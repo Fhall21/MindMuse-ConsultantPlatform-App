@@ -19,7 +19,7 @@ export function AutocompleteInput({
   value,
   onChange,
   options,
-  emptyMessage = "No matching options",
+  emptyMessage = "No existing matches",
   className,
   ...props
 }: AutocompleteInputProps) {

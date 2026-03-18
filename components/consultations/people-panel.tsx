@@ -56,6 +56,13 @@ function getDistinctPersonValues(
   return getDistinctCaseInsensitiveValues((people ?? []).map((person) => person[field]));
 }
 
+function hasExactClassificationMatch(value: string, options: string[]) {
+  const normalizedValue = value.trim().toLocaleLowerCase();
+  if (!normalizedValue) return false;
+
+  return options.some((option) => option.toLocaleLowerCase() === normalizedValue);
+}
+
 function getPersonSummary(person: Pick<Person, "working_group" | "work_type" | "role" | "email">) {
   return [person.working_group, person.work_type, person.role, person.email]
     .filter(isNonEmptyString)
@@ -98,6 +105,13 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
   const workingGroupValue =
     useWatch({ control: control, name: "working_group" }) ?? "";
   const workTypeValue = useWatch({ control: control, name: "work_type" }) ?? "";
+  const workingGroupPreview = workingGroupValue.trim();
+  const workTypePreview = workTypeValue.trim();
+  const workingGroupIsNew =
+    Boolean(workingGroupPreview) &&
+    !hasExactClassificationMatch(workingGroupPreview, workingGroupOptions);
+  const workTypeIsNew =
+    Boolean(workTypePreview) && !hasExactClassificationMatch(workTypePreview, workTypeOptions);
 
   const filteredPeople = useMemo(
     () =>
@@ -282,6 +296,7 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
                   id="new-person-working-group"
                   value={workingGroupValue}
                   options={workingGroupOptions}
+                  emptyMessage="No existing working groups match. This will be created for future use when you create this person."
                   onChange={(value) =>
                     setValue("working_group", value, {
                       shouldDirty: true,
@@ -289,6 +304,13 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
                     })
                   }
                 />
+                {workingGroupIsNew && (
+                  <div className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    New working group preview:{" "}
+                    <span className="font-medium text-foreground">{workingGroupPreview}</span>. It
+                    will be created for future use when you create and link this person.
+                  </div>
+                )}
                 {errors.working_group && (
                   <p className="text-sm text-destructive">
                     {errors.working_group.message}
@@ -303,6 +325,7 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
                   placeholder="Employee, Manager, Contractor..."
                   value={workTypeValue}
                   options={workTypeOptions}
+                  emptyMessage="No existing work types match. This will be created for future use when you create this person."
                   onChange={(value) =>
                     setValue("work_type", value, {
                       shouldDirty: true,
@@ -310,6 +333,13 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
                     })
                   }
                 />
+                {workTypeIsNew && (
+                  <div className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    New work type preview:{" "}
+                    <span className="font-medium text-foreground">{workTypePreview}</span>. It
+                    will be created for future use when you create and link this person.
+                  </div>
+                )}
                 {errors.work_type && (
                   <p className="text-sm text-destructive">{errors.work_type.message}</p>
                 )}

@@ -28,7 +28,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const AI_SERVICE_URL = process.env.NEXT_PUBLIC_AI_SERVICE_URL ?? "http://localhost:8000";
 
 interface ThemePanelProps {
   consultationId: string;
@@ -71,7 +70,7 @@ async function readError(response: Response) {
 }
 
 async function extractThemes(transcript: string) {
-  const response = await fetch(`${AI_SERVICE_URL}/themes/extract`, {
+  const response = await fetch(`/api/themes/extract`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -88,7 +87,7 @@ async function extractThemes(transcript: string) {
 }
 
 async function getClarificationQuestions(payload: { transcript: string; themes: string[] }) {
-  const response = await fetch(`${AI_SERVICE_URL}/clarification/questions`, {
+  const response = await fetch(`/api/clarification/questions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

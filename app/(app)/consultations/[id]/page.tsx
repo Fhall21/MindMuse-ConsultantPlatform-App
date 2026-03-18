@@ -201,7 +201,7 @@ export default function ConsultationDetailPage({
             </div>
           </div>
 
-          <div className="space-y-3 border-t pt-4">
+          <div className="space-y-4 border-t pt-4">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Round
@@ -225,6 +225,18 @@ export default function ConsultationDetailPage({
                 </span>
               </div>
             ) : null}
+
+            <div className="space-y-2 border-t pt-4">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  People
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Link people before audio transcription so the expected speaker count is clear.
+                </p>
+              </div>
+              <PeoplePanel consultationId={id} />
+            </div>
           </div>
         </div>
       </div>
@@ -259,14 +271,6 @@ export default function ConsultationDetailPage({
           initialValue={consultation.notes}
           readOnly={!isDraft}
         />
-      </section>
-
-      <Separator />
-
-      {/* People */}
-      <section className="space-y-3">
-        <SectionHeading>People</SectionHeading>
-        <PeoplePanel consultationId={id} />
       </section>
 
       <Separator />

@@ -23,6 +23,7 @@ export interface Theme {
   id: string;
   consultation_id: string;
   label: string;
+  description: string | null;
   accepted: boolean;
   created_at: string;
 }

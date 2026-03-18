@@ -628,17 +628,42 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                   <p className="text-sm text-muted-foreground">{acceptedThemeList.length} themes accepted</p>
                   <p className="text-xs text-muted-foreground">Review is complete for this extraction round.</p>
                 </div>
-                <Button variant="outline" disabled={isExtracting} onClick={() => setConfirmReextractOpen(true)}>
-                  {isExtracting ? (
-                    <>
-                      <LoadingSpinner />
-                      Extracting…
-                    </>
-                  ) : (
-                    "Re-extract"
-                  )}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {!addThemeOpen && !consultationIsLocked ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setAddThemeOpen(true)}
+                      disabled={isAddingTheme}
+                    >
+                      Add theme
+                    </Button>
+                  ) : null}
+                  <Button variant="outline" disabled={isExtracting} onClick={() => setConfirmReextractOpen(true)}>
+                    {isExtracting ? (
+                      <>
+                        <LoadingSpinner />
+                        Extracting…
+                      </>
+                    ) : (
+                      "Re-extract"
+                    )}
+                  </Button>
+                </div>
               </div>
+
+              {addThemeOpen ? (
+                <AddThemeForm
+                  label={addThemeLabel}
+                  description={addThemeDescription}
+                  error={addThemeError}
+                  isSubmitting={isAddingTheme}
+                  onLabelChange={(v) => { setAddThemeLabel(v); if (addThemeError) setAddThemeError(null); }}
+                  onDescriptionChange={setAddThemeDescription}
+                  onSubmit={() => void handleAddCustomTheme()}
+                  onCancel={() => { setAddThemeOpen(false); setAddThemeLabel(""); setAddThemeDescription(""); setAddThemeError(null); }}
+                />
+              ) : null}
 
               {acceptedThemeList.length > 0 ? (
                 <div className="space-y-2">

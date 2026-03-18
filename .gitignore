@@ -68,3 +68,6 @@ supabase/.temp/
 *.swp
 *.swo
 .gstack/
+
+# Git worktrees
+worktrees/

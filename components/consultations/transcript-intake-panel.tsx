@@ -52,7 +52,11 @@ export function TranscriptIntakePanel({
   // Skip sync if a local file/audio load is pending to avoid clobbering it.
   useEffect(() => {
     if (!pendingLocalRef.current) {
-      setTranscriptValue(initialTranscript);
+      const syncTimer = window.setTimeout(() => {
+        setTranscriptValue(initialTranscript);
+      }, 0);
+
+      return () => window.clearTimeout(syncTimer);
     }
   }, [initialTranscript]);
 

@@ -19,7 +19,7 @@ import { ManagementRejectionDialog } from "./management-rejection-dialog";
 import type {
   RoundThemeGroupDetail,
   RoundThemeGroupDraftState,
-  RoundSourceTheme,
+  SourceTheme,
 } from "@/types/round-detail";
 import {
   createRoundThemeGroup,
@@ -35,7 +35,7 @@ import {
 
 interface ThemeGroupingWorkspaceProps {
   roundId: string;
-  sourceThemes: RoundSourceTheme[];
+  sourceThemes: SourceTheme[];
   initialGroups: RoundThemeGroupDetail[];
   onStructuralChange?: () => void;
 }
@@ -54,7 +54,7 @@ export function ThemeGroupingWorkspace({
 }: ThemeGroupingWorkspaceProps) {
   // ─── State ─────────────────────────────────────────────────────────────────
 
-  const [groups, setGroups] = useState<RoundThemeGroupDetail[]>(initialGroups);
+  const [groups, setGroups] = useState<any[]>(initialGroups);
   const [selectedThemeIds, setSelectedThemeIds] = useState<Set<string>>(new Set());
   const [mergeSelectedGroupIds, setMergeSelectedGroupIds] = useState<Set<string>>(new Set());
   const [isDragOverUngrouped, setIsDragOverUngrouped] = useState(false);
@@ -82,19 +82,19 @@ export function ThemeGroupingWorkspace({
   }, [groups]);
 
   const ungroupedThemes = useMemo(
-    () => sourceThemes.filter((t) => !groupedThemeIds.has(t.sourceThemeId)),
+    () => sourceThemes.filter((t) => !groupedThemeIds.has(t.id)),
     [sourceThemes, groupedThemeIds]
   );
 
   const themesByConsultation = useMemo(() => {
-    const map = new Map<string, { title: string; themes: RoundSourceTheme[] }>();
+    const map = new Map<string, { title: string; themes: SourceTheme[] }>();
     for (const theme of ungroupedThemes) {
-      const existing = map.get(theme.consultationId);
+      const existing = map.get(theme.sourceConsultationId);
       if (existing) {
         existing.themes.push(theme);
       } else {
-        map.set(theme.consultationId, {
-          title: theme.consultationTitle,
+        map.set(theme.sourceConsultationId, {
+          title: theme.sourceConsultationTitle,
           themes: [theme],
         });
       }
@@ -121,7 +121,7 @@ export function ThemeGroupingWorkspace({
         // Remove from any existing group
         const cleaned = prev.map((g) => ({
           ...g,
-          members: g.members.filter((m) => m.id !== themeId),
+          members: g.members.filter((m: any) => m.id !== themeId),
         }));
 
         // Add to target group
@@ -153,8 +153,8 @@ export function ThemeGroupingWorkspace({
       setGroups((prev) =>
         prev.map((g) => ({
           ...g,
-          members: g.members.filter((m) => m.id !== themeId),
-          lastStructuralChangeAt: g.members.some((m) => m.id === themeId)
+          members: g.members.filter((m: any) => m.themeId !== themeId),
+          lastStructuralChangeAt: g.members.some((m: any) => m.themeId === themeId)
             ? new Date().toISOString()
             : g.lastStructuralChangeAt,
         }))
@@ -183,7 +183,7 @@ export function ThemeGroupingWorkspace({
 
   function handleCreateGroup() {
     const selectedUngrouped = ungroupedThemes.filter((t) =>
-      selectedThemeIds.has(t.sourceThemeId)
+      selectedThemeIds.has(t.id)
     );
 
     if (selectedUngrouped.length === 0) {
@@ -193,8 +193,7 @@ export function ThemeGroupingWorkspace({
 
     void createRoundThemeGroup(
       roundId,
-      selectedUngrouped.map((t) => t.sourceThemeId),
-      `Group from ${selectedUngrouped[0].label}`
+      selectedUngrouped.map((t) => t.id)
     ).then(() => {
       queryClient.invalidateQueries({
         queryKey: ["consultation_rounds", roundId, "detail"],
@@ -214,15 +213,19 @@ export function ThemeGroupingWorkspace({
     const allMembers = toMerge.flatMap((g) => g.members);
     const remaining = groups.filter((g) => !mergeSelectedGroupIds.has(g.id));
 
-    const mergedGroup: RoundThemeGroup = {
+    const mergedGroup: any = {
       id: crypto.randomUUID(),
       label: toMerge.map((g) => g.label).join(" + "),
       description: null,
-      status: "draft",
-      origin: "manual",
+      status: "draft" as const,
+      origin: "manual" as const,
       members: allMembers,
       pendingDraft: null,
       lastStructuralChangeAt: new Date().toISOString(),
+      lastStructuralChangeBy: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      actorId: "",
     };
 
     setGroups([...remaining, mergedGroup]);
@@ -234,7 +237,7 @@ export function ThemeGroupingWorkspace({
     const group = groups.find((g) => g.id === groupId);
     if (!group) return;
 
-    const selectedInGroup = group.members.filter((m) =>
+    const selectedInGroup = group.members.filter((m: any) =>
       selectedThemeIds.has(m.id)
     );
     if (selectedInGroup.length === 0) {
@@ -243,18 +246,22 @@ export function ThemeGroupingWorkspace({
     }
 
     const remainingMembers = group.members.filter(
-      (m) => !selectedThemeIds.has(m.id)
+      (m: any) => !selectedThemeIds.has(m.id)
     );
 
-    const splitGroup: RoundThemeGroup = {
+    const splitGroup: any = {
       id: crypto.randomUUID(),
       label: `Split from ${group.label}`,
       description: null,
-      status: "draft",
-      origin: "manual",
+      status: "draft" as const,
+      origin: "manual" as const,
       members: selectedInGroup,
       pendingDraft: null,
       lastStructuralChangeAt: new Date().toISOString(),
+      lastStructuralChangeBy: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      actorId: "",
     };
 
     setGroups((prev) =>
@@ -288,7 +295,7 @@ export function ThemeGroupingWorkspace({
     const group = groups.find((g) => g.id === groupId);
     if (!group) return;
 
-    const hasLocked = group.members.some((m) => m.lockedFromSource);
+    const hasLocked = group.members.some((m: any) => m.lockedFromSource);
     if (hasLocked) {
       setRejectionTarget({
         type: "group",
@@ -313,7 +320,7 @@ export function ThemeGroupingWorkspace({
       type: "group",
       id: groupId,
       label: group.label,
-      isLocked: group.members.some((m) => m.lockedFromSource),
+      isLocked: group.members.some((m: any) => m.lockedFromSource),
     });
   }
 

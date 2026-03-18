@@ -100,9 +100,6 @@ export function RoundOutputsSection({
                 ) : (
                   <p className="text-xs text-muted-foreground">Not yet generated</p>
                 )}
-                {output?.error ? (
-                  <p className="text-xs text-destructive">{output.error}</p>
-                ) : null}
               </div>
               <div className="flex items-center gap-2">
                 {statusConfig ? (

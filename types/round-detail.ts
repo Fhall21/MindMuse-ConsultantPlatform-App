@@ -36,9 +36,16 @@ export interface SourceTheme {
   groupId: string | null;
 }
 
-// Legacy type alias for backward compat with existing usage
-export type RoundThemeGroup = RoundThemeGroupDetail;
-export type RoundThemeGroupDraft = RoundThemeGroupDraftState;
-export type RoundThemeGroupStatus = RoundThemeGroupDetail["status"];
-export type RoundThemeGroupOrigin = RoundThemeGroupDetail["origin"];
-export type RoundConsultationSummary = RoundDetailConsultation;
+export interface RoundConsultationSummary {
+  id: string;
+  title: string;
+  status: string;
+  evidenceEmailSubject: string | null;
+  evidenceEmailStatus: string | null;
+  themeCount: number;
+}
+
+// Legacy type aliases for backward compat with existing usage
+export type { RoundThemeGroupDetail as RoundThemeGroup, RoundThemeGroupDraftState as RoundThemeGroupDraft } from "@/lib/actions/round-workflow";
+export type RoundThemeGroupStatus = "draft" | "accepted" | "discarded" | "management_rejected";
+export type RoundThemeGroupOrigin = "manual" | "ai_refined";

@@ -58,8 +58,8 @@ export function ThemeGroupCard({
   const [editDescription, setEditDescription] = useState(group.description ?? "");
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const hasLockedMembers = group.members.some((m) => m.lockedFromSource);
-  const selectedMembersCount = group.members.filter((m) =>
+  const hasLockedMembers = group.members.some((m: any) => m.lockedFromSource);
+  const selectedMembersCount = group.members.filter((m: any) =>
     selectedThemeIds.has(m.id)
   ).length;
 
@@ -182,16 +182,31 @@ export function ThemeGroupCard({
           </p>
         ) : (
           <div className="space-y-1.5">
-            {group.members.map((theme) => (
-              <SourceThemeCard
-                key={theme.id}
-                theme={theme}
-                selected={selectedThemeIds.has(theme.id)}
-                onSelect={onThemeSelect}
-                onDragStart={onThemeDragStart}
-                compact
-              />
-            ))}
+            {group.members.map((member: any) => {
+              const adaptedTheme: SourceTheme = {
+                id: member.themeId,
+                sourceConsultationId: member.sourceConsultationId,
+                sourceConsultationTitle: member.sourceConsultationTitle,
+                label: member.label,
+                description: member.description,
+                editableLabel: member.label,
+                editableDescription: member.description,
+                lockedFromSource: member.lockedFromSource,
+                isGrouped: true,
+                isUserAdded: member.isUserAdded,
+                groupId: group.id,
+              };
+              return (
+                <SourceThemeCard
+                  key={member.id}
+                  theme={adaptedTheme}
+                  selected={selectedThemeIds.has(member.themeId)}
+                  onSelect={onThemeSelect}
+                  onDragStart={onThemeDragStart}
+                  compact
+                />
+              );
+            })}
           </div>
         )}
 

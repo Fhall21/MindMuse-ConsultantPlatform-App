@@ -13,7 +13,7 @@ import { ThemeGroupingWorkspace } from "@/components/consultations/rounds/theme-
 import { RoundOutputsSection } from "@/components/consultations/rounds/round-outputs-section";
 import { DecisionHistorySection } from "@/components/consultations/rounds/decision-history-section";
 import { AnalyticsPlaceholder } from "@/components/consultations/rounds/analytics-placeholder";
-import type { SourceTheme, RoundThemeGroup } from "@/types/round-detail";
+import type { SourceTheme, RoundThemeGroup, RoundConsultationSummary } from "@/types/round-detail";
 import {
   generateRoundSummary,
   generateRoundReport,
@@ -53,6 +53,22 @@ export default function RoundDetailPage({
       groupId: theme.groupId,
     }));
   }, [data?.sourceThemes]);
+
+  const adaptedConsultations = useMemo((): RoundConsultationSummary[] => {
+    if (!data?.consultations) return [];
+    const themeCountMap = new Map<string, number>();
+    for (const theme of data.sourceThemes || []) {
+      themeCountMap.set(theme.consultationId, (themeCountMap.get(theme.consultationId) || 0) + 1);
+    }
+    return data.consultations.map((c) => ({
+      id: c.id,
+      title: c.title,
+      status: c.status,
+      evidenceEmailSubject: c.evidenceEmail?.subject ?? null,
+      evidenceEmailStatus: c.evidenceEmail?.status ?? null,
+      themeCount: themeCountMap.get(c.id) ?? 0,
+    }));
+  }, [data?.consultations, data?.sourceThemes]);
 
   const adaptedThemeGroups = useMemo((): RoundThemeGroup[] => {
     if (!data?.themeGroups) return [];
@@ -139,7 +155,7 @@ export default function RoundDetailPage({
       {/* Linked Consultations */}
       <section className="space-y-3">
         <SectionHeading>Linked Consultations</SectionHeading>
-        <LinkedConsultationsSection consultations={data.consultations} />
+        <LinkedConsultationsSection consultations={adaptedConsultations} />
       </section>
 
       <Separator />

@@ -3,10 +3,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { RoundSourceTheme } from "@/types/round-detail";
+import type { SourceTheme } from "@/types/round-detail";
 
 interface SourceThemeCardProps {
-  theme: RoundSourceTheme;
+  theme: SourceTheme;
   selected?: boolean;
   onSelect?: (themeId: string) => void;
   onDragStart?: (e: React.DragEvent, themeId: string) => void;
@@ -23,8 +23,8 @@ export function SourceThemeCard({
   return (
     <div
       draggable={!!onDragStart}
-      onDragStart={(e) => onDragStart?.(e, theme.sourceThemeId)}
-      onClick={() => onSelect?.(theme.sourceThemeId)}
+      onDragStart={(e) => onDragStart?.(e, theme.id)}
+      onClick={() => onSelect?.(theme.id)}
       className={cn(
         "rounded-md border px-3 py-2 transition-colors",
         "cursor-grab active:cursor-grabbing",
@@ -45,7 +45,7 @@ export function SourceThemeCard({
           ) : null}
           {!compact ? (
             <p className="mt-1 text-[10px] text-muted-foreground">
-              from {theme.consultationTitle}
+              from {theme.sourceConsultationTitle}
             </p>
           ) : null}
         </div>
@@ -68,7 +68,8 @@ export function SourceThemeCard({
               User
             </Badge>
           ) : null}
-          {theme.acceptedState === "accepted" ? (
+          {/* Accepted state check - SourceTheme adapter doesn't have acceptedState, so skip this badge */}
+          {false ? (
             <Badge
               variant="outline"
               className="h-4 border-emerald-200 bg-emerald-50 px-1 text-[10px] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300"

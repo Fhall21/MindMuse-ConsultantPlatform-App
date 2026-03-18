@@ -156,6 +156,22 @@ export interface RoundAnalyticsSummary {
   lockedSourceThemeCount: number;
 }
 
+export interface ConsultationGroupMemberDetail {
+  id: string;
+  consultationId: string;
+  consultationTitle: string;
+  consultationStatus: string;
+  position: number;
+}
+
+export interface ConsultationGroupDetail {
+  id: string;
+  label: string;
+  position: number;
+  members: ConsultationGroupMemberDetail[];
+  memberCount: number;
+}
+
 export interface RoundDetail {
   round: {
     id: string;
@@ -166,6 +182,7 @@ export interface RoundDetail {
   consultations: RoundDetailConsultation[];
   sourceThemes: RoundSourceTheme[];
   themeGroups: RoundThemeGroupDetail[];
+  consultationGroups: ConsultationGroupDetail[];
   decisionHistory: RoundDecisionHistoryItem[];
   outputs: RoundOutputCollection;
   history: RoundHistoryEvent[];
@@ -434,6 +451,44 @@ async function loadRoundGroupMembers(params: {
   }
 
   return (data ?? []) as RoundThemeGroupMember[];
+}
+
+async function loadConsultationGroups(params: {
+  supabase: SupabaseServerClient;
+  roundId: string;
+}) {
+  const { supabase, roundId } = params;
+  const { data, error } = await supabase
+    .from("consultation_groups")
+    .select("*")
+    .eq("round_id", roundId)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+async function loadConsultationGroupMembers(params: {
+  supabase: SupabaseServerClient;
+  roundId: string;
+}) {
+  const { supabase, roundId } = params;
+  const { data, error } = await supabase
+    .from("consultation_group_members")
+    .select("*")
+    .eq("round_id", roundId)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
 }
 
 async function loadRoundDecisions(params: {
@@ -861,7 +916,7 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
   const round = await loadOwnedRound({ supabase, userId, roundId });
   const consultations = await loadRoundConsultations({ supabase, userId, roundId });
   const consultationIds = consultations.map((consultation) => consultation.id);
-  const [themes, groups, members, decisions, outputs, emailMap, history] =
+  const [themes, groups, members, decisions, outputs, emailMap, history, consultationGroups, consultationGroupMembers] =
     await Promise.all([
       loadAcceptedThemes({ supabase, consultationIds }),
       loadRoundGroups({ supabase, roundId }),
@@ -870,6 +925,8 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
       loadRoundOutputs({ supabase, roundId }),
       loadEvidenceEmailsByConsultation({ supabase, consultationIds }),
       loadRoundHistory({ supabase, userId, roundId, consultationIds }),
+      loadConsultationGroups({ supabase, roundId }),
+      loadConsultationGroupMembers({ supabase, roundId }),
     ]);
 
   const consultationById = new Map(consultations.map((consultation) => [consultation.id, consultation]));
@@ -878,6 +935,12 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
 
   members.forEach((member) => {
     memberByThemeId.set(member.theme_id, member);
+  });
+
+  // Build a map of consultation_id → consultation group id for quick lookup
+  const consultationGroupMemberByConsultationId = new Map<string, { groupId: string; position: number }>();
+  consultationGroupMembers.forEach((m) => {
+    consultationGroupMemberByConsultationId.set(m.consultation_id, { groupId: m.group_id, position: m.position });
   });
 
   const consultationItems = consultations.map((consultation): RoundDetailConsultation => {
@@ -984,6 +1047,30 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
     };
   });
 
+  // Build consultation group details
+  const consultationGroupDetails: ConsultationGroupDetail[] = consultationGroups.map((cg) => {
+    const cgMembers = consultationGroupMembers
+      .filter((m) => m.group_id === cg.id)
+      .map((m): ConsultationGroupMemberDetail => {
+        const consultation = consultationById.get(m.consultation_id);
+        return {
+          id: m.id,
+          consultationId: m.consultation_id,
+          consultationTitle: consultation?.title ?? "Unknown",
+          consultationStatus: consultation?.status ?? "draft",
+          position: m.position,
+        };
+      });
+
+    return {
+      id: cg.id,
+      label: cg.label,
+      position: cg.position,
+      members: cgMembers,
+      memberCount: cgMembers.length,
+    };
+  });
+
   return {
     round: {
       id: round.id,
@@ -994,6 +1081,7 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
     consultations: consultationItems,
     sourceThemes,
     themeGroups: groupDetails,
+    consultationGroups: consultationGroupDetails,
     decisionHistory: decisions.map((decision) => ({
       id: decision.id,
       targetType: decision.target_type,

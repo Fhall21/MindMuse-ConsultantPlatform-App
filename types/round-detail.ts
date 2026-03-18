@@ -18,6 +18,8 @@ export type {
   RoundOutputCollection,
   RoundHistoryEvent,
   RoundAnalyticsSummary,
+  ConsultationGroupDetail,
+  ConsultationGroupMemberDetail,
 } from "@/lib/actions/round-workflow";
 
 // Component-friendly adapter types that derive from Agent 1 types
@@ -43,6 +45,7 @@ export interface RoundConsultationSummary {
   evidenceEmailSubject: string | null;
   evidenceEmailStatus: string | null;
   themeCount: number;
+  groupId: string | null;
 }
 
 // Legacy type aliases for backward compat with existing usage

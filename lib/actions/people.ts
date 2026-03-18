@@ -6,12 +6,16 @@ import { emitAuditEvent } from "./audit";
 
 interface CreatePersonParams {
   name: string;
+  working_group?: string;
+  work_type?: string;
   role?: string;
   email?: string;
 }
 
 export async function createPerson({
   name,
+  working_group,
+  work_type,
   role,
   email,
 }: CreatePersonParams) {
@@ -27,6 +31,8 @@ export async function createPerson({
     .insert({
       user_id: user.user.id,
       name,
+      working_group: working_group || null,
+      work_type: work_type || null,
       role: role || null,
       email: email || null,
     })
@@ -41,6 +47,8 @@ export async function createPerson({
 interface UpdatePersonParams {
   id: string;
   name?: string;
+  working_group?: string;
+  work_type?: string;
   role?: string;
   email?: string;
 }
@@ -48,6 +56,8 @@ interface UpdatePersonParams {
 export async function updatePerson({
   id,
   name,
+  working_group,
+  work_type,
   role,
   email,
 }: UpdatePersonParams) {
@@ -55,6 +65,8 @@ export async function updatePerson({
 
   const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name;
+  if (working_group !== undefined) updates.working_group = working_group || null;
+  if (work_type !== undefined) updates.work_type = work_type || null;
   if (role !== undefined) updates.role = role || null;
   if (email !== undefined) updates.email = email || null;
 

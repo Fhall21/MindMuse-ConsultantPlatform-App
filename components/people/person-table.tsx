@@ -41,6 +41,22 @@ export function PersonTable({ data, onEdit, onDelete, onRowClick }: PersonTableP
         cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
       },
       {
+        accessorKey: "working_group",
+        header: "Working Group",
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.working_group || "-"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "work_type",
+        header: "Work Type",
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">{row.original.work_type || "-"}</span>
+        ),
+      },
+      {
         accessorKey: "role",
         header: "Role",
         cell: ({ row }) => (

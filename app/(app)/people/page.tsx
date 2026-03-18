@@ -21,6 +21,19 @@ import { createClient } from "@/lib/supabase/client";
 import type { Person } from "@/types/db";
 import type { PersonFormData } from "@/lib/validations/consultation";
 
+function isNonEmptyString(value: string | null | undefined): value is string {
+  return Boolean(value?.trim());
+}
+
+function getDistinctPersonValues(
+  people: Person[] | undefined,
+  field: "working_group" | "work_type"
+) {
+  return [...new Set((people ?? []).map((person) => person[field]).filter(isNonEmptyString))].sort(
+    (left, right) => left.localeCompare(right)
+  );
+}
+
 export default function PeoplePage() {
   const queryClient = useQueryClient();
   const peopleQuery = usePeople();
@@ -31,6 +44,14 @@ export default function PeoplePage() {
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
 
   const people = peopleQuery.data;
+  const workingGroupOptions = useMemo(
+    () => getDistinctPersonValues(people, "working_group"),
+    [people]
+  );
+  const workTypeOptions = useMemo(
+    () => getDistinctPersonValues(people, "work_type"),
+    [people]
+  );
 
   const personIds = useMemo(() => (people ?? []).map((person) => person.id), [people]);
 
@@ -61,6 +82,8 @@ export default function PeoplePage() {
     mutationFn: (payload: PersonFormData) =>
       createPerson({
         name: payload.name,
+        working_group: payload.working_group,
+        work_type: payload.work_type,
         role: payload.role,
         email: payload.email,
       }),
@@ -78,6 +101,8 @@ export default function PeoplePage() {
       return updatePerson({
         id: editingPerson.id,
         name: payload.name,
+        working_group: payload.working_group,
+        work_type: payload.work_type,
         role: payload.role,
         email: payload.email,
       });
@@ -113,7 +138,11 @@ export default function PeoplePage() {
     const normalized = search.trim().toLowerCase();
     if (!normalized) return rows;
 
-    return rows.filter((row) => row.name.toLowerCase().includes(normalized));
+    return rows.filter((row) =>
+      [row.name, row.working_group, row.work_type, row.role, row.email]
+        .filter(isNonEmptyString)
+        .some((value) => value.toLowerCase().includes(normalized))
+    );
   }, [rows, search]);
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
@@ -138,7 +167,7 @@ export default function PeoplePage() {
       <Input
         value={search}
         onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search by name"
+        placeholder="Search by name, working group, work type, role, or email"
         className="w-full sm:max-w-xs"
       />
 
@@ -192,7 +221,8 @@ export default function PeoplePage() {
           <DialogHeader>
             <DialogTitle>{editingPerson ? "Edit Person" : "Add Person"}</DialogTitle>
             <DialogDescription>
-              Save core details for people you may link to consultations.
+              Save core details and reusable classifications for people you may link to
+              consultations.
             </DialogDescription>
           </DialogHeader>
 
@@ -200,6 +230,8 @@ export default function PeoplePage() {
             defaultValues={editingPerson ?? undefined}
             isLoading={isSaving}
             submitLabel={editingPerson ? "Update Person" : "Create Person"}
+            workingGroupOptions={workingGroupOptions}
+            workTypeOptions={workTypeOptions}
             onSubmit={async (values) => {
               if (editingPerson) {
                 await updateMutation.mutateAsync(values);

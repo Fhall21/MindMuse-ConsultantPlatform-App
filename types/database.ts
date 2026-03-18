@@ -48,6 +48,8 @@ export interface ThemeDecisionLog {
 export interface Person {
   id: string;
   name: string;
+  working_group: string | null;
+  work_type: string | null;
   role: string | null;
   email: string | null;
   created_at: string;

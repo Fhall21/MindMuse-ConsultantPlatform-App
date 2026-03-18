@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod/v4";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -22,24 +21,38 @@ import {
   unlinkPersonFromConsultation,
   createPerson,
 } from "@/lib/actions/people";
+import { personSchema, type PersonFormData } from "@/lib/validations/consultation";
 import type { Person } from "@/types/db";
 
 interface PeoplePanelProps {
   consultationId: string;
 }
 
-const newPersonSchema = z.object({
-  name: z.string().min(1, "Name is required").max(255),
-  role: z.string().max(255).optional(),
-  email: z.email("Invalid email address").optional().or(z.literal("")),
-});
+function isNonEmptyString(value: string | null | undefined): value is string {
+  return Boolean(value?.trim());
+}
 
-type NewPersonFormData = z.infer<typeof newPersonSchema>;
+function getDistinctPersonValues(
+  people: Person[] | undefined,
+  field: "working_group" | "work_type"
+) {
+  return [...new Set((people ?? []).map((person) => person[field]).filter(isNonEmptyString))].sort(
+    (left, right) => left.localeCompare(right)
+  );
+}
+
+function getPersonSummary(person: Pick<Person, "working_group" | "work_type" | "role" | "email">) {
+  return [person.working_group, person.work_type, person.role, person.email]
+    .filter(isNonEmptyString)
+    .join(" · ");
+}
 
 export function PeoplePanel({ consultationId }: PeoplePanelProps) {
   const queryClient = useQueryClient();
   const { data: linkedPeople, isLoading } = useConsultationPeople(consultationId);
   const { data: allPeople } = usePeople();
+  const workingGroupListId = useId();
+  const workTypeListId = useId();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -53,17 +66,38 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<NewPersonFormData>({
-    resolver: zodResolver(newPersonSchema),
-    defaultValues: { name: "", role: "", email: "" },
+  } = useForm<PersonFormData>({
+    resolver: zodResolver(personSchema),
+    defaultValues: { name: "", working_group: "", work_type: "", role: "", email: "" },
   });
 
-  const linkedIds = new Set(linkedPeople?.map((p) => p.id) ?? []);
+  const linkedIds = useMemo(() => new Set(linkedPeople?.map((person) => person.id) ?? []), [linkedPeople]);
+  const workingGroupOptions = useMemo(
+    () => getDistinctPersonValues(allPeople, "working_group"),
+    [allPeople]
+  );
+  const workTypeOptions = useMemo(
+    () => getDistinctPersonValues(allPeople, "work_type"),
+    [allPeople]
+  );
 
-  const filteredPeople = (allPeople ?? []).filter(
-    (p) =>
-      !linkedIds.has(p.id) &&
-      p.name.toLowerCase().includes(search.toLowerCase())
+  const filteredPeople = useMemo(
+    () =>
+      (allPeople ?? []).filter((person) => {
+        if (linkedIds.has(person.id)) {
+          return false;
+        }
+
+        const normalizedSearch = search.trim().toLowerCase();
+        if (!normalizedSearch) {
+          return true;
+        }
+
+        return [person.name, person.working_group, person.work_type, person.role, person.email]
+          .filter(isNonEmptyString)
+          .some((value) => value.toLowerCase().includes(normalizedSearch));
+      }),
+    [allPeople, linkedIds, search]
   );
 
   function invalidate() {
@@ -99,13 +133,15 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
     }
   }
 
-  async function handleCreate(data: NewPersonFormData) {
+  async function handleCreate(data: PersonFormData) {
     setCreating(true);
     try {
       const personId = await createPerson({
-        name: data.name,
-        role: data.role || undefined,
-        email: data.email || undefined,
+        name: data.name.trim(),
+        working_group: data.working_group?.trim() || undefined,
+        work_type: data.work_type?.trim() || undefined,
+        role: data.role?.trim() || undefined,
+        email: data.email?.trim() || undefined,
       });
       await linkPersonToConsultation(consultationId, personId);
       invalidate();
@@ -134,14 +170,11 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
       {linkedPeople && linkedPeople.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {linkedPeople.map((person) => (
-            <span
-              key={person.id}
-              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm"
-            >
+            <span key={person.id} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm">
               <span>{person.name}</span>
-              {person.role && (
-                <span className="text-muted-foreground">· {person.role}</span>
-              )}
+              {getPersonSummary(person) ? (
+                <span className="text-muted-foreground">· {getPersonSummary(person)}</span>
+              ) : null}
               <button
                 onClick={() => handleUnlink(person.id)}
                 disabled={unlinking === person.id}
@@ -177,7 +210,7 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
           {!showCreateForm ? (
             <div className="space-y-3">
               <Input
-                placeholder="Search by name…"
+                placeholder="Search by name, working group, work type, role, or email…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 autoFocus
@@ -194,16 +227,12 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
                     key={person.id}
                     onClick={() => handleLink(person)}
                     disabled={linking === person.id}
-                    className="flex w-full items-center justify-between rounded px-3 py-2 text-sm hover:bg-accent disabled:opacity-50"
+                    className="flex w-full flex-col items-start rounded px-3 py-2 text-left text-sm hover:bg-accent disabled:opacity-50"
                   >
-                    <span>
-                      {person.name}
-                      {person.role && (
-                        <span className="ml-2 text-muted-foreground">
-                          {person.role}
-                        </span>
-                      )}
-                    </span>
+                    <span className="font-medium">{person.name}</span>
+                    {getPersonSummary(person) ? (
+                      <span className="text-muted-foreground">{getPersonSummary(person)}</span>
+                    ) : null}
                   </button>
                 ))}
               </div>
@@ -226,6 +255,43 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
                 <Input id="person-name" {...register("name")} autoFocus />
                 {errors.name && (
                   <p className="text-sm text-destructive">{errors.name.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="new-person-working-group">Working Group (optional)</Label>
+                <Input
+                  id="new-person-working-group"
+                  list={workingGroupListId}
+                  {...register("working_group")}
+                />
+                <datalist id={workingGroupListId}>
+                  {workingGroupOptions.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
+                {errors.working_group && (
+                  <p className="text-sm text-destructive">
+                    {errors.working_group.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="new-person-work-type">Work Type (optional)</Label>
+                <Input
+                  id="new-person-work-type"
+                  list={workTypeListId}
+                  placeholder="Employee, Manager, Contractor..."
+                  {...register("work_type")}
+                />
+                <datalist id={workTypeListId}>
+                  {workTypeOptions.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
+                {errors.work_type && (
+                  <p className="text-sm text-destructive">{errors.work_type.message}</p>
                 )}
               </div>
 

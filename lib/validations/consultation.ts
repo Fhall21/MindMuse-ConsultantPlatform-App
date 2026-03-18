@@ -17,8 +17,10 @@ export type ThemeFormData = z.infer<typeof themeSchema>;
 
 export const personSchema = z.object({
   name: z.string().min(1, "Name is required").max(255),
+  working_group: z.string().max(255).optional(),
+  work_type: z.string().max(255).optional(),
   role: z.string().max(255).optional(),
-  email: z.email("Invalid email address").optional(),
+  email: z.email("Invalid email address").optional().or(z.literal("")),
 });
 
 export type PersonFormData = z.infer<typeof personSchema>;

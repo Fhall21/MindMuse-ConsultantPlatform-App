@@ -109,6 +109,14 @@ export function PersonSheet({ personId, open, onClose }: PersonSheetProps) {
                     <dd>{data.person.name}</dd>
                   </div>
                   <div className="flex gap-2">
+                    <dt className="text-muted-foreground">Working group:</dt>
+                    <dd>{data.person.working_group || "-"}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="text-muted-foreground">Work type:</dt>
+                    <dd>{data.person.work_type || "-"}</dd>
+                  </div>
+                  <div className="flex gap-2">
                     <dt className="text-muted-foreground">Role:</dt>
                     <dd>{data.person.role || "-"}</dd>
                   </div>

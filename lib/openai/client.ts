@@ -4,7 +4,9 @@
  * but this client is available for direct use if needed.
  */
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
+import { requireEnv } from "@/lib/env";
+
+const AI_SERVICE_URL = requireEnv("AI_SERVICE_URL");
 
 export async function callAIService(
   endpoint: string,

@@ -4,7 +4,7 @@ Psychosocial consultation evidence platform. Turn post-interview admin into a re
 
 ## Prerequisites
 
-- Node.js 20+
+- Bun 1.1+
 - Python 3.12+
 - Docker & Docker Compose
 - Supabase CLI (`brew install supabase/tap/supabase`)
@@ -15,14 +15,22 @@ Psychosocial consultation evidence platform. Turn post-interview admin into a re
 
 ```bash
 cp .env.example .env
-# Fill in your Supabase and OpenAI keys
+# Set OPENAI_API_KEY and verify AI_SERVICE_URL
 ```
 
 ### 2. Start Supabase locally
 
 ```bash
 supabase start
-# This will output your local SUPABASE_URL and ANON_KEY — copy them to .env
+# Copy API URL, anon key, and service_role key from output into .env
+```
+
+Expected local values:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key from supabase start>
+SUPABASE_SERVICE_ROLE_KEY=<service_role key from supabase start>
 ```
 
 ### 3. Run database migrations
@@ -35,8 +43,8 @@ supabase db reset
 ### 4. Start the Next.js app
 
 ```bash
-npm install
-npm run dev
+bun install
+bun run dev
 # Open http://localhost:3000
 ```
 
@@ -60,6 +68,12 @@ This starts:
 - **app** — Next.js on port 3000
 - **ai** — FastAPI on port 8000
 - **db** — PostgreSQL 15 on port 5432
+
+## Supabase Local Notes
+
+- Supabase Studio is available at `http://localhost:54323`.
+- Use `supabase db reset` for a clean local rebuild (migrations + seed).
+- Use `supabase migration up` when you only want pending migrations.
 
 ## Project Structure
 

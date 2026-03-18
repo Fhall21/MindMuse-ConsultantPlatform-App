@@ -1,0 +1,2 @@
+-- v1 MVP: no default seed fixtures yet.
+-- This file is executed by `supabase db reset` because seed is enabled in config.toml.

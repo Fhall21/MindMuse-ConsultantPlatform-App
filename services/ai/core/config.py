@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    openai_api_key: str = ""
+    openai_api_key: str
     openai_model: str = "gpt-4o"
     allowed_origins: list[str] = ["http://localhost:3000"]
 

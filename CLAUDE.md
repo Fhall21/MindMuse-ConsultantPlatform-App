@@ -118,7 +118,7 @@ The Next.js app calls the AI service via `AI_SERVICE_URL` env var.
 cp .env.example .env           # Fill in keys
 supabase start                 # Local Supabase
 supabase db reset              # Apply migrations
-npm install && npm run dev     # Next.js on :3000
+bun install && bun run dev     # Next.js on :3000
 cd services/ai && uvicorn main:app --reload  # FastAPI on :8000
 ```
 

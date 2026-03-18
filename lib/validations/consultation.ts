@@ -28,3 +28,10 @@ export const evidenceEmailSchema = z.object({
 });
 
 export type EvidenceEmailFormData = z.infer<typeof evidenceEmailSchema>;
+
+export const consultationRoundSchema = z.object({
+  label: z.string().min(1, "Label is required").max(255),
+  description: z.string().max(500).optional(),
+});
+
+export type ConsultationRoundFormData = z.infer<typeof consultationRoundSchema>;

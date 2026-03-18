@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { callAIService } from "@/lib/openai/client";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -169,4 +170,54 @@ export async function reorderGroupMembers(
     .upsert(updates, { onConflict: "round_id,consultation_id" });
 
   if (error) throw error;
+}
+
+// ─── AI actions ───────────────────────────────────────────────────────────────
+
+export interface ConsultationThemeInput {
+  consultation_id: string;
+  consultation_title: string;
+  theme_labels: string[];
+  theme_descriptions: string[];
+}
+
+export interface SuggestedConsultationGroup {
+  label: string;
+  consultation_ids: string[];
+  explanation: string;
+}
+
+/**
+ * Ask the AI to suggest consultation groups based on selected focus themes.
+ * Sends theme text inline — the AI sidecar stays stateless.
+ */
+export async function suggestConsultationGroups(
+  roundLabel: string | null,
+  selectedThemeLabels: string[],
+  consultations: ConsultationThemeInput[]
+): Promise<SuggestedConsultationGroup[]> {
+  const result = await callAIService("/rounds/suggest-consultation-groups", {
+    round_label: roundLabel,
+    selected_theme_labels: selectedThemeLabels,
+    consultations,
+  });
+
+  return (result.groups ?? []) as SuggestedConsultationGroup[];
+}
+
+/**
+ * Generate a short evidence summary for a consultation group.
+ */
+export async function generateGroupSummary(
+  roundLabel: string | null,
+  groupLabel: string,
+  consultations: ConsultationThemeInput[]
+): Promise<{ title: string; content: string }> {
+  const result = await callAIService("/rounds/generate-group-summary", {
+    round_label: roundLabel,
+    group_label: groupLabel,
+    consultations,
+  });
+
+  return { title: result.title ?? groupLabel, content: result.content ?? "" };
 }

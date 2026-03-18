@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { PersonForm } from "@/components/people/person-form";
 import { PersonSheet } from "@/components/people/person-sheet";
@@ -23,6 +24,21 @@ import type { PersonFormData } from "@/lib/validations/consultation";
 
 function isNonEmptyString(value: string | null | undefined): value is string {
   return Boolean(value?.trim());
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object" && "message" in error) {
+    const message = error.message;
+    if (typeof message === "string" && message.length > 0) {
+      return message;
+    }
+  }
+
+  return "Unable to save this person right now.";
 }
 
 function getDistinctPersonValues(
@@ -122,6 +138,9 @@ export default function PeoplePage() {
       if (selectedPersonId) {
         setSelectedPersonId(null);
       }
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error));
     },
   });
 
@@ -233,12 +252,16 @@ export default function PeoplePage() {
             workingGroupOptions={workingGroupOptions}
             workTypeOptions={workTypeOptions}
             onSubmit={async (values) => {
-              if (editingPerson) {
-                await updateMutation.mutateAsync(values);
-                return;
-              }
+              try {
+                if (editingPerson) {
+                  await updateMutation.mutateAsync(values);
+                  return;
+                }
 
-              await createMutation.mutateAsync(values);
+                await createMutation.mutateAsync(values);
+              } catch (error) {
+                toast.error(getErrorMessage(error));
+              }
             }}
           />
         </DialogContent>

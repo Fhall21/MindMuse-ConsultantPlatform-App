@@ -32,6 +32,21 @@ function isNonEmptyString(value: string | null | undefined): value is string {
   return Boolean(value?.trim());
 }
 
+function getErrorMessage(error: unknown, fallbackMessage: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object" && "message" in error) {
+    const message = error.message;
+    if (typeof message === "string" && message.length > 0) {
+      return message;
+    }
+  }
+
+  return fallbackMessage;
+}
+
 function getDistinctPersonValues(
   people: Person[] | undefined,
   field: "working_group" | "work_type"
@@ -114,7 +129,7 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
       setSearch("");
     } catch (err) {
       console.error(err);
-      toast.error("Failed to link person.");
+      toast.error(getErrorMessage(err, "Failed to link person."));
     } finally {
       setLinking(null);
     }
@@ -127,7 +142,7 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
       invalidate();
     } catch (err) {
       console.error(err);
-      toast.error("Failed to unlink person.");
+      toast.error(getErrorMessage(err, "Failed to unlink person."));
     } finally {
       setUnlinking(null);
     }
@@ -151,7 +166,7 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
       reset();
     } catch (err) {
       console.error(err);
-      toast.error("Failed to create and link person.");
+      toast.error(getErrorMessage(err, "Failed to create and link person."));
     } finally {
       setCreating(false);
     }

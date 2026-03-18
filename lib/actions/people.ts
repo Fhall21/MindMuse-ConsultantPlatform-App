@@ -4,6 +4,37 @@ import { createClient } from "@/lib/supabase/server";
 import { AUDIT_ACTIONS } from "./audit-actions";
 import { emitAuditEvent } from "./audit";
 
+function normalizePeopleWriteError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return error;
+  }
+
+  const record = error as Record<string, unknown>;
+  const combinedText = [
+    record.code,
+    record.message,
+    record.details,
+    record.hint,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .join(" ")
+    .toLowerCase();
+
+  const isClassificationSchemaError =
+    (combinedText.includes("working_group") || combinedText.includes("work_type")) &&
+    (combinedText.includes("schema cache") ||
+      combinedText.includes("column") ||
+      combinedText.includes("does not exist"));
+
+  if (isClassificationSchemaError) {
+    return new Error(
+      "The database is missing the new People classification fields. Run the latest Supabase migration, then try again."
+    );
+  }
+
+  return error;
+}
+
 interface CreatePersonParams {
   name: string;
   working_group?: string;
@@ -26,20 +57,28 @@ export async function createPerson({
     throw new Error("Not authenticated");
   }
 
+  const personPayload: Record<string, string | null> = {
+    user_id: user.user.id,
+    name,
+    role: role || null,
+    email: email || null,
+  };
+
+  if (working_group !== undefined) {
+    personPayload.working_group = working_group || null;
+  }
+
+  if (work_type !== undefined) {
+    personPayload.work_type = work_type || null;
+  }
+
   const { data, error } = await supabase
     .from("people")
-    .insert({
-      user_id: user.user.id,
-      name,
-      working_group: working_group || null,
-      work_type: work_type || null,
-      role: role || null,
-      email: email || null,
-    })
+    .insert(personPayload)
     .select("id")
     .single();
 
-  if (error) throw error;
+  if (error) throw normalizePeopleWriteError(error);
 
   return data.id;
 }
@@ -75,7 +114,7 @@ export async function updatePerson({
     .update(updates)
     .eq("id", id);
 
-  if (error) throw error;
+  if (error) throw normalizePeopleWriteError(error);
 
   await emitAuditEvent({
     consultationId: null,

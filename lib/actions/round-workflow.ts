@@ -1028,6 +1028,14 @@ export async function createRoundThemeGroup(
     roundId,
     themeIds: seedThemeIds,
   });
+  const existingMemberships = await loadThemeMembershipsForRound({
+    supabase,
+    roundId,
+    themeIds: seedThemes.map((theme) => theme.id),
+  });
+  const previousGroupIds = Array.from(
+    new Set(existingMemberships.map((membership) => membership.group_id))
+  );
 
   const defaultLabel =
     seedThemes.length === 1 ? seedThemes[0].label : "Round theme group";
@@ -1054,7 +1062,7 @@ export async function createRoundThemeGroup(
   const group = data as RoundThemeGroup;
 
   if (seedThemes.length > 0) {
-    await supabase
+    const { error: deleteMembershipError } = await supabase
       .from("round_theme_group_members")
       .delete()
       .eq("round_id", roundId)
@@ -1062,6 +1070,10 @@ export async function createRoundThemeGroup(
         "theme_id",
         seedThemes.map((theme) => theme.id)
       );
+
+    if (deleteMembershipError) {
+      throw deleteMembershipError;
+    }
 
     const { error: memberError } = await supabase
       .from("round_theme_group_members")
@@ -1089,6 +1101,29 @@ export async function createRoundThemeGroup(
       userId,
       structuralChange: "create_group",
     });
+
+    for (const previousGroupId of previousGroupIds) {
+      const previousGroup = await loadGroupForRound({
+        supabase,
+        userId,
+        roundId,
+        groupId: previousGroupId,
+      });
+      const discarded = await maybeDiscardEmptyGroup({
+        supabase,
+        group: previousGroup,
+      });
+
+      if (!discarded) {
+        await refreshGroupDraftForCurrentMembers({
+          supabase,
+          userId,
+          round,
+          groupId: previousGroupId,
+          structuralChange: "move_theme_out_of_group",
+        });
+      }
+    }
   }
 
   await emitAuditEvent({
@@ -1919,6 +1954,30 @@ async function loadThemeMembershipForRound(params: {
   }
 
   return ((data ?? []) as RoundThemeGroupMember[])[0] ?? null;
+}
+
+async function loadThemeMembershipsForRound(params: {
+  supabase: SupabaseServerClient;
+  roundId: string;
+  themeIds: string[];
+}) {
+  const { supabase, roundId, themeIds } = params;
+
+  if (themeIds.length === 0) {
+    return [] as RoundThemeGroupMember[];
+  }
+
+  const { data, error } = await supabase
+    .from("round_theme_group_members")
+    .select("*")
+    .eq("round_id", roundId)
+    .in("theme_id", themeIds);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as RoundThemeGroupMember[];
 }
 
 async function refreshGroupDraftForCurrentMembers(params: {

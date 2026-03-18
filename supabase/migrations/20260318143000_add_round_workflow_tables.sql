@@ -56,7 +56,7 @@ create table if not exists round_theme_group_members (
   position integer not null default 0 check (position >= 0),
   created_by uuid not null references auth.users(id) on delete cascade,
   created_at timestamptz not null default now(),
-  unique (group_id, theme_id)
+  unique (round_id, theme_id)
 );
 
 alter table round_theme_group_members enable row level security;

@@ -32,3 +32,22 @@ class EmailDraftRequest(BaseModel):
 class EmailDraftResponse(BaseModel):
     subject: str
     body: str
+
+
+# --- Clarification questions ---
+
+
+class ClarificationRequest(BaseModel):
+    transcript: str
+    themes: list[str]             # Accepted themes so far
+    context_notes: str | None = None  # Optional: anything the consultant already added
+
+
+class ClarificationQuestion(BaseModel):
+    question: str               # The question itself
+    type: str                   # 'confirm' | 'expand' | 'missing'
+    theme_label: str | None     # Which theme it relates to, if any
+
+
+class ClarificationResponse(BaseModel):
+    questions: list[ClarificationQuestion]

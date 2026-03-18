@@ -16,7 +16,6 @@ import {
   type IncludedThemeSelection,
 } from "@/lib/actions/reports";
 import type { EvidenceEmail } from "@/types/db";
-import { ConsultationReportPanel } from "@/components/reports/consultation-report-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -209,25 +208,24 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
     [consultationQuery.data?.themes]
   );
 
-  const includedThemes = useMemo<IncludedThemeSelection[]>(
-    () =>
-      reportQuery.data?.includedThemes ??
-      buildFallbackIncludedThemes({
-        consultationId,
-        consultationTitle: consultationQuery.data?.consultation.title,
-        roundId: consultationQuery.data?.consultation.round_id,
-        roundLabel: reportQuery.data?.roundLabel ?? null,
-        labels: acceptedThemeLabels,
-      }),
-    [
-      acceptedThemeLabels,
+  const includedThemes = useMemo<IncludedThemeSelection[]>(() => {
+    const fromReport = reportQuery.data?.includedThemes;
+    if (fromReport && fromReport.length > 0) return fromReport;
+    return buildFallbackIncludedThemes({
       consultationId,
-      consultationQuery.data?.consultation.round_id,
-      consultationQuery.data?.consultation.title,
-      reportQuery.data?.includedThemes,
-      reportQuery.data?.roundLabel,
-    ]
-  );
+      consultationTitle: consultationQuery.data?.consultation.title,
+      roundId: consultationQuery.data?.consultation.round_id,
+      roundLabel: reportQuery.data?.roundLabel ?? null,
+      labels: acceptedThemeLabels,
+    });
+  }, [
+    acceptedThemeLabels,
+    consultationId,
+    consultationQuery.data?.consultation.round_id,
+    consultationQuery.data?.consultation.title,
+    reportQuery.data?.includedThemes,
+    reportQuery.data?.roundLabel,
+  ]);
 
   const includedThemeLabels = useMemo(
     () => includedThemes.map((theme) => theme.label),
@@ -425,10 +423,6 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                   peopleQuery.error
               )}
             </p>
-          ) : null}
-
-          {reportQuery.data ? (
-            <ConsultationReportPanel report={reportQuery.data} />
           ) : null}
 
           {!consultationQuery.isPending &&

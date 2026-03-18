@@ -67,3 +67,4 @@ supabase/.temp/
 .vscode/
 *.swp
 *.swo
+.gstack/

@@ -44,7 +44,7 @@ export function RoundsPanel({
   }
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-wrap items-center gap-4">
       <span className="text-sm text-muted-foreground">
         {currentRoundLabel ?? "No round assigned"}
       </span>

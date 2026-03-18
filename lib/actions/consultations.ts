@@ -49,6 +49,41 @@ interface UpdateTranscriptParams {
   transcriptRaw: string;
 }
 
+export async function updateConsultationTitle({
+  id,
+  title,
+}: {
+  id: string;
+  title: string;
+}) {
+  const trimmedTitle = title.trim();
+
+  if (!trimmedTitle) {
+    throw new Error("Title is required");
+  }
+
+  if (trimmedTitle.length > 255) {
+    throw new Error("Title must be 255 characters or fewer");
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("consultations")
+    .update({ title: trimmedTitle })
+    .eq("id", id);
+
+  if (error) throw error;
+
+  await emitAuditEvent({
+    consultationId: id,
+    action: AUDIT_ACTIONS.CONSULTATION_TITLE_EDITED,
+    entityType: "consultation",
+    entityId: id,
+    metadata: { title: trimmedTitle },
+  });
+}
+
 export async function updateTranscript({
   id,
   transcriptRaw,

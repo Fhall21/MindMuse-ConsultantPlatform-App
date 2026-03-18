@@ -1,11 +1,12 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -25,7 +26,10 @@ import { NotesEditor } from "@/components/consultations/notes-editor";
 import { PeoplePanel } from "@/components/consultations/people-panel";
 import { RoundsPanel } from "@/components/consultations/rounds-panel";
 import { useConsultation, useConsultationRounds } from "@/hooks/use-consultations";
-import { markConsultationComplete } from "@/lib/actions/consultations";
+import {
+  markConsultationComplete,
+  updateConsultationTitle,
+} from "@/lib/actions/consultations";
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
@@ -47,11 +51,21 @@ export default function ConsultationDetailPage({
 
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [savingTitle, setSavingTitle] = useState(false);
 
   const consultation = data?.consultation;
   const isDraft = consultation?.status === "draft";
 
   const currentRound = rounds?.find((r) => r.id === consultation?.round_id) ?? null;
+  const normalizedSavedTitle = consultation?.title.trim() ?? "";
+  const normalizedDraftTitle = titleDraft.trim();
+  const titleChanged = normalizedDraftTitle !== normalizedSavedTitle;
+  const titleInvalid = normalizedDraftTitle.length === 0 || normalizedDraftTitle.length > 255;
+
+  useEffect(() => {
+    setTitleDraft(consultation?.title ?? "");
+  }, [consultation?.title]);
 
   async function handleMarkComplete() {
     setCompleting(true);
@@ -64,6 +78,23 @@ export default function ConsultationDetailPage({
       toast.error("Failed to mark consultation as complete.");
     } finally {
       setCompleting(false);
+    }
+  }
+
+  async function handleSaveTitle() {
+    if (!consultation || savingTitle || !titleChanged || titleInvalid) return;
+
+    setSavingTitle(true);
+    try {
+      await updateConsultationTitle({ id, title: titleDraft });
+      await queryClient.invalidateQueries({ queryKey: ["consultations", id] });
+      toast.success("Consultation title updated.");
+    } catch (err) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : "Failed to update consultation title.";
+      toast.error(message);
+    } finally {
+      setSavingTitle(false);
     }
   }
 
@@ -93,33 +124,107 @@ export default function ConsultationDetailPage({
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       {/* Header */}
-      <div className="space-y-3">
+      <div className="space-y-4">
         <nav className="text-sm text-muted-foreground">
           <Link href="/consultations" className="hover:text-foreground">
             Consultations
           </Link>
           <span className="mx-2">/</span>
-          <span className="text-foreground">{consultation.title}</span>
+          <span className="text-foreground">{normalizedSavedTitle}</span>
         </nav>
 
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {consultation.title}
-          </h1>
+        <div className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="space-y-2">
+                <label
+                  htmlFor="consultation-title"
+                  className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+                >
+                  Consultation title
+                </label>
+                <Input
+                  id="consultation-title"
+                  value={titleDraft}
+                  onChange={(event) => setTitleDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleSaveTitle();
+                    }
+                  }}
+                  placeholder="Enter consultation title"
+                  className="h-11 text-base font-semibold sm:text-lg"
+                />
+              </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            <Badge variant={isDraft ? "outline" : "secondary"}>
-              {isDraft ? "Draft" : "Complete"}
-            </Badge>
-            {isDraft && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setConfirmCompleteOpen(true)}
-              >
-                Mark complete
-              </Button>
-            )}
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSaveTitle}
+                  disabled={!titleChanged || titleInvalid || savingTitle}
+                >
+                  {savingTitle ? "Saving…" : "Save title"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setTitleDraft(consultation.title)}
+                  disabled={!titleChanged || savingTitle}
+                >
+                  Reset
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {titleInvalid
+                    ? "Title must be between 1 and 255 characters."
+                    : titleChanged
+                      ? "Unsaved title changes"
+                      : "Title saved"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <Badge variant={isDraft ? "outline" : "secondary"}>
+                {isDraft ? "Draft" : "Complete"}
+              </Badge>
+              {isDraft && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setConfirmCompleteOpen(true)}
+                >
+                  Mark complete
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-3 border-t pt-4">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Round
+              </p>
+              <RoundsPanel
+                consultationId={id}
+                currentRoundId={consultation.round_id}
+                currentRoundLabel={currentRound?.label ?? null}
+              />
+            </div>
+
+            {consultation.round_id ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/consultations/rounds/${consultation.round_id}`}>
+                    Open round workspace &rarr;
+                  </Link>
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  View theme grouping, synthesis, and round outputs
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -162,30 +267,6 @@ export default function ConsultationDetailPage({
       <section className="space-y-3">
         <SectionHeading>People</SectionHeading>
         <PeoplePanel consultationId={id} />
-      </section>
-
-      <Separator />
-
-      {/* Round */}
-      <section className="space-y-3">
-        <SectionHeading>Round</SectionHeading>
-        <RoundsPanel
-          consultationId={id}
-          currentRoundId={consultation.round_id}
-          currentRoundLabel={currentRound?.label ?? null}
-        />
-        {consultation.round_id ? (
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/consultations/rounds/${consultation.round_id}`}>
-                Open round workspace &rarr;
-              </Link>
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              View theme grouping, synthesis, and round outputs
-            </span>
-          </div>
-        ) : null}
       </section>
 
       <Separator />

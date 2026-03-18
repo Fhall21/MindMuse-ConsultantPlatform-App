@@ -1,6 +1,7 @@
 import json
 
 from fastapi import APIRouter, HTTPException
+from pydantic import ValidationError
 
 from core.config import settings
 from core.openai_client import get_client
@@ -70,5 +71,18 @@ async def generate_clarification_questions(request: ClarificationRequest):
     if not content:
         raise HTTPException(status_code=502, detail="Empty response from LLM")
 
-    parsed = json.loads(content)
-    return ClarificationResponse(**parsed)
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Model returned invalid JSON: {e}",
+        )
+
+    try:
+        return ClarificationResponse(**parsed)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Model output did not match expected schema: {e}",
+        )

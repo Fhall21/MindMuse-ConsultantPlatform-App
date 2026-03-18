@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import heic2any from "heic2any";
 import { useOcrJobs } from "@/hooks/use-ingestion";
 import { saveOcrCorrections, submitOcrResult } from "@/lib/actions/ocr";
 import { Button } from "@/components/ui/button";
@@ -35,6 +34,15 @@ function formatConfidence(score: number | null): string {
 
 function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleString();
+}
+
+async function loadHeic2Any() {
+  if (typeof window === "undefined") {
+    throw new Error("HEIC conversion is only available in the browser.");
+  }
+
+  const heicModule = await import("heic2any");
+  return heicModule.default;
 }
 
 export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps) {
@@ -86,6 +94,7 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
       let imageBlob: Blob = file;
 
       if (isHeic) {
+        const heic2any = await loadHeic2Any();
         const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
         imageBlob = Array.isArray(converted) ? converted[0] : converted;
       }
@@ -168,7 +177,7 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
                 <li>Use good natural or overhead lighting; avoid shadows across the page.</li>
                 <li>Make sure the entire page fits in the frame with a small margin.</li>
                 <li>Hold the phone steady, or rest it on a surface to avoid blur.</li>
-                <li>Use your camera's highest resolution and avoid digital zoom.</li>
+                <li>Use your camera&apos;s highest resolution and avoid digital zoom.</li>
               </ol>
             </div>
           )}

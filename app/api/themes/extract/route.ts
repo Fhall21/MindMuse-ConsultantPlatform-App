@@ -20,6 +20,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ detail: message }, { status: 502 });
   }
 
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    const text = await response.text();
+    return NextResponse.json({ detail: text }, { status: response.ok ? 502 : response.status });
+  }
+
   const data = await response.json();
 
   if (!response.ok) {

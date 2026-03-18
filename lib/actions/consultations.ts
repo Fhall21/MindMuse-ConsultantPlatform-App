@@ -85,7 +85,7 @@ export async function setConsultationRound(
 
   await emitAuditEvent({
     consultationId: id,
-    action: "consultation.round_assigned",
+    action: AUDIT_ACTIONS.CONSULTATION_ROUND_ASSIGNED,
     entityType: "consultation",
     entityId: id,
     metadata: { roundId },

@@ -33,7 +33,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-const AI_SERVICE_URL = process.env.NEXT_PUBLIC_AI_SERVICE_URL ?? "http://localhost:8000";
 
 interface EmailDraftPanelProps {
   consultationId: string;
@@ -102,7 +101,7 @@ async function generateEmailDraft(payload: {
   consultation_title?: string;
   consultation_date?: string;
 }) {
-  const response = await fetch(`${AI_SERVICE_URL}/draft/email`, {
+  const response = await fetch("/api/draft/email", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

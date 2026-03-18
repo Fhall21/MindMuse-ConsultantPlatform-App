@@ -21,5 +21,14 @@ export type {
   IngestionStatus,
   IngestionArtifactType,
 } from "./database";
+export type {
+  AuditExportArtifactSummary,
+  AuditExportConsultationRecord,
+  AuditExportEvent,
+  AuditExportFilters,
+  AuditExportFormat,
+  AuditExportLifecycleMarker,
+  AuditExportPackage,
+} from "./audit-export";
 
 export type { ConsultationFormData, ThemeFormData, PersonFormData, EvidenceEmailFormData } from "@/lib/validations/consultation";

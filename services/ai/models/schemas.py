@@ -9,8 +9,9 @@ class ThemeExtractRequest(BaseModel):
 
 
 class ExtractedTheme(BaseModel):
-    label: str
-    confidence: float
+    label: str           # Short label, e.g. "Workplace stress"
+    description: str     # One sentence: why this is a theme
+    confidence: float    # 0.0–1.0
 
 
 class ThemeExtractResponse(BaseModel):

@@ -20,6 +20,7 @@ import { AuditTrail } from "@/components/audit/audit-trail";
 import { ThemePanel } from "@/components/consultations/theme-panel";
 import { EmailDraftPanel } from "@/components/evidence/email-draft-panel";
 import { TranscriptIntakePanel } from "@/components/consultations/transcript-intake-panel";
+import { OcrReviewPanel } from "@/components/consultations/ocr-review-panel";
 import { NotesEditor } from "@/components/consultations/notes-editor";
 import { PeoplePanel } from "@/components/consultations/people-panel";
 import { RoundsPanel } from "@/components/consultations/rounds-panel";
@@ -133,6 +134,14 @@ export default function ConsultationDetailPage({
           initialTranscript={consultation.transcript_raw}
           readOnly={!isDraft}
         />
+      </section>
+
+      <Separator />
+
+      {/* Handwritten notes OCR */}
+      <section className="space-y-3">
+        <SectionHeading>Handwritten notes photo</SectionHeading>
+        <OcrReviewPanel consultationId={id} />
       </section>
 
       <Separator />

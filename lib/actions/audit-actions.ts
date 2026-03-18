@@ -45,4 +45,5 @@ export const AUDIT_ACTIONS = {
   OCR_EXTRACTION_FAILED: "ocr.extraction_failed",
   OCR_REVIEW_ACCEPTED: "ocr.review_accepted",
   OCR_REVIEW_REJECTED: "ocr.review_rejected",
+  OCR_CORRECTIONS_SAVED: "ocr.corrections_saved",
 } as const;

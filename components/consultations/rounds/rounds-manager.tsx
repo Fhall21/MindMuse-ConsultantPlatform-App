@@ -200,7 +200,7 @@ export function RoundsManager() {
             </div>
           ) : (
             <div className="space-y-3">
-              {rounds.map((round) => {
+              {rounds?.map((round) => {
                 const linkedCount = consultationCounts[round.id] ?? 0;
                 return (
                   <div key={round.id} className="rounded-md border p-4">

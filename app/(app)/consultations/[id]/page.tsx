@@ -213,7 +213,7 @@ export default function ConsultationDetailPage({
               />
             </div>
 
-            {consultation.round_id ? (
+            {!isDraft && consultation.round_id ? (
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" asChild>
                   <Link href={`/consultations/rounds/${consultation.round_id}`}>

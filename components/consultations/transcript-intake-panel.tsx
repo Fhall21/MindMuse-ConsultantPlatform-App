@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { TranscriptEditor } from "./transcript-editor";
 import { AudioUploadPanel } from "./audio-upload-panel";
@@ -36,17 +36,35 @@ export function TranscriptIntakePanel({
   readOnly = false,
 }: TranscriptIntakePanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>("paste");
-  // Transcript value that can be updated by file or audio routes
+  // transcriptValue seeds TranscriptEditor on (re)mount.
+  // It can be updated by file/audio routes, but also stays in sync with the
+  // server value so that after a save+refetch the editor doesn't show stale data.
   const [transcriptValue, setTranscriptValue] = useState<string | null>(
     initialTranscript
   );
+  // Track whether we have a pending locally-loaded value (file/audio) that hasn't
+  // been saved yet — while pending we don't overwrite with the server value.
+  const pendingLocalRef = useRef(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Sync transcriptValue when the server refetches the transcript (e.g. after save).
+  // Skip sync if a local file/audio load is pending to avoid clobbering it.
+  useEffect(() => {
+    if (!pendingLocalRef.current) {
+      setTranscriptValue(initialTranscript);
+    }
+  }, [initialTranscript]);
+
   function handleTranscriptFromAudio(text: string) {
+    pendingLocalRef.current = true;
     setTranscriptValue(text);
-    // Switch to paste tab so the user can review/edit
     setActiveTab("paste");
+  }
+
+  function handleTranscriptSaved() {
+    // Local value has been persisted — allow server refetches to sync again
+    pendingLocalRef.current = false;
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -63,8 +81,8 @@ export function TranscriptIntakePanel({
       const reader = new FileReader();
       reader.onload = () => {
         const text = reader.result as string;
+        pendingLocalRef.current = true;
         setTranscriptValue(text);
-        // Switch to paste tab so user can review and save
         setActiveTab("paste");
       };
       reader.onerror = () => {
@@ -133,6 +151,7 @@ export function TranscriptIntakePanel({
           consultationId={consultationId}
           initialValue={transcriptValue}
           readOnly={false}
+          onSaved={handleTranscriptSaved}
         />
       )}
 

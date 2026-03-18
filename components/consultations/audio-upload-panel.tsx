@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useTranscriptionStatus } from "@/hooks/use-transcription";
 import { uploadAudioForTranscription } from "@/lib/actions/ingestion";
@@ -57,15 +57,14 @@ export function AudioUploadPanel({
 
   const { data: job, error: jobError } = useTranscriptionStatus(jobId);
 
-  // Notify parent once when completed
-  if (
-    job?.status === "completed" &&
-    job.transcript &&
-    !transcriptConsumed
-  ) {
-    setTranscriptConsumed(true);
-    onTranscriptReady(job.transcript);
-  }
+  // Notify parent once when transcription completes — must be in an effect,
+  // not render body, to avoid React Strict Mode double-fire and state-during-render warnings.
+  useEffect(() => {
+    if (job?.status === "completed" && job.transcript && !transcriptConsumed) {
+      setTranscriptConsumed(true);
+      onTranscriptReady(job.transcript);
+    }
+  }, [job?.status, job?.transcript, transcriptConsumed, onTranscriptReady]);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
@@ -61,6 +61,11 @@ export function ThemeGroupingWorkspace({
 
   const [groups, setGroups] = useState<any[]>(initialGroups);
   const [selectedThemeIds, setSelectedThemeIds] = useState<Set<string>>(new Set());
+
+  // Sync local state when the server-fetched groups change (e.g. after AI group creation)
+  useEffect(() => {
+    setGroups(initialGroups);
+  }, [initialGroups]);
   const [mergeSelectedGroupIds, setMergeSelectedGroupIds] = useState<Set<string>>(new Set());
   const [isDragOverUngrouped, setIsDragOverUngrouped] = useState(false);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
@@ -123,11 +128,12 @@ export function ThemeGroupingWorkspace({
       const theme = sourceThemes.find((t) => t.id === themeId);
       if (!theme) return;
 
+      // Optimistic update
       setGroups((prev) => {
-        // Remove from any existing group
+        // Remove from any existing group (use themeId, not member row id)
         const cleaned = prev.map((g) => ({
           ...g,
-          members: g.members.filter((m: any) => m.id !== themeId),
+          members: g.members.filter((m: any) => m.themeId !== themeId),
         }));
 
         // Add to target group
@@ -135,7 +141,7 @@ export function ThemeGroupingWorkspace({
           if (g.id === targetGroupId) {
             return {
               ...g,
-              members: [...g.members, { ...theme, isGrouped: true, groupId: targetGroupId }],
+              members: [...g.members, { ...theme, themeId: themeId, isGrouped: true, groupId: targetGroupId }],
               lastStructuralChangeAt: new Date().toISOString(),
             };
           }
@@ -143,9 +149,15 @@ export function ThemeGroupingWorkspace({
         });
       });
 
-      onStructuralChange?.();
+      // Persist to server
+      void moveThemeToGroup(themeId, targetGroupId).then(() => {
+        queryClient.invalidateQueries({
+          queryKey: ["consultation_rounds", roundId, "detail"],
+        });
+        onStructuralChange?.();
+      });
     },
-    [sourceThemes, onStructuralChange]
+    [sourceThemes, roundId, queryClient, onStructuralChange]
   );
 
   const handleDropOnUngrouped = useCallback(
@@ -155,7 +167,13 @@ export function ThemeGroupingWorkspace({
       const themeId = e.dataTransfer.getData("text/plain");
       if (!themeId) return;
 
-      // Remove from any group
+      // Only act if the theme was actually in a group
+      const wasGrouped = groups.some((g) =>
+        g.members.some((m: any) => m.themeId === themeId)
+      );
+      if (!wasGrouped) return;
+
+      // Optimistic update — remove from all groups
       setGroups((prev) =>
         prev.map((g) => ({
           ...g,
@@ -166,9 +184,15 @@ export function ThemeGroupingWorkspace({
         }))
       );
 
-      onStructuralChange?.();
+      // Persist: null target = ungroup
+      void moveThemeToGroup(themeId, null).then(() => {
+        queryClient.invalidateQueries({
+          queryKey: ["consultation_rounds", roundId, "detail"],
+        });
+        onStructuralChange?.();
+      });
     },
-    [onStructuralChange]
+    [groups, roundId, queryClient, onStructuralChange]
   );
 
   // ─── Theme selection ───────────────────────────────────────────────────────

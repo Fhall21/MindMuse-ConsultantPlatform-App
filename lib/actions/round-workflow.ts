@@ -112,6 +112,7 @@ export interface RoundDecisionHistoryItem {
   id: string;
   targetType: RoundDecisionTargetType;
   targetId: string;
+  targetLabel: string | null;
   decisionType: RoundDecisionType;
   rationale: string | null;
   actor: string;
@@ -1082,16 +1083,26 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
     sourceThemes,
     themeGroups: groupDetails,
     consultationGroups: consultationGroupDetails,
-    decisionHistory: decisions.map((decision) => ({
-      id: decision.id,
-      targetType: decision.target_type,
-      targetId: decision.target_id,
-      decisionType: decision.decision_type,
-      rationale: decision.rationale ?? null,
-      actor: decision.user_id,
-      timestamp: decision.created_at,
-      metadata: decision.metadata ?? null,
-    })),
+    decisionHistory: (() => {
+      const groupLabelById = new Map(groupDetails.map((g) => [g.id, g.label]));
+      const themeLabelById = new Map(sourceThemes.map((t) => [t.sourceThemeId, t.label]));
+      return decisions.map((decision) => ({
+        id: decision.id,
+        targetType: decision.target_type,
+        targetId: decision.target_id,
+        targetLabel:
+          decision.target_type === "theme_group"
+            ? (groupLabelById.get(decision.target_id) ?? null)
+            : decision.target_type === "source_theme"
+              ? (themeLabelById.get(decision.target_id) ?? null)
+              : null,
+        decisionType: decision.decision_type,
+        rationale: decision.rationale ?? null,
+        actor: decision.user_id,
+        timestamp: decision.created_at,
+        metadata: decision.metadata ?? null,
+      }));
+    })(),
     outputs: buildOutputCollection(outputs),
     history,
     analytics: {

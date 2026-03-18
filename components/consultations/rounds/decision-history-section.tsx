@@ -67,8 +67,10 @@ export function DecisionHistorySection({
                 </Badge>
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="text-sm">
-                    <span className="font-medium">{d.targetId}</span>
-                    <span className="text-muted-foreground"> ({d.targetType.replace("_", " ")})</span>
+                    <span className="font-medium">
+                      {d.targetLabel ?? `${d.targetId.slice(0, 8)}…`}
+                    </span>
+                    <span className="text-muted-foreground"> ({d.targetType.replaceAll("_", " ")})</span>
                   </p>
                   {d.rationale ? (
                     <p className="text-xs text-muted-foreground">

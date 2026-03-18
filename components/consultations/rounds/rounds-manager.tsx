@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -199,7 +200,7 @@ export function RoundsManager() {
             </div>
           ) : (
             <div className="space-y-3">
-              {rounds.map((round) => {
+              {rounds?.map((round) => {
                 const linkedCount = consultationCounts[round.id] ?? 0;
                 return (
                   <div key={round.id} className="rounded-md border p-4">
@@ -262,7 +263,12 @@ export function RoundsManager() {
                     ) : (
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-0.5">
-                          <p className="text-sm font-medium">{round.label}</p>
+                          <Link
+                            href={`/consultations/rounds/${round.id}`}
+                            className="text-sm font-medium hover:text-primary hover:underline transition-colors"
+                          >
+                            {round.label}
+                          </Link>
                           {round.description ? (
                             <p className="text-sm text-muted-foreground">{round.description}</p>
                           ) : null}
@@ -271,6 +277,15 @@ export function RoundsManager() {
                           </p>
                         </div>
                         <div className="flex shrink-0 gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            asChild
+                          >
+                            <Link href={`/consultations/rounds/${round.id}`}>
+                              View
+                            </Link>
+                          </Button>
                           <Button
                             type="button"
                             size="sm"

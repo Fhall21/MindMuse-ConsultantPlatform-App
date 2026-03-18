@@ -1,23 +1,24 @@
 "use client";
 
-import { use, useCallback } from "react";
+import { use, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRoundDetail } from "@/hooks/use-round-detail";
+import { useRoundDetail } from "@/hooks/use-rounds";
 import { RoundDetailHeader } from "@/components/consultations/rounds/round-detail-header";
 import { LinkedConsultationsSection } from "@/components/consultations/rounds/linked-consultations-section";
 import { ThemeGroupingWorkspace } from "@/components/consultations/rounds/theme-grouping-workspace";
 import { RoundOutputsSection } from "@/components/consultations/rounds/round-outputs-section";
 import { DecisionHistorySection } from "@/components/consultations/rounds/decision-history-section";
 import { AnalyticsPlaceholder } from "@/components/consultations/rounds/analytics-placeholder";
+import type { SourceTheme, RoundThemeGroup } from "@/types/round-detail";
 import {
   generateRoundSummary,
   generateRoundReport,
   generateRoundEmail,
-} from "@/lib/actions/round-detail";
+} from "@/lib/actions/round-workflow";
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
@@ -35,9 +36,30 @@ export default function RoundDetailPage({
   const { id } = use(params);
   const { data, isLoading, error } = useRoundDetail(id);
 
+  // Adapt Agent 1 types to component-friendly shapes
+  const adaptedSourceThemes = useMemo((): SourceTheme[] => {
+    if (!data?.sourceThemes) return [];
+    return data.sourceThemes.map((theme) => ({
+      id: theme.sourceThemeId,
+      sourceConsultationId: theme.consultationId,
+      sourceConsultationTitle: theme.consultationTitle,
+      label: theme.label,
+      description: theme.description,
+      editableLabel: theme.editableLabel,
+      editableDescription: theme.editableDescription,
+      lockedFromSource: theme.lockedFromSource,
+      isGrouped: theme.isGrouped,
+      isUserAdded: theme.isUserAdded,
+      groupId: theme.groupId,
+    }));
+  }, [data?.sourceThemes]);
+
+  const adaptedThemeGroups = useMemo((): RoundThemeGroup[] => {
+    if (!data?.themeGroups) return [];
+    return data.themeGroups;
+  }, [data?.themeGroups]);
+
   const handleStructuralChange = useCallback(() => {
-    // Structural grouping changes trigger a draft AI refinement.
-    // In production this would call the AI service; for now we log it.
     toast.info("Structural change detected — AI refinement will be triggered when available.");
   }, []);
 
@@ -127,8 +149,8 @@ export default function RoundDetailPage({
         <SectionHeading>Theme Grouping</SectionHeading>
         <ThemeGroupingWorkspace
           roundId={id}
-          sourceThemes={data.sourceThemes}
-          initialGroups={data.themeGroups}
+          sourceThemes={adaptedSourceThemes}
+          initialGroups={adaptedThemeGroups}
           onStructuralChange={handleStructuralChange}
         />
       </section>

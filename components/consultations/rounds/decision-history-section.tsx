@@ -8,10 +8,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { RoundDecisionHistoryEntry } from "@/types/round-detail";
+import type { RoundDecisionHistoryItem } from "@/types/round-detail";
 
 interface DecisionHistorySectionProps {
-  decisions: RoundDecisionHistoryEntry[];
+  decisions: RoundDecisionHistoryItem[];
 }
 
 const decisionTypeConfig: Record<
@@ -67,7 +67,7 @@ export function DecisionHistorySection({
                 </Badge>
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="text-sm">
-                    <span className="font-medium">{d.targetLabel}</span>
+                    <span className="font-medium">{d.targetId}</span>
                     <span className="text-muted-foreground"> ({d.targetType.replace("_", " ")})</span>
                   </p>
                   {d.rationale ? (

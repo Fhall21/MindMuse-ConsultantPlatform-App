@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,24 +17,34 @@ import { SourceThemeCard } from "./source-theme-card";
 import { ThemeGroupCard } from "./theme-group-card";
 import { ManagementRejectionDialog } from "./management-rejection-dialog";
 import type {
-  RoundThemeGroup,
-  RoundThemeGroupDraft,
-  SourceTheme,
+  RoundThemeGroupDetail,
+  RoundThemeGroupDraftState,
+  RoundSourceTheme,
 } from "@/types/round-detail";
+import {
+  createRoundThemeGroup,
+  moveThemeToGroup,
+  mergeRoundThemeGroups,
+  splitRoundThemeGroup,
+  acceptRoundTarget,
+  discardRoundTarget,
+  managementRejectRoundTarget,
+  acceptRoundThemeGroupDraft,
+  discardRoundThemeGroupDraft,
+} from "@/lib/actions/round-workflow";
 
 interface ThemeGroupingWorkspaceProps {
   roundId: string;
-  sourceThemes: SourceTheme[];
-  initialGroups: RoundThemeGroup[];
+  sourceThemes: RoundSourceTheme[];
+  initialGroups: RoundThemeGroupDetail[];
   onStructuralChange?: () => void;
 }
 
 /**
- * The main grouping workspace manages client-side state for theme groups.
+ * The main grouping workspace manages theme group operations and state.
  *
- * Until Agent 1 provides the round_theme_groups DB schema, grouping state
- * is managed entirely in React state. Structural changes (create, move,
- * merge, split) trigger onStructuralChange which can request AI refinement.
+ * All mutations call Agent 1's real server actions and invalidate the
+ * round detail query to keep the UI in sync with the server.
  */
 export function ThemeGroupingWorkspace({
   roundId,
@@ -43,7 +54,7 @@ export function ThemeGroupingWorkspace({
 }: ThemeGroupingWorkspaceProps) {
   // ─── State ─────────────────────────────────────────────────────────────────
 
-  const [groups, setGroups] = useState<RoundThemeGroup[]>(initialGroups);
+  const [groups, setGroups] = useState<RoundThemeGroupDetail[]>(initialGroups);
   const [selectedThemeIds, setSelectedThemeIds] = useState<Set<string>>(new Set());
   const [mergeSelectedGroupIds, setMergeSelectedGroupIds] = useState<Set<string>>(new Set());
   const [isDragOverUngrouped, setIsDragOverUngrouped] = useState(false);
@@ -56,32 +67,34 @@ export function ThemeGroupingWorkspace({
     isLocked: boolean;
   } | null>(null);
 
+  const queryClient = useQueryClient();
+
   // ─── Derived data ──────────────────────────────────────────────────────────
 
   const groupedThemeIds = useMemo(() => {
     const ids = new Set<string>();
     for (const group of groups) {
       for (const member of group.members) {
-        ids.add(member.id);
+        ids.add(member.themeId);
       }
     }
     return ids;
   }, [groups]);
 
   const ungroupedThemes = useMemo(
-    () => sourceThemes.filter((t) => !groupedThemeIds.has(t.id)),
+    () => sourceThemes.filter((t) => !groupedThemeIds.has(t.sourceThemeId)),
     [sourceThemes, groupedThemeIds]
   );
 
   const themesByConsultation = useMemo(() => {
-    const map = new Map<string, { title: string; themes: SourceTheme[] }>();
+    const map = new Map<string, { title: string; themes: RoundSourceTheme[] }>();
     for (const theme of ungroupedThemes) {
-      const existing = map.get(theme.sourceConsultationId);
+      const existing = map.get(theme.consultationId);
       if (existing) {
         existing.themes.push(theme);
       } else {
-        map.set(theme.sourceConsultationId, {
-          title: theme.sourceConsultationTitle,
+        map.set(theme.consultationId, {
+          title: theme.consultationTitle,
           themes: [theme],
         });
       }
@@ -170,29 +183,25 @@ export function ThemeGroupingWorkspace({
 
   function handleCreateGroup() {
     const selectedUngrouped = ungroupedThemes.filter((t) =>
-      selectedThemeIds.has(t.id)
+      selectedThemeIds.has(t.sourceThemeId)
     );
 
-    const newGroup: RoundThemeGroup = {
-      id: crypto.randomUUID(),
-      label: selectedUngrouped.length > 0
-        ? `Group from ${selectedUngrouped[0].label}`
-        : "New Group",
-      description: null,
-      status: "draft",
-      origin: "manual",
-      members: selectedUngrouped.map((t) => ({
-        ...t,
-        isGrouped: true,
-        groupId: null,
-      })),
-      pendingDraft: null,
-      lastStructuralChangeAt: new Date().toISOString(),
-    };
+    if (selectedUngrouped.length === 0) {
+      toast.error("Select themes to group");
+      return;
+    }
 
-    setGroups((prev) => [...prev, newGroup]);
-    setSelectedThemeIds(new Set());
-    onStructuralChange?.();
+    void createRoundThemeGroup(
+      roundId,
+      selectedUngrouped.map((t) => t.sourceThemeId),
+      `Group from ${selectedUngrouped[0].label}`
+    ).then(() => {
+      queryClient.invalidateQueries({
+        queryKey: ["consultation_rounds", roundId, "detail"],
+      });
+      setSelectedThemeIds(new Set());
+      onStructuralChange?.();
+    });
   }
 
   function handleMergeGroups() {

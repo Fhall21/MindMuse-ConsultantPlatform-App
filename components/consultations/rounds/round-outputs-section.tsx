@@ -10,11 +10,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { RoundOutput } from "@/types/round-detail";
+import type { RoundOutputCollection } from "@/types/round-detail";
 
 interface RoundOutputsSectionProps {
   roundId: string;
-  outputs: RoundOutput[];
+  outputs: RoundOutputCollection;
   onGenerateSummary: (roundId: string) => Promise<void>;
   onGenerateReport: (roundId: string) => Promise<void>;
   onGenerateEmail: (roundId: string) => Promise<void>;
@@ -66,7 +66,9 @@ export function RoundOutputsSection({
     }
   }
 
-  const outputMap = new Map(outputs.map((o) => [o.type, o]));
+  const outputMap = new Map(
+    (["summary", "report", "email"] as const).map((type) => [type, outputs[type]])
+  );
 
   return (
     <Card>

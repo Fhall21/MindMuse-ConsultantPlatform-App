@@ -26,6 +26,7 @@ class EmailDraftRequest(BaseModel):
     themes: list[str]
     people: list[str]
     consultation_title: str | None = None
+    consultation_date: str | None = None  # ISO date, e.g. "2026-03-18"
 
 
 class EmailDraftResponse(BaseModel):

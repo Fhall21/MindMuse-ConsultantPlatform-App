@@ -214,7 +214,12 @@ export default function ConsultationsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Consultations</h1>
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">All consultations</h2>
+          <p className="text-sm text-muted-foreground">
+            Search, filter, and open consultation records from here.
+          </p>
+        </div>
         <Button asChild>
           <Link href="/consultations/new">New Consultation</Link>
         </Button>

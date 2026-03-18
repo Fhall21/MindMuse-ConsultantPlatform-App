@@ -20,9 +20,11 @@ import { consultationRoundSchema } from "@/lib/validations/consultation";
 export function RoundsManager() {
   const queryClient = useQueryClient();
 
+  const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newDescription, setNewDescription] = useState("");
-  const [formError, setFormError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [editingError, setEditingError] = useState<string | null>(null);
 
   const [editingRoundId, setEditingRoundId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState("");
@@ -57,7 +59,8 @@ export function RoundsManager() {
       await queryClient.invalidateQueries({ queryKey: ["consultation_rounds"] });
       setNewLabel("");
       setNewDescription("");
-      setFormError(null);
+      setCreateError(null);
+      setIsCreateFormOpen(false);
     },
   });
 
@@ -69,6 +72,7 @@ export function RoundsManager() {
       setEditingRoundId(null);
       setEditingLabel("");
       setEditingDescription("");
+      setEditingError(null);
     },
   });
 
@@ -80,55 +84,92 @@ export function RoundsManager() {
   });
 
   const consultationCounts = consultationCountsQuery.data ?? {};
+  const hasNoRounds = !roundsQuery.isLoading && (!rounds || rounds.length === 0);
 
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Add round</CardTitle>
-          <CardDescription>Create a new round label for filing consultations.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            className="space-y-3"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              const parsed = consultationRoundSchema.safeParse({
-                label: newLabel,
-                description: newDescription || undefined,
-              });
-              if (!parsed.success) {
-                setFormError(parsed.error.issues[0]?.message ?? "Invalid round details.");
-                return;
-              }
-              await createMutation.mutateAsync(parsed.data);
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <CardTitle>Consultation rounds</CardTitle>
+            <CardDescription>
+              Keep recurring consultation cycles clearly labeled so records stay organized.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            onClick={() => {
+              setIsCreateFormOpen(true);
+              setCreateError(null);
             }}
           >
-            <div className="space-y-2">
-              <Label htmlFor="round-label">Label</Label>
-              <Input
-                id="round-label"
-                value={newLabel}
-                onChange={(event) => setNewLabel(event.target.value)}
-                placeholder="Round label"
-                disabled={createMutation.isPending}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="round-description">Description</Label>
-              <Input
-                id="round-description"
-                value={newDescription}
-                onChange={(event) => setNewDescription(event.target.value)}
-                placeholder="Optional description"
-                disabled={createMutation.isPending}
-              />
-            </div>
-            {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Adding..." : "Add round"}
-            </Button>
-          </form>
+            Create Round
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isCreateFormOpen ? (
+            <form
+              className="space-y-4 rounded-xl border bg-muted/20 p-4"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const parsed = consultationRoundSchema.safeParse({
+                  label: newLabel,
+                  description: newDescription || undefined,
+                });
+                if (!parsed.success) {
+                  setCreateError(parsed.error.issues[0]?.message ?? "Invalid round details.");
+                  return;
+                }
+                await createMutation.mutateAsync(parsed.data);
+              }}
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="round-label">Label</Label>
+                  <Input
+                    id="round-label"
+                    value={newLabel}
+                    onChange={(event) => setNewLabel(event.target.value)}
+                    placeholder="Initial consultation"
+                    disabled={createMutation.isPending}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="round-description">Description</Label>
+                  <Input
+                    id="round-description"
+                    value={newDescription}
+                    onChange={(event) => setNewDescription(event.target.value)}
+                    placeholder="Optional description"
+                    disabled={createMutation.isPending}
+                  />
+                </div>
+              </div>
+              {createError ? <p className="text-sm text-destructive">{createError}</p> : null}
+              <div className="flex flex-wrap gap-3">
+                <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending ? "Creating..." : "Create Round"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={createMutation.isPending}
+                  onClick={() => {
+                    setIsCreateFormOpen(false);
+                    setCreateError(null);
+                    setNewLabel("");
+                    setNewDescription("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Create a round when you need a reusable label for a stage of consultation work.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -140,8 +181,22 @@ export function RoundsManager() {
         <CardContent>
           {roundsQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading...</p>
-          ) : !rounds || rounds.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No rounds yet.</p>
+          ) : hasNoRounds ? (
+            <div className="rounded-xl border border-dashed p-8 text-center">
+              <p className="mb-4 text-sm text-muted-foreground">
+                No consultation rounds yet.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsCreateFormOpen(true);
+                  setCreateError(null);
+                }}
+              >
+                Create Round
+              </Button>
+            </div>
           ) : (
             <div className="space-y-3">
               {rounds.map((round) => {
@@ -158,7 +213,7 @@ export function RoundsManager() {
                             description: editingDescription || undefined,
                           });
                           if (!parsed.success) {
-                            setFormError(
+                            setEditingError(
                               parsed.error.issues[0]?.message ?? "Invalid round details."
                             );
                             return;
@@ -184,8 +239,8 @@ export function RoundsManager() {
                             disabled={updateMutation.isPending}
                           />
                         </div>
-                        {formError ? (
-                          <p className="text-sm text-destructive">{formError}</p>
+                        {editingError ? (
+                          <p className="text-sm text-destructive">{editingError}</p>
                         ) : null}
                         <div className="flex gap-2">
                           <Button type="submit" size="sm" disabled={updateMutation.isPending}>
@@ -197,7 +252,7 @@ export function RoundsManager() {
                             variant="ghost"
                             onClick={() => {
                               setEditingRoundId(null);
-                              setFormError(null);
+                              setEditingError(null);
                             }}
                           >
                             Cancel
@@ -224,6 +279,7 @@ export function RoundsManager() {
                               setEditingRoundId(round.id);
                               setEditingLabel(round.label);
                               setEditingDescription(round.description ?? "");
+                              setEditingError(null);
                             }}
                           >
                             Edit
@@ -243,7 +299,7 @@ export function RoundsManager() {
                               try {
                                 await deleteMutation.mutateAsync(round.id);
                               } catch (error) {
-                                setFormError(
+                                setEditingError(
                                   error instanceof Error
                                     ? error.message
                                     : "Unable to delete round."

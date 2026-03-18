@@ -7,6 +7,7 @@ import { emitAuditEvent } from "./audit";
 interface ThemeData {
   label: string;
   confidence?: number;
+  description?: string | null;
 }
 
 function trimToNull(value?: string | null) {
@@ -23,6 +24,7 @@ export async function saveThemes(
   const themesWithConsultationId = themes.map((theme) => ({
     consultation_id: consultationId,
     label: theme.label,
+    description: theme.description ?? null,
     accepted: false,
     is_user_added: false,
   }));

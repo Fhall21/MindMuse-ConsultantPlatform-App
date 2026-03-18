@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ThemeRejectionDialog } from "@/components/consultations/theme-rejection-dialog";
 
 
@@ -172,6 +173,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
   // Inline add-theme form
   const [addThemeOpen, setAddThemeOpen] = useState(false);
   const [addThemeLabel, setAddThemeLabel] = useState("");
+  const [addThemeDescription, setAddThemeDescription] = useState("");
   const [addThemeError, setAddThemeError] = useState<string | null>(null);
   const [isAddingTheme, setIsAddingTheme] = useState(false);
 
@@ -184,6 +186,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     setRejectedThemes({});
     setAddThemeOpen(false);
     setAddThemeLabel("");
+    setAddThemeDescription("");
     setRejectionDialogTheme(null);
   }, [consultationId]);
 
@@ -297,6 +300,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
         extractedThemes.map((theme) => ({
           label: theme.label,
           confidence: theme.confidence,
+          description: theme.description ?? null,
         }))
       )) as Array<{ id: string }> | null;
 
@@ -391,9 +395,10 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
 
     try {
       // addUserTheme: sets is_user_added=true, accepted=true, weight=2.0, logs learning signal
-      await addUserTheme(consultationId, label);
+      await addUserTheme(consultationId, label, addThemeDescription.trim() || undefined);
 
       setAddThemeLabel("");
+      setAddThemeDescription("");
       setAddThemeOpen(false);
       await refreshPanelData();
     } catch (error) {
@@ -482,8 +487,10 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                   error={addThemeError}
                   isSubmitting={isAddingTheme}
                   onLabelChange={(v) => { setAddThemeLabel(v); if (addThemeError) setAddThemeError(null); }}
+                  description={addThemeDescription}
+                  onDescriptionChange={setAddThemeDescription}
                   onSubmit={() => void handleAddCustomTheme()}
-                  onCancel={() => { setAddThemeOpen(false); setAddThemeLabel(""); setAddThemeError(null); }}
+                  onCancel={() => { setAddThemeOpen(false); setAddThemeLabel(""); setAddThemeDescription(""); setAddThemeError(null); }}
                 />
               ) : null}
             </div>
@@ -514,8 +521,10 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                   error={addThemeError}
                   isSubmitting={isAddingTheme}
                   onLabelChange={(v) => { setAddThemeLabel(v); if (addThemeError) setAddThemeError(null); }}
+                  description={addThemeDescription}
+                  onDescriptionChange={setAddThemeDescription}
                   onSubmit={() => void handleAddCustomTheme()}
-                  onCancel={() => { setAddThemeOpen(false); setAddThemeLabel(""); setAddThemeError(null); }}
+                  onCancel={() => { setAddThemeOpen(false); setAddThemeLabel(""); setAddThemeDescription(""); setAddThemeError(null); }}
                 />
               ) : null}
 
@@ -537,11 +546,9 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1">
                           <p className={cn("font-medium", rejected && "line-through")}>{theme.label}</p>
-                          {details?.description ? (
-                            <p className="text-sm text-muted-foreground">{details.description}</p>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">{getThemeDescription(null)}</p>
-                          )}
+                          {(details?.description ?? theme.description) ? (
+                            <p className="text-sm text-muted-foreground">{details?.description ?? theme.description}</p>
+                          ) : null}
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
@@ -642,7 +649,9 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                     >
                       <div className="min-w-0 flex-1 space-y-1">
                         <p className="font-medium">{theme.label}</p>
-                        <p className="text-sm text-muted-foreground">{getThemeDescription(theme.description)}</p>
+                        {theme.description ? (
+                          <p className="text-sm text-muted-foreground">{theme.description}</p>
+                        ) : null}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {theme.source === "user" ? (
@@ -679,7 +688,9 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                       >
                         <div className="min-w-0 flex-1 space-y-1">
                           <p className="font-medium line-through">{theme.label}</p>
-                          <p className="text-sm text-muted-foreground">{getThemeDescription(theme.description)}</p>
+                          {theme.description ? (
+                            <p className="text-sm text-muted-foreground">{theme.description}</p>
+                          ) : null}
                           {theme.rejectionRationale ? (
                             <p className="text-xs text-muted-foreground">
                               <span className="font-medium">Rationale:</span> {theme.rejectionRationale}
@@ -787,18 +798,22 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
 
 interface AddThemeFormProps {
   label: string;
+  description: string;
   error: string | null;
   isSubmitting: boolean;
   onLabelChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
 }
 
 function AddThemeForm({
   label,
+  description,
   error,
   isSubmitting,
   onLabelChange,
+  onDescriptionChange,
   onSubmit,
   onCancel,
 }: AddThemeFormProps) {
@@ -815,16 +830,23 @@ function AddThemeForm({
   return (
     <div className="space-y-2 rounded-lg border border-dashed border-border/80 bg-muted/10 p-3">
       <p className="text-xs font-medium text-muted-foreground">Add a custom theme</p>
+      <Input
+        autoFocus
+        placeholder="Theme label…"
+        value={label}
+        onChange={(e) => onLabelChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        disabled={isSubmitting}
+        className="h-8 text-sm"
+      />
+      <Textarea
+        placeholder="Brief description (optional)…"
+        value={description}
+        onChange={(e) => onDescriptionChange(e.target.value)}
+        disabled={isSubmitting}
+        className="min-h-[60px] text-sm"
+      />
       <div className="flex items-center gap-2">
-        <Input
-          autoFocus
-          placeholder="Theme label…"
-          value={label}
-          onChange={(e) => onLabelChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isSubmitting}
-          className="h-8 text-sm"
-        />
         <Button size="sm" onClick={onSubmit} disabled={isSubmitting || !label.trim()}>
           {isSubmitting ? <LoadingSpinner /> : null}
           Save

@@ -57,7 +57,7 @@ export interface EvidenceEmail {
 
 export interface AuditLogEntry {
   id: string;
-  consultation_id: string;
+  consultation_id: string | null;
   action: string;
   entity_type: string | null;
   entity_id: string | null;

@@ -1,7 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { emitAuditEvent, AUDIT_ACTIONS } from "./audit";
+import { AUDIT_ACTIONS } from "./audit-actions";
+import { emitAuditEvent } from "./audit";
 
 interface CreatePersonParams {
   name: string;
@@ -65,7 +66,7 @@ export async function updatePerson({
   if (error) throw error;
 
   await emitAuditEvent({
-    consultationId: "", // Person updates are not consultation-specific; leave blank
+    consultationId: null,
     action: AUDIT_ACTIONS.PERSON_UPDATED,
     entityType: "person",
     entityId: id,
@@ -81,7 +82,7 @@ export async function deletePerson(id: string) {
   if (error) throw error;
 
   await emitAuditEvent({
-    consultationId: "",
+    consultationId: null,
     action: AUDIT_ACTIONS.PERSON_DELETED,
     entityType: "person",
     entityId: id,

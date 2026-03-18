@@ -1,7 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { AUDIT_ACTIONS, emitAuditEvent } from "@/lib/actions/audit";
+import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";
+import { emitAuditEvent } from "@/lib/actions/audit";
 
 interface CreateRoundParams {
   label: string;
@@ -35,7 +36,7 @@ export async function createRound({ label, description }: CreateRoundParams) {
   if (error) throw error;
 
   await emitAuditEvent({
-    consultationId: "",
+    consultationId: null,
     action: AUDIT_ACTIONS.ROUND_CREATED,
     entityType: "consultation_round",
     entityId: data.id,
@@ -62,7 +63,7 @@ export async function updateRound({ id, label, description }: UpdateRoundParams)
   if (error) throw error;
 
   await emitAuditEvent({
-    consultationId: "",
+    consultationId: null,
     action: AUDIT_ACTIONS.ROUND_UPDATED,
     entityType: "consultation_round",
     entityId: id,
@@ -92,7 +93,7 @@ export async function deleteRound(id: string) {
   if (error) throw error;
 
   await emitAuditEvent({
-    consultationId: "",
+    consultationId: null,
     action: AUDIT_ACTIONS.ROUND_DELETED,
     entityType: "consultation_round",
     entityId: id,

@@ -218,7 +218,7 @@ create policy "Users can delete own evidence_emails"
 -- ============================================================
 create table audit_log (
   id uuid primary key default uuid_generate_v4(),
-  consultation_id uuid not null references consultations(id) on delete cascade,
+  consultation_id uuid references consultations(id) on delete cascade,
   action text not null,
   payload jsonb,
   created_at timestamptz not null default now(),

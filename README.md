@@ -25,6 +25,9 @@ supabase start
 # Copy API URL, anon key, and service_role key from output into .env
 ```
 
+Local auth emails are captured by Supabase's built-in email testing server instead of being delivered to a real inbox.
+Open the inbox at http://localhost:54324 after signing up to inspect confirmation links.
+
 Expected local values:
 
 ```bash

@@ -2,34 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 
-/**
- * Audit action catalog — canonical list of all audit event action strings
- * Keep this synchronized across the codebase
- */
-export const AUDIT_ACTIONS = {
-  CONSULTATION_CREATED: "consultation.created",
-  CONSULTATION_TRANSCRIPT_EDITED: "consultation.transcript_edited",
-  CONSULTATION_COMPLETED: "consultation.completed",
-  CONSULTATION_ROUND_ASSIGNED: "consultation.round_assigned",
-  ROUND_CREATED: "round.created",
-  ROUND_UPDATED: "round.updated",
-  ROUND_DELETED: "round.deleted",
-  PERSON_CREATED: "person.created",
-  PERSON_UPDATED: "person.updated",
-  PERSON_DELETED: "person.deleted",
-  PERSON_LINKED: "person.linked",
-  PERSON_UNLINKED: "person.unlinked",
-  THEME_EXTRACTION_REQUESTED: "theme.extraction_requested",
-  THEME_ACCEPTED: "theme.accepted",
-  THEME_REJECTED: "theme.rejected",
-  EVIDENCE_EMAIL_GENERATION_REQUESTED: "evidence_email.generation_requested",
-  EVIDENCE_EMAIL_GENERATED: "evidence_email.generated",
-  EVIDENCE_EMAIL_ACCEPTED: "evidence_email.accepted",
-  EVIDENCE_EMAIL_SENT: "evidence_email.sent",
-} as const;
-
 interface EmitAuditEventParams {
-  consultationId: string;
+  consultationId?: string | null;
   action: string;
   entityType?: string;
   entityId?: string;
@@ -55,7 +29,7 @@ export async function emitAuditEvent({
   }
 
   const { error } = await supabase.from("audit_log").insert({
-    consultation_id: consultationId,
+    consultation_id: consultationId ?? null,
     action,
     entity_type: entityType,
     entity_id: entityId,

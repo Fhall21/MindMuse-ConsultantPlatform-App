@@ -1,4 +1,5 @@
 -- Add consultation_rounds table and link to consultations
+-- Add consultation_rounds table and link to consultations
 -- PostgreSQL-portable: standard SQL with no Supabase extensions
 
 -- ============================================================

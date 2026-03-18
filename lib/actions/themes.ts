@@ -1,7 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { emitAuditEvent, AUDIT_ACTIONS } from "./audit";
+import { AUDIT_ACTIONS } from "./audit-actions";
+import { emitAuditEvent } from "./audit";
 
 interface ThemeData {
   label: string;

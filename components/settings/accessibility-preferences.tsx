@@ -6,12 +6,14 @@ export const ACCESSIBILITY_STORAGE_KEY = "consultant-platform-accessibility";
 
 export type AccessibilityPreferences = {
   textSize: "default" | "large";
+  contrastMode: "default" | "high";
   focusMode: "default" | "strong";
   reduceMotion: boolean;
 };
 
 export const defaultAccessibilityPreferences: AccessibilityPreferences = {
   textSize: "default",
+  contrastMode: "default",
   focusMode: "default",
   reduceMotion: false,
 };
@@ -26,6 +28,7 @@ function parseStoredPreferences(rawValue: string | null): AccessibilityPreferenc
 
     return {
       textSize: parsed.textSize === "large" ? "large" : "default",
+      contrastMode: parsed.contrastMode === "high" ? "high" : "default",
       focusMode: parsed.focusMode === "strong" ? "strong" : "default",
       reduceMotion: parsed.reduceMotion === true,
     };
@@ -55,6 +58,7 @@ export function applyAccessibilityPreferences(
   element: HTMLElement = document.documentElement
 ) {
   element.dataset.accessibilityTextSize = preferences.textSize;
+  element.dataset.accessibilityContrast = preferences.contrastMode;
   element.dataset.accessibilityFocus = preferences.focusMode;
   element.dataset.accessibilityMotion = preferences.reduceMotion ? "reduced" : "default";
 }

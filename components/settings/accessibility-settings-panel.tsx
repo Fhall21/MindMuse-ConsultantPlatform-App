@@ -35,6 +35,7 @@ function PreferenceButton({
 function summarizePreferences(preferences: AccessibilityPreferences) {
   return [
     preferences.textSize === "large" ? "Larger text enabled" : "Default text size",
+    preferences.contrastMode === "high" ? "High contrast enabled" : "Default contrast",
     preferences.focusMode === "strong" ? "Stronger focus rings enabled" : "Default focus rings",
     preferences.reduceMotion ? "Reduced motion enabled" : "Standard motion settings",
   ];
@@ -96,6 +97,32 @@ export function AccessibilitySettingsPanel() {
                     label="Larger text"
                     onClick={() =>
                       setPreferences((current) => ({ ...current, textSize: "large" }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border p-4">
+                <div className="space-y-2">
+                  <p className="font-medium">Contrast</p>
+                  <p className="text-sm text-muted-foreground">
+                    Increase text and border contrast to make controls, labels, and dividers stand
+                    out more clearly.
+                  </p>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <PreferenceButton
+                    active={preferences.contrastMode === "default"}
+                    label="Default contrast"
+                    onClick={() =>
+                      setPreferences((current) => ({ ...current, contrastMode: "default" }))
+                    }
+                  />
+                  <PreferenceButton
+                    active={preferences.contrastMode === "high"}
+                    label="High contrast"
+                    onClick={() =>
+                      setPreferences((current) => ({ ...current, contrastMode: "high" }))
                     }
                   />
                 </div>
@@ -167,6 +194,27 @@ export function AccessibilitySettingsPanel() {
                 {summarizePreferences(preferences).map((summary) => (
                   <p key={summary}>{summary}</p>
                 ))}
+              </div>
+
+              <div className="rounded-lg border bg-background/80 p-4">
+                <p className="font-medium">Preview</p>
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <p className="font-medium">Consultation summary</p>
+                    <p className="text-sm text-muted-foreground">
+                      Stronger contrast, larger type, and reduced motion are all reflected here
+                      immediately so you can feel the difference before leaving this page.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Button type="button" size="sm">
+                      Sample action
+                    </Button>
+                    <Button type="button" variant="outline" size="sm">
+                      Secondary action
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               <div className="rounded-lg border border-dashed bg-background/80 p-4">

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +16,9 @@ export function AccountSettingsPanel() {
   const [supabase] = useState(() => createClient());
   const [isLoading, setIsLoading] = useState(true);
   const [currentEmail, setCurrentEmail] = useState("");
+  const [fullNameValue, setFullNameValue] = useState("");
+  const [displayNameValue, setDisplayNameValue] = useState("");
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [emailValue, setEmailValue] = useState("");
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [isSavingEmail, setIsSavingEmail] = useState(false);
@@ -40,7 +44,16 @@ export function AccountSettingsPanel() {
       }
 
       const email = user?.email ?? "";
+      const fullName = typeof user?.user_metadata.full_name === "string"
+        ? user.user_metadata.full_name
+        : "";
+      const displayName = typeof user?.user_metadata.display_name === "string"
+        ? user.user_metadata.display_name
+        : "";
+
       setCurrentEmail(email);
+      setFullNameValue(fullName);
+      setDisplayNameValue(displayName);
       setEmailValue(email);
       setIsLoading(false);
     }
@@ -53,7 +66,32 @@ export function AccountSettingsPanel() {
   }, [supabase]);
 
   const normalizedEmail = emailValue.trim().toLowerCase();
+  const normalizedFullName = fullNameValue.trim();
+  const normalizedDisplayName = displayNameValue.trim();
   const isEmailChanged = normalizedEmail.length > 0 && normalizedEmail !== currentEmail.toLowerCase();
+  const hasProfileDetails = normalizedDisplayName.length > 0 || normalizedFullName.length > 0;
+
+  async function handleProfileUpdate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    setIsSavingProfile(true);
+
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        display_name: normalizedDisplayName || null,
+        full_name: normalizedFullName || null,
+      },
+    });
+
+    setIsSavingProfile(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Profile updated.");
+  }
 
   async function handleEmailUpdate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -118,7 +156,15 @@ export function AccountSettingsPanel() {
           </div>
           <Badge variant="outline">{isLoading ? "Loading account..." : "Signed in"}</Badge>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl border bg-muted/30 p-4">
+            <p className="text-sm font-medium">Display name</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {isLoading
+                ? "Loading profile..."
+                : normalizedDisplayName || normalizedFullName || "Not set yet"}
+            </p>
+          </div>
           <div className="rounded-xl border bg-muted/30 p-4">
             <p className="text-sm font-medium">Current email</p>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -131,6 +177,53 @@ export function AccountSettingsPanel() {
               Email updates may require inbox confirmation depending on your Supabase auth setup.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile</CardTitle>
+          <CardDescription>
+            Save the name you want shown around the workspace and in your account menu.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-4" onSubmit={handleProfileUpdate}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="settings-display-name">Preferred name</Label>
+                <Input
+                  id="settings-display-name"
+                  value={displayNameValue}
+                  onChange={(event) => setDisplayNameValue(event.target.value)}
+                  disabled={isLoading || isSavingProfile}
+                  placeholder="How you want to be addressed"
+                  autoComplete="nickname"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="settings-full-name">Full name</Label>
+                <Input
+                  id="settings-full-name"
+                  value={fullNameValue}
+                  onChange={(event) => setFullNameValue(event.target.value)}
+                  disabled={isLoading || isSavingProfile}
+                  placeholder="Your full name"
+                  autoComplete="name"
+                />
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              {hasProfileDetails
+                ? "Your preferred name will be used where the product needs a friendlier label."
+                : "Add a preferred or full name so the workspace feels more personal."}
+            </p>
+
+            <Button type="submit" disabled={isLoading || isSavingProfile}>
+              {isSavingProfile ? "Saving..." : "Save Profile"}
+            </Button>
+          </form>
         </CardContent>
       </Card>
 
@@ -230,6 +323,21 @@ export function AccountSettingsPanel() {
               {isSavingPassword ? "Saving..." : "Update Password"}
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Reports Have Moved</CardTitle>
+          <CardDescription>
+            Audit exports and reporting tools now live in their own sidebar destination so this
+            settings area can stay focused on account and workspace preferences.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild variant="outline">
+            <Link href="/reports">Open reports</Link>
+          </Button>
         </CardContent>
       </Card>
     </div>

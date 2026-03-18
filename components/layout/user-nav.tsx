@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -11,9 +12,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export function UserNav({ email }: { email?: string }) {
+function getInitials(displayName?: string, email?: string) {
+  if (displayName) {
+    const words = displayName.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 1) {
+      return words[0].slice(0, 2).toUpperCase();
+    }
+
+    return words
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase() ?? "")
+      .join("");
+  }
+
+  return email ? email.slice(0, 2).toUpperCase() : "??";
+}
+
+export function UserNav({ email, displayName }: { email?: string; displayName?: string }) {
   const router = useRouter();
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -21,9 +38,7 @@ export function UserNav({ email }: { email?: string }) {
     router.refresh();
   }
 
-  const initials = email
-    ? email.slice(0, 2).toUpperCase()
-    : "??";
+  const initials = getInitials(displayName, email);
 
   return (
     <DropdownMenu>
@@ -35,6 +50,11 @@ export function UserNav({ email }: { email?: string }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {displayName ? (
+          <DropdownMenuItem disabled className="text-xs font-medium">
+            {displayName}
+          </DropdownMenuItem>
+        ) : null}
         {email && (
           <DropdownMenuItem disabled className="text-xs text-muted-foreground">
             {email}

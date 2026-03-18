@@ -1,11 +1,5 @@
-import { PlaceholderSettingsPanel } from "@/components/settings/placeholder-settings-panel";
+import { AccountSettingsPanel } from "@/components/settings/account-settings-panel";
 
 export default function SettingsPage() {
-  return (
-    <PlaceholderSettingsPanel
-      title="User Settings"
-      description="Core account settings now live here, separate from reporting."
-      note="I am using this section as the new home for account settings. The next pass adds the working email and password management forms."
-    />
-  );
+  return <AccountSettingsPanel />;
 }

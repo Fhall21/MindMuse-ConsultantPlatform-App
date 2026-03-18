@@ -19,6 +19,13 @@ export default async function AppLayout({
     redirect("/login");
   }
 
+  const displayName =
+    typeof user.user_metadata.display_name === "string"
+      ? user.user_metadata.display_name
+      : typeof user.user_metadata.full_name === "string"
+        ? user.user_metadata.full_name
+        : undefined;
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -27,7 +34,7 @@ export default async function AppLayout({
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-6" />
           <div className="flex-1" />
-          <UserNav email={user.email} />
+          <UserNav email={user.email} displayName={displayName} />
         </header>
         <main className="flex-1 p-6">{children}</main>
       </SidebarInset>

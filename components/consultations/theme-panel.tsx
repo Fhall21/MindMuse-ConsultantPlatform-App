@@ -27,6 +27,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { ThemeRejectionDialog } from "@/components/consultations/theme-rejection-dialog";
 
 
 interface ThemePanelProps {
@@ -46,6 +48,17 @@ interface ThemeDetails {
 
 interface RejectedThemeSnapshot extends Theme {
   confidence?: number;
+  rationale?: string;
+}
+
+interface ThemeDisplayItem {
+  id: string;
+  label: string;
+  description: string | null;
+  accepted: boolean;
+  rejected: boolean;
+  source: "ai" | "user";
+  rejectionRationale?: string;
 }
 
 function LoadingSpinner() {
@@ -132,6 +145,10 @@ function getConfidenceLabel(confidence?: number) {
   };
 }
 
+function getThemeDescription(description?: string | null) {
+  return description ?? "Awaiting persisted theme details from the shared schema.";
+}
+
 export function ThemePanel({ consultationId }: ThemePanelProps) {
   const queryClient = useQueryClient();
   const consultationQuery = useConsultation(consultationId);
@@ -145,8 +162,22 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
   const [clarificationOpen, setClarificationOpen] = useState(false);
   const [clarificationQuestions, setClarificationQuestions] = useState<string[]>([]);
   const [themeDetailsById, setThemeDetailsById] = useState<Record<string, ThemeDetails>>({});
-  // TODO: from Agent 1 - persist rejected themes and extracted metadata in DB/actions so this survives refresh.
+
+  // TODO: Agent 1 — persist rejected themes and rationale in DB/actions so this survives refresh.
   const [rejectedThemes, setRejectedThemes] = useState<Record<string, RejectedThemeSnapshot>>({});
+
+  // Tracks theme IDs the user added manually this session.
+  // TODO: Agent 1 — add `source` column to themes table so this is durable across sessions.
+  const [userAddedThemeIds, setUserAddedThemeIds] = useState<Set<string>>(new Set());
+
+  // Rejection dialog
+  const [rejectionDialogTheme, setRejectionDialogTheme] = useState<Theme | null>(null);
+
+  // Inline add-theme form
+  const [addThemeOpen, setAddThemeOpen] = useState(false);
+  const [addThemeLabel, setAddThemeLabel] = useState("");
+  const [addThemeError, setAddThemeError] = useState<string | null>(null);
+  const [isAddingTheme, setIsAddingTheme] = useState(false);
 
   useEffect(() => {
     setErrorMessage(null);
@@ -155,6 +186,10 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     setClarificationQuestions([]);
     setThemeDetailsById({});
     setRejectedThemes({});
+    setUserAddedThemeIds(new Set());
+    setAddThemeOpen(false);
+    setAddThemeLabel("");
+    setRejectionDialogTheme(null);
   }, [consultationId]);
 
   const transcript = consultationQuery.data?.consultation.transcript_raw?.trim() ?? "";
@@ -173,7 +208,36 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     [rejectedThemes, savedThemes]
   );
 
-  const reviewedCount = acceptedThemeLabels.length + rejectedThemeList.length;
+  const acceptedThemeList = useMemo<ThemeDisplayItem[]>(
+    () =>
+      savedThemes
+        .filter((theme) => theme.accepted && !rejectedThemes[theme.id])
+        .map((theme) => ({
+          id: theme.id,
+          label: theme.label,
+          description: themeDetailsById[theme.id]?.description ?? theme.description ?? null,
+          accepted: true,
+          rejected: false,
+          source: userAddedThemeIds.has(theme.id) ? ("user" as const) : ("ai" as const),
+        })),
+    [rejectedThemes, savedThemes, themeDetailsById, userAddedThemeIds]
+  );
+
+  const rejectedThemeDisplayList = useMemo<ThemeDisplayItem[]>(
+    () =>
+      rejectedThemeList.map((theme) => ({
+        id: theme.id,
+        label: theme.label,
+        description: theme.description ?? null,
+        accepted: false,
+        rejected: true,
+        source: userAddedThemeIds.has(theme.id) ? ("user" as const) : ("ai" as const),
+        rejectionRationale: theme.rationale,
+      })),
+    [rejectedThemeList, userAddedThemeIds]
+  );
+
+  const reviewedCount = acceptedThemeList.length + rejectedThemeList.length;
   const totalThemeCount = savedThemes.length + rejectedThemeList.length;
   const pendingCount = savedThemes.filter((theme) => !theme.accepted && !rejectedThemes[theme.id]).length;
   const allReviewed = totalThemeCount > 0 && pendingCount === 0;
@@ -183,6 +247,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
       theme,
       rejected: false,
       details: themeDetailsById[theme.id],
+      source: userAddedThemeIds.has(theme.id) ? ("user" as const) : ("ai" as const),
     }));
     const rejected = rejectedThemeList.map((theme) => ({
       theme,
@@ -191,12 +256,13 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
         description: theme.description,
         confidence: theme.confidence,
       },
+      source: userAddedThemeIds.has(theme.id) ? ("user" as const) : ("ai" as const),
     }));
 
     return [...saved, ...rejected].sort(
       (left, right) => Date.parse(right.theme.created_at) - Date.parse(left.theme.created_at)
     );
-  }, [rejectedThemeList, savedThemes, themeDetailsById]);
+  }, [rejectedThemeList, savedThemes, themeDetailsById, userAddedThemeIds]);
 
   async function refreshPanelData() {
     await Promise.all([
@@ -251,6 +317,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
 
       setThemeDetailsById(nextDetails);
       setRejectedThemes({});
+      setUserAddedThemeIds(new Set());
       setClarificationQuestions([]);
       setClarificationOpen(false);
       setConfirmReextractOpen(false);
@@ -277,22 +344,30 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     }
   }
 
-  async function handleReject(theme: Theme) {
+  function openRejectionDialog(theme: Theme) {
+    setRejectionDialogTheme(theme);
+  }
+
+  async function handleRejectionConfirm(rationale: string) {
+    const theme = rejectionDialogTheme;
+    if (!theme) return;
+
     const details = themeDetailsById[theme.id];
     const snapshot: RejectedThemeSnapshot = {
       ...theme,
       description: details?.description ?? theme.description ?? null,
       confidence: details?.confidence,
+      rationale,
     };
 
     setErrorMessage(null);
     setActiveThemeId(theme.id);
-    setRejectedThemes((current) => ({
-      ...current,
-      [theme.id]: snapshot,
-    }));
+    setRejectedThemes((current) => ({ ...current, [theme.id]: snapshot }));
+    setRejectionDialogTheme(null);
 
     try {
+      // TODO: Agent 1 — update rejectTheme(id, consultationId, rationale) signature to persist
+      // rationale and emit it in audit event metadata once the DB column is extended.
       await rejectTheme(theme.id, consultationId);
       await refreshPanelData();
     } catch (error) {
@@ -304,6 +379,40 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setActiveThemeId(null);
+    }
+  }
+
+  function handleRejectionCancel() {
+    setRejectionDialogTheme(null);
+  }
+
+  async function handleAddCustomTheme() {
+    const label = addThemeLabel.trim();
+    if (!label) {
+      setAddThemeError("Theme label is required.");
+      return;
+    }
+
+    setAddThemeError(null);
+    setIsAddingTheme(true);
+
+    try {
+      const saved = (await saveThemes(consultationId, [{ label }])) as Array<{ id: string }> | null;
+      const newId = saved?.[0]?.id;
+
+      if (newId) {
+        // Mark as user-added so it renders with the "User added" source badge.
+        // TODO: Agent 1 — persist `source = 'user'` on the themes row so this survives refresh.
+        setUserAddedThemeIds((current) => new Set([...current, newId]));
+      }
+
+      setAddThemeLabel("");
+      setAddThemeOpen(false);
+      await refreshPanelData();
+    } catch (error) {
+      setAddThemeError(getErrorMessage(error));
+    } finally {
+      setIsAddingTheme(false);
     }
   }
 
@@ -354,6 +463,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
             </p>
           ) : null}
 
+          {/* Empty state */}
           {!consultationQuery.isPending && !themesQuery.isPending && totalThemeCount === 0 ? (
             <div className="space-y-3 rounded-lg border border-dashed border-border/80 bg-muted/20 p-4">
               <p className="text-sm text-muted-foreground">No themes extracted yet.</p>
@@ -368,21 +478,62 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                     "Extract themes"
                   )}
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setAddThemeOpen(true)}
+                  disabled={isAddingTheme || addThemeOpen}
+                >
+                  Add theme
+                </Button>
                 {!transcript ? (
                   <p className="text-xs text-muted-foreground">Add a transcript before extracting themes.</p>
                 ) : null}
               </div>
+              {addThemeOpen ? (
+                <AddThemeForm
+                  label={addThemeLabel}
+                  error={addThemeError}
+                  isSubmitting={isAddingTheme}
+                  onLabelChange={(v) => { setAddThemeLabel(v); if (addThemeError) setAddThemeError(null); }}
+                  onSubmit={() => void handleAddCustomTheme()}
+                  onCancel={() => { setAddThemeOpen(false); setAddThemeLabel(""); setAddThemeError(null); }}
+                />
+              ) : null}
             </div>
           ) : null}
 
+          {/* In-progress review */}
           {!consultationQuery.isPending && !themesQuery.isPending && totalThemeCount > 0 && !allReviewed ? (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                {reviewedCount} of {totalThemeCount} themes reviewed
-              </p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {reviewedCount} of {totalThemeCount} themes reviewed
+                </p>
+                {!addThemeOpen ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAddThemeOpen(true)}
+                    disabled={isAddingTheme}
+                  >
+                    Add theme
+                  </Button>
+                ) : null}
+              </div>
+
+              {addThemeOpen ? (
+                <AddThemeForm
+                  label={addThemeLabel}
+                  error={addThemeError}
+                  isSubmitting={isAddingTheme}
+                  onLabelChange={(v) => { setAddThemeLabel(v); if (addThemeError) setAddThemeError(null); }}
+                  onSubmit={() => void handleAddCustomTheme()}
+                  onCancel={() => { setAddThemeOpen(false); setAddThemeLabel(""); setAddThemeError(null); }}
+                />
+              ) : null}
 
               <div className="space-y-3">
-                {displayThemes.map(({ theme, rejected, details }) => {
+                {displayThemes.map(({ theme, rejected, details, source }) => {
                   const confidence = getConfidenceLabel(details?.confidence);
                   const isAccepted = theme.accepted && !rejected;
                   const isBusy = activeThemeId === theme.id;
@@ -402,11 +553,29 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                           {details?.description ? (
                             <p className="text-sm text-muted-foreground">{details.description}</p>
                           ) : (
-                            <p className="text-sm text-muted-foreground">Awaiting persisted theme details from the shared schema.</p>
+                            <p className="text-sm text-muted-foreground">{getThemeDescription(null)}</p>
                           )}
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
+                          {/* Source badge */}
+                          {source === "user" ? (
+                            <Badge
+                              variant="outline"
+                              className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300"
+                            >
+                              User added
+                            </Badge>
+                          ) : (!isAccepted && !rejected) ? (
+                            <Badge
+                              variant="outline"
+                              className="border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-300"
+                            >
+                              AI suggested
+                            </Badge>
+                          ) : null}
+
+                          {/* Decision badges */}
                           {isAccepted ? (
                             <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
                               Accepted
@@ -420,6 +589,14 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                           ) : null}
                         </div>
                       </div>
+
+                      {/* Rejection rationale */}
+                      {rejected && rejectedThemes[theme.id]?.rationale ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          <span className="font-medium">Rationale:</span>{" "}
+                          {rejectedThemes[theme.id].rationale}
+                        </p>
+                      ) : null}
 
                       {!rejected ? (
                         <div className="mt-4 flex flex-wrap gap-2">
@@ -436,9 +613,8 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                             size="sm"
                             variant="outline"
                             disabled={isBusy}
-                            onClick={() => void handleReject(theme)}
+                            onClick={() => openRejectionDialog(theme)}
                           >
-                            {isBusy ? <LoadingSpinner /> : null}
                             Reject
                           </Button>
                         </div>
@@ -450,11 +626,12 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
             </div>
           ) : null}
 
+          {/* All reviewed */}
           {!consultationQuery.isPending && !themesQuery.isPending && allReviewed ? (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">{acceptedThemeLabels.length} themes accepted</p>
+                  <p className="text-sm text-muted-foreground">{acceptedThemeList.length} themes accepted</p>
                   <p className="text-xs text-muted-foreground">Review is complete for this extraction round.</p>
                 </div>
                 <Button variant="outline" disabled={isExtracting} onClick={() => setConfirmReextractOpen(true)}>
@@ -469,22 +646,38 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                 </Button>
               </div>
 
-              {acceptedThemeLabels.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {acceptedThemeLabels.map((label) => (
-                    <Badge
-                      key={label}
-                      className="border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200"
+              {acceptedThemeList.length > 0 ? (
+                <div className="space-y-2">
+                  {acceptedThemeList.map((theme) => (
+                    <div
+                      key={theme.id}
+                      className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/20"
                     >
-                      {label}
-                    </Badge>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="font-medium">{theme.label}</p>
+                        <p className="text-sm text-muted-foreground">{getThemeDescription(theme.description)}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {theme.source === "user" ? (
+                          <Badge
+                            variant="outline"
+                            className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300"
+                          >
+                            User added
+                          </Badge>
+                        ) : null}
+                        <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
+                          Accepted
+                        </Badge>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No themes were accepted in the current review.</p>
               )}
 
-              {rejectedThemeList.length > 0 ? (
+              {rejectedThemeDisplayList.length > 0 ? (
                 <div className="space-y-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
                   <div className="space-y-1">
                     <p className="text-sm font-medium text-foreground/85">Rejected themes</p>
@@ -492,15 +685,18 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                   </div>
 
                   <div className="space-y-2">
-                    {rejectedThemeList.map((theme) => (
+                    {rejectedThemeDisplayList.map((theme) => (
                       <div
                         key={theme.id}
                         className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-destructive/20 bg-background/80 p-3 opacity-75"
                       >
-                        <div className="space-y-1">
+                        <div className="min-w-0 flex-1 space-y-1">
                           <p className="font-medium line-through">{theme.label}</p>
-                          {theme.description ? (
-                            <p className="text-sm text-muted-foreground">{theme.description}</p>
+                          <p className="text-sm text-muted-foreground">{getThemeDescription(theme.description)}</p>
+                          {theme.rejectionRationale ? (
+                            <p className="text-xs text-muted-foreground">
+                              <span className="font-medium">Rationale:</span> {theme.rejectionRationale}
+                            </p>
                           ) : null}
                         </div>
                         <Badge variant="destructive">Rejected</Badge>
@@ -588,6 +784,68 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ThemeRejectionDialog
+        open={rejectionDialogTheme !== null}
+        themeLabel={rejectionDialogTheme?.label ?? ""}
+        onConfirm={handleRejectionConfirm}
+        onCancel={handleRejectionCancel}
+      />
     </>
+  );
+}
+
+// ─── Inline add-theme form ────────────────────────────────────────────────────
+
+interface AddThemeFormProps {
+  label: string;
+  error: string | null;
+  isSubmitting: boolean;
+  onLabelChange: (value: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+}
+
+function AddThemeForm({
+  label,
+  error,
+  isSubmitting,
+  onLabelChange,
+  onSubmit,
+  onCancel,
+}: AddThemeFormProps) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onSubmit();
+    }
+    if (e.key === "Escape") {
+      onCancel();
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-dashed border-border/80 bg-muted/10 p-3">
+      <p className="text-xs font-medium text-muted-foreground">Add a custom theme</p>
+      <div className="flex items-center gap-2">
+        <Input
+          autoFocus
+          placeholder="Theme label…"
+          value={label}
+          onChange={(e) => onLabelChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={isSubmitting}
+          className="h-8 text-sm"
+        />
+        <Button size="sm" onClick={onSubmit} disabled={isSubmitting || !label.trim()}>
+          {isSubmitting ? <LoadingSpinner /> : null}
+          Save
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancel} disabled={isSubmitting}>
+          Cancel
+        </Button>
+      </div>
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+    </div>
   );
 }

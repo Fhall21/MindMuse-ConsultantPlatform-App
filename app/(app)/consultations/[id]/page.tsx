@@ -165,6 +165,18 @@ export default function ConsultationDetailPage({
           currentRoundId={consultation.round_id}
           currentRoundLabel={currentRound?.label ?? null}
         />
+        {consultation.round_id ? (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/consultations/rounds/${consultation.round_id}`}>
+                Open round workspace &rarr;
+              </Link>
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              View theme grouping, synthesis, and round outputs
+            </span>
+          </div>
+        ) : null}
       </section>
 
       <Separator />

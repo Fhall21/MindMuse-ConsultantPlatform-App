@@ -254,7 +254,10 @@ export async function updateOcrJob({
 
   // Emit appropriate audit event based on status transition
   let auditAction = "";
-  let metadata: Record<string, string | number | null> = { extractedTextLength: extractedText?.length || 0, confidenceScore };
+  let metadata: Record<string, string | number | null | undefined> = {
+    extractedTextLength: extractedText?.length || 0,
+    confidenceScore,
+  };
 
   if (status === "processing") {
     auditAction = AUDIT_ACTIONS.OCR_EXTRACTION_REQUESTED;

@@ -25,4 +25,8 @@ app.include_router(clarification.router)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "model": settings.openai_model,
+        "endpoints": ["/themes/extract", "/draft/email", "/clarification/questions"],
+    }

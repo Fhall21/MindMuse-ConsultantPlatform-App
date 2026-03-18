@@ -195,6 +195,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
   const [body, setBody] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const [confirmAcceptOpen, setConfirmAcceptOpen] = useState(false);
+  const [confirmRegenerateOpen, setConfirmRegenerateOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
@@ -245,10 +246,19 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
     currentDraft !== null &&
     (subject !== currentDraftSubject || body !== currentDraftBody);
 
+  const themesChangedSinceEmail = useMemo(() => {
+    if (!currentDraft || currentDraft.status !== "draft" || !currentDraft.generated_at) return false;
+    const generatedAt = new Date(currentDraft.generated_at).getTime();
+    return (consultationQuery.data?.themes ?? []).some(
+      (theme) => theme.accepted && new Date(theme.created_at).getTime() > generatedAt
+    );
+  }, [currentDraft, consultationQuery.data?.themes]);
+
   useEffect(() => {
     setErrorMessage(null);
     setShowHistory(false);
     setConfirmAcceptOpen(false);
+    setConfirmRegenerateOpen(false);
   }, [consultationId]);
 
   useEffect(() => {
@@ -463,10 +473,15 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
           {currentDraft ? (
             <div className="space-y-4">
               {currentDraft.status === "draft" ? (
-                <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {themesChangedSinceEmail ? (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Themes have changed since this draft was generated — consider regenerating.
+                    </p>
+                  ) : <span />}
                   <Button
-                    variant="outline"
-                    onClick={() => void handleGenerateDraft()}
+                    variant={themesChangedSinceEmail ? "default" : "outline"}
+                    onClick={() => setConfirmRegenerateOpen(true)}
                     disabled={
                       isGenerating ||
                       includedThemeLabels.length === 0 ||
@@ -590,9 +605,8 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                               )}
                             </p>
                           </div>
-                          <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
-                            {(draft.body_draft || "").slice(0, 240) ||
-                              "No body preview available."}
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                            {draft.body_draft || "No body available."}
                           </p>
                         </div>
                       ))}
@@ -635,6 +649,38 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                 "Save and accept draft"
               ) : (
                 "Accept draft"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmRegenerateOpen} onOpenChange={setConfirmRegenerateOpen}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Generate a new draft?</DialogTitle>
+            <DialogDescription>
+              Any manual edits you&apos;ve made to the current draft will not carry over to the new generation. The previous draft will be preserved in history.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmRegenerateOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={isGenerating}
+              onClick={() => {
+                setConfirmRegenerateOpen(false);
+                void handleGenerateDraft();
+              }}
+            >
+              {isGenerating ? (
+                <>
+                  <LoadingSpinner />
+                  Generating…
+                </>
+              ) : (
+                "Generate new draft"
               )}
             </Button>
           </DialogFooter>

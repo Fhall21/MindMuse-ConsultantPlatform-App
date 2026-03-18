@@ -13,6 +13,7 @@ import { ThemeGroupingWorkspace } from "@/components/consultations/rounds/theme-
 import { RoundOutputsSection } from "@/components/consultations/rounds/round-outputs-section";
 import { DecisionHistorySection } from "@/components/consultations/rounds/decision-history-section";
 import { AnalyticsPlaceholder } from "@/components/consultations/rounds/analytics-placeholder";
+import { RoundAuditTrail } from "@/components/audit/audit-trail";
 import type { SourceTheme, RoundThemeGroup, RoundConsultationSummary } from "@/types/round-detail";
 import {
   generateRoundSummary,
@@ -191,8 +192,16 @@ export default function RoundDetailPage({
 
       {/* Decision History */}
       <section className="space-y-3">
-        <SectionHeading>Audit &amp; History</SectionHeading>
+        <SectionHeading>Decision History</SectionHeading>
         <DecisionHistorySection decisions={data.decisionHistory} />
+      </section>
+
+      <Separator />
+
+      {/* Audit Trail */}
+      <section className="space-y-3">
+        <SectionHeading>Audit Trail</SectionHeading>
+        <RoundAuditTrail roundId={id} />
       </section>
 
       <Separator />

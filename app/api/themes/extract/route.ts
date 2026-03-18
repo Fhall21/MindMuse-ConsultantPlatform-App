@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL ?? "http://localhost:8000";
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL;
+
+if (!AI_SERVICE_URL) {
+  throw new Error("AI_SERVICE_URL environment variable is not set");
+}
 
 export async function POST(request: NextRequest) {
   const body = await request.json();

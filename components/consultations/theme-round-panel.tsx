@@ -174,8 +174,7 @@ export function ThemeRoundPanel({ roundId, roundLabel }: ThemeRoundPanelProps) {
     setRejectionDialogTheme(null);
 
     try {
-      // TODO: Agent 1 — pass rationale to rejectTheme once signature supports it.
-      await rejectTheme(theme.id, theme.consultationId);
+      await rejectTheme(theme.id, theme.consultationId, rationale);
       await refreshRoundData();
     } catch (error) {
       setRejectedThemes((current) => {
@@ -336,6 +335,14 @@ function ConsultationThemeGroup({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
+                    {theme.is_user_added ? (
+                      <Badge
+                        variant="outline"
+                        className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300"
+                      >
+                        User added
+                      </Badge>
+                    ) : null}
                     {isAccepted ? (
                       <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
                         Accepted

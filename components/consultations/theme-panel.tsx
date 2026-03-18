@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { useConsultation } from "@/hooks/use-consultations";
 import { useThemes } from "@/hooks/use-themes";
-import { acceptTheme, rejectTheme, saveThemes } from "@/lib/actions/themes";
+import { acceptTheme, addUserTheme, rejectTheme, saveThemes } from "@/lib/actions/themes";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Theme } from "@/types/db";
@@ -166,10 +166,6 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
   // TODO: Agent 1 — persist rejected themes and rationale in DB/actions so this survives refresh.
   const [rejectedThemes, setRejectedThemes] = useState<Record<string, RejectedThemeSnapshot>>({});
 
-  // Tracks theme IDs the user added manually this session.
-  // TODO: Agent 1 — add `source` column to themes table so this is durable across sessions.
-  const [userAddedThemeIds, setUserAddedThemeIds] = useState<Set<string>>(new Set());
-
   // Rejection dialog
   const [rejectionDialogTheme, setRejectionDialogTheme] = useState<Theme | null>(null);
 
@@ -186,7 +182,6 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     setClarificationQuestions([]);
     setThemeDetailsById({});
     setRejectedThemes({});
-    setUserAddedThemeIds(new Set());
     setAddThemeOpen(false);
     setAddThemeLabel("");
     setRejectionDialogTheme(null);
@@ -218,9 +213,9 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
           description: themeDetailsById[theme.id]?.description ?? theme.description ?? null,
           accepted: true,
           rejected: false,
-          source: userAddedThemeIds.has(theme.id) ? ("user" as const) : ("ai" as const),
+          source: theme.is_user_added ? ("user" as const) : ("ai" as const),
         })),
-    [rejectedThemes, savedThemes, themeDetailsById, userAddedThemeIds]
+    [rejectedThemes, savedThemes, themeDetailsById]
   );
 
   const rejectedThemeDisplayList = useMemo<ThemeDisplayItem[]>(
@@ -231,10 +226,10 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
         description: theme.description ?? null,
         accepted: false,
         rejected: true,
-        source: userAddedThemeIds.has(theme.id) ? ("user" as const) : ("ai" as const),
+        source: theme.is_user_added ? ("user" as const) : ("ai" as const),
         rejectionRationale: theme.rationale,
       })),
-    [rejectedThemeList, userAddedThemeIds]
+    [rejectedThemeList]
   );
 
   const reviewedCount = acceptedThemeList.length + rejectedThemeList.length;
@@ -247,7 +242,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
       theme,
       rejected: false,
       details: themeDetailsById[theme.id],
-      source: userAddedThemeIds.has(theme.id) ? ("user" as const) : ("ai" as const),
+      source: theme.is_user_added ? ("user" as const) : ("ai" as const),
     }));
     const rejected = rejectedThemeList.map((theme) => ({
       theme,
@@ -256,13 +251,13 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
         description: theme.description,
         confidence: theme.confidence,
       },
-      source: userAddedThemeIds.has(theme.id) ? ("user" as const) : ("ai" as const),
+      source: theme.is_user_added ? ("user" as const) : ("ai" as const),
     }));
 
     return [...saved, ...rejected].sort(
       (left, right) => Date.parse(right.theme.created_at) - Date.parse(left.theme.created_at)
     );
-  }, [rejectedThemeList, savedThemes, themeDetailsById, userAddedThemeIds]);
+  }, [rejectedThemeList, savedThemes, themeDetailsById]);
 
   async function refreshPanelData() {
     await Promise.all([
@@ -317,7 +312,6 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
 
       setThemeDetailsById(nextDetails);
       setRejectedThemes({});
-      setUserAddedThemeIds(new Set());
       setClarificationQuestions([]);
       setClarificationOpen(false);
       setConfirmReextractOpen(false);
@@ -366,9 +360,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     setRejectionDialogTheme(null);
 
     try {
-      // TODO: Agent 1 — update rejectTheme(id, consultationId, rationale) signature to persist
-      // rationale and emit it in audit event metadata once the DB column is extended.
-      await rejectTheme(theme.id, consultationId);
+      await rejectTheme(theme.id, consultationId, rationale);
       await refreshPanelData();
     } catch (error) {
       setRejectedThemes((current) => {
@@ -397,14 +389,8 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     setIsAddingTheme(true);
 
     try {
-      const saved = (await saveThemes(consultationId, [{ label }])) as Array<{ id: string }> | null;
-      const newId = saved?.[0]?.id;
-
-      if (newId) {
-        // Mark as user-added so it renders with the "User added" source badge.
-        // TODO: Agent 1 — persist `source = 'user'` on the themes row so this survives refresh.
-        setUserAddedThemeIds((current) => new Set([...current, newId]));
-      }
+      // addUserTheme: sets is_user_added=true, accepted=true, weight=2.0, logs learning signal
+      await addUserTheme(consultationId, label);
 
       setAddThemeLabel("");
       setAddThemeOpen(false);

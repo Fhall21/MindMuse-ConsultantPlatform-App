@@ -28,17 +28,27 @@ export async function emitAuditEvent({
     throw new Error("Not authenticated");
   }
 
-  const { error } = await supabase.from("audit_log").insert({
+  const auditEvent = {
     consultation_id: consultationId ?? null,
     action,
     entity_type: entityType,
     entity_id: entityId,
     payload: metadata || null,
     user_id: user.user.id,
-  });
+  };
+
+  const { error } = await supabase.from("audit_log").insert(auditEvent);
 
   if (error) {
-    console.error("Audit event emission failed:", error);
-    throw error;
+    console.error("Audit event emission failed:", {
+      action,
+      consultationId,
+      entityType,
+      entityId,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
   }
 }

@@ -41,12 +41,11 @@ interface ExtractedTheme {
 }
 
 interface ThemeDetails {
-  description?: string;
+  description?: string | null;
   confidence?: number;
 }
 
 interface RejectedThemeSnapshot extends Theme {
-  description?: string;
   confidence?: number;
 }
 
@@ -283,7 +282,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     const details = themeDetailsById[theme.id];
     const snapshot: RejectedThemeSnapshot = {
       ...theme,
-      description: details?.description,
+      description: details?.description ?? theme.description ?? null,
       confidence: details?.confidence,
     };
 

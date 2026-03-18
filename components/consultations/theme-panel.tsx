@@ -160,7 +160,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
   }, [consultationId]);
 
   const transcript = consultationQuery.data?.consultation.transcript_raw?.trim() ?? "";
-  const savedThemes = themesQuery.data ?? [];
+  const savedThemes = useMemo(() => themesQuery.data ?? [], [themesQuery.data]);
 
   const rejectedThemeList = useMemo(
     () => Object.values(rejectedThemes).sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)),

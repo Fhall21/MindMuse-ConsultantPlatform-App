@@ -168,14 +168,14 @@ export function AuditTrail({ consultationId }: AuditTrailProps) {
   const auditQuery = useAuditEvents(consultationId);
   const [showEarlier, setShowEarlier] = useState(false);
 
-  const events = auditQuery.data ?? [];
-  const { olderEvents, recentEvents } = useMemo(() => {
-    const now = Date.now();
+  const events = useMemo(() => auditQuery.data ?? [], [auditQuery.data]);
+  const referenceTime = auditQuery.dataUpdatedAt || 0;
 
+  const { olderEvents, recentEvents } = useMemo(() => {
     return events.reduce(
       (groups, event) => {
         const createdAt = new Date(event.created_at).getTime();
-        if (!Number.isNaN(createdAt) && now - createdAt > SEVEN_DAYS_IN_MS) {
+        if (!Number.isNaN(createdAt) && referenceTime - createdAt > SEVEN_DAYS_IN_MS) {
           groups.olderEvents.push(event);
         } else {
           groups.recentEvents.push(event);
@@ -184,7 +184,7 @@ export function AuditTrail({ consultationId }: AuditTrailProps) {
       },
       { olderEvents: [] as AuditLogEntry[], recentEvents: [] as AuditLogEntry[] }
     );
-  }, [events]);
+  }, [events, referenceTime]);
 
   return (
     <Card className="border-border/70">

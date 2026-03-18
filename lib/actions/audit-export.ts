@@ -236,7 +236,10 @@ export async function generateAuditExport(
   const { data: auditRows, error: auditError } = await auditQuery;
 
   if (auditError) {
-    console.error("Audit export query failed:", auditError);
+    console.error("Audit export query failed", {
+      code: auditError.code,
+      message: auditError.message,
+    });
     throw new Error("Unable to load audit events for export. Please retry.");
   }
 
@@ -279,17 +282,26 @@ export async function generateAuditExport(
     ]);
 
     if (consultationsResult.error) {
-      console.error("Consultation query for audit export failed:", consultationsResult.error);
+      console.error("Consultation query for audit export failed", {
+        code: consultationsResult.error.code,
+        message: consultationsResult.error.message,
+      });
       throw new Error("Unable to load consultation details for export. Please retry.");
     }
 
     if (evidenceEmailsResult.error) {
-      console.error("Evidence email query for audit export failed:", evidenceEmailsResult.error);
+      console.error("Evidence email query for audit export failed", {
+        code: evidenceEmailsResult.error.code,
+        message: evidenceEmailsResult.error.message,
+      });
       throw new Error("Unable to load evidence email details for export. Please retry.");
     }
 
     if (themesResult.error) {
-      console.error("Theme query for audit export failed:", themesResult.error);
+      console.error("Theme query for audit export failed", {
+        code: themesResult.error.code,
+        message: themesResult.error.message,
+      });
       throw new Error("Unable to load theme details for export. Please retry.");
     }
 
@@ -312,7 +324,10 @@ export async function generateAuditExport(
         .in("id", roundIds);
 
       if (roundsError) {
-        console.error("Consultation round query for audit export failed:", roundsError);
+        console.error("Consultation round query for audit export failed", {
+          code: roundsError.code,
+          message: roundsError.message,
+        });
         throw new Error("Unable to load consultation round details for export. Please retry.");
       }
 

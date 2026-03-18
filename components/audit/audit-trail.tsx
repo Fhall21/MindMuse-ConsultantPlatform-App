@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { useAuditEvents } from "@/hooks/use-audit";
+import { useAuditEvents, useRoundAuditEvents } from "@/hooks/use-audit";
 import type { AuditLogEntry } from "@/types/db";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -48,24 +48,51 @@ function buildEventLabel(event: AuditLogEntry) {
   const payload = event.payload ?? {};
   const personName = getStringValue(payload.person_name);
   const themeLabel = getStringValue(payload.theme_label);
+  const groupLabel =
+    getStringValue(payload.accepted_label) ??
+    getStringValue(payload.draft_label) ??
+    getStringValue(payload.current_label) ??
+    getStringValue(payload.label);
+  const targetType = getStringValue(payload.target_type);
 
   switch (event.action) {
+    // Consultation events
     case "consultation.created":
       return "Consultation created";
+    case "consultation.title_edited":
+      return "Consultation title updated";
     case "consultation.transcript_edited":
       return "Transcript updated";
+    case "consultation.notes_edited":
+      return "Notes updated";
     case "consultation.completed":
       return "Consultation marked complete";
+    case "consultation.round_assigned":
+      return "Assigned to round";
+
+    // Person events
     case "person.linked":
       return personName ? `Person linked: ${personName}` : "Person linked";
     case "person.unlinked":
       return personName ? `Person unlinked: ${personName}` : "Person unlinked";
+    case "person.created":
+      return "Person record created";
+    case "person.updated":
+      return "Person record updated";
+    case "person.deleted":
+      return "Person record deleted";
+
+    // Theme events
     case "theme.extraction_requested":
       return "Theme extraction triggered";
     case "theme.accepted":
       return themeLabel ? `Theme accepted: ${themeLabel}` : "Theme accepted";
     case "theme.rejected":
       return themeLabel ? `Theme rejected: ${themeLabel}` : "Theme rejected";
+    case "theme.user_added":
+      return themeLabel ? `Theme added: ${themeLabel}` : "Theme added";
+
+    // Evidence email events
     case "evidence_email.generation_requested":
       return "Email draft generation triggered";
     case "evidence_email.generated":
@@ -74,6 +101,81 @@ function buildEventLabel(event: AuditLogEntry) {
       return "Email draft accepted";
     case "evidence_email.sent":
       return "Email marked as sent";
+
+    // Transcript / audio / OCR ingestion events
+    case "transcript.file_uploaded":
+      return "Transcript file uploaded";
+    case "transcript.parsed":
+      return "Transcript parsed";
+    case "audio.uploaded":
+      return "Audio file uploaded";
+    case "audio.transcription_requested":
+      return "Audio transcription requested";
+    case "audio.transcription_completed":
+      return "Audio transcription completed";
+    case "audio.transcription_failed":
+      return "Audio transcription failed";
+    case "ocr.uploaded":
+      return "Handwritten notes uploaded";
+    case "ocr.extraction_requested":
+      return "OCR extraction requested";
+    case "ocr.extraction_completed":
+      return "OCR extraction completed";
+    case "ocr.extraction_failed":
+      return "OCR extraction failed";
+    case "ocr.review_accepted":
+      return "OCR review accepted";
+    case "ocr.review_rejected":
+      return "OCR review rejected";
+    case "ocr.corrections_saved":
+      return "OCR corrections saved";
+
+    // Round lifecycle
+    case "round.created":
+      return "Round created";
+    case "round.updated":
+      return "Round updated";
+    case "round.deleted":
+      return "Round deleted";
+
+    // Round theme group events
+    case "round.theme_group_created":
+      return groupLabel ? `Theme group created: ${groupLabel}` : "Theme group created";
+    case "round.theme_group_updated":
+      return groupLabel ? `Theme group updated: ${groupLabel}` : "Theme group updated";
+    case "round.theme_group_merged":
+      return "Theme groups merged";
+    case "round.theme_group_split":
+      return "Theme group split";
+    case "round.theme_group_member_moved":
+      return "Theme moved between groups";
+
+    // Round draft events
+    case "round.theme_group_draft_created":
+      return groupLabel ? `AI draft created: ${groupLabel}` : "AI draft created for theme group";
+    case "round.theme_group_draft_accepted":
+      return groupLabel ? `Draft accepted: ${groupLabel}` : "Theme group draft accepted";
+    case "round.theme_group_draft_discarded":
+      return "Theme group draft discarded";
+
+    // Round decision events
+    case "round.target_accepted": {
+      const typeLabel = targetType === "theme_group" ? "theme group" : targetType === "source_theme" ? "source theme" : "item";
+      return `${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} accepted`;
+    }
+    case "round.target_discarded": {
+      const typeLabel = targetType === "theme_group" ? "theme group" : targetType === "source_theme" ? "source theme" : "item";
+      return `${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} discarded`;
+    }
+    case "round.target_management_rejected": {
+      const typeLabel = targetType === "theme_group" ? "theme group" : targetType === "source_theme" ? "source theme" : "item";
+      return `${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} management rejected`;
+    }
+
+    // Round output
+    case "round.output_generated":
+      return "Round output generated";
+
     default:
       return humanizeAction(event.action);
   }
@@ -139,6 +241,14 @@ function getDotClassName(action: string) {
     return "bg-sky-500";
   }
 
+  if (action.startsWith("round.")) {
+    return "bg-violet-500";
+  }
+
+  if (action.startsWith("transcript.") || action.startsWith("audio.") || action.startsWith("ocr.")) {
+    return "bg-teal-500";
+  }
+
   return "bg-muted-foreground/40";
 }
 
@@ -164,8 +274,15 @@ function TimelineEvents({ events }: { events: AuditLogEntry[] }) {
   );
 }
 
-export function AuditTrail({ consultationId }: AuditTrailProps) {
-  const auditQuery = useAuditEvents(consultationId);
+function AuditTrailCard({
+  auditQuery,
+  title,
+  description,
+}: {
+  auditQuery: ReturnType<typeof useAuditEvents> | ReturnType<typeof useRoundAuditEvents>;
+  title: string;
+  description: string;
+}) {
   const [showEarlier, setShowEarlier] = useState(false);
 
   const events = useMemo(() => auditQuery.data ?? [], [auditQuery.data]);
@@ -189,8 +306,8 @@ export function AuditTrail({ consultationId }: AuditTrailProps) {
   return (
     <Card className="border-border/70">
       <CardHeader>
-        <CardTitle>Audit Trail</CardTitle>
-        <CardDescription>Chronological reference of consultation actions and evidence milestones.</CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -224,5 +341,31 @@ export function AuditTrail({ consultationId }: AuditTrailProps) {
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+export function AuditTrail({ consultationId }: AuditTrailProps) {
+  const auditQuery = useAuditEvents(consultationId);
+  return (
+    <AuditTrailCard
+      auditQuery={auditQuery}
+      title="Audit Trail"
+      description="Chronological reference of consultation actions and evidence milestones."
+    />
+  );
+}
+
+interface RoundAuditTrailProps {
+  roundId: string;
+}
+
+export function RoundAuditTrail({ roundId }: RoundAuditTrailProps) {
+  const auditQuery = useRoundAuditEvents(roundId);
+  return (
+    <AuditTrailCard
+      auditQuery={auditQuery}
+      title="Audit Trail"
+      description="Chronological record of all round actions, grouping decisions, and output events."
+    />
   );
 }

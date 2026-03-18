@@ -18,3 +18,41 @@ export function useAuditEvents(consultationId: string) {
     enabled: !!consultationId,
   });
 }
+
+export function useRoundAuditEvents(roundId: string) {
+  return useQuery({
+    queryKey: ["audit_log", "round", roundId],
+    queryFn: async () => {
+      const supabase = createClient();
+
+      // Round-level events (created/updated/deleted) — entity_id is the round id
+      const [{ data: roundEntityEvents, error: e1 }, { data: roundPayloadEvents, error: e2 }] =
+        await Promise.all([
+          supabase
+            .from("audit_log")
+            .select("*")
+            .eq("entity_type", "consultation_round")
+            .eq("entity_id", roundId),
+          supabase
+            .from("audit_log")
+            .select("*")
+            .filter("payload->>round_id", "eq", roundId),
+        ]);
+
+      if (e1) throw e1;
+      if (e2) throw e2;
+
+      const seen = new Set<string>();
+      const merged: AuditLogEntry[] = [];
+      for (const event of [...(roundEntityEvents ?? []), ...(roundPayloadEvents ?? [])]) {
+        if (!seen.has(event.id)) {
+          seen.add(event.id);
+          merged.push(event as AuditLogEntry);
+        }
+      }
+      merged.sort((a, b) => a.created_at.localeCompare(b.created_at));
+      return merged;
+    },
+    enabled: !!roundId,
+  });
+}

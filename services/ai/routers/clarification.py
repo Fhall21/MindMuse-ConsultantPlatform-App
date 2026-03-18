@@ -20,11 +20,13 @@ async def generate_clarification_questions(request: ClarificationRequest):
 
     themes_str = ", ".join(request.themes) if request.themes else "none identified yet"
     context = f"\nConsultant's additional notes:\n{request.context_notes}" if request.context_notes else ""
+    ocr_section = f"\nHandwritten note content (OCR extracted):\n{request.ocr_text}" if request.ocr_text else ""
 
     system_prompt = (
         "You are a psychosocial consultation quality analyst. A consultant has "
-        "completed a consultation and pasted a transcript. Themes have been "
-        "extracted, but the record may be incomplete or ambiguous.\n\n"
+        "completed a consultation. They may have provided a transcript, handwritten "
+        "note extracts (OCR), or both. Themes have been extracted, but the record "
+        "may be incomplete or ambiguous.\n\n"
         "Your task is to generate 3–6 targeted questions that help the "
         "consultant strengthen their evidence record before drafting the "
         "follow-up email. These are questions for the consultant to reflect on "
@@ -54,7 +56,8 @@ async def generate_clarification_questions(request: ClarificationRequest):
 
     user_content = (
         f"Themes identified so far: {themes_str}\n"
-        f"{context}\n\n"
+        f"{context}"
+        f"{ocr_section}\n\n"
         f"Transcript:\n{request.transcript}"
     )
 

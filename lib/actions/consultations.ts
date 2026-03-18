@@ -70,6 +70,28 @@ export async function updateTranscript({
   });
 }
 
+export async function setConsultationRound(
+  id: string,
+  roundId: string | null
+) {
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("consultations")
+    .update({ round_id: roundId })
+    .eq("id", id);
+
+  if (error) throw error;
+
+  await emitAuditEvent({
+    consultationId: id,
+    action: "consultation.round_assigned",
+    entityType: "consultation",
+    entityId: id,
+    metadata: { roundId },
+  });
+}
+
 export async function markConsultationComplete(id: string) {
   const supabase = await createClient();
 

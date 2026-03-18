@@ -16,41 +16,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { AuditTrail } from "@/components/audit/audit-trail";
+import { ThemePanel } from "@/components/consultations/theme-panel";
+import { EmailDraftPanel } from "@/components/evidence/email-draft-panel";
 import { TranscriptEditor } from "@/components/consultations/transcript-editor";
 import { PeoplePanel } from "@/components/consultations/people-panel";
 import { RoundsPanel } from "@/components/consultations/rounds-panel";
 import { useConsultation, useConsultationRounds } from "@/hooks/use-consultations";
 import { markConsultationComplete } from "@/lib/actions/consultations";
-
-// Expected: <ThemePanel consultationId={string} />
-// TODO: replace stub with import from components/consultations/theme-panel.tsx when Agent 4 branch merges
-function ThemePanel({ consultationId: _id }: { consultationId: string }) {
-  return (
-    <div className="rounded border border-dashed p-4 text-sm text-muted-foreground">
-      Theme panel — pending Agent 4
-    </div>
-  );
-}
-
-// Expected: <EmailDraftPanel consultationId={string} />
-// TODO: replace stub with import from components/evidence/email-draft-panel.tsx when Agent 4 branch merges
-function EmailDraftPanel({ consultationId: _id }: { consultationId: string }) {
-  return (
-    <div className="rounded border border-dashed p-4 text-sm text-muted-foreground">
-      Evidence email panel — pending Agent 4
-    </div>
-  );
-}
-
-// Expected: <AuditTrail consultationId={string} />
-// TODO: replace stub with import from components/audit/audit-trail.tsx when Agent 4 branch merges
-function AuditTrail({ consultationId: _id }: { consultationId: string }) {
-  return (
-    <div className="rounded border border-dashed p-4 text-sm text-muted-foreground">
-      Audit trail — pending Agent 4
-    </div>
-  );
-}
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (

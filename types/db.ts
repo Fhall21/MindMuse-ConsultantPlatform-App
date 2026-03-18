@@ -11,6 +11,8 @@ export type {
   Consultation,
   ConsultationRound,
   Theme,
+  ThemeDecisionLog,
+  ThemeDecisionType,
   Person,
   ConsultationPerson,
   EvidenceEmail,

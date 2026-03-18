@@ -27,6 +27,21 @@ export interface Theme {
   label: string;
   description: string | null;
   accepted: boolean;
+  is_user_added: boolean;
+  weight: number;
+  created_at: string;
+}
+
+export type ThemeDecisionType = "accept" | "reject" | "user_added";
+
+export interface ThemeDecisionLog {
+  id: string;
+  user_id: string;
+  consultation_id: string;
+  theme_id: string;
+  round_id: string | null;
+  decision_type: ThemeDecisionType;
+  rationale: string | null;
   created_at: string;
 }
 

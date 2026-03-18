@@ -52,10 +52,10 @@ export default function ConsultationsPage() {
   const consultationsQuery = useConsultations();
   const roundsQuery = useConsultationRounds();
 
-  const consultations = consultationsQuery.data ?? [];
+  const consultations = consultationsQuery.data;
 
   const consultationIds = useMemo(
-    () => consultations.map((consultation) => consultation.id),
+    () => (consultations ?? []).map((consultation) => consultation.id),
     [consultations]
   );
 
@@ -88,7 +88,7 @@ export default function ConsultationsPage() {
     );
     const peopleCounts = peopleCountsQuery.data ?? {};
 
-    return consultations.slice(0, 200).map((consultation) => ({
+    return (consultations ?? []).slice(0, 200).map((consultation) => ({
       ...consultation,
       roundLabel: consultation.round_id
         ? (roundLabelById.get(consultation.round_id) ?? null)
@@ -196,6 +196,7 @@ export default function ConsultationsPage() {
     []
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: filteredRows,
     columns,

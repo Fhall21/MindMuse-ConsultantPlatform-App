@@ -105,6 +105,7 @@ export function PersonTable({ data, onEdit, onDelete, onRowClick }: PersonTableP
     [onDelete, onEdit]
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,

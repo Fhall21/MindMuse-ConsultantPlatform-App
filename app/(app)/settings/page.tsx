@@ -24,8 +24,8 @@ export default function SettingsPage() {
   const [editingDescription, setEditingDescription] = useState("");
 
   const roundsQuery = useConsultationRounds();
-  const rounds = roundsQuery.data ?? [];
-  const roundIds = useMemo(() => rounds.map((round) => round.id), [rounds]);
+  const rounds = roundsQuery.data;
+  const roundIds = useMemo(() => (rounds ?? []).map((round) => round.id), [rounds]);
 
   const consultationCountsQuery = useQuery({
     queryKey: ["consultation_rounds", "counts", roundIds],
@@ -145,11 +145,11 @@ export default function SettingsPage() {
             </Button>
           </form>
 
-          {rounds.length === 0 ? (
+          {(rounds ?? []).length === 0 ? (
             <p className="text-sm text-muted-foreground">No rounds added yet.</p>
           ) : (
             <div className="space-y-3">
-              {rounds.map((round) => {
+              {(rounds ?? []).map((round) => {
                 const linkedConsultationCount = consultationCounts[round.id] ?? 0;
                 const isEditing = editingRoundId === round.id;
 

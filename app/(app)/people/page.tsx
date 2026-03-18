@@ -30,9 +30,9 @@ export default function PeoplePage() {
   const [editingPerson, setEditingPerson] = useState<Person | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
 
-  const people = peopleQuery.data ?? [];
+  const people = peopleQuery.data;
 
-  const personIds = useMemo(() => people.map((person) => person.id), [people]);
+  const personIds = useMemo(() => (people ?? []).map((person) => person.id), [people]);
 
   const consultationCountsQuery = useQuery({
     queryKey: ["people", "consultation_counts", personIds],
@@ -103,7 +103,7 @@ export default function PeoplePage() {
   const rows = useMemo<PersonTableRow[]>(() => {
     const counts = consultationCountsQuery.data ?? {};
 
-    return people.map((person) => ({
+    return (people ?? []).map((person) => ({
       ...person,
       consultationCount: counts[person.id] ?? 0,
     }));

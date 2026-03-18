@@ -39,7 +39,9 @@ function downloadBlob(blob: Blob, filename: string) {
   anchor.download = filename;
   anchor.click();
 
-  URL.revokeObjectURL(objectUrl);
+  window.setTimeout(() => {
+    URL.revokeObjectURL(objectUrl);
+  }, 1000);
 }
 
 function serializeAuditExportAsCsv(exportPackage: AuditExportPackage) {

@@ -102,6 +102,16 @@ function normalizeFilters(filters: AuditExportFilters = {}): Required<AuditExpor
   };
 }
 
+function validateDateRange(dateFromIso: string | null, dateToIso: string | null) {
+  if (!dateFromIso || !dateToIso) {
+    return;
+  }
+
+  if (new Date(dateFromIso).getTime() >= new Date(dateToIso).getTime()) {
+    throw new Error("Date range is invalid. Choose an end date after the start date.");
+  }
+}
+
 function buildFilenameBase(filters: Required<AuditExportFilters>) {
   const today = new Date().toISOString().slice(0, 10);
   const segments = ["audit-export", today];
@@ -202,6 +212,8 @@ export async function generateAuditExport(
   const filters = normalizeFilters(rawFilters);
   const dateFromIso = normalizeDateBoundary(filters.dateFrom, "start");
   const dateToIso = normalizeDateBoundary(filters.dateTo, "end");
+
+  validateDateRange(dateFromIso, dateToIso);
 
   let auditQuery = supabase.from("audit_log").select("*").order("created_at", { ascending: true });
 

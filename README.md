@@ -72,6 +72,68 @@ This starts:
 - **ai** — FastAPI on port 8000
 - **db** — PostgreSQL 15 on port 5432
 
+## Coolify Deployment (Compose Service Stack)
+
+This repository now includes a dedicated Coolify stack file: `docker-compose.coolify.yml`.
+Keep local development on `docker-compose.yml` and use the Coolify file only for deployment.
+
+### 1. In Coolify, create a Docker Compose Service Stack
+
+- Select this repository and branch.
+- Set Compose file path to `ConsultantPlatformApp/docker-compose.coolify.yml`.
+- Use standard Compose Service Stack mode (not Raw Compose Deployment).
+
+### 2. Set environment variables in a single Coolify panel
+
+The stack uses Compose interpolation so Coolify can validate required values.
+
+Required values:
+
+- `APP_SITE_URL`
+- `SUPABASE_PUBLIC_URL`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_JWT_SECRET`
+- `POSTGRES_PASSWORD`
+- `OPENAI_API_KEY`
+
+Recommended defaults:
+
+- `APP_PORT=3000`
+- `AI_SERVICE_PORT=8000`
+- `SUPABASE_JWT_EXP=3600`
+- `POSTGRES_DB=postgres`
+- `OPENAI_MODEL=gpt-4o-mini`
+- `OPENAI_VISION_MODEL=gpt-4o`
+- `OPENAI_AUDIO_MODEL=whisper-1`
+- `ALLOWED_ORIGINS=https://your-app-domain`
+- `GOTRUE_DISABLE_SIGNUP=false`
+- `GOTRUE_MAILER_AUTOCONFIRM=true`
+
+Use `SUPABASE_PUBLIC_URL` as the single public Supabase endpoint for both the app client config and Supabase auth site URL. You still set the actual public domain once in Coolify, but the stack reuses it everywhere else.
+
+### 3. Domain routing and service exposure
+
+- Assign your public app domain to the `app` service using container port `3000`.
+- Assign a separate public domain to `supabase-kong` if browser clients should call Supabase APIs directly.
+- Do not expose `db`, `ai`, `supabase-auth`, `supabase-rest`, or `supabase-meta` directly.
+
+### 4. Validate before first deploy
+
+From this directory:
+
+```bash
+docker compose -f docker-compose.coolify.yml config
+```
+
+If interpolation succeeds, deploy in Coolify and verify:
+
+- app health endpoint responds through your domain
+- AI health endpoint is healthy internally
+- signup/login and consultation data reads/writes work
+- theme/email generation requests reach the AI service
+
 ## Supabase Local Notes
 
 - Supabase Studio is available at `http://localhost:54323`.

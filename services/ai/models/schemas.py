@@ -1,11 +1,29 @@
 from pydantic import BaseModel
 
 
+# --- Learning signals (Stage 4: user-scoped theme personalization) ---
+
+
+class LearningSignal(BaseModel):
+    """A single user decision about a theme, used to personalize future extraction.
+
+    Sent by the frontend from Agent 1's persisted learning signal data.
+    - 'accepted': user confirmed this AI-suggested theme (moderate positive weight)
+    - 'rejected': user dismissed this theme with a rationale (negative weight)
+    - 'user_added': user created this theme manually (high positive weight)
+    """
+    label: str                                    # Theme label the decision applies to
+    decision_type: str                            # 'accepted' | 'rejected' | 'user_added'
+    rationale: str | None = None                  # Required for rejections; optional otherwise
+    weight: float = 1.0                           # 0.0–2.0; user_added defaults higher at call site
+
+
 # --- Theme extraction ---
 
 
 class ThemeExtractRequest(BaseModel):
     transcript: str
+    learning_signals: list[LearningSignal] = []   # Optional: user-scoped learning history
 
 
 class ExtractedTheme(BaseModel):

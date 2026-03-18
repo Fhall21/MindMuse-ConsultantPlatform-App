@@ -144,6 +144,51 @@ class OcrExtractResponse(BaseModel):
     segments: list[OcrSegment]
 
 
+# --- Consultation grouping ---
+
+
+class ConsultationThemeSeed(BaseModel):
+    """A single consultation with its accepted themes, for group suggestion input."""
+    consultation_id: str
+    consultation_title: str
+    theme_labels: list[str]           # Accepted theme labels from this consultation
+    theme_descriptions: list[str]     # Parallel list of theme descriptions (empty string if none)
+
+
+class ConsultationGroupSuggestionRequest(BaseModel):
+    round_label: str | None = None
+    selected_theme_labels: list[str]  # 2+ themes the user wants to cluster around
+    consultations: list[ConsultationThemeSeed]
+
+
+class SuggestedConsultationGroup(BaseModel):
+    label: str                        # Short group name, e.g. "Workplace Stress Cluster"
+    consultation_ids: list[str]       # IDs of consultations to include
+    explanation: str                  # Brief rationale (1-2 sentences)
+
+
+class ConsultationGroupSuggestionResponse(BaseModel):
+    groups: list[SuggestedConsultationGroup]
+
+
+class ConsultationGroupSummaryConsultation(BaseModel):
+    consultation_id: str
+    consultation_title: str
+    theme_labels: list[str]
+    theme_descriptions: list[str]
+
+
+class ConsultationGroupSummaryRequest(BaseModel):
+    round_label: str | None = None
+    group_label: str
+    consultations: list[ConsultationGroupSummaryConsultation]
+
+
+class ConsultationGroupSummaryResponse(BaseModel):
+    title: str
+    content: str
+
+
 # --- Shorthand expansion ---
 
 

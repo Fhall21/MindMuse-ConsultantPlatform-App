@@ -6,6 +6,10 @@ from pydantic import ValidationError
 from core.config import settings
 from core.openai_client import get_client
 from models.schemas import (
+    ConsultationGroupSuggestionRequest,
+    ConsultationGroupSuggestionResponse,
+    ConsultationGroupSummaryRequest,
+    ConsultationGroupSummaryResponse,
     RoundOutputRequest,
     RoundOutputResponse,
     RoundThemeGroupDraftRequest,
@@ -204,3 +208,131 @@ async def generate_round_report(request: RoundOutputRequest):
 @router.post("/generate-email", response_model=RoundOutputResponse)
 async def generate_round_email(request: RoundOutputRequest):
     return await _generate_round_output("email", request)
+
+
+@router.post("/suggest-consultation-groups", response_model=ConsultationGroupSuggestionResponse)
+async def suggest_consultation_groups(request: ConsultationGroupSuggestionRequest):
+    """
+    Analyse how the user's selected themes cluster across consultations and suggest
+    natural consultation groups. Each suggestion includes a label and explanation.
+
+    AI flow:
+      selected_theme_labels (user-picked) + consultations (id, title, themes)
+        → GPT-4o-mini (JSON mode, 30s timeout)
+        → { groups: [{ label, consultation_ids, explanation }] }
+    """
+    client = _require_client()
+
+    selected = ", ".join(request.selected_theme_labels) or "none"
+
+    consultation_lines = "\n".join(
+        [
+            (
+                f"- id={c.consultation_id} | title={c.consultation_title}"
+                f" | themes: {'; '.join(c.theme_labels) or 'none'}"
+            )
+            for c in request.consultations
+        ]
+    ) or "- none"
+
+    system_prompt = (
+        "You are helping a psychosocial consultant group a set of consultations into "
+        "meaningful clusters based on shared themes.\n\n"
+        "The consultant has selected a set of focus themes. Your job is to analyse which "
+        "consultations share those themes (or closely related themes) and suggest a small "
+        "number of natural groups.\n\n"
+        "Rules:\n"
+        "- Each consultation may appear in at most one group.\n"
+        "- A group must have at least 2 consultations.\n"
+        "- Group labels should be concise (2-6 words) and evidence-based.\n"
+        "- Explanations should be 1-2 sentences, grounded in the theme overlap.\n"
+        "- Consultations that do not fit any group should be omitted from the output.\n"
+        "- Do not invent themes or evidence not present in the input.\n\n"
+        "Return JSON with: { \"groups\": [ { \"label\": str, \"consultation_ids\": [str, ...], "
+        "\"explanation\": str }, ... ] }\n"
+        "Return only valid JSON."
+    )
+
+    user_content = (
+        f"Round: {request.round_label or 'Untitled round'}\n"
+        f"Focus themes selected by consultant: {selected}\n\n"
+        f"Consultations in this round:\n{consultation_lines}"
+    )
+
+    completion = client.chat.completions.create(
+        model=settings.openai_model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ],
+        response_format={"type": "json_object"},
+        timeout=30.0,
+    )
+
+    parsed = _parse_json_response(completion.choices[0].message.content)
+
+    try:
+        return ConsultationGroupSuggestionResponse(**parsed)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Model output did not match expected schema: {exc}",
+        ) from exc
+
+
+@router.post("/generate-group-summary", response_model=ConsultationGroupSummaryResponse)
+async def generate_group_summary(request: ConsultationGroupSummaryRequest):
+    """
+    Generate a short evidence summary for a consultation group.
+    Used to produce a group-level artifact in the round outputs section.
+    """
+    client = _require_client()
+
+    consultation_lines = "\n".join(
+        [
+            (
+                f"- {c.consultation_title}:"
+                f" {'; '.join(c.theme_labels) or 'no themes'}"
+            )
+            for c in request.consultations
+        ]
+    ) or "- none"
+
+    system_prompt = (
+        "You are writing a concise evidence summary for a group of consultations within a "
+        "psychosocial consultation round.\n\n"
+        "The group is a named cluster of consultations that share common themes. "
+        "Your summary should:\n"
+        "- Open with one sentence naming the shared concern across the group.\n"
+        "- Note any relevant theme patterns or escalation considerations.\n"
+        "- Stay grounded in the provided themes — do not invent evidence.\n"
+        "- Be 2-4 sentences total.\n\n"
+        "Return JSON with 'title' (the group label as the title) and 'content' (the summary text).\n"
+        "Return only valid JSON."
+    )
+
+    user_content = (
+        f"Round: {request.round_label or 'Untitled round'}\n"
+        f"Group: {request.group_label}\n\n"
+        f"Consultations in this group:\n{consultation_lines}"
+    )
+
+    completion = client.chat.completions.create(
+        model=settings.openai_model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ],
+        response_format={"type": "json_object"},
+        timeout=30.0,
+    )
+
+    parsed = _parse_json_response(completion.choices[0].message.content)
+
+    try:
+        return ConsultationGroupSummaryResponse(**parsed)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Model output did not match expected schema: {exc}",
+        ) from exc

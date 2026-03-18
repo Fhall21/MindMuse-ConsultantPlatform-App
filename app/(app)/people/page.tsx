@@ -18,13 +18,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { usePeople } from "@/hooks/use-people";
 import { deletePerson, createPerson, updatePerson } from "@/lib/actions/people";
+import { getDistinctCaseInsensitiveValues, isNonEmptyString } from "@/lib/people-classifications";
 import { createClient } from "@/lib/supabase/client";
 import type { Person } from "@/types/db";
 import type { PersonFormData } from "@/lib/validations/consultation";
-
-function isNonEmptyString(value: string | null | undefined): value is string {
-  return Boolean(value?.trim());
-}
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
@@ -45,9 +42,7 @@ function getDistinctPersonValues(
   people: Person[] | undefined,
   field: "working_group" | "work_type"
 ) {
-  return [...new Set((people ?? []).map((person) => person[field]).filter(isNonEmptyString))].sort(
-    (left, right) => left.localeCompare(right)
-  );
+  return getDistinctCaseInsensitiveValues((people ?? []).map((person) => person[field]));
 }
 
 export default function PeoplePage() {

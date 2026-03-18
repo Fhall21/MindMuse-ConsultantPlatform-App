@@ -1,10 +1,11 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useMemo, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,15 +22,16 @@ import {
   unlinkPersonFromConsultation,
   createPerson,
 } from "@/lib/actions/people";
+import {
+  getDistinctCaseInsensitiveValues,
+  isNonEmptyString,
+  normalizeClassificationValue,
+} from "@/lib/people-classifications";
 import { personSchema, type PersonFormData } from "@/lib/validations/consultation";
 import type { Person } from "@/types/db";
 
 interface PeoplePanelProps {
   consultationId: string;
-}
-
-function isNonEmptyString(value: string | null | undefined): value is string {
-  return Boolean(value?.trim());
 }
 
 function getErrorMessage(error: unknown, fallbackMessage: string) {
@@ -51,9 +53,7 @@ function getDistinctPersonValues(
   people: Person[] | undefined,
   field: "working_group" | "work_type"
 ) {
-  return [...new Set((people ?? []).map((person) => person[field]).filter(isNonEmptyString))].sort(
-    (left, right) => left.localeCompare(right)
-  );
+  return getDistinctCaseInsensitiveValues((people ?? []).map((person) => person[field]));
 }
 
 function getPersonSummary(person: Pick<Person, "working_group" | "work_type" | "role" | "email">) {
@@ -66,8 +66,6 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
   const queryClient = useQueryClient();
   const { data: linkedPeople, isLoading } = useConsultationPeople(consultationId);
   const { data: allPeople } = usePeople();
-  const workingGroupListId = useId();
-  const workTypeListId = useId();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -77,9 +75,11 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
   const [creating, setCreating] = useState(false);
 
   const {
+    control,
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<PersonFormData>({
     resolver: zodResolver(personSchema),
@@ -95,6 +95,9 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
     () => getDistinctPersonValues(allPeople, "work_type"),
     [allPeople]
   );
+  const workingGroupValue =
+    useWatch({ control: control, name: "working_group" }) ?? "";
+  const workTypeValue = useWatch({ control: control, name: "work_type" }) ?? "";
 
   const filteredPeople = useMemo(
     () =>
@@ -153,8 +156,8 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
     try {
       const personId = await createPerson({
         name: data.name.trim(),
-        working_group: data.working_group?.trim() || undefined,
-        work_type: data.work_type?.trim() || undefined,
+        working_group: normalizeClassificationValue(data.working_group, workingGroupOptions),
+        work_type: normalizeClassificationValue(data.work_type, workTypeOptions),
         role: data.role?.trim() || undefined,
         email: data.email?.trim() || undefined,
       });
@@ -275,16 +278,17 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="new-person-working-group">Working Group (optional)</Label>
-                <Input
+                <AutocompleteInput
                   id="new-person-working-group"
-                  list={workingGroupListId}
-                  {...register("working_group")}
+                  value={workingGroupValue}
+                  options={workingGroupOptions}
+                  onChange={(value) =>
+                    setValue("working_group", value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
                 />
-                <datalist id={workingGroupListId}>
-                  {workingGroupOptions.map((option) => (
-                    <option key={option} value={option} />
-                  ))}
-                </datalist>
                 {errors.working_group && (
                   <p className="text-sm text-destructive">
                     {errors.working_group.message}
@@ -294,17 +298,18 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="new-person-work-type">Work Type (optional)</Label>
-                <Input
+                <AutocompleteInput
                   id="new-person-work-type"
-                  list={workTypeListId}
                   placeholder="Employee, Manager, Contractor..."
-                  {...register("work_type")}
+                  value={workTypeValue}
+                  options={workTypeOptions}
+                  onChange={(value) =>
+                    setValue("work_type", value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
                 />
-                <datalist id={workTypeListId}>
-                  {workTypeOptions.map((option) => (
-                    <option key={option} value={option} />
-                  ))}
-                </datalist>
                 {errors.work_type && (
                   <p className="text-sm text-destructive">{errors.work_type.message}</p>
                 )}

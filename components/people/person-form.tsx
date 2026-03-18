@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useId } from "react";
+import { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { normalizeClassificationValue } from "@/lib/people-classifications";
 import { personSchema, type PersonFormData } from "@/lib/validations/consultation";
 import type { Person } from "@/types/db";
 
@@ -27,9 +29,6 @@ export function PersonForm({
   workingGroupOptions = [],
   workTypeOptions = [],
 }: PersonFormProps) {
-  const workingGroupListId = useId();
-  const workTypeListId = useId();
-
   const form = useForm<PersonFormData>({
     resolver: zodResolver(personSchema),
     defaultValues: {
@@ -58,14 +57,21 @@ export function PersonForm({
     form,
   ]);
 
+  const workingGroupValue =
+    useWatch({ control: form.control, name: "working_group" }) ?? "";
+  const workTypeValue = useWatch({ control: form.control, name: "work_type" }) ?? "";
+
   return (
     <form
       className="space-y-4"
       onSubmit={form.handleSubmit(async (values) => {
         await onSubmit({
           name: values.name.trim(),
-          working_group: values.working_group?.trim() || undefined,
-          work_type: values.work_type?.trim() || undefined,
+          working_group: normalizeClassificationValue(
+            values.working_group,
+            workingGroupOptions
+          ),
+          work_type: normalizeClassificationValue(values.work_type, workTypeOptions),
           role: values.role?.trim() || undefined,
           email: values.email?.trim() || undefined,
         });
@@ -86,18 +92,19 @@ export function PersonForm({
 
       <div className="space-y-2">
         <Label htmlFor="person-working-group">Working Group</Label>
-        <Input
+        <AutocompleteInput
           id="person-working-group"
-          list={workingGroupListId}
           disabled={isLoading}
           placeholder="Operations, Leadership, Safety..."
-          {...form.register("working_group")}
+          value={workingGroupValue}
+          options={workingGroupOptions}
+          onChange={(value) =>
+            form.setValue("working_group", value, {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+          }
         />
-        <datalist id={workingGroupListId}>
-          {workingGroupOptions.map((option) => (
-            <option key={option} value={option} />
-          ))}
-        </datalist>
         <p className="text-xs text-muted-foreground">
           Reuse an existing working group or type a new one.
         </p>
@@ -110,18 +117,19 @@ export function PersonForm({
 
       <div className="space-y-2">
         <Label htmlFor="person-work-type">Work Type</Label>
-        <Input
+        <AutocompleteInput
           id="person-work-type"
-          list={workTypeListId}
           disabled={isLoading}
           placeholder="Employee, Manager, Contractor..."
-          {...form.register("work_type")}
+          value={workTypeValue}
+          options={workTypeOptions}
+          onChange={(value) =>
+            form.setValue("work_type", value, {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+          }
         />
-        <datalist id={workTypeListId}>
-          {workTypeOptions.map((option) => (
-            <option key={option} value={option} />
-          ))}
-        </datalist>
         <p className="text-xs text-muted-foreground">
           Reuse an existing work type or type a new one.
         </p>

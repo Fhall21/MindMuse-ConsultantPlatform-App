@@ -1,32 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  forwardJsonToAi,
+  getAiServiceUrlOrResponse,
+  parseJsonBodyOrResponse,
+  requireAuthenticatedApiUser,
+} from "@/lib/api/route-helpers";
 
 export async function POST(request: NextRequest) {
-  const aiServiceUrl = process.env.AI_SERVICE_URL;
-  if (!aiServiceUrl) {
-    return NextResponse.json({ detail: "AI_SERVICE_URL is not configured" }, { status: 503 });
+  const auth = await requireAuthenticatedApiUser();
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
-  const body = await request.json();
-
-  let response: Response;
-  try {
-    response = await fetch(`${aiServiceUrl}/shorthand/expand`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to reach AI service";
-    return NextResponse.json({ detail: message }, { status: 502 });
+  const aiServiceUrl = getAiServiceUrlOrResponse();
+  if (aiServiceUrl instanceof NextResponse) {
+    return aiServiceUrl;
   }
 
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    const text = await response.text();
-    return NextResponse.json({ detail: text }, { status: response.ok ? 502 : response.status });
+  const body = await parseJsonBodyOrResponse(request);
+  if (body instanceof NextResponse) {
+    return body;
   }
 
-  const data = await response.json();
-  if (!response.ok) return NextResponse.json(data, { status: response.status });
-  return NextResponse.json(data);
+  return forwardJsonToAi(aiServiceUrl, "/shorthand/expand", body);
 }

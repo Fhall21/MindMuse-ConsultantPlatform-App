@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  forwardJsonToAi,
+  getAiServiceUrlOrResponse,
+  parseJsonBodyOrResponse,
+  requireAuthenticatedApiUser,
+} from "@/lib/api/route-helpers";
 
 interface ThemeLearningSignal {
   label: string;
@@ -53,12 +59,21 @@ async function loadLearningSignals() {
 }
 
 export async function POST(request: NextRequest) {
-  const aiServiceUrl = process.env.AI_SERVICE_URL;
-  if (!aiServiceUrl) {
-    return NextResponse.json({ detail: "AI_SERVICE_URL is not configured" }, { status: 503 });
+  const auth = await requireAuthenticatedApiUser();
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
-  const body = await request.json();
+  const aiServiceUrl = getAiServiceUrlOrResponse();
+  if (aiServiceUrl instanceof NextResponse) {
+    return aiServiceUrl;
+  }
+
+  const body = await parseJsonBodyOrResponse(request);
+  if (body instanceof NextResponse) {
+    return body;
+  }
+
   let learningSignals: ThemeLearningSignal[] = [];
 
   try {
@@ -67,32 +82,8 @@ export async function POST(request: NextRequest) {
     console.error("Failed to load theme learning signals", err);
   }
 
-  let response: Response;
-  try {
-    response = await fetch(`${aiServiceUrl}/themes/extract`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...body,
-        learning_signals: learningSignals,
-      }),
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to reach AI service";
-    return NextResponse.json({ detail: message }, { status: 502 });
-  }
-
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    const text = await response.text();
-    return NextResponse.json({ detail: text }, { status: response.ok ? 502 : response.status });
-  }
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    return NextResponse.json(data, { status: response.status });
-  }
-
-  return NextResponse.json(data);
+  return forwardJsonToAi(aiServiceUrl, "/themes/extract", {
+    ...(body as Record<string, unknown>),
+    learning_signals: learningSignals,
+  });
 }

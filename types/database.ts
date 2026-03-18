@@ -21,6 +21,86 @@ export interface ConsultationRound {
   created_at: string;
 }
 
+export type RoundThemeGroupStatus =
+  | "draft"
+  | "accepted"
+  | "discarded"
+  | "management_rejected";
+
+export type RoundThemeGroupOrigin = "manual" | "ai_refined";
+
+export interface RoundThemeGroup {
+  id: string;
+  round_id: string;
+  user_id: string;
+  label: string;
+  description: string | null;
+  status: RoundThemeGroupStatus;
+  origin: RoundThemeGroupOrigin;
+  ai_draft_label: string | null;
+  ai_draft_description: string | null;
+  ai_draft_explanation: string | null;
+  ai_draft_created_at: string | null;
+  ai_draft_created_by: string | null;
+  last_structural_change_at: string;
+  last_structural_change_by: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoundThemeGroupMember {
+  id: string;
+  group_id: string;
+  round_id: string;
+  theme_id: string;
+  source_consultation_id: string;
+  user_id: string;
+  position: number;
+  created_by: string;
+  created_at: string;
+}
+
+export type RoundDecisionTargetType =
+  | "source_theme"
+  | "theme_group"
+  | "round_output";
+
+export type RoundDecisionType =
+  | "accepted"
+  | "discarded"
+  | "management_rejected";
+
+export interface RoundDecision {
+  id: string;
+  round_id: string;
+  user_id: string;
+  target_type: RoundDecisionTargetType;
+  target_id: string;
+  decision_type: RoundDecisionType;
+  rationale: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export type RoundOutputArtifactType = "summary" | "report" | "email";
+export type RoundOutputArtifactStatus = "generated";
+
+export interface RoundOutputArtifact {
+  id: string;
+  round_id: string;
+  user_id: string;
+  artifact_type: RoundOutputArtifactType;
+  status: RoundOutputArtifactStatus;
+  title: string | null;
+  content: string;
+  input_snapshot: Record<string, unknown>;
+  generated_at: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+}
+
 export interface Theme {
   id: string;
   consultation_id: string;

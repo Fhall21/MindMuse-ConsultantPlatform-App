@@ -6,10 +6,30 @@
 
 export type ConsultationStatus = "draft" | "complete";
 export type EvidenceEmailStatus = "draft" | "accepted" | "sent";
+export type RoundThemeGroupStatus =
+  | "draft"
+  | "accepted"
+  | "discarded"
+  | "management_rejected";
+export type RoundThemeGroupOrigin = "manual" | "ai_refined";
+export type RoundDecisionTargetType =
+  | "source_theme"
+  | "theme_group"
+  | "round_output";
+export type RoundDecisionType =
+  | "accepted"
+  | "discarded"
+  | "management_rejected";
+export type RoundOutputArtifactType = "summary" | "report" | "email";
+export type RoundOutputArtifactStatus = "generated";
 
 export type {
   Consultation,
   ConsultationRound,
+  RoundThemeGroup,
+  RoundThemeGroupMember,
+  RoundDecision,
+  RoundOutputArtifact,
   Theme,
   ThemeDecisionLog,
   ThemeDecisionType,

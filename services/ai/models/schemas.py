@@ -52,6 +52,53 @@ class EmailDraftResponse(BaseModel):
     body: str
 
 
+# --- Round workflow drafts and outputs ---
+
+
+class RoundThemeSeed(BaseModel):
+    label: str
+    description: str | None = None
+    consultation_title: str | None = None
+    is_user_added: bool = False
+    locked_from_source: bool = False
+
+
+class RoundThemeGroupDraftRequest(BaseModel):
+    round_label: str | None = None
+    current_label: str | None = None
+    current_description: str | None = None
+    structural_change: str
+    member_themes: list[RoundThemeSeed]
+
+
+class RoundThemeGroupDraftResponse(BaseModel):
+    draft_label: str
+    draft_description: str
+    explanation: str | None = None
+
+
+class RoundOutputTheme(BaseModel):
+    label: str
+    description: str | None = None
+    source_kind: str
+    consultation_title: str | None = None
+    grouped_under: str | None = None
+    is_user_added: bool = False
+
+
+class RoundOutputRequest(BaseModel):
+    round_label: str
+    round_description: str | None = None
+    consultations: list[str] = []
+    accepted_round_themes: list[RoundOutputTheme] = []
+    supporting_consultation_themes: list[RoundOutputTheme] = []
+
+
+class RoundOutputResponse(BaseModel):
+    title: str
+    content: str
+
+
 # --- Clarification questions ---
 
 

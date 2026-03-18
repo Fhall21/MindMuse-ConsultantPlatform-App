@@ -17,7 +17,6 @@ import {
 } from "@/lib/actions/reports";
 import type { EvidenceEmail } from "@/types/db";
 import { ConsultationReportPanel } from "@/components/reports/consultation-report-panel";
-import { RoundSummaryCard } from "@/components/reports/round-summary-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -426,23 +425,6 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                   peopleQuery.error
               )}
             </p>
-          ) : null}
-
-          {consultationQuery.data?.consultation.round_id && reportQuery.isPending ? (
-            <p className="text-xs text-muted-foreground">
-              Loading round-aware report context…
-            </p>
-          ) : null}
-
-          {consultationQuery.data?.consultation.round_id && reportQuery.error ? (
-            <p className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
-              Round context is unavailable right now. Draft generation will fall
-              back to accepted consultation themes only.
-            </p>
-          ) : null}
-
-          {reportQuery.data?.roundSummary ? (
-            <RoundSummaryCard summary={reportQuery.data.roundSummary} />
           ) : null}
 
           {reportQuery.data ? (

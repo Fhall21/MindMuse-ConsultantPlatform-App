@@ -9,6 +9,11 @@ interface ThemeData {
   confidence?: number;
 }
 
+function trimToNull(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
 export async function saveThemes(
   consultationId: string,
   themes: ThemeData[]
@@ -55,6 +60,15 @@ export async function acceptTheme(
     throw new Error("Not authenticated");
   }
 
+  const { data: theme, error: themeError } = await supabase
+    .from("themes")
+    .select("id, label")
+    .eq("id", id)
+    .eq("consultation_id", consultationId)
+    .single();
+
+  if (themeError) throw themeError;
+
   const { error } = await supabase
     .from("themes")
     .update({ accepted: true })
@@ -69,6 +83,7 @@ export async function acceptTheme(
       user_id: user.user.id,
       consultation_id: consultationId,
       theme_id: id,
+      theme_label: theme.label,
       round_id: roundId || null,
       decision_type: "accept",
       rationale: null,
@@ -84,15 +99,16 @@ export async function acceptTheme(
     entityId: id,
     metadata: {
       decision_type: "accept",
+      theme_label: theme.label,
       round_id: roundId || null,
     },
   });
 }
 
 /**
- * Reject a theme with required compliance rationale
- * Logs the decision and removes the theme from active use
- * Rationale is required and enforced at this boundary.
+ * Reject a theme and remove it from active use.
+ * Rationale is optional while the consultation is still draft, but remains
+ * required once the consultation is locked.
  */
 export async function rejectTheme(
   id: string,
@@ -100,38 +116,62 @@ export async function rejectTheme(
   rationale: string = "",
   roundId?: string
 ) {
-  // Enforce rejection rationale requirement
-  if (!rationale || rationale.trim().length === 0) {
-    throw new Error("Rejection rationale is required for compliance");
-  }
-
   const supabase = await createClient();
+  const trimmedRationale = trimToNull(rationale);
 
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) {
     throw new Error("Not authenticated");
   }
 
-  // Delete the theme
-  const { error } = await supabase.from("themes").delete().eq("id", id);
+  const [{ data: consultation, error: consultationError }, { data: theme, error: themeError }] =
+    await Promise.all([
+      supabase
+        .from("consultations")
+        .select("status")
+        .eq("id", consultationId)
+        .single(),
+      supabase
+        .from("themes")
+        .select("id, label, consultation_id")
+        .eq("id", id)
+        .eq("consultation_id", consultationId)
+        .single(),
+    ]);
 
-  if (error) throw error;
+  if (consultationError) throw consultationError;
+  if (themeError) throw themeError;
 
-  // Log the decision with rationale for compliance trail
-  const { error: logError } = await supabase
+  const requiresRationale = consultation.status !== "draft";
+  if (requiresRationale && !trimmedRationale) {
+    throw new Error("A rejection rationale is required once the consultation is locked.");
+  }
+
+  const { data: logRecord, error: logError } = await supabase
     .from("theme_decision_logs")
     .insert({
       user_id: user.user.id,
       consultation_id: consultationId,
       theme_id: id,
+      theme_label: theme.label,
       round_id: roundId || null,
       decision_type: "reject",
-      rationale: rationale.trim(),
-    });
+      rationale: trimmedRationale,
+    })
+    .select("id")
+    .single();
 
   if (logError) throw logError;
 
-  // Emit audit event with full compliance metadata
+  // Delete the theme
+  const { error } = await supabase.from("themes").delete().eq("id", id);
+
+  if (error) {
+    await supabase.from("theme_decision_logs").delete().eq("id", logRecord.id);
+    throw error;
+  }
+
+  // Emit audit event with decision metadata
   await emitAuditEvent({
     consultationId,
     action: AUDIT_ACTIONS.THEME_REJECTED,
@@ -139,7 +179,8 @@ export async function rejectTheme(
     entityId: id,
     metadata: {
       decision_type: "reject",
-      rationale: rationale.trim(),
+      theme_label: theme.label,
+      rationale: trimmedRationale,
       round_id: roundId || null,
     },
   });
@@ -187,6 +228,7 @@ export async function addUserTheme(
       user_id: user.user.id,
       consultation_id: consultationId,
       theme_id: themeId,
+      theme_label: label,
       round_id: roundId || null,
       decision_type: "user_added",
       rationale: null,

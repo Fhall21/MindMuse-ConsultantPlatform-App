@@ -1672,10 +1672,6 @@ export async function managementRejectRoundTarget(
   rationale: string
 ) {
   const trimmedRationale = trimToNull(rationale);
-  if (!trimmedRationale) {
-    throw new Error("Management rejection rationale is required.");
-  }
-
   const { supabase, userId } = await requireAuthenticatedContext();
 
   if (targetType === "theme_group") {
@@ -1684,6 +1680,15 @@ export async function managementRejectRoundTarget(
       userId,
       groupId: targetId,
     });
+    const requiresRationale = await groupHasLockedMembers({
+      supabase,
+      groupId: targetId,
+    });
+
+    if (requiresRationale && !trimmedRationale) {
+      throw new Error("Management rejection rationale is required for locked themes.");
+    }
+
     const { error } = await supabase
       .from("round_theme_groups")
       .update({ status: "management_rejected" })
@@ -1727,6 +1732,10 @@ export async function managementRejectRoundTarget(
       consultationId: theme.consultation.id,
     });
 
+    if (lockedFromSource && !trimmedRationale) {
+      throw new Error("Management rejection rationale is required for locked themes.");
+    }
+
     await insertRoundDecision({
       supabase,
       roundId: theme.consultation.round_id as string,
@@ -1757,6 +1766,10 @@ export async function managementRejectRoundTarget(
   }
 
   const output = await loadRoundOutputForContext({ supabase, userId, outputId: targetId });
+
+  if (!trimmedRationale) {
+    throw new Error("Management rejection rationale is required.");
+  }
 
   await insertRoundDecision({
     supabase,
@@ -2029,6 +2042,30 @@ async function themeIsLockedFromSource(params: {
   return ((data ?? []) as Pick<EvidenceEmail, "status">[]).some((email) =>
     isEvidenceLocked(email.status)
   );
+}
+
+async function groupHasLockedMembers(params: {
+  supabase: SupabaseServerClient;
+  groupId: string;
+}) {
+  const { supabase, groupId } = params;
+  const members = await loadGroupMembers({ supabase, groupId });
+  const consultationIds = Array.from(new Set(members.map((member) => member.source_consultation_id)));
+
+  if (consultationIds.length === 0) {
+    return false;
+  }
+
+  const lockStates = await Promise.all(
+    consultationIds.map((consultationId) =>
+      themeIsLockedFromSource({
+        supabase,
+        consultationId,
+      })
+    )
+  );
+
+  return lockStates.some(Boolean);
 }
 
 async function loadRoundOutputForContext(params: {

@@ -7,14 +7,14 @@ from pydantic import BaseModel
 class LearningSignal(BaseModel):
     """A single user decision about a theme, used to personalize future extraction.
 
-    Sent by the frontend from Agent 1's persisted learning signal data.
+    Sent by the app from persisted learning signal data.
     - 'accept': user confirmed this AI-suggested theme (moderate positive weight)
-    - 'reject': user dismissed this theme with a rationale (negative weight)
+    - 'reject': user dismissed this theme (negative weight)
     - 'user_added': user created this theme manually (high positive weight)
     """
     label: str                                    # Theme label the decision applies to
     decision_type: str                            # 'accept' | 'reject' | 'user_added'
-    rationale: str | None = None                  # Required for rejections; optional otherwise
+    rationale: str | None = None                  # Optional context for why the decision was made
     weight: float = 1.0                           # 0.0–2.0; user_added defaults higher at call site
 
 

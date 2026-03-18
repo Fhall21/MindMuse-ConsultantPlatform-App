@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 interface ThemeRejectionDialogProps {
   open: boolean;
   themeLabel: string;
+  requiresRationale: boolean;
   onConfirm: (rationale: string) => Promise<void>;
   onCancel: () => void;
 }
@@ -27,6 +28,7 @@ function LoadingSpinner() {
 export function ThemeRejectionDialog({
   open,
   themeLabel,
+  requiresRationale,
   onConfirm,
   onCancel,
 }: ThemeRejectionDialogProps) {
@@ -36,7 +38,7 @@ export function ThemeRejectionDialog({
 
   async function handleConfirm() {
     const trimmed = rationale.trim();
-    if (!trimmed) {
+    if (requiresRationale && !trimmed) {
       setError("A rationale note is required before rejecting a theme.");
       return;
     }
@@ -71,21 +73,29 @@ export function ThemeRejectionDialog({
           <DialogTitle>Reject theme</DialogTitle>
           <DialogDescription>
             You are rejecting{" "}
-            <span className="font-medium text-foreground">"{themeLabel}"</span>.
-            A rationale note is required for compliance records.
+            <span className="font-medium text-foreground">&ldquo;{themeLabel}&rdquo;</span>.
+            {requiresRationale
+              ? " A rationale note is required because this consultation is locked."
+              : " You can add an optional note to help future theme extraction better match your preferences."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
           <Label htmlFor="rejection-rationale">
-            Rationale{" "}
-            <span className="text-destructive" aria-hidden>
-              *
-            </span>
+            {requiresRationale ? "Rationale" : "Optional note"}{" "}
+            {requiresRationale ? (
+              <span className="text-destructive" aria-hidden>
+                *
+              </span>
+            ) : null}
           </Label>
           <Textarea
             id="rejection-rationale"
-            placeholder="Explain why this theme is being rejected…"
+            placeholder={
+              requiresRationale
+                ? "Explain why this theme is being rejected…"
+                : "Share anything that would help the model learn what you prefer…"
+            }
             value={rationale}
             onChange={(e) => {
               setRationale(e.target.value);
@@ -106,7 +116,7 @@ export function ThemeRejectionDialog({
           <Button
             variant="destructive"
             onClick={() => void handleConfirm()}
-            disabled={isSubmitting || !rationale.trim()}
+            disabled={isSubmitting || (requiresRationale && !rationale.trim())}
           >
             {isSubmitting ? <LoadingSpinner /> : null}
             Reject theme

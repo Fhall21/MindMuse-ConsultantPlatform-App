@@ -118,7 +118,8 @@ export interface ThemeDecisionLog {
   id: string;
   user_id: string;
   consultation_id: string;
-  theme_id: string;
+  theme_id: string | null;
+  theme_label: string;
   round_id: string | null;
   decision_type: ThemeDecisionType;
   rationale: string | null;

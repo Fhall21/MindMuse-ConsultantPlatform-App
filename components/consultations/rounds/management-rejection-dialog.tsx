@@ -31,12 +31,12 @@ export function ManagementRejectionDialog({
   onCancel,
 }: ManagementRejectionDialogProps) {
   const [rationale, setRationale] = useState("");
+  const requiresRationale = Boolean(isLocked);
 
   function handleConfirm() {
-    if (rationale.trim()) {
-      onConfirm(rationale.trim());
-      setRationale("");
-    }
+    if (requiresRationale && !rationale.trim()) return;
+    onConfirm(rationale.trim());
+    setRationale("");
   }
 
   function handleCancel() {
@@ -52,28 +52,39 @@ export function ManagementRejectionDialog({
           <DialogDescription>
             You are rejecting the {targetType}{" "}
             <span className="font-medium text-foreground">&ldquo;{targetLabel}&rdquo;</span>.
-            {isLocked ? (
+            {requiresRationale ? (
               <span className="mt-1 block text-amber-600 dark:text-amber-400">
                 This theme was accepted at the consultation level. A management
                 rationale is required to exclude it from the round.
               </span>
-            ) : null}
+            ) : (
+              <span className="mt-1 block text-muted-foreground">
+                This item is not locked yet, so a note is optional.
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
           <Label htmlFor="rejection-rationale">
-            Rationale <span className="text-destructive">*</span>
+            {requiresRationale ? "Rationale" : "Optional note"}{" "}
+            {requiresRationale ? <span className="text-destructive">*</span> : null}
           </Label>
           <Textarea
             id="rejection-rationale"
             value={rationale}
             onChange={(e) => setRationale(e.target.value)}
-            placeholder="Explain why this is being excluded from the round..."
+            placeholder={
+              requiresRationale
+                ? "Explain why this is being excluded from the round..."
+                : "Share anything that would help the model learn what you prefer..."
+            }
             rows={3}
           />
           <p className="text-xs text-muted-foreground">
-            Required for compliance. This will be recorded in the audit trail.
+            {requiresRationale
+              ? "Required for compliance. This will be recorded in the audit trail."
+              : "This will be recorded in the audit trail if you add one."}
           </p>
         </div>
 
@@ -84,9 +95,9 @@ export function ManagementRejectionDialog({
           <Button
             variant="destructive"
             onClick={handleConfirm}
-            disabled={!rationale.trim()}
+            disabled={requiresRationale && !rationale.trim()}
           >
-            Reject with rationale
+            Reject
           </Button>
         </DialogFooter>
       </DialogContent>

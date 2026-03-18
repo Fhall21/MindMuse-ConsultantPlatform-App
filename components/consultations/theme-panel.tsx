@@ -188,6 +188,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
   }, [consultationId]);
 
   const transcript = consultationQuery.data?.consultation.transcript_raw?.trim() ?? "";
+  const consultationIsLocked = consultationQuery.data?.consultation.status === "complete";
   const savedThemes = useMemo(() => themesQuery.data ?? [], [themesQuery.data]);
 
   const rejectedThemeList = useMemo(
@@ -774,6 +775,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
       <ThemeRejectionDialog
         open={rejectionDialogTheme !== null}
         themeLabel={rejectionDialogTheme?.label ?? ""}
+        requiresRationale={consultationIsLocked}
         onConfirm={handleRejectionConfirm}
         onCancel={handleRejectionCancel}
       />

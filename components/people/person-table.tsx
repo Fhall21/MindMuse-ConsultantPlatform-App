@@ -7,6 +7,8 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Delete02Icon, Edit01Icon } from "@hugeicons/core-free-icons";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -71,26 +73,30 @@ export function PersonTable({ data, onEdit, onDelete, onRowClick }: PersonTableP
           <div className="flex items-center justify-end gap-1">
             <Button
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               type="button"
+              aria-label="Edit person"
+              title="Edit"
               onClick={(event) => {
                 event.stopPropagation();
                 onEdit(row.original);
               }}
             >
-              Edit
+              <HugeiconsIcon icon={Edit01Icon} strokeWidth={2} />
             </Button>
             <Button
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               type="button"
               className="text-destructive hover:text-destructive"
+              aria-label="Delete person"
+              title="Delete"
               onClick={(event) => {
                 event.stopPropagation();
                 onDelete(row.original);
               }}
             >
-              Delete
+              <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
             </Button>
           </div>
         ),

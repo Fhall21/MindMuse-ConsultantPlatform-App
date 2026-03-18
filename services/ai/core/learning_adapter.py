@@ -63,9 +63,9 @@ def build_personalization_prompt(signals: list[LearningSignal]) -> str:
     for sig in selected:
         if sig.decision_type == "user_added":
             user_created.append(sig.label)
-        elif sig.decision_type == "accepted":
+        elif sig.decision_type == "accept":
             preferred.append(sig.label)
-        elif sig.decision_type == "rejected":
+        elif sig.decision_type == "reject":
             reason = f" (reason: {sig.rationale})" if sig.rationale else ""
             avoided.append(f"{sig.label}{reason}")
 

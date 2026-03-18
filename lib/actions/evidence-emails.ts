@@ -4,16 +4,30 @@ import { createClient } from "@/lib/supabase/server";
 import { AUDIT_ACTIONS } from "./audit-actions";
 import { emitAuditEvent } from "./audit";
 
+interface EmailThemeSelection {
+  label: string;
+  sourceKinds: Array<"consultation" | "round">;
+  provenance: Array<{
+    consultationId: string | null;
+    consultationTitle: string | null;
+    roundId: string | null;
+    roundLabel: string | null;
+    isUserAdded: boolean;
+  }>;
+}
+
 interface SaveEmailDraftParams {
   consultationId: string;
   subject: string;
   body: string;
+  themeSelections?: EmailThemeSelection[];
 }
 
 export async function saveEmailDraft({
   consultationId,
   subject,
   body,
+  themeSelections,
 }: SaveEmailDraftParams) {
   const supabase = await createClient();
 
@@ -36,7 +50,15 @@ export async function saveEmailDraft({
     action: AUDIT_ACTIONS.EVIDENCE_EMAIL_GENERATED,
     entityType: "evidence_email",
     entityId: data.id,
-    metadata: { subjectLength: subject.length, bodyLength: body.length },
+    metadata: {
+      subjectLength: subject.length,
+      bodyLength: body.length,
+      themeSelections: themeSelections ?? [],
+      includedThemeCount: themeSelections?.length ?? 0,
+      roundThemeCount:
+        themeSelections?.filter((theme) => theme.sourceKinds.includes("round"))
+          .length ?? 0,
+    },
   });
 
   return data.id;

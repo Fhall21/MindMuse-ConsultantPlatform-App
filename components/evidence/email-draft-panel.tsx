@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useConsultation } from "@/hooks/use-consultations";
 import { useEvidenceEmails } from "@/hooks/use-evidence-email";
@@ -11,7 +11,13 @@ import {
   markEmailSent,
   saveEmailDraft,
 } from "@/lib/actions/evidence-emails";
+import {
+  getConsultationReportData,
+  type IncludedThemeSelection,
+} from "@/lib/actions/reports";
 import type { EvidenceEmail } from "@/types/db";
+import { ConsultationReportPanel } from "@/components/reports/consultation-report-panel";
+import { RoundSummaryCard } from "@/components/reports/round-summary-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +39,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-
 interface EmailDraftPanelProps {
   consultationId: string;
 }
@@ -45,7 +50,9 @@ interface EmailDraftResponse {
 }
 
 function LoadingSpinner() {
-  return <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />;
+  return (
+    <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+  );
 }
 
 function getErrorMessage(error: unknown) {
@@ -139,11 +146,51 @@ function getDraftStatusPresentation(status: EvidenceEmail["status"]) {
   };
 }
 
+function buildFallbackIncludedThemes(params: {
+  consultationId: string;
+  consultationTitle?: string | null;
+  roundId?: string | null;
+  roundLabel?: string | null;
+  labels: string[];
+}): IncludedThemeSelection[] {
+  const { consultationId, consultationTitle, roundId, roundLabel, labels } = params;
+  const seen = new Set<string>();
+
+  return labels
+    .filter((label) => {
+      const key = label.trim().toLowerCase();
+      if (!key || seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    })
+    .map((label) => ({
+      label,
+      sourceKinds: ["consultation" as const],
+      provenance: [
+        {
+          consultationId,
+          consultationTitle: consultationTitle ?? null,
+          roundId: roundId ?? null,
+          roundLabel: roundLabel ?? null,
+          isUserAdded: false,
+        },
+      ],
+    }));
+}
+
 export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
   const queryClient = useQueryClient();
   const consultationQuery = useConsultation(consultationId);
   const evidenceEmailsQuery = useEvidenceEmails(consultationId);
   const peopleQuery = useConsultationPeople(consultationId);
+  const reportQuery = useQuery({
+    queryKey: ["consultation-report", consultationId],
+    queryFn: async () => getConsultationReportData(consultationId),
+    enabled: !!consultationId,
+  });
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
@@ -163,6 +210,31 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
     [consultationQuery.data?.themes]
   );
 
+  const includedThemes = useMemo<IncludedThemeSelection[]>(
+    () =>
+      reportQuery.data?.includedThemes ??
+      buildFallbackIncludedThemes({
+        consultationId,
+        consultationTitle: consultationQuery.data?.consultation.title,
+        roundId: consultationQuery.data?.consultation.round_id,
+        roundLabel: reportQuery.data?.roundLabel ?? null,
+        labels: acceptedThemeLabels,
+      }),
+    [
+      acceptedThemeLabels,
+      consultationId,
+      consultationQuery.data?.consultation.round_id,
+      consultationQuery.data?.consultation.title,
+      reportQuery.data?.includedThemes,
+      reportQuery.data?.roundLabel,
+    ]
+  );
+
+  const includedThemeLabels = useMemo(
+    () => includedThemes.map((theme) => theme.label),
+    [includedThemes]
+  );
+
   const drafts = evidenceEmailsQuery.data ?? [];
   const currentDraft = drafts[0] ?? null;
   const previousDrafts = drafts.slice(1);
@@ -170,8 +242,11 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
   const currentDraftPresentation = getDraftStatusPresentation(currentDraftStatus);
   const currentDraftSubject = currentDraft?.subject ?? "";
   const currentDraftBody = currentDraft?.body_draft ?? "";
-  const isReadOnly = currentDraft?.status === "accepted" || currentDraft?.status === "sent";
-  const isDirty = currentDraft !== null && (subject !== currentDraftSubject || body !== currentDraftBody);
+  const isReadOnly =
+    currentDraft?.status === "accepted" || currentDraft?.status === "sent";
+  const isDirty =
+    currentDraft !== null &&
+    (subject !== currentDraftSubject || body !== currentDraftBody);
 
   useEffect(() => {
     setErrorMessage(null);
@@ -189,13 +264,16 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
       queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] }),
       queryClient.invalidateQueries({ queryKey: ["evidence_emails", consultationId] }),
       queryClient.invalidateQueries({ queryKey: ["audit_log", consultationId] }),
+      queryClient.invalidateQueries({
+        queryKey: ["consultation-report", consultationId],
+      }),
     ]);
   }
 
   async function handleGenerateDraft() {
     const transcript = consultationQuery.data?.consultation.transcript_raw?.trim() ?? "";
 
-    if (!transcript || acceptedThemeLabels.length === 0) {
+    if (!transcript || includedThemeLabels.length === 0) {
       return;
     }
 
@@ -205,14 +283,18 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
     try {
       const generatedDraft = await generateEmailDraft({
         transcript,
-        themes: acceptedThemeLabels,
+        themes: includedThemeLabels,
         people: (peopleQuery.data ?? []).map((person) => person.name),
         consultation_title: consultationQuery.data?.consultation.title,
-        consultation_date: formatConsultationDate(consultationQuery.data?.consultation.created_at),
+        consultation_date: formatConsultationDate(
+          consultationQuery.data?.consultation.created_at
+        ),
       });
 
-      const nextSubject = generatedDraft.subject?.trim() || "Consultation follow-up evidence";
-      const nextBody = generatedDraft.body?.trim() || generatedDraft.body_draft?.trim() || "";
+      const nextSubject =
+        generatedDraft.subject?.trim() || "Consultation follow-up evidence";
+      const nextBody =
+        generatedDraft.body?.trim() || generatedDraft.body_draft?.trim() || "";
 
       if (!nextBody) {
         throw new Error("The AI service returned an empty evidence email draft.");
@@ -222,6 +304,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
         consultationId,
         subject: nextSubject,
         body: nextBody,
+        themeSelections: includedThemes,
       });
 
       await refreshPanelData();
@@ -245,6 +328,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
         consultationId,
         subject,
         body,
+        themeSelections: includedThemes,
       });
       await refreshPanelData();
     } catch (error) {
@@ -268,6 +352,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
             consultationId,
             subject,
             body,
+            themeSelections: includedThemes,
           })
         : currentDraft.id;
 
@@ -305,11 +390,17 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
         <CardHeader>
           <div>
             <CardTitle>Evidence Email</CardTitle>
-            <CardDescription>Generate a draft, refine it locally, and mark the official record as accepted or sent.</CardDescription>
+            <CardDescription>
+              Generate a draft, refine it locally, and mark the official record
+              as accepted or sent.
+            </CardDescription>
           </div>
           {currentDraft ? (
             <CardAction>
-              <Badge variant={currentDraft.status === "draft" ? "secondary" : "outline"} className={currentDraftPresentation.className}>
+              <Badge
+                variant={currentDraft.status === "draft" ? "secondary" : "outline"}
+                className={currentDraftPresentation.className}
+              >
                 {currentDraftPresentation.label}
               </Badge>
             </CardAction>
@@ -317,24 +408,59 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {consultationQuery.isPending || evidenceEmailsQuery.isPending || peopleQuery.isPending ? (
-            <p className="text-sm text-muted-foreground">Loading evidence email data…</p>
-          ) : null}
-
-          {consultationQuery.error || evidenceEmailsQuery.error || peopleQuery.error ? (
-            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {getErrorMessage(consultationQuery.error ?? evidenceEmailsQuery.error ?? peopleQuery.error)}
+          {consultationQuery.isPending ||
+          evidenceEmailsQuery.isPending ||
+          peopleQuery.isPending ? (
+            <p className="text-sm text-muted-foreground">
+              Loading evidence email data…
             </p>
           ) : null}
 
-          {!consultationQuery.isPending && !evidenceEmailsQuery.isPending && currentDraft === null ? (
+          {consultationQuery.error ||
+          evidenceEmailsQuery.error ||
+          peopleQuery.error ? (
+            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {getErrorMessage(
+                consultationQuery.error ??
+                  evidenceEmailsQuery.error ??
+                  peopleQuery.error
+              )}
+            </p>
+          ) : null}
+
+          {consultationQuery.data?.consultation.round_id && reportQuery.isPending ? (
+            <p className="text-xs text-muted-foreground">
+              Loading round-aware report context…
+            </p>
+          ) : null}
+
+          {consultationQuery.data?.consultation.round_id && reportQuery.error ? (
+            <p className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+              Round context is unavailable right now. Draft generation will fall
+              back to accepted consultation themes only.
+            </p>
+          ) : null}
+
+          {reportQuery.data?.roundSummary ? (
+            <RoundSummaryCard summary={reportQuery.data.roundSummary} />
+          ) : null}
+
+          {reportQuery.data ? (
+            <ConsultationReportPanel report={reportQuery.data} />
+          ) : null}
+
+          {!consultationQuery.isPending &&
+          !evidenceEmailsQuery.isPending &&
+          currentDraft === null ? (
             <div className="space-y-3 rounded-lg border border-dashed border-border/80 bg-muted/20 p-4">
-              <p className="text-sm text-muted-foreground">No evidence email generated yet.</p>
+              <p className="text-sm text-muted-foreground">
+                No evidence email generated yet.
+              </p>
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   disabled={
                     isGenerating ||
-                    acceptedThemeLabels.length === 0 ||
+                    includedThemeLabels.length === 0 ||
                     !(consultationQuery.data?.consultation.transcript_raw?.trim())
                   }
                   onClick={() => void handleGenerateDraft()}
@@ -348,8 +474,11 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                     "Generate draft"
                   )}
                 </Button>
-                {acceptedThemeLabels.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Accept at least one theme before generating the evidence email.</p>
+                {includedThemeLabels.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Accept at least one consultation or round theme before
+                    generating the evidence email.
+                  </p>
                 ) : null}
               </div>
             </div>
@@ -364,7 +493,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                     onClick={() => void handleGenerateDraft()}
                     disabled={
                       isGenerating ||
-                      acceptedThemeLabels.length === 0 ||
+                      includedThemeLabels.length === 0 ||
                       !(consultationQuery.data?.consultation.transcript_raw?.trim())
                     }
                   >
@@ -381,7 +510,10 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
               ) : null}
 
               <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor={`email-subject-${consultationId}`}>
+                <label
+                  className="text-sm font-medium"
+                  htmlFor={`email-subject-${consultationId}`}
+                >
                   Subject
                 </label>
                 <Input
@@ -393,7 +525,10 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor={`email-body-${consultationId}`}>
+                <label
+                  className="text-sm font-medium"
+                  htmlFor={`email-body-${consultationId}`}
+                >
                   Draft body
                 </label>
                 <Textarea
@@ -430,7 +565,11 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                 ) : null}
 
                 {currentDraft.status === "accepted" ? (
-                  <Button variant="outline" onClick={() => void handleMarkSent()} disabled={isSending}>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleMarkSent()}
+                    disabled={isSending}
+                  >
                     {isSending ? (
                       <>
                         <LoadingSpinner />
@@ -446,8 +585,14 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
               {previousDrafts.length > 0 ? (
                 <div className="rounded-lg border border-border/70 bg-muted/10 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-medium">Previous drafts ({previousDrafts.length})</p>
-                    <Button size="xs" variant="ghost" onClick={() => setShowHistory((current) => !current)}>
+                    <p className="text-sm font-medium">
+                      Previous drafts ({previousDrafts.length})
+                    </p>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => setShowHistory((current) => !current)}
+                    >
                       {showHistory ? "Hide" : "Show"}
                     </Button>
                   </div>
@@ -455,13 +600,23 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                   {showHistory ? (
                     <div className="mt-3 space-y-3">
                       {previousDrafts.map((draft) => (
-                        <div key={draft.id} className="rounded-md border border-border/70 bg-background p-3">
+                        <div
+                          key={draft.id}
+                          className="rounded-md border border-border/70 bg-background p-3"
+                        >
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-sm font-medium">{draft.subject || "Untitled draft"}</p>
-                            <p className="text-xs text-muted-foreground">{formatAbsoluteDate(draft.generated_at ?? draft.created_at)}</p>
+                            <p className="text-sm font-medium">
+                              {draft.subject || "Untitled draft"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatAbsoluteDate(
+                                draft.generated_at ?? draft.created_at
+                              )}
+                            </p>
                           </div>
                           <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
-                            {(draft.body_draft || "").slice(0, 240) || "No body preview available."}
+                            {(draft.body_draft || "").slice(0, 240) ||
+                              "No body preview available."}
                           </p>
                         </div>
                       ))}
@@ -500,8 +655,10 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                   <LoadingSpinner />
                   {isDirty ? "Saving and accepting…" : "Accepting…"}
                 </>
+              ) : isDirty ? (
+                "Save and accept draft"
               ) : (
-                isDirty ? "Save and accept draft" : "Accept draft"
+                "Accept draft"
               )}
             </Button>
           </DialogFooter>

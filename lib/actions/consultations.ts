@@ -92,6 +92,32 @@ export async function setConsultationRound(
   });
 }
 
+// TODO: Agent 1 — add `notes text` column to consultations migration before this works
+export async function updateNotes({
+  id,
+  notes,
+}: {
+  id: string;
+  notes: string;
+}) {
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("consultations")
+    .update({ notes } as Record<string, unknown>)
+    .eq("id", id);
+
+  if (error) throw error;
+
+  await emitAuditEvent({
+    consultationId: id,
+    action: "consultation.notes_edited",
+    entityType: "consultation",
+    entityId: id,
+    metadata: { notesLength: notes.length },
+  });
+}
+
 export async function markConsultationComplete(id: string) {
   const supabase = await createClient();
 

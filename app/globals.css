@@ -127,3 +127,25 @@
     @apply font-sans;
   }
 }
+
+html[data-accessibility-text-size="large"] {
+  font-size: 17px;
+}
+
+html[data-accessibility-focus="strong"] :focus-visible {
+  outline: 3px solid var(--color-ring);
+  outline-offset: 4px;
+}
+
+html[data-accessibility-motion="reduced"] {
+  scroll-behavior: auto;
+}
+
+html[data-accessibility-motion="reduced"] *,
+html[data-accessibility-motion="reduced"] *::before,
+html[data-accessibility-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}

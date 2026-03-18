@@ -19,4 +19,17 @@ export const AUDIT_ACTIONS = {
   EVIDENCE_EMAIL_GENERATED: "evidence_email.generated",
   EVIDENCE_EMAIL_ACCEPTED: "evidence_email.accepted",
   EVIDENCE_EMAIL_SENT: "evidence_email.sent",
+  // Ingestion lifecycle events (Agent 1)
+  TRANSCRIPT_FILE_UPLOADED: "transcript.file_uploaded",
+  TRANSCRIPT_PARSED: "transcript.parsed",
+  AUDIO_UPLOADED: "audio.uploaded",
+  AUDIO_TRANSCRIPTION_REQUESTED: "audio.transcription_requested",
+  AUDIO_TRANSCRIPTION_COMPLETED: "audio.transcription_completed",
+  AUDIO_TRANSCRIPTION_FAILED: "audio.transcription_failed",
+  OCR_UPLOADED: "ocr.uploaded",
+  OCR_EXTRACTION_REQUESTED: "ocr.extraction_requested",
+  OCR_EXTRACTION_COMPLETED: "ocr.extraction_completed",
+  OCR_EXTRACTION_FAILED: "ocr.extraction_failed",
+  OCR_REVIEW_ACCEPTED: "ocr.review_accepted",
+  OCR_REVIEW_REJECTED: "ocr.review_rejected",
 } as const;

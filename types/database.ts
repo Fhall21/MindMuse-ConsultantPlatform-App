@@ -67,3 +67,52 @@ export interface AuditLogEntry {
   created_at: string;
   user_id: string;
 }
+
+export type IngestionStatus = "queued" | "processing" | "completed" | "failed";
+export type IngestionArtifactType =
+  | "transcript_file"
+  | "transcript_paste"
+  | "audio"
+  | "ocr_image"
+  | "clarification_response";
+
+export interface TranscriptionJob {
+  id: string;
+  consultation_id: string;
+  audio_file_key: string;
+  status: IngestionStatus;
+  transcript_text: string | null;
+  error_message: string | null;
+  requested_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OcrJob {
+  id: string;
+  consultation_id: string;
+  image_file_key: string;
+  status: IngestionStatus;
+  extracted_text: string | null;
+  confidence_score: number | null;
+  error_message: string | null;
+  requested_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IngestionArtifact {
+  id: string;
+  consultation_id: string;
+  artifact_type: IngestionArtifactType;
+  source_file_key: string;
+  metadata: Record<string, unknown> | null;
+  accepted: boolean | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}

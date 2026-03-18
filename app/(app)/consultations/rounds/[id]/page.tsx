@@ -8,12 +8,12 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRoundDetail } from "@/hooks/use-rounds";
 import { RoundDetailHeader } from "@/components/consultations/rounds/round-detail-header";
-import { LinkedConsultationsSection } from "@/components/consultations/rounds/linked-consultations-section";
+import { ConsultationGroupingSection } from "@/components/consultations/rounds/consultation-grouping-section";
 import { ThemeGroupingWorkspace } from "@/components/consultations/rounds/theme-grouping-workspace";
 import { RoundOutputsSection } from "@/components/consultations/rounds/round-outputs-section";
 import { DecisionHistorySection } from "@/components/consultations/rounds/decision-history-section";
 import { AnalyticsPlaceholder } from "@/components/consultations/rounds/analytics-placeholder";
-import type { SourceTheme, RoundThemeGroup, RoundConsultationSummary } from "@/types/round-detail";
+import type { SourceTheme, RoundThemeGroup, RoundConsultationSummary, ConsultationGroupDetail } from "@/types/round-detail";
 import {
   generateRoundSummary,
   generateRoundReport,
@@ -60,6 +60,12 @@ export default function RoundDetailPage({
     for (const theme of data.sourceThemes || []) {
       themeCountMap.set(theme.consultationId, (themeCountMap.get(theme.consultationId) || 0) + 1);
     }
+    const groupMemberMap = new Map<string, string>();
+    for (const group of data.consultationGroups || []) {
+      for (const member of group.members) {
+        groupMemberMap.set(member.consultationId, group.id);
+      }
+    }
     return data.consultations.map((c) => ({
       id: c.id,
       title: c.title,
@@ -67,8 +73,13 @@ export default function RoundDetailPage({
       evidenceEmailSubject: c.evidenceEmail?.subject ?? null,
       evidenceEmailStatus: c.evidenceEmail?.status ?? null,
       themeCount: themeCountMap.get(c.id) ?? 0,
+      groupId: groupMemberMap.get(c.id) ?? null,
     }));
-  }, [data?.consultations, data?.sourceThemes]);
+  }, [data?.consultations, data?.sourceThemes, data?.consultationGroups]);
+
+  const adaptedConsultationGroups = useMemo((): ConsultationGroupDetail[] => {
+    return data?.consultationGroups ?? [];
+  }, [data?.consultationGroups]);
 
   const adaptedThemeGroups = useMemo((): RoundThemeGroup[] => {
     if (!data?.themeGroups) return [];
@@ -152,10 +163,16 @@ export default function RoundDetailPage({
 
       <Separator />
 
-      {/* Linked Consultations */}
+      {/* Consultation Grouping */}
       <section className="space-y-3">
         <SectionHeading>Linked Consultations</SectionHeading>
-        <LinkedConsultationsSection consultations={adaptedConsultations} />
+        <ConsultationGroupingSection
+          roundId={id}
+          roundLabel={data.round.label}
+          initialGroups={adaptedConsultationGroups}
+          consultations={adaptedConsultations}
+          acceptedThemes={adaptedSourceThemes}
+        />
       </section>
 
       <Separator />

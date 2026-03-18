@@ -44,6 +44,8 @@ async def health():
             "/rounds/generate-summary",
             "/rounds/generate-report",
             "/rounds/generate-email",
+            "/rounds/suggest-consultation-groups",
+            "/rounds/generate-group-summary",
             "/clarification/questions",
             "/transcribe/audio",
             "/ocr/extract",

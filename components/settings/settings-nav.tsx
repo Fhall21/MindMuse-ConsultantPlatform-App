@@ -31,23 +31,29 @@ export function SettingsNav() {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Settings sections" className="rounded-xl border bg-card p-2 shadow-xs">
-      <ul className="space-y-1">
+    <nav
+      aria-label="Settings sections"
+      className="overflow-x-auto border-b border-border/80 pb-1"
+    >
+      <ul className="flex min-w-max items-center gap-5">
         {settingsSections.map((section) => {
           const isActive =
-            section.href === "/settings" ? pathname === section.href : pathname.startsWith(section.href);
+            section.href === "/settings"
+              ? pathname === section.href
+              : pathname.startsWith(section.href);
 
           return (
             <li key={section.href}>
               <Link
                 href={section.href}
                 className={cn(
-                  "block rounded-lg px-3 py-3 transition-colors",
-                  isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                  "inline-flex border-b-2 px-0 pb-3 text-sm font-medium tracking-tight transition-colors",
+                  isActive
+                    ? "border-foreground/70 text-foreground"
+                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
                 )}
               >
-                <p className="font-medium">{section.title}</p>
-                <p className="mt-1 text-xs leading-relaxed">{section.description}</p>
+                {section.title}
               </Link>
             </li>
           );

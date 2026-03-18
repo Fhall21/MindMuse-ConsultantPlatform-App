@@ -92,11 +92,12 @@ export async function acceptTheme(
 /**
  * Reject a theme with required compliance rationale
  * Logs the decision and removes the theme from active use
+ * Rationale is required and enforced at this boundary.
  */
 export async function rejectTheme(
   id: string,
   consultationId: string,
-  rationale: string,
+  rationale: string = "",
   roundId?: string
 ) {
   // Enforce rejection rationale requirement

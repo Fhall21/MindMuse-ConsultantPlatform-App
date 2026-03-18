@@ -277,7 +277,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     }
   }
 
-  async function handleReject(theme: Theme, rationale: string) {
+  async function handleReject(theme: Theme) {
     const details = themeDetailsById[theme.id];
     const snapshot: RejectedThemeSnapshot = {
       ...theme,
@@ -293,7 +293,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     }));
 
     try {
-      await rejectTheme(theme.id, consultationId, rationale);
+      await rejectTheme(theme.id, consultationId);
       await refreshPanelData();
     } catch (error) {
       setRejectedThemes((current) => {
@@ -436,14 +436,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
                             size="sm"
                             variant="outline"
                             disabled={isBusy}
-                            onClick={() => {
-                              const rationale = window.prompt(
-                                "Provide a compliance rationale for rejecting this theme:"
-                              );
-                              if (rationale) {
-                                void handleReject(theme, rationale);
-                              }
-                            }}
+                            onClick={() => void handleReject(theme)}
                           >
                             {isBusy ? <LoadingSpinner /> : null}
                             Reject

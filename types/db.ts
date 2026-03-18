@@ -15,6 +15,11 @@ export type {
   ConsultationPerson,
   EvidenceEmail,
   AuditLogEntry,
+  TranscriptionJob,
+  OcrJob,
+  IngestionArtifact,
+  IngestionStatus,
+  IngestionArtifactType,
 } from "./database";
 
 export type { ConsultationFormData, ThemeFormData, PersonFormData, EvidenceEmailFormData } from "@/lib/validations/consultation";

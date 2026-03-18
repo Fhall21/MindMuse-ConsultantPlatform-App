@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
@@ -28,6 +28,7 @@ import {
   moveThemeToGroup,
   mergeRoundThemeGroups,
   splitRoundThemeGroup,
+  updateRoundThemeGroup,
   acceptRoundTarget,
   discardRoundTarget,
   managementRejectRoundTarget,
@@ -79,6 +80,8 @@ export function ThemeGroupingWorkspace({
   } | null>(null);
 
   const queryClient = useQueryClient();
+  const labelTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const descTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // ─── Derived data ──────────────────────────────────────────────────────────
 
@@ -329,15 +332,28 @@ export function ThemeGroupingWorkspace({
 
   // ─── Decision handlers ─────────────────────────────────────────────────────
 
-  function handleAcceptGroup(groupId: string) {
+  function invalidateDetail() {
+    queryClient.invalidateQueries({
+      queryKey: ["consultation_rounds", roundId, "detail"],
+    });
+  }
+
+  async function handleAcceptGroup(groupId: string) {
     setGroups((prev) =>
       prev.map((g) =>
         g.id === groupId ? { ...g, status: "accepted" as const } : g
       )
     );
+    try {
+      await acceptRoundTarget("theme_group", groupId);
+      invalidateDetail();
+    } catch {
+      toast.error("Failed to accept group");
+      invalidateDetail(); // revert optimistic update
+    }
   }
 
-  function handleDiscardGroup(groupId: string) {
+  async function handleDiscardGroup(groupId: string) {
     const group = groups.find((g) => g.id === groupId);
     if (!group) return;
 
@@ -357,6 +373,13 @@ export function ThemeGroupingWorkspace({
         g.id === groupId ? { ...g, status: "discarded" as const } : g
       )
     );
+    try {
+      await discardRoundTarget("theme_group", groupId);
+      invalidateDetail();
+    } catch {
+      toast.error("Failed to discard group");
+      invalidateDetail();
+    }
   }
 
   function handleManagementRejectGroup(groupId: string) {
@@ -370,7 +393,7 @@ export function ThemeGroupingWorkspace({
     });
   }
 
-  function handleRejectionConfirm(rationale: string) {
+  async function handleRejectionConfirm(rationale: string) {
     if (!rejectionTarget) return;
 
     if (rejectionTarget.type === "group") {
@@ -381,6 +404,13 @@ export function ThemeGroupingWorkspace({
             : g
         )
       );
+      try {
+        await managementRejectRoundTarget("theme_group", rejectionTarget.id, rationale);
+        invalidateDetail();
+      } catch {
+        toast.error("Failed to record management rejection");
+        invalidateDetail();
+      }
     }
 
     toast.success("Management rejection recorded");
@@ -393,7 +423,16 @@ export function ThemeGroupingWorkspace({
     setGroups((prev) =>
       prev.map((g) => (g.id === groupId ? { ...g, label } : g))
     );
-    // Manual text edits do NOT trigger AI refinement
+    // Debounce: persist 800ms after last keystroke
+    const existing = labelTimers.current.get(groupId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      void updateRoundThemeGroup(groupId, { label })
+        .then(invalidateDetail)
+        .catch(() => toast.error("Failed to save label"));
+      labelTimers.current.delete(groupId);
+    }, 800);
+    labelTimers.current.set(groupId, timer);
   }
 
   function handleDescriptionChange(groupId: string, description: string) {
@@ -402,12 +441,21 @@ export function ThemeGroupingWorkspace({
         g.id === groupId ? { ...g, description: description || null } : g
       )
     );
-    // Manual text edits do NOT trigger AI refinement
+    // Debounce: persist 800ms after last keystroke
+    const existing = descTimers.current.get(groupId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      void updateRoundThemeGroup(groupId, { description: description || null })
+        .then(invalidateDetail)
+        .catch(() => toast.error("Failed to save description"));
+      descTimers.current.delete(groupId);
+    }, 800);
+    descTimers.current.set(groupId, timer);
   }
 
   // ─── Draft handlers ────────────────────────────────────────────────────────
 
-  function handleAcceptDraft(groupId: string) {
+  async function handleAcceptDraft(groupId: string) {
     setGroups((prev) =>
       prev.map((g) => {
         if (g.id === groupId && g.pendingDraft) {
@@ -421,14 +469,28 @@ export function ThemeGroupingWorkspace({
         return g;
       })
     );
+    try {
+      await acceptRoundThemeGroupDraft(groupId);
+      invalidateDetail();
+    } catch {
+      toast.error("Failed to accept AI draft");
+      invalidateDetail();
+    }
   }
 
-  function handleDiscardDraft(groupId: string) {
+  async function handleDiscardDraft(groupId: string) {
     setGroups((prev) =>
       prev.map((g) =>
         g.id === groupId ? { ...g, pendingDraft: null } : g
       )
     );
+    try {
+      await discardRoundThemeGroupDraft(groupId);
+      invalidateDetail();
+    } catch {
+      toast.error("Failed to discard AI draft");
+      invalidateDetail();
+    }
   }
 
   // ─── Merge selection ───────────────────────────────────────────────────────

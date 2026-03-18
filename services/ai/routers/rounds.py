@@ -14,6 +14,8 @@ from models.schemas import (
     RoundOutputResponse,
     RoundThemeGroupDraftRequest,
     RoundThemeGroupDraftResponse,
+    ThemeGroupSuggestionRequest,
+    ThemeGroupSuggestionResponse,
 )
 
 router = APIRouter(prefix="/rounds", tags=["rounds"])
@@ -208,6 +210,77 @@ async def generate_round_report(request: RoundOutputRequest):
 @router.post("/generate-email", response_model=RoundOutputResponse)
 async def generate_round_email(request: RoundOutputRequest):
     return await _generate_round_output("email", request)
+
+
+@router.post("/suggest-theme-groups", response_model=ThemeGroupSuggestionResponse)
+async def suggest_theme_groups(request: ThemeGroupSuggestionRequest):
+    """
+    Analyse source themes and suggest how they should be clustered into round_theme_groups.
+    The user picks 2+ focus themes; AI identifies natural clusters across all source themes.
+
+    AI flow:
+      focus_theme_labels (user-picked) + source_themes (id, label, description, consultation)
+        → GPT-4o-mini (JSON mode, 30s timeout)
+        → { groups: [{ label, theme_ids, explanation }] }
+    """
+    client = _require_client()
+
+    focus = ", ".join(request.focus_theme_labels) or "none"
+
+    theme_lines = "\n".join(
+        [
+            (
+                f"- id={t.theme_id} | label={t.label}"
+                f" | description={t.description or 'none'}"
+                f" | consultation={t.consultation_title or 'unknown'}"
+                f" | user_added={'yes' if t.is_user_added else 'no'}"
+            )
+            for t in request.source_themes
+        ]
+    ) or "- none"
+
+    system_prompt = (
+        "You are helping a psychosocial consultant group themes from multiple consultations "
+        "into meaningful round-level theme groups.\n\n"
+        "The consultant has selected focus themes. Your job is to identify natural clusters "
+        "across all source themes, anchored around the focus themes.\n\n"
+        "Rules:\n"
+        "- Each theme may appear in at most one group.\n"
+        "- A group must have at least 2 themes.\n"
+        "- Group labels should be concise (2-5 words) and evidence-based.\n"
+        "- Explanations should be 1-2 sentences grounded in the theme content.\n"
+        "- Themes that do not fit any cluster should be omitted from the output.\n"
+        "- Do not invent themes or evidence not present in the input.\n\n"
+        "Return JSON with: { \"groups\": [ { \"label\": str, \"theme_ids\": [str, ...], "
+        "\"explanation\": str }, ... ] }\n"
+        "Return only valid JSON."
+    )
+
+    user_content = (
+        f"Round: {request.round_label or 'Untitled round'}\n"
+        f"Focus themes selected by consultant: {focus}\n\n"
+        f"All source themes in this round:\n{theme_lines}"
+    )
+
+    completion = client.chat.completions.create(
+        model=settings.openai_model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ],
+        response_format={"type": "json_object"},
+        timeout=30.0,
+    )
+
+    parsed = _parse_json_response(completion.choices[0].message.content)
+
+    try:
+        return ThemeGroupSuggestionResponse(**parsed)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Model output did not match expected schema: {exc}",
+        ) from exc
 
 
 @router.post("/suggest-consultation-groups", response_model=ConsultationGroupSuggestionResponse)

@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { SourceThemeCard } from "./source-theme-card";
 import { ThemeGroupCard } from "./theme-group-card";
 import { ManagementRejectionDialog } from "./management-rejection-dialog";
+import { AiThemeGroupSuggestionDialog } from "./ai-theme-group-suggestion-dialog";
 import type {
   RoundThemeGroupDetail,
   RoundThemeGroupDraftState,
@@ -31,10 +33,12 @@ import {
   managementRejectRoundTarget,
   acceptRoundThemeGroupDraft,
   discardRoundThemeGroupDraft,
+  type SuggestedThemeGroup,
 } from "@/lib/actions/round-workflow";
 
 interface ThemeGroupingWorkspaceProps {
   roundId: string;
+  roundLabel?: string | null;
   sourceThemes: SourceTheme[];
   initialGroups: RoundThemeGroupDetail[];
   onStructuralChange?: () => void;
@@ -48,6 +52,7 @@ interface ThemeGroupingWorkspaceProps {
  */
 export function ThemeGroupingWorkspace({
   roundId,
+  roundLabel,
   sourceThemes,
   initialGroups,
   onStructuralChange,
@@ -58,6 +63,7 @@ export function ThemeGroupingWorkspace({
   const [selectedThemeIds, setSelectedThemeIds] = useState<Set<string>>(new Set());
   const [mergeSelectedGroupIds, setMergeSelectedGroupIds] = useState<Set<string>>(new Set());
   const [isDragOverUngrouped, setIsDragOverUngrouped] = useState(false);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
 
   // Management rejection dialog state
   const [rejectionTarget, setRejectionTarget] = useState<{
@@ -201,6 +207,22 @@ export function ThemeGroupingWorkspace({
       setSelectedThemeIds(new Set());
       onStructuralChange?.();
     });
+  }
+
+  async function handleAcceptAiSuggestion(suggestion: SuggestedThemeGroup) {
+    // theme_ids in the suggestion are sourceTheme IDs — pass them directly to createRoundThemeGroup
+    const validThemeIds = suggestion.theme_ids.filter((id) =>
+      sourceThemes.some((t) => t.id === id)
+    );
+    if (validThemeIds.length < 2) {
+      toast.error("Suggestion contains fewer than 2 valid themes — skipping");
+      return;
+    }
+    await createRoundThemeGroup(roundId, validThemeIds);
+    queryClient.invalidateQueries({
+      queryKey: ["consultation_rounds", roundId, "detail"],
+    });
+    onStructuralChange?.();
   }
 
   function handleMergeGroups() {
@@ -422,16 +444,28 @@ export function ThemeGroupingWorkspace({
                   {sourceThemes.length} total
                 </CardDescription>
               </div>
-              <Button
-                size="sm"
-                onClick={handleCreateGroup}
-                disabled={ungroupedThemes.length === 0}
-              >
-                Create Group
-                {selectedThemeIds.size > 0 ? (
-                  <span className="ml-1">({selectedThemeIds.size})</span>
-                ) : null}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAiDialogOpen(true)}
+                  disabled={ungroupedThemes.length < 2}
+                  className="gap-1.5"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AI Groups
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleCreateGroup}
+                  disabled={ungroupedThemes.length === 0}
+                >
+                  Create Group
+                  {selectedThemeIds.size > 0 ? (
+                    <span className="ml-1">({selectedThemeIds.size})</span>
+                  ) : null}
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent
@@ -565,6 +599,14 @@ export function ThemeGroupingWorkspace({
         isLocked={rejectionTarget?.isLocked}
         onConfirm={handleRejectionConfirm}
         onCancel={() => setRejectionTarget(null)}
+      />
+
+      <AiThemeGroupSuggestionDialog
+        open={aiDialogOpen}
+        onOpenChange={setAiDialogOpen}
+        roundLabel={roundLabel ?? null}
+        sourceThemes={ungroupedThemes}
+        onAcceptSuggestion={handleAcceptAiSuggestion}
       />
     </>
   );

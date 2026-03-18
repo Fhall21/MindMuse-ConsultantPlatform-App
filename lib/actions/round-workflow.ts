@@ -1976,6 +1976,41 @@ export async function generateRoundEmail(roundId: string) {
   return generateRoundOutput(roundId, "email");
 }
 
+// ─── AI theme group suggestions ───────────────────────────────────────────────
+
+export interface ThemeGroupSuggestionThemeInput {
+  theme_id: string;
+  label: string;
+  description: string | null;
+  consultation_title: string | null;
+  is_user_added: boolean;
+}
+
+export interface SuggestedThemeGroup {
+  label: string;
+  theme_ids: string[];
+  explanation: string;
+}
+
+/**
+ * Ask the AI to suggest how source themes should be clustered into round_theme_groups.
+ * The user provides 2+ focus themes; the AI identifies natural groupings across all themes.
+ * Returns suggestions the user can accept to create actual round_theme_groups.
+ */
+export async function suggestThemeGroups(
+  roundLabel: string | null,
+  focusThemeLabels: string[],
+  sourceThemes: ThemeGroupSuggestionThemeInput[]
+): Promise<SuggestedThemeGroup[]> {
+  const result = await callAIService("/rounds/suggest-theme-groups", {
+    round_label: roundLabel,
+    focus_theme_labels: focusThemeLabels,
+    source_themes: sourceThemes,
+  });
+
+  return (result.groups ?? []) as SuggestedThemeGroup[];
+}
+
 async function loadThemeWithRoundContext(params: {
   supabase: SupabaseServerClient;
   userId: string;

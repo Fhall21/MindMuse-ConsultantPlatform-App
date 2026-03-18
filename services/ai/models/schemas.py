@@ -144,7 +144,35 @@ class OcrExtractResponse(BaseModel):
     segments: list[OcrSegment]
 
 
-# --- Consultation grouping ---
+# --- Theme grouping (AI-suggested round_theme_groups) ---
+
+
+class ThemeGroupSuggestionInput(BaseModel):
+    """A single source theme, for theme group suggestion input."""
+    theme_id: str
+    label: str
+    description: str | None = None
+    consultation_title: str | None = None
+    is_user_added: bool = False
+
+
+class ThemeGroupSuggestionRequest(BaseModel):
+    round_label: str | None = None
+    focus_theme_labels: list[str]       # 2+ themes the user selected as focus
+    source_themes: list[ThemeGroupSuggestionInput]
+
+
+class SuggestedThemeGroup(BaseModel):
+    label: str                          # Short group name, e.g. "Workplace Stress"
+    theme_ids: list[str]                # IDs of themes to include in this group
+    explanation: str                    # Brief rationale (1-2 sentences)
+
+
+class ThemeGroupSuggestionResponse(BaseModel):
+    groups: list[SuggestedThemeGroup]
+
+
+# --- Consultation grouping (PARKED — future feature) ---
 
 
 class ConsultationThemeSeed(BaseModel):

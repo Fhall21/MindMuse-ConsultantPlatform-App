@@ -15,6 +15,7 @@ export const AUDIT_ACTIONS = {
   THEME_EXTRACTION_REQUESTED: "theme.extraction_requested",
   THEME_ACCEPTED: "theme.accepted",
   THEME_REJECTED: "theme.rejected",
+  THEME_USER_ADDED: "theme.user_added",
   EVIDENCE_EMAIL_GENERATION_REQUESTED: "evidence_email.generation_requested",
   EVIDENCE_EMAIL_GENERATED: "evidence_email.generated",
   EVIDENCE_EMAIL_ACCEPTED: "evidence_email.accepted",

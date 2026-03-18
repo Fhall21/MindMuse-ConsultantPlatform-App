@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import ValidationError
 
 from core.config import settings
+from core.learning_adapter import build_personalization_prompt
 from core.openai_client import get_client
 from models.schemas import ThemeExtractRequest, ThemeExtractResponse
 
@@ -43,6 +44,11 @@ async def extract_themes(request: ThemeExtractRequest):
         "- 'confidence': float 0.0–1.0 reflecting depth of discussion\n\n"
         "Return only valid JSON, no markdown."
     )
+
+    # Stage 4: inject user-scoped learning context if signals are provided
+    personalization = build_personalization_prompt(request.learning_signals)
+    if personalization:
+        system_prompt += personalization
 
     completion = client.chat.completions.create(
         model=settings.openai_model,

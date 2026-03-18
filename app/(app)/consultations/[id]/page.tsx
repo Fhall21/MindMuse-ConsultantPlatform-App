@@ -19,7 +19,8 @@ import {
 import { AuditTrail } from "@/components/audit/audit-trail";
 import { ThemePanel } from "@/components/consultations/theme-panel";
 import { EmailDraftPanel } from "@/components/evidence/email-draft-panel";
-import { TranscriptEditor } from "@/components/consultations/transcript-editor";
+import { TranscriptIntakePanel } from "@/components/consultations/transcript-intake-panel";
+import { NotesEditor } from "@/components/consultations/notes-editor";
 import { PeoplePanel } from "@/components/consultations/people-panel";
 import { RoundsPanel } from "@/components/consultations/rounds-panel";
 import { useConsultation, useConsultationRounds } from "@/hooks/use-consultations";
@@ -124,12 +125,24 @@ export default function ConsultationDetailPage({
 
       <Separator />
 
-      {/* Transcript */}
+      {/* Transcript intake — paste, file upload, or audio transcription */}
       <section className="space-y-3">
         <SectionHeading>Transcript</SectionHeading>
-        <TranscriptEditor
+        <TranscriptIntakePanel
           consultationId={id}
-          initialValue={consultation.transcript_raw}
+          initialTranscript={consultation.transcript_raw}
+          readOnly={!isDraft}
+        />
+      </section>
+
+      <Separator />
+
+      {/* Notes */}
+      <section className="space-y-3">
+        <SectionHeading>Notes</SectionHeading>
+        <NotesEditor
+          consultationId={id}
+          initialValue={consultation.notes}
           readOnly={!isDraft}
         />
       </section>

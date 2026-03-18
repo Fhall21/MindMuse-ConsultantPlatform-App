@@ -4,6 +4,8 @@ export interface Consultation {
   id: string;
   title: string;
   transcript_raw: string | null;
+  // TODO: Agent 1 — add `notes text` column to consultations migration
+  notes?: string | null;
   created_at: string;
   updated_at: string;
   user_id: string;

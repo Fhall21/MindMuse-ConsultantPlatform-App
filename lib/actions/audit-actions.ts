@@ -3,6 +3,7 @@ export const AUDIT_ACTIONS = {
   CONSULTATION_TRANSCRIPT_EDITED: "consultation.transcript_edited",
   CONSULTATION_COMPLETED: "consultation.completed",
   CONSULTATION_ROUND_ASSIGNED: "consultation.round_assigned",
+  CONSULTATION_NOTES_EDITED: "consultation.notes_edited",
   ROUND_CREATED: "round.created",
   ROUND_UPDATED: "round.updated",
   ROUND_DELETED: "round.deleted",

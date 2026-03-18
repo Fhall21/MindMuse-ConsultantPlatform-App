@@ -485,6 +485,32 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
               ) : (
                 <p className="text-sm text-muted-foreground">No themes were accepted in the current review.</p>
               )}
+
+              {rejectedThemeList.length > 0 ? (
+                <div className="space-y-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground/85">Rejected themes</p>
+                    <p className="text-xs text-muted-foreground">These stay visible in-session until the page is refreshed.</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {rejectedThemeList.map((theme) => (
+                      <div
+                        key={theme.id}
+                        className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-destructive/20 bg-background/80 p-3 opacity-75"
+                      >
+                        <div className="space-y-1">
+                          <p className="font-medium line-through">{theme.label}</p>
+                          {theme.description ? (
+                            <p className="text-sm text-muted-foreground">{theme.description}</p>
+                          ) : null}
+                        </div>
+                        <Badge variant="destructive">Rejected</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
 

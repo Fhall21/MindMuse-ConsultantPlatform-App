@@ -264,7 +264,15 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
     setIsAccepting(true);
 
     try {
-      await acceptEmailDraft(currentDraft.id, consultationId);
+      const draftIdToAccept = isDirty
+        ? await saveEmailDraft({
+            consultationId,
+            subject,
+            body,
+          })
+        : currentDraft.id;
+
+      await acceptEmailDraft(draftIdToAccept, consultationId);
       setConfirmAcceptOpen(false);
       await refreshPanelData();
     } catch (error) {
@@ -413,7 +421,11 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                 ) : null}
 
                 {currentDraft.status === "draft" ? (
-                  <Button variant="outline" onClick={() => setConfirmAcceptOpen(true)} disabled={isAccepting}>
+                  <Button
+                    variant="outline"
+                    onClick={() => setConfirmAcceptOpen(true)}
+                    disabled={isAccepting || isSaving}
+                  >
                     Accept this draft
                   </Button>
                 ) : null}
@@ -473,7 +485,11 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>Accept this draft?</DialogTitle>
-            <DialogDescription>Mark this draft as accepted? This locks the draft as the official record.</DialogDescription>
+            <DialogDescription>
+              {isDirty
+                ? "Your unsaved edits will be saved as a new version and then marked as the official record."
+                : "Mark this draft as accepted? This locks the draft as the official record."}
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmAcceptOpen(false)}>
@@ -483,10 +499,10 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
               {isAccepting ? (
                 <>
                   <LoadingSpinner />
-                  Accepting…
+                  {isDirty ? "Saving and accepting…" : "Accepting…"}
                 </>
               ) : (
-                "Accept draft"
+                isDirty ? "Save and accept draft" : "Accept draft"
               )}
             </Button>
           </DialogFooter>

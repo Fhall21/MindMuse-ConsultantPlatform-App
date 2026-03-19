@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { updateTranscript } from "@/lib/actions/consultations";
 import { TranscriptEditor } from "./transcript-editor";
 import { AudioUploadPanel } from "./audio-upload-panel";
 
@@ -209,6 +210,15 @@ export function TranscriptIntakePanel({
 
   function handleTranscriptFromAudio(text: string) {
     applyLocalTranscript(text);
+    // Auto-save so downstream panels respond immediately (same reason as file upload).
+    updateTranscript({ id: consultationId, transcriptRaw: text })
+      .then(() => {
+        pendingLocalRef.current = false;
+        return queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] });
+      })
+      .catch(() => {
+        // Optimistic update still in place; user can manually save.
+      });
   }
 
   function handleTranscriptSaved() {
@@ -253,6 +263,19 @@ export function TranscriptIntakePanel({
 
       applyLocalTranscript(extractedText);
       setLoadedFileName(file.name);
+
+      // Auto-save so other panels (EmailDraftPanel, ThemePanel) see the
+      // transcript immediately. Without this, the TanStack Query
+      // refetchOnWindowFocus triggered by the OS file picker closing can
+      // overwrite the optimistic setQueryData patch with stale server data.
+      try {
+        await updateTranscript({ id: consultationId, transcriptRaw: extractedText });
+        pendingLocalRef.current = false;
+        await queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] });
+      } catch {
+        // Auto-save failed — the optimistic update is still in place; the
+        // user can manually save from the Paste tab.
+      }
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Could not process file. Please try again.");
     } finally {

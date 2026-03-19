@@ -374,6 +374,19 @@ export interface ReportArtifactListItem {
   updatedAt: string;
 }
 
+export interface ConsultationMeta {
+  id: string;
+  title: string;
+  date: string;
+  people: string[];
+}
+
+export interface AuditSummaryEvent {
+  action: string;
+  createdAt: string;
+  entityType: string | null;
+}
+
 export interface ReportArtifactDetail {
   id: string;
   artifactType: "summary" | "report" | "email";
@@ -386,10 +399,12 @@ export interface ReportArtifactDetail {
   updatedAt: string;
   inputSnapshot: Record<string, unknown>;
   consultationTitles: string[];
+  consultations: ConsultationMeta[];
   acceptedThemeCount: number;
   supportingThemeCount: number;
   versionNumber: number;
   totalVersions: number;
+  auditSummary: AuditSummaryEvent[];
 }
 
 function previewContent(content: string, maxLength = 200): string {
@@ -475,6 +490,75 @@ export async function getReportArtifact(
     ? inputSnapshot.supporting_consultation_themes.length
     : 0;
 
+  // Load live consultation metadata (dates + linked people) for compliance display
+  const { data: consultationRows } = await supabase
+    .from("consultations")
+    .select("id, title, created_at")
+    .eq("round_id", artifact.round_id)
+    .order("created_at", { ascending: true });
+
+  const liveConsultations = (consultationRows ?? []) as Array<{
+    id: string;
+    title: string;
+    created_at: string;
+  }>;
+  const liveConsultationIds = liveConsultations.map((c) => c.id);
+
+  const peopleByConsultationId = new Map<string, string[]>();
+  if (liveConsultationIds.length > 0) {
+    const { data: cpLinks } = await supabase
+      .from("consultation_people")
+      .select("consultation_id, person_id")
+      .in("consultation_id", liveConsultationIds);
+
+    const personIds = [...new Set((cpLinks ?? []).map((cp: { consultation_id: string; person_id: string }) => cp.person_id))];
+
+    if (personIds.length > 0) {
+      const { data: personRows } = await supabase
+        .from("people")
+        .select("id, name")
+        .in("id", personIds);
+
+      const personNameById = new Map(
+        (personRows ?? []).map((p: { id: string; name: string }) => [p.id, p.name])
+      );
+
+      for (const cp of (cpLinks ?? []) as Array<{ consultation_id: string; person_id: string }>) {
+        const name = personNameById.get(cp.person_id);
+        if (!name) continue;
+        const arr = peopleByConsultationId.get(cp.consultation_id) ?? [];
+        arr.push(name);
+        peopleByConsultationId.set(cp.consultation_id, arr);
+      }
+    }
+  }
+
+  const consultations: ConsultationMeta[] = liveConsultations.map((c) => ({
+    id: c.id,
+    title: c.title,
+    date: c.created_at,
+    people: peopleByConsultationId.get(c.id) ?? [],
+  }));
+
+  // Load key audit events for the report's compliance trail section
+  let auditSummary: AuditSummaryEvent[] = [];
+  if (liveConsultationIds.length > 0) {
+    const { data: auditRows } = await supabase
+      .from("audit_log")
+      .select("action, created_at, entity_type")
+      .in("consultation_id", liveConsultationIds)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    auditSummary = (auditRows ?? []).map(
+      (row: { action: string; created_at: string; entity_type: string | null }) => ({
+        action: row.action,
+        createdAt: row.created_at,
+        entityType: row.entity_type ?? null,
+      })
+    );
+  }
+
   return {
     id: artifact.id,
     artifactType: artifact.artifact_type as "summary" | "report" | "email",
@@ -487,10 +571,12 @@ export async function getReportArtifact(
     updatedAt: artifact.updated_at,
     inputSnapshot,
     consultationTitles,
+    consultations,
     acceptedThemeCount,
     supportingThemeCount,
     versionNumber,
     totalVersions: versions.length || 1,
+    auditSummary,
   };
 }
 

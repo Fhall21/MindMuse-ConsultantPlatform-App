@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useState, useCallback } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,9 +10,15 @@ import {
   useReportArtifact,
   useReportArtifactVersions,
 } from "@/hooks/use-reports";
-import type { ReportArtifactDetail } from "@/lib/actions/reports";
+import type { ReportArtifactDetail, ConsultationMeta } from "@/lib/actions/reports";
+import {
+  formatDate,
+  formatShortDate,
+  estimateReadTime,
+} from "@/lib/report-formatting";
+import { toast } from "sonner";
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────────────
 
 const artifactTypeLabels: Record<string, string> = {
   summary: "Round Summary",
@@ -19,102 +26,98 @@ const artifactTypeLabels: Record<string, string> = {
   email: "Evidence Email",
 };
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "long",
-    timeStyle: "short",
-  }).format(date);
-}
+type ReportTemplate = "standard" | "executive";
 
-function formatShortDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
+// ─── Copy helper ─────────────────────────────────────────────────────────────
 
-// ─── Content renderer ───────────────────────────────────────────────────────
-
-/**
- * Renders report content with minimal formatting.
- * Splits on double-newlines for paragraphs, and detects markdown-style
- * headings (## / ###) for section structure.
- */
-function ReportContent({ content }: { content: string }) {
-  const blocks = content.split(/\n{2,}/);
+function CopyButton({ text, label }: { text: string; label?: string }) {
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(label ? `Copied: ${label}` : "Copied to clipboard");
+    } catch {
+      toast.error("Failed to copy");
+    }
+  }, [text, label]);
 
   return (
-    <div className="space-y-4">
-      {blocks.map((block, i) => {
-        const trimmed = block.trim();
-        if (!trimmed) return null;
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="copy-button inline-flex items-center justify-center rounded p-1 text-muted-foreground/50 transition-colors hover:bg-muted/40 hover:text-muted-foreground print:hidden"
+      title="Copy to clipboard"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+      </svg>
+    </button>
+  );
+}
 
-        // Markdown heading detection
-        if (trimmed.startsWith("### ")) {
-          return (
-            <h4
-              key={i}
-              className="pt-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
-            >
-              {trimmed.slice(4)}
-            </h4>
-          );
-        }
-        if (trimmed.startsWith("## ")) {
-          return (
-            <h3 key={i} className="pt-3 text-base font-semibold text-foreground">
-              {trimmed.slice(3)}
-            </h3>
-          );
-        }
-        if (trimmed.startsWith("# ")) {
-          return (
-            <h2 key={i} className="pt-4 text-lg font-semibold text-foreground">
-              {trimmed.slice(2)}
-            </h2>
-          );
-        }
+// ─── Quick Stats ─────────────────────────────────────────────────────────────
 
-        // Bullet list detection
-        const lines = trimmed.split("\n");
-        const isBulletList = lines.every(
-          (line) =>
-            line.trim().startsWith("- ") ||
-            line.trim().startsWith("• ") ||
-            line.trim().startsWith("* ") ||
-            line.trim() === ""
-        );
+function QuickStats({ report }: { report: ReportArtifactDetail }) {
+  const readTime = estimateReadTime(report.content);
+  const consultationCount = report.consultations.length || report.consultationTitles.length;
 
-        if (isBulletList) {
-          return (
-            <ul key={i} className="list-inside list-disc space-y-1 pl-1 text-sm leading-relaxed text-foreground/90">
-              {lines
-                .filter((line) => line.trim())
-                .map((line, j) => (
-                  <li key={j}>{line.replace(/^[\s]*[-•*]\s*/, "")}</li>
-                ))}
-            </ul>
-          );
-        }
+  const stats = [
+    {
+      label: "Consultations",
+      value: consultationCount,
+    },
+    {
+      label: "Accepted Themes",
+      value: report.acceptedThemeCount,
+    },
+    {
+      label: "Supporting Themes",
+      value: report.supportingThemeCount,
+    },
+    {
+      label: "Reading Time",
+      value: `~${readTime} min`,
+    },
+  ];
 
-        // Regular paragraph
-        return (
-          <p key={i} className="text-sm leading-relaxed text-foreground/90">
-            {trimmed}
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {stats.map((stat) => (
+        <div
+          key={stat.label}
+          className="rounded-lg border border-border/60 bg-gradient-to-br from-muted/30 to-background px-4 py-3"
+        >
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {stat.label}
           </p>
-        );
-      })}
+          <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
+            {stat.value}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
 
-// ─── Provenance section ─────────────────────────────────────────────────────
+// ─── Findings Section ────────────────────────────────────────────────────────
 
-function ProvenanceSection({ report }: { report: ReportArtifactDetail }) {
+function FindingsSection({
+  report,
+  template,
+}: {
+  report: ReportArtifactDetail;
+  template: ReportTemplate;
+}) {
   const inputThemes = report.inputSnapshot.accepted_round_themes as
     | Array<{ label: string; description?: string | null }>
     | undefined;
@@ -127,86 +130,356 @@ function ProvenanceSection({ report }: { report: ReportArtifactDetail }) {
         }>
       | undefined;
 
+  const acceptedToShow =
+    template === "executive" ? inputThemes?.slice(0, 3) : inputThemes;
+  const showSupporting = template === "standard";
+
+  if (!acceptedToShow?.length && !supportingThemes?.length) return null;
+
+  // Build map: accepted theme label (normalised) → linked supporting themes
+  const supportingByAccepted = new Map<
+    string,
+    Array<{ label: string; description?: string | null; consultation_title?: string | null }>
+  >();
+  const unlinkedSupporting: Array<{
+    label: string;
+    description?: string | null;
+    consultation_title?: string | null;
+  }> = [];
+
+  if (showSupporting && supportingThemes && inputThemes) {
+    const acceptedLabelSet = new Set(inputThemes.map((t) => t.label.toLowerCase()));
+    for (const st of supportingThemes) {
+      const key = st.label.toLowerCase();
+      if (acceptedLabelSet.has(key)) {
+        const arr = supportingByAccepted.get(key) ?? [];
+        arr.push(st);
+        supportingByAccepted.set(key, arr);
+      } else {
+        unlinkedSupporting.push(st);
+      }
+    }
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Source consultations */}
-      {report.consultationTitles.length > 0 && (
-        <div className="space-y-2">
+    <section className="space-y-6">
+      {/* Accepted (round-level) themes with linked consultation evidence */}
+      {acceptedToShow && acceptedToShow.length > 0 && (
+        <div className="space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Source Consultations
+            Key Findings ({inputThemes?.length ?? 0})
+            {template === "executive" && inputThemes && inputThemes.length > 3 && (
+              <span className="ml-2 normal-case tracking-normal font-normal">
+                — showing top 3
+              </span>
+            )}
           </h3>
-          <div className="grid gap-1.5">
-            {report.consultationTitles.map((title, i) => (
-              <div
-                key={i}
-                className="rounded-md border border-border/60 bg-muted/10 px-3 py-2 text-sm"
-              >
-                {title}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+          <div className="grid gap-3">
+            {acceptedToShow.map((theme, i) => {
+              const linked = supportingByAccepted.get(theme.label.toLowerCase());
+              return (
+                <div key={i}>
+                  {/* Primary accepted theme */}
+                  <div className="group rounded-lg border border-emerald-200/60 border-l-4 border-l-emerald-500 bg-emerald-50/20 px-4 py-3 dark:border-emerald-800/40 dark:border-l-emerald-600 dark:bg-emerald-950/10">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-foreground">{theme.label}</p>
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 border-emerald-300 text-[10px] text-emerald-700 dark:border-emerald-700 dark:text-emerald-400"
+                          >
+                            Accepted
+                          </Badge>
+                        </div>
+                        {theme.description && (
+                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                            {theme.description}
+                          </p>
+                        )}
+                      </div>
+                      <CopyButton
+                        text={theme.description ? `${theme.label}: ${theme.description}` : theme.label}
+                        label={theme.label}
+                      />
+                    </div>
+                  </div>
 
-      {/* Accepted round themes */}
-      {inputThemes && inputThemes.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Accepted Round Themes ({inputThemes.length})
-          </h3>
-          <div className="grid gap-1.5">
-            {inputThemes.map((theme, i) => (
-              <div
-                key={i}
-                className="rounded-md border border-border/60 bg-muted/10 px-3 py-2"
-              >
-                <p className="text-sm font-medium">{theme.label}</p>
-                {theme.description && (
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {theme.description}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Supporting consultation themes */}
-      {supportingThemes && supportingThemes.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Supporting Consultation Themes ({supportingThemes.length})
-          </h3>
-          <div className="grid gap-1.5">
-            {supportingThemes.map((theme, i) => (
-              <div
-                key={i}
-                className="rounded-md border border-border/60 bg-muted/10 px-3 py-2"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-medium">{theme.label}</p>
-                  {theme.consultation_title && (
-                    <Badge variant="outline" className="text-[10px]">
-                      {theme.consultation_title}
-                    </Badge>
+                  {/* Linked consultation-level evidence for this theme */}
+                  {showSupporting && linked && linked.length > 0 && (
+                    <div className="ml-4 mt-1 space-y-1 border-l-2 border-emerald-200/40 pl-3 dark:border-emerald-800/30">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 pb-0.5">
+                        Evidence from consultations
+                      </p>
+                      {linked.map((st, j) => (
+                        <div
+                          key={j}
+                          className="flex items-start gap-2 rounded-md border border-border/30 bg-muted/5 px-3 py-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p className="text-xs font-medium text-foreground/80">{st.label}</p>
+                              {st.consultation_title && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  {st.consultation_title}
+                                </Badge>
+                              )}
+                            </div>
+                            {st.description && (
+                              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                                {st.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-                {theme.description && (
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {theme.description}
-                  </p>
-                )}
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Unlinked supporting themes (don't match any accepted label) */}
+      {showSupporting && unlinkedSupporting.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Additional Supporting Themes ({unlinkedSupporting.length})
+          </h3>
+          <div className="grid gap-2">
+            {unlinkedSupporting.map((theme, i) => (
+              <div
+                key={i}
+                className="group rounded-lg border border-border/40 border-l-4 border-l-slate-300 bg-slate-50/20 px-4 py-3 dark:border-slate-700/40 dark:border-l-slate-600 dark:bg-slate-900/10"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">{theme.label}</p>
+                      {theme.consultation_title && (
+                        <Badge variant="outline" className="text-[10px]">
+                          {theme.consultation_title}
+                        </Badge>
+                      )}
+                    </div>
+                    {theme.description && (
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        {theme.description}
+                      </p>
+                    )}
+                  </div>
+                  <CopyButton
+                    text={theme.description ? `${theme.label}: ${theme.description}` : theme.label}
+                    label={theme.label}
+                  />
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+// ─── Evidence Section ────────────────────────────────────────────────────────
+
+function EvidenceSection({ report }: { report: ReportArtifactDetail }) {
+  const consultations: ConsultationMeta[] = report.consultations.length > 0
+    ? report.consultations
+    : report.consultationTitles.map((title) => ({ id: title, title, date: "", people: [] }));
+
+  if (consultations.length === 0) return null;
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        Source Consultations ({consultations.length})
+      </h3>
+      <div className="grid gap-2">
+        {consultations.map((c, i) => (
+          <div
+            key={c.id}
+            className="group flex items-start justify-between rounded-lg border border-border/50 bg-muted/5 px-4 py-3"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted/60 text-xs font-medium text-muted-foreground">
+                {i + 1}
+              </div>
+              <div>
+                <p className="text-sm text-foreground">{c.title}</p>
+                <div className="mt-0.5 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                  {c.date && (
+                    <span>{formatShortDate(c.date)}</span>
+                  )}
+                  {c.people.length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <span className="opacity-40">·</span>
+                      {c.people.join(", ")}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <CopyButton text={c.title} label={c.title} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─── Audit trail section (compliance) ────────────────────────────────────────
+
+function AuditTrailSection({ report }: { report: ReportArtifactDetail }) {
+  if (!report.auditSummary || report.auditSummary.length === 0) return null;
+
+  function formatAuditAction(action: string): string {
+    return action
+      .replace(/\./g, " → ")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        Audit Trail ({report.auditSummary.length} events)
+      </h3>
+      <div className="rounded-lg border border-border/50 bg-muted/5 divide-y divide-border/30">
+        {report.auditSummary.map((event, i) => (
+          <div key={i} className="flex items-start justify-between px-4 py-2.5 gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-foreground/80">
+                {formatAuditAction(event.action)}
+              </p>
+              {event.entityType && (
+                <p className="text-[11px] text-muted-foreground">{event.entityType}</p>
+              )}
+            </div>
+            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+              {formatShortDate(event.createdAt)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─── Inline bold renderer ─────────────────────────────────────────────────────
+
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
+// ─── Content renderer ────────────────────────────────────────────────────────
+
+function ReportContent({ content }: { content: string }) {
+  const blocks = content.split(/\n{2,}/);
+
+  return (
+    <div className="space-y-4">
+      {blocks.map((block, i) => {
+        const trimmed = block.trim();
+        if (!trimmed) return null;
+
+        if (trimmed.startsWith("### ")) {
+          return (
+            <h4
+              key={i}
+              className="pt-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              {trimmed.slice(4)}
+            </h4>
+          );
+        }
+        if (trimmed.startsWith("## ")) {
+          return (
+            <h3
+              key={i}
+              className="pt-3 text-base font-semibold text-foreground"
+            >
+              {trimmed.slice(3)}
+            </h3>
+          );
+        }
+        if (trimmed.startsWith("# ")) {
+          return (
+            <h2
+              key={i}
+              className="pt-4 text-lg font-semibold text-foreground"
+            >
+              {trimmed.slice(2)}
+            </h2>
+          );
+        }
+
+        const lines = trimmed.split("\n");
+        const isBulletList = lines.every(
+          (line) =>
+            line.trim().startsWith("- ") ||
+            line.trim().startsWith("\u2022 ") ||
+            line.trim().startsWith("* ") ||
+            line.trim() === ""
+        );
+        const isNumberedList = lines.every(
+          (line) => /^\d+\.\s/.test(line.trim()) || line.trim() === ""
+        );
+
+        if (isBulletList) {
+          return (
+            <ul
+              key={i}
+              className="list-inside list-disc space-y-1 pl-1 text-sm leading-relaxed text-foreground/90"
+            >
+              {lines
+                .filter((line) => line.trim())
+                .map((line, j) => (
+                  <li key={j}>{renderInline(line.replace(/^[\s]*[-\u2022*]\s*/, ""))}</li>
+                ))}
+            </ul>
+          );
+        }
+
+        if (isNumberedList) {
+          return (
+            <ol
+              key={i}
+              className="list-inside list-decimal space-y-1 pl-1 text-sm leading-relaxed text-foreground/90"
+            >
+              {lines
+                .filter((line) => line.trim())
+                .map((line, j) => (
+                  <li key={j}>{renderInline(line.replace(/^\d+\.\s*/, ""))}</li>
+                ))}
+            </ol>
+          );
+        }
+
+        return (
+          <p
+            key={i}
+            className="text-sm leading-relaxed text-foreground/90"
+          >
+            {renderInline(trimmed)}
+          </p>
+        );
+      })}
     </div>
   );
 }
 
-// ─── Version history sidebar ────────────────────────────────────────────────
+// ─── Version history sidebar ─────────────────────────────────────────────────
 
 function VersionHistory({
   report,
@@ -225,7 +498,7 @@ function VersionHistory({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 print:hidden">
       <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
         Version History
       </h3>
@@ -251,7 +524,47 @@ function VersionHistory({
   );
 }
 
-// ─── Main report view ───────────────────────────────────────────────────────
+// ─── Template selector ───────────────────────────────────────────────────────
+
+function TemplateSelector({
+  value,
+  onChange,
+}: {
+  value: ReportTemplate;
+  onChange: (template: ReportTemplate) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 print:hidden">
+      <span className="text-xs text-muted-foreground">Template:</span>
+      <div className="inline-flex rounded-md border border-border/60">
+        <button
+          type="button"
+          onClick={() => onChange("standard")}
+          className={`rounded-l-md px-3 py-1 text-xs font-medium transition-colors ${
+            value === "standard"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:bg-muted/40"
+          }`}
+        >
+          Standard
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange("executive")}
+          className={`rounded-r-md border-l border-border/60 px-3 py-1 text-xs font-medium transition-colors ${
+            value === "executive"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:bg-muted/40"
+          }`}
+        >
+          Executive
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main report view ────────────────────────────────────────────────────────
 
 interface ReportViewProps {
   artifactId: string;
@@ -259,12 +572,42 @@ interface ReportViewProps {
 
 export function ReportView({ artifactId }: ReportViewProps) {
   const { data: report, isLoading, error } = useReportArtifact(artifactId);
+  const [template, setTemplate] = useState<ReportTemplate>("standard");
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleDownloadPDF = useCallback(async () => {
+    if (!report) return;
+    setIsExporting(true);
+    try {
+      const response = await fetch(
+        `/api/reports/${report.id}/export?template=${template}`
+      );
+      if (!response.ok) throw new Error("Export failed");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `report-${report.id.slice(0, 8)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF downloaded");
+    } catch {
+      toast.error("Failed to download PDF. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [report, template]);
 
   if (isLoading) {
     return (
       <div className="mx-auto max-w-4xl space-y-6">
         <Skeleton className="h-8 w-2/3" />
         <Skeleton className="h-4 w-1/3" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-20" />
+          ))}
+        </div>
         <Skeleton className="h-64 w-full" />
       </div>
     );
@@ -285,35 +628,58 @@ export function ReportView({ artifactId }: ReportViewProps) {
     );
   }
 
+  const readTime = estimateReadTime(report.content);
+
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       {/* Navigation */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link href="/reports" className="hover:text-foreground transition-colors">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground print:hidden">
+        <Link
+          href="/reports"
+          className="transition-colors hover:text-foreground"
+        >
           Reports
         </Link>
         <span>/</span>
-        <span className="text-foreground">
-          {report.title ?? "Untitled"}
-        </span>
+        <span className="text-foreground">{report.title ?? "Untitled"}</span>
       </div>
 
       {/* ─── Report header ─── */}
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">
-            {artifactTypeLabels[report.artifactType] ?? report.artifactType}
-          </Badge>
-          <Badge variant="secondary">{report.roundLabel}</Badge>
-          {report.totalVersions > 1 && (
-            <Badge variant="outline" className="text-[10px]">
-              v{report.versionNumber} of {report.totalVersions}
+      <header className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">
+              {artifactTypeLabels[report.artifactType] ?? report.artifactType}
             </Badge>
-          )}
+            <Badge variant="secondary">{report.roundLabel}</Badge>
+            {report.totalVersions > 1 && (
+              <Badge variant="outline" className="text-[10px]">
+                v{report.versionNumber} of {report.totalVersions}
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2 print:hidden">
+            <TemplateSelector value={template} onChange={setTemplate} />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDownloadPDF}
+              disabled={isExporting}
+            >
+              {isExporting ? "Exporting..." : "Download PDF"}
+            </Button>
+          </div>
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {report.title ?? "Untitled Report"}
-        </h1>
+
+        <div>
+          <p className="text-xs text-muted-foreground">
+            ~{readTime} min read
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+            {report.title ?? "Untitled Report"}
+          </h1>
+        </div>
+
         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
           <span>Generated {formatDate(report.generatedAt)}</span>
           {report.consultationTitles.length > 0 && (
@@ -333,6 +699,7 @@ export function ReportView({ artifactId }: ReportViewProps) {
             </span>
           )}
         </div>
+
         {report.roundDescription && (
           <p className="text-sm text-muted-foreground">
             {report.roundDescription}
@@ -340,39 +707,74 @@ export function ReportView({ artifactId }: ReportViewProps) {
         )}
       </header>
 
+      {/* ─── Quick Stats ─── */}
+      <QuickStats report={report} />
+
       <Separator />
 
       {/* ─── Report body + sidebar layout ─── */}
       <div className="grid gap-8 lg:grid-cols-[1fr_260px]">
         {/* Main content */}
-        <article className="min-w-0 space-y-6">
+        <article className="min-w-0 space-y-8">
           <ReportContent content={report.content} />
+
+          <Separator />
+
+          <FindingsSection report={report} template={template} />
+
+          {template === "standard" && (
+            <>
+              <Separator />
+              <EvidenceSection report={report} />
+              <Separator />
+              <AuditTrailSection report={report} />
+            </>
+          )}
         </article>
 
         {/* Sidebar */}
-        <aside className="space-y-6">
+        <aside className="space-y-6 print:hidden">
           <VersionHistory report={report} currentId={artifactId} />
-          <ProvenanceSection report={report} />
+
+          {/* Metadata callout */}
+          <div className="rounded-lg border border-border/50 bg-muted/5 p-4 space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              Report Info
+            </h3>
+            <div className="space-y-1.5 text-xs text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground">Round:</span>{" "}
+                <Link
+                  href={`/consultations/rounds/${report.roundId}`}
+                  className="underline transition-colors hover:text-foreground"
+                >
+                  {report.roundLabel}
+                </Link>
+              </p>
+              <p>
+                <span className="font-medium text-foreground">Generated:</span>{" "}
+                {formatDate(report.generatedAt)}
+              </p>
+              {report.totalVersions > 1 && (
+                <p>
+                  <span className="font-medium text-foreground">Version:</span>{" "}
+                  {report.versionNumber} of {report.totalVersions}
+                </p>
+              )}
+              <p className="pt-1">
+                <code className="text-[10px] text-muted-foreground/60">
+                  {report.id}
+                </code>
+              </p>
+            </div>
+          </div>
         </aside>
       </div>
 
-      {/* ─── Footer metadata ─── */}
-      <Separator />
+      {/* ─── Footer ─── */}
+      <Separator className="print:hidden" />
 
-      <footer className="space-y-2 pb-8 text-xs text-muted-foreground">
-        <p>
-          Report artifact ID: <code className="text-[10px]">{report.id}</code>
-        </p>
-        <p>
-          Round:{" "}
-          <Link
-            href={`/consultations/rounds/${report.roundId}`}
-            className="underline hover:text-foreground transition-colors"
-          >
-            {report.roundLabel}
-          </Link>
-        </p>
-        <p>Generated {formatDate(report.generatedAt)}</p>
+      <footer className="space-y-2 pb-8 text-xs text-muted-foreground print:hidden">
         {report.totalVersions > 1 && (
           <p>
             Version {report.versionNumber} of {report.totalVersions} — each

@@ -1,12 +1,33 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { db } from "@/db/client";
+import {
+  auditLog,
+  consultationGroupMembers,
+  consultationGroups,
+  consultationRounds,
+  consultations,
+  evidenceEmails,
+  roundDecisions,
+  roundOutputArtifacts,
+  roundThemeGroupMembers,
+  roundThemeGroups,
+  themes,
+} from "@/db/schema";
 import { callAIService } from "@/lib/openai/client";
 import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";
 import { emitAuditEvent } from "@/lib/actions/audit";
 import { getServerSession } from "@/lib/auth/session";
+import {
+  mapAuditLogRecord,
+  mapConsultationRecord,
+  mapConsultationRoundRecord,
+  mapEvidenceEmailRecord,
+  mapRoundOutputArtifactRecord,
+  mapThemeRecord,
+} from "@/lib/data/mappers";
 import type {
-  AuditLogEntry,
   Consultation,
   ConsultationRound,
   EvidenceEmail,
@@ -20,7 +41,9 @@ import type {
   Theme,
 } from "@/types/db";
 
-type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+type RoundThemeGroupRow = typeof roundThemeGroups.$inferSelect;
+type RoundThemeGroupMemberRow = typeof roundThemeGroupMembers.$inferSelect;
+type RoundDecisionRow = typeof roundDecisions.$inferSelect;
 
 type RoundTargetStatus =
   | "unreviewed"
@@ -201,6 +224,23 @@ interface StructuralDraftResponse {
   explanation?: string | null;
 }
 
+interface ConsultationGroupRecord {
+  id: string;
+  label: string;
+  position: number;
+}
+
+interface ConsultationGroupMemberRecord {
+  id: string;
+  group_id: string;
+  consultation_id: string;
+  position: number;
+}
+
+function toIsoString(value: Date | null | undefined) {
+  return value ? value.toISOString() : null;
+}
+
 function trimToNull(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
@@ -350,207 +390,219 @@ async function requireAuthenticatedContext() {
     throw new Error("Not authenticated");
   }
 
-  const supabase = await createClient();
-
-  return { supabase, userId: session.user.id };
+  return { userId: session.user.id };
 }
 
-async function loadOwnedRound(params: {
-  supabase: SupabaseServerClient;
-  userId: string;
-  roundId: string;
-}) {
-  const { supabase, userId, roundId } = params;
-  const { data, error } = await supabase
-    .from("consultation_rounds")
-    .select("*")
-    .eq("id", roundId)
-    .eq("user_id", userId)
-    .single();
+function mapRoundThemeGroupRecord(row: RoundThemeGroupRow): RoundThemeGroup {
+  return {
+    id: row.id,
+    round_id: row.roundId,
+    user_id: row.userId,
+    label: row.label,
+    description: row.description,
+    status: row.status as RoundThemeGroup["status"],
+    origin: row.origin as RoundThemeGroup["origin"],
+    ai_draft_label: row.aiDraftLabel,
+    ai_draft_description: row.aiDraftDescription,
+    ai_draft_explanation: row.aiDraftExplanation,
+    ai_draft_created_at: toIsoString(row.aiDraftCreatedAt),
+    ai_draft_created_by: row.aiDraftCreatedBy,
+    last_structural_change_at: row.lastStructuralChangeAt.toISOString(),
+    last_structural_change_by: row.lastStructuralChangeBy,
+    created_by: row.createdBy,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+  };
+}
 
-  if (error) {
-    throw error;
+function mapRoundThemeGroupMemberRecord(
+  row: RoundThemeGroupMemberRow
+): RoundThemeGroupMember {
+  return {
+    id: row.id,
+    group_id: row.groupId,
+    round_id: row.roundId,
+    theme_id: row.themeId,
+    source_consultation_id: row.sourceConsultationId,
+    user_id: row.userId,
+    position: row.position,
+    created_by: row.createdBy,
+    created_at: row.createdAt.toISOString(),
+  };
+}
+
+function mapRoundDecisionRecord(row: RoundDecisionRow): RoundDecision {
+  return {
+    id: row.id,
+    round_id: row.roundId,
+    user_id: row.userId,
+    target_type: row.targetType as RoundDecision["target_type"],
+    target_id: row.targetId,
+    decision_type: row.decisionType as RoundDecision["decision_type"],
+    rationale: row.rationale,
+    metadata: row.metadata,
+    created_at: row.createdAt.toISOString(),
+  };
+}
+
+async function loadOwnedRound(params: { userId: string; roundId: string }) {
+  const { userId, roundId } = params;
+  const [row] = await db
+    .select()
+    .from(consultationRounds)
+    .where(
+      and(
+        eq(consultationRounds.id, roundId),
+        eq(consultationRounds.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (!row) {
+    throw new Error("Round not found");
   }
 
-  return data as ConsultationRound;
+  return mapConsultationRoundRecord(row);
 }
 
-async function loadRoundConsultations(params: {
-  supabase: SupabaseServerClient;
-  userId: string;
-  roundId: string;
-}) {
-  const { supabase, userId, roundId } = params;
-  const { data, error } = await supabase
-    .from("consultations")
-    .select("*")
-    .eq("round_id", roundId)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true });
+async function loadRoundConsultations(params: { userId: string; roundId: string }) {
+  const { userId, roundId } = params;
+  const rows = await db
+    .select()
+    .from(consultations)
+    .where(
+      and(
+        eq(consultations.roundId, roundId),
+        eq(consultations.userId, userId)
+      )
+    )
+    .orderBy(asc(consultations.createdAt));
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as Consultation[];
+  return rows.map(mapConsultationRecord);
 }
 
-async function loadAcceptedThemes(params: {
-  supabase: SupabaseServerClient;
-  consultationIds: string[];
-}) {
-  const { supabase, consultationIds } = params;
+async function loadAcceptedThemes(params: { consultationIds: string[] }) {
+  const { consultationIds } = params;
 
   if (consultationIds.length === 0) {
     return [] as Theme[];
   }
 
-  const { data, error } = await supabase
-    .from("themes")
-    .select("*")
-    .eq("accepted", true)
-    .in("consultation_id", consultationIds)
-    .order("created_at", { ascending: true });
+  const rows = await db
+    .select()
+    .from(themes)
+    .where(
+      and(
+        eq(themes.accepted, true),
+        inArray(themes.consultationId, consultationIds)
+      )
+    )
+    .orderBy(asc(themes.createdAt));
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as Theme[];
+  return rows.map(mapThemeRecord);
 }
 
-async function loadRoundGroups(params: {
-  supabase: SupabaseServerClient;
-  roundId: string;
-}) {
-  const { supabase, roundId } = params;
-  const { data, error } = await supabase
-    .from("round_theme_groups")
-    .select("*")
-    .eq("round_id", roundId)
-    .order("created_at", { ascending: true });
+async function loadRoundGroups(params: { roundId: string }) {
+  const { roundId } = params;
+  const rows = await db
+    .select()
+    .from(roundThemeGroups)
+    .where(eq(roundThemeGroups.roundId, roundId))
+    .orderBy(asc(roundThemeGroups.createdAt));
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as RoundThemeGroup[];
+  return rows.map(mapRoundThemeGroupRecord);
 }
 
-async function loadRoundGroupMembers(params: {
-  supabase: SupabaseServerClient;
-  roundId: string;
-}) {
-  const { supabase, roundId } = params;
-  const { data, error } = await supabase
-    .from("round_theme_group_members")
-    .select("*")
-    .eq("round_id", roundId)
-    .order("position", { ascending: true })
-    .order("created_at", { ascending: true });
+async function loadRoundGroupMembers(params: { roundId: string }) {
+  const { roundId } = params;
+  const rows = await db
+    .select()
+    .from(roundThemeGroupMembers)
+    .where(eq(roundThemeGroupMembers.roundId, roundId))
+    .orderBy(
+      asc(roundThemeGroupMembers.position),
+      asc(roundThemeGroupMembers.createdAt)
+    );
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as RoundThemeGroupMember[];
+  return rows.map(mapRoundThemeGroupMemberRecord);
 }
 
-async function loadConsultationGroups(params: {
-  supabase: SupabaseServerClient;
-  roundId: string;
-}) {
-  const { supabase, roundId } = params;
-  const { data, error } = await supabase
-    .from("consultation_groups")
-    .select("*")
-    .eq("round_id", roundId)
-    .order("position", { ascending: true })
-    .order("created_at", { ascending: true });
+async function loadConsultationGroups(params: { roundId: string }) {
+  const { roundId } = params;
+  const rows = await db
+    .select()
+    .from(consultationGroups)
+    .where(eq(consultationGroups.roundId, roundId))
+    .orderBy(asc(consultationGroups.position), asc(consultationGroups.createdAt));
 
-  if (error) {
-    throw error;
-  }
-
-  return data ?? [];
+  return rows.map(
+    (row): ConsultationGroupRecord => ({
+      id: row.id,
+      label: row.label,
+      position: row.position,
+    })
+  );
 }
 
-async function loadConsultationGroupMembers(params: {
-  supabase: SupabaseServerClient;
-  roundId: string;
-}) {
-  const { supabase, roundId } = params;
-  const { data, error } = await supabase
-    .from("consultation_group_members")
-    .select("*")
-    .eq("round_id", roundId)
-    .order("position", { ascending: true })
-    .order("created_at", { ascending: true });
+async function loadConsultationGroupMembers(params: { roundId: string }) {
+  const { roundId } = params;
+  const rows = await db
+    .select()
+    .from(consultationGroupMembers)
+    .where(eq(consultationGroupMembers.roundId, roundId))
+    .orderBy(
+      asc(consultationGroupMembers.position),
+      asc(consultationGroupMembers.createdAt)
+    );
 
-  if (error) {
-    throw error;
-  }
-
-  return data ?? [];
+  return rows.map(
+    (row): ConsultationGroupMemberRecord => ({
+      id: row.id,
+      group_id: row.groupId,
+      consultation_id: row.consultationId,
+      position: row.position,
+    })
+  );
 }
 
-async function loadRoundDecisions(params: {
-  supabase: SupabaseServerClient;
-  roundId: string;
-}) {
-  const { supabase, roundId } = params;
-  const { data, error } = await supabase
-    .from("round_decisions")
-    .select("*")
-    .eq("round_id", roundId)
-    .order("created_at", { ascending: false });
+async function loadRoundDecisions(params: { roundId: string }) {
+  const { roundId } = params;
+  const rows = await db
+    .select()
+    .from(roundDecisions)
+    .where(eq(roundDecisions.roundId, roundId))
+    .orderBy(desc(roundDecisions.createdAt));
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as RoundDecision[];
+  return rows.map(mapRoundDecisionRecord);
 }
 
-async function loadRoundOutputs(params: {
-  supabase: SupabaseServerClient;
-  roundId: string;
-}) {
-  const { supabase, roundId } = params;
-  const { data, error } = await supabase
-    .from("round_output_artifacts")
-    .select("*")
-    .eq("round_id", roundId)
-    .order("generated_at", { ascending: false });
+async function loadRoundOutputs(params: { roundId: string }) {
+  const { roundId } = params;
+  const rows = await db
+    .select()
+    .from(roundOutputArtifacts)
+    .where(eq(roundOutputArtifacts.roundId, roundId))
+    .orderBy(desc(roundOutputArtifacts.generatedAt));
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as RoundOutputArtifact[];
+  return rows.map(mapRoundOutputArtifactRecord);
 }
 
 async function loadEvidenceEmailsByConsultation(params: {
-  supabase: SupabaseServerClient;
   consultationIds: string[];
 }) {
-  const { supabase, consultationIds } = params;
+  const { consultationIds } = params;
 
   if (consultationIds.length === 0) {
     return new Map<string, EvidenceEmail[]>();
   }
 
-  const { data, error } = await supabase
-    .from("evidence_emails")
-    .select("*")
-    .in("consultation_id", consultationIds)
-    .order("created_at", { ascending: false });
+  const rows = await db
+    .select()
+    .from(evidenceEmails)
+    .where(inArray(evidenceEmails.consultationId, consultationIds))
+    .orderBy(desc(evidenceEmails.createdAt));
 
-  if (error) {
-    throw error;
-  }
-
-  const emails = (data ?? []) as EvidenceEmail[];
+  const emails = rows.map(mapEvidenceEmailRecord);
   const grouped = new Map<string, EvidenceEmail[]>();
 
   emails.forEach((email) => {
@@ -563,26 +615,22 @@ async function loadEvidenceEmailsByConsultation(params: {
 }
 
 async function loadRoundHistory(params: {
-  supabase: SupabaseServerClient;
   userId: string;
   roundId: string;
   consultationIds: string[];
 }) {
-  const { supabase, userId, roundId, consultationIds } = params;
-  const { data, error } = await supabase
-    .from("audit_log")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
+  const { userId, roundId, consultationIds } = params;
+  const rows = await db
+    .select()
+    .from(auditLog)
+    .where(eq(auditLog.userId, userId))
+    .orderBy(desc(auditLog.createdAt))
     .limit(400);
-
-  if (error) {
-    throw error;
-  }
 
   const consultationIdSet = new Set(consultationIds);
 
-  return ((data ?? []) as AuditLogEntry[])
+  return rows
+    .map(mapAuditLogRecord)
     .filter((entry) => {
       if (entry.consultation_id && consultationIdSet.has(entry.consultation_id)) {
         return true;
@@ -659,127 +707,103 @@ function buildOutputCollection(outputs: RoundOutputArtifact[]): RoundOutputColle
 }
 
 async function loadThemesForRound(params: {
-  supabase: SupabaseServerClient;
   userId: string;
   roundId: string;
   themeIds: string[];
 }) {
-  const { supabase, userId, roundId, themeIds } = params;
+  const { userId, roundId, themeIds } = params;
 
   if (themeIds.length === 0) {
     return [] as ThemeWithConsultation[];
   }
 
-  const { data: themeRows, error: themeError } = await supabase
-    .from("themes")
-    .select("*")
-    .in("id", themeIds)
-    .order("created_at", { ascending: true });
-
-  if (themeError) {
-    throw themeError;
-  }
-
-  const themes = (themeRows ?? []) as Theme[];
-  const consultationIds = Array.from(new Set(themes.map((theme) => theme.consultation_id)));
-  const { data: consultationRows, error: consultationError } = await supabase
-    .from("consultations")
-    .select("*")
-    .in("id", consultationIds)
-    .eq("user_id", userId)
-    .eq("round_id", roundId);
-
-  if (consultationError) {
-    throw consultationError;
-  }
-
-  const consultationById = new Map(
-    ((consultationRows ?? []) as Consultation[]).map((consultation) => [consultation.id, consultation])
-  );
-
-  return themes
-    .map((theme) => {
-      const consultation = consultationById.get(theme.consultation_id);
-      if (!consultation) {
-        return null;
-      }
-
-      return {
-        ...theme,
-        consultation,
-      } satisfies ThemeWithConsultation;
+  const rows = await db
+    .select({
+      theme: themes,
+      consultation: consultations,
     })
-    .filter((value): value is ThemeWithConsultation => value !== null);
+    .from(themes)
+    .innerJoin(consultations, eq(themes.consultationId, consultations.id))
+    .where(
+      and(
+        inArray(themes.id, themeIds),
+        eq(consultations.userId, userId),
+        eq(consultations.roundId, roundId)
+      )
+    )
+    .orderBy(asc(themes.createdAt));
+
+  return rows.map(
+    ({ theme, consultation }): ThemeWithConsultation => ({
+      ...mapThemeRecord(theme),
+      consultation: mapConsultationRecord(consultation),
+    })
+  );
 }
 
 async function loadGroupForRound(params: {
-  supabase: SupabaseServerClient;
   userId: string;
   roundId: string;
   groupId: string;
 }) {
-  const { supabase, userId, roundId, groupId } = params;
-  const { data, error } = await supabase
-    .from("round_theme_groups")
-    .select("*")
-    .eq("id", groupId)
-    .eq("round_id", roundId)
-    .eq("user_id", userId)
-    .single();
+  const { userId, roundId, groupId } = params;
+  const [row] = await db
+    .select()
+    .from(roundThemeGroups)
+    .where(
+      and(
+        eq(roundThemeGroups.id, groupId),
+        eq(roundThemeGroups.roundId, roundId),
+        eq(roundThemeGroups.userId, userId)
+      )
+    )
+    .limit(1);
 
-  if (error) {
-    throw error;
+  if (!row) {
+    throw new Error("Round theme group not found");
   }
 
-  return data as RoundThemeGroup;
+  return mapRoundThemeGroupRecord(row);
 }
 
-async function loadGroupMembers(params: {
-  supabase: SupabaseServerClient;
-  groupId: string;
-}) {
-  const { supabase, groupId } = params;
-  const { data, error } = await supabase
-    .from("round_theme_group_members")
-    .select("*")
-    .eq("group_id", groupId)
-    .order("position", { ascending: true })
-    .order("created_at", { ascending: true });
+async function loadGroupMembers(params: { groupId: string }) {
+  const { groupId } = params;
+  const rows = await db
+    .select()
+    .from(roundThemeGroupMembers)
+    .where(eq(roundThemeGroupMembers.groupId, groupId))
+    .orderBy(
+      asc(roundThemeGroupMembers.position),
+      asc(roundThemeGroupMembers.createdAt)
+    );
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as RoundThemeGroupMember[];
+  return rows.map(mapRoundThemeGroupMemberRecord);
 }
 
 async function writeGroupDraftSuggestion(params: {
-  supabase: SupabaseServerClient;
   group: RoundThemeGroup;
   round: ConsultationRound;
   memberThemes: ThemeWithConsultation[];
   userId: string;
   structuralChange: string;
 }) {
-  const { supabase, group, round, memberThemes, userId, structuralChange } = params;
+  const { group, round, memberThemes, userId, structuralChange } = params;
+  const timestamp = new Date();
 
   if (memberThemes.length === 0) {
-    const { error } = await supabase
-      .from("round_theme_groups")
-      .update({
-        ai_draft_label: null,
-        ai_draft_description: null,
-        ai_draft_explanation: null,
-        ai_draft_created_at: null,
-        ai_draft_created_by: null,
-        last_structural_change_at: new Date().toISOString(),
-        last_structural_change_by: userId,
+    await db
+      .update(roundThemeGroups)
+      .set({
+        aiDraftLabel: null,
+        aiDraftDescription: null,
+        aiDraftExplanation: null,
+        aiDraftCreatedAt: null,
+        aiDraftCreatedBy: null,
+        lastStructuralChangeAt: timestamp,
+        lastStructuralChangeBy: userId,
+        updatedAt: timestamp,
       })
-      .eq("id", group.id);
-
-    if (error) {
-      throw error;
-    }
+      .where(eq(roundThemeGroups.id, group.id));
 
     return null;
   }
@@ -816,23 +840,19 @@ async function writeGroupDraftSuggestion(params: {
     draft = fallback;
   }
 
-  const timestamp = new Date().toISOString();
-  const { error } = await supabase
-    .from("round_theme_groups")
-    .update({
-      ai_draft_label: draft.draftLabel,
-      ai_draft_description: draft.draftDescription,
-      ai_draft_explanation: draft.draftExplanation,
-      ai_draft_created_at: timestamp,
-      ai_draft_created_by: userId,
-      last_structural_change_at: timestamp,
-      last_structural_change_by: userId,
+  await db
+    .update(roundThemeGroups)
+    .set({
+      aiDraftLabel: draft.draftLabel,
+      aiDraftDescription: draft.draftDescription,
+      aiDraftExplanation: draft.draftExplanation,
+      aiDraftCreatedAt: timestamp,
+      aiDraftCreatedBy: userId,
+      lastStructuralChangeAt: timestamp,
+      lastStructuralChangeBy: userId,
+      updatedAt: timestamp,
     })
-    .eq("id", group.id);
-
-  if (error) {
-    throw error;
-  }
+    .where(eq(roundThemeGroups.id, group.id));
 
   await emitAuditEvent({
     action: AUDIT_ACTIONS.ROUND_THEME_GROUP_DRAFT_CREATED,
@@ -849,38 +869,31 @@ async function writeGroupDraftSuggestion(params: {
   return draft;
 }
 
-async function maybeDiscardEmptyGroup(params: {
-  supabase: SupabaseServerClient;
-  group: RoundThemeGroup;
-}) {
-  const { supabase, group } = params;
-  const members = await loadGroupMembers({ supabase, groupId: group.id });
+async function maybeDiscardEmptyGroup(params: { group: RoundThemeGroup }) {
+  const { group } = params;
+  const members = await loadGroupMembers({ groupId: group.id });
 
   if (members.length > 0) {
     return false;
   }
 
-  const { error } = await supabase
-    .from("round_theme_groups")
-    .update({
+  await db
+    .update(roundThemeGroups)
+    .set({
       status: "discarded",
-      ai_draft_label: null,
-      ai_draft_description: null,
-      ai_draft_explanation: null,
-      ai_draft_created_at: null,
-      ai_draft_created_by: null,
+      aiDraftLabel: null,
+      aiDraftDescription: null,
+      aiDraftExplanation: null,
+      aiDraftCreatedAt: null,
+      aiDraftCreatedBy: null,
+      updatedAt: new Date(),
     })
-    .eq("id", group.id);
-
-  if (error) {
-    throw error;
-  }
+    .where(eq(roundThemeGroups.id, group.id));
 
   return true;
 }
 
 async function insertRoundDecision(params: {
-  supabase: SupabaseServerClient;
   roundId: string;
   userId: string;
   targetType: RoundDecisionTargetType;
@@ -889,21 +902,25 @@ async function insertRoundDecision(params: {
   rationale?: string | null;
   metadata?: Record<string, unknown>;
 }) {
-  const { supabase, roundId, userId, targetType, targetId, decisionType, rationale, metadata } = params;
+  const {
+    roundId,
+    userId,
+    targetType,
+    targetId,
+    decisionType,
+    rationale,
+    metadata,
+  } = params;
 
-  const { error } = await supabase.from("round_decisions").insert({
-    round_id: roundId,
-    user_id: userId,
-    target_type: targetType,
-    target_id: targetId,
-    decision_type: decisionType,
+  await db.insert(roundDecisions).values({
+    roundId,
+    userId,
+    targetType,
+    targetId,
+    decisionType,
     rationale: trimToNull(rationale),
     metadata: metadata ?? null,
   });
-
-  if (error) {
-    throw error;
-  }
 }
 
 function mapTargetStatus(decision: RoundDecision | undefined): RoundTargetStatus {
@@ -915,21 +932,21 @@ function mapTargetStatus(decision: RoundDecision | undefined): RoundTargetStatus
 }
 
 export async function getRoundDetail(roundId: string): Promise<RoundDetail | null> {
-  const { supabase, userId } = await requireAuthenticatedContext();
-  const round = await loadOwnedRound({ supabase, userId, roundId });
-  const consultations = await loadRoundConsultations({ supabase, userId, roundId });
+  const { userId } = await requireAuthenticatedContext();
+  const round = await loadOwnedRound({ userId, roundId });
+  const consultations = await loadRoundConsultations({ userId, roundId });
   const consultationIds = consultations.map((consultation) => consultation.id);
   const [themes, groups, members, decisions, outputs, emailMap, history, consultationGroups, consultationGroupMembers] =
     await Promise.all([
-      loadAcceptedThemes({ supabase, consultationIds }),
-      loadRoundGroups({ supabase, roundId }),
-      loadRoundGroupMembers({ supabase, roundId }),
-      loadRoundDecisions({ supabase, roundId }),
-      loadRoundOutputs({ supabase, roundId }),
-      loadEvidenceEmailsByConsultation({ supabase, consultationIds }),
-      loadRoundHistory({ supabase, userId, roundId, consultationIds }),
-      loadConsultationGroups({ supabase, roundId }),
-      loadConsultationGroupMembers({ supabase, roundId }),
+      loadAcceptedThemes({ consultationIds }),
+      loadRoundGroups({ roundId }),
+      loadRoundGroupMembers({ roundId }),
+      loadRoundDecisions({ roundId }),
+      loadRoundOutputs({ roundId }),
+      loadEvidenceEmailsByConsultation({ consultationIds }),
+      loadRoundHistory({ userId, roundId, consultationIds }),
+      loadConsultationGroups({ roundId }),
+      loadConsultationGroupMembers({ roundId }),
     ]);
 
   const consultationById = new Map(consultations.map((consultation) => [consultation.id, consultation]));
@@ -1121,16 +1138,14 @@ export async function createRoundThemeGroup(
   roundId: string,
   seedThemeIds: string[] = []
 ) {
-  const { supabase, userId } = await requireAuthenticatedContext();
-  const round = await loadOwnedRound({ supabase, userId, roundId });
+  const { userId } = await requireAuthenticatedContext();
+  const round = await loadOwnedRound({ userId, roundId });
   const seedThemes = await loadThemesForRound({
-    supabase,
     userId,
     roundId,
     themeIds: seedThemeIds,
   });
   const existingMemberships = await loadThemeMembershipsForRound({
-    supabase,
     roundId,
     themeIds: seedThemes.map((theme) => theme.id),
   });
@@ -1140,62 +1155,49 @@ export async function createRoundThemeGroup(
 
   const defaultLabel =
     seedThemes.length === 1 ? seedThemes[0].label : "Round theme group";
-  const { data, error } = await supabase
-    .from("round_theme_groups")
-    .insert({
-      round_id: roundId,
-      user_id: userId,
+  const [created] = await db
+    .insert(roundThemeGroups)
+    .values({
+      roundId,
+      userId,
       label: defaultLabel,
       description:
         seedThemes.length === 1 ? seedThemes[0].description ?? null : null,
       status: "draft",
       origin: "manual",
-      created_by: userId,
-      last_structural_change_by: userId,
+      createdBy: userId,
+      lastStructuralChangeBy: userId,
     })
-    .select("*")
-    .single();
+    .returning();
 
-  if (error) {
-    throw error;
-  }
-
-  const group = data as RoundThemeGroup;
+  const group = mapRoundThemeGroupRecord(created);
 
   if (seedThemes.length > 0) {
-    const { error: deleteMembershipError } = await supabase
-      .from("round_theme_group_members")
-      .delete()
-      .eq("round_id", roundId)
-      .in(
-        "theme_id",
-        seedThemes.map((theme) => theme.id)
+    await db
+      .delete(roundThemeGroupMembers)
+      .where(
+        and(
+          eq(roundThemeGroupMembers.roundId, roundId),
+          inArray(
+            roundThemeGroupMembers.themeId,
+            seedThemes.map((theme) => theme.id)
+          )
+        )
       );
 
-    if (deleteMembershipError) {
-      throw deleteMembershipError;
-    }
-
-    const { error: memberError } = await supabase
-      .from("round_theme_group_members")
-      .insert(
-        seedThemes.map((theme, index) => ({
-          group_id: group.id,
-          round_id: roundId,
-          theme_id: theme.id,
-          source_consultation_id: theme.consultation.id,
-          user_id: userId,
-          position: index,
-          created_by: userId,
-        }))
-      );
-
-    if (memberError) {
-      throw memberError;
-    }
+    await db.insert(roundThemeGroupMembers).values(
+      seedThemes.map((theme, index) => ({
+        groupId: group.id,
+        roundId,
+        themeId: theme.id,
+        sourceConsultationId: theme.consultation.id,
+        userId,
+        position: index,
+        createdBy: userId,
+      }))
+    );
 
     await writeGroupDraftSuggestion({
-      supabase,
       group,
       round,
       memberThemes: seedThemes,
@@ -1205,19 +1207,16 @@ export async function createRoundThemeGroup(
 
     for (const previousGroupId of previousGroupIds) {
       const previousGroup = await loadGroupForRound({
-        supabase,
         userId,
         roundId,
         groupId: previousGroupId,
       });
       const discarded = await maybeDiscardEmptyGroup({
-        supabase,
         group: previousGroup,
       });
 
       if (!discarded) {
         await refreshGroupDraftForCurrentMembers({
-          supabase,
           userId,
           round,
           groupId: previousGroupId,
@@ -1245,17 +1244,16 @@ export async function moveThemeToGroup(
   targetGroupId: string | null,
   position?: number
 ) {
-  const { supabase, userId } = await requireAuthenticatedContext();
-  const theme = await loadThemeWithRoundContext({ supabase, userId, themeId });
+  const { userId } = await requireAuthenticatedContext();
+  const theme = await loadThemeWithRoundContext({ userId, themeId });
   const roundId = theme.consultation.round_id;
 
   if (!roundId) {
     throw new Error("The source theme is not assigned to a round.");
   }
 
-  const round = await loadOwnedRound({ supabase, userId, roundId });
+  const round = await loadOwnedRound({ userId, roundId });
   const currentMembership = await loadThemeMembershipForRound({
-    supabase,
     roundId,
     themeId,
   });
@@ -1263,7 +1261,6 @@ export async function moveThemeToGroup(
   let targetGroup: RoundThemeGroup | null = null;
   if (targetGroupId) {
     targetGroup = await loadGroupForRound({
-      supabase,
       userId,
       roundId,
       groupId: targetGroupId,
@@ -1274,67 +1271,48 @@ export async function moveThemeToGroup(
 
   if (currentMembership && currentMembership.group_id === targetGroupId) {
     if (typeof position === "number") {
-      const { error } = await supabase
-        .from("round_theme_group_members")
-        .update({ position })
-        .eq("id", currentMembership.id);
-
-      if (error) {
-        throw error;
-      }
+      await db
+        .update(roundThemeGroupMembers)
+        .set({ position })
+        .where(eq(roundThemeGroupMembers.id, currentMembership.id));
     }
 
     return { groupId: targetGroupId };
   }
 
   if (currentMembership) {
-    const { error } = await supabase
-      .from("round_theme_group_members")
-      .delete()
-      .eq("id", currentMembership.id);
-
-    if (error) {
-      throw error;
-    }
+    await db
+      .delete(roundThemeGroupMembers)
+      .where(eq(roundThemeGroupMembers.id, currentMembership.id));
   }
 
   if (targetGroup) {
-    const targetMembers = await loadGroupMembers({
-      supabase,
-      groupId: targetGroup.id,
-    });
+    const targetMembers = await loadGroupMembers({ groupId: targetGroup.id });
     const nextPosition =
       typeof position === "number" ? position : targetMembers.length;
-    const { error } = await supabase.from("round_theme_group_members").insert({
-      group_id: targetGroup.id,
-      round_id: roundId,
-      theme_id: theme.id,
-      source_consultation_id: theme.consultation.id,
-      user_id: userId,
+    await db.insert(roundThemeGroupMembers).values({
+      groupId: targetGroup.id,
+      roundId,
+      themeId: theme.id,
+      sourceConsultationId: theme.consultation.id,
+      userId,
       position: nextPosition,
-      created_by: userId,
+      createdBy: userId,
     });
-
-    if (error) {
-      throw error;
-    }
   }
 
   if (previousGroupId) {
     const previousGroup = await loadGroupForRound({
-      supabase,
       userId,
       roundId,
       groupId: previousGroupId,
     });
     const discarded = await maybeDiscardEmptyGroup({
-      supabase,
       group: previousGroup,
     });
 
     if (!discarded) {
       await refreshGroupDraftForCurrentMembers({
-        supabase,
         userId,
         round,
         groupId: previousGroupId,
@@ -1345,7 +1323,6 @@ export async function moveThemeToGroup(
 
   if (targetGroup) {
     await refreshGroupDraftForCurrentMembers({
-      supabase,
       userId,
       round,
       groupId: targetGroup.id,
@@ -1378,75 +1355,57 @@ export async function mergeRoundThemeGroups(
     throw new Error("Select at least two groups to merge.");
   }
 
-  const { supabase, userId } = await requireAuthenticatedContext();
-  const round = await loadOwnedRound({ supabase, userId, roundId });
+  const { userId } = await requireAuthenticatedContext();
+  const round = await loadOwnedRound({ userId, roundId });
   const uniqueGroupIds = Array.from(new Set(groupIds));
   const groups = await Promise.all(
-    uniqueGroupIds.map((groupId) =>
-      loadGroupForRound({ supabase, userId, roundId, groupId })
-    )
+    uniqueGroupIds.map((groupId) => loadGroupForRound({ userId, roundId, groupId }))
   );
   const primaryGroup = groups[0];
   const mergedGroupIds = groups.slice(1).map((group) => group.id);
-  const primaryMembers = await loadGroupMembers({
-    supabase,
-    groupId: primaryGroup.id,
-  });
+  const primaryMembers = await loadGroupMembers({ groupId: primaryGroup.id });
   const existingThemeIds = new Set(primaryMembers.map((member) => member.theme_id));
   let position = primaryMembers.length;
 
   for (const group of groups.slice(1)) {
-    const sourceMembers = await loadGroupMembers({ supabase, groupId: group.id });
+    const sourceMembers = await loadGroupMembers({ groupId: group.id });
 
     for (const member of sourceMembers) {
       if (existingThemeIds.has(member.theme_id)) {
-        const { error } = await supabase
-          .from("round_theme_group_members")
-          .delete()
-          .eq("id", member.id);
-
-        if (error) {
-          throw error;
-        }
+        await db
+          .delete(roundThemeGroupMembers)
+          .where(eq(roundThemeGroupMembers.id, member.id));
 
         continue;
       }
 
-      const { error } = await supabase
-        .from("round_theme_group_members")
-        .update({
-          group_id: primaryGroup.id,
+      await db
+        .update(roundThemeGroupMembers)
+        .set({
+          groupId: primaryGroup.id,
           position,
         })
-        .eq("id", member.id);
-
-      if (error) {
-        throw error;
-      }
+        .where(eq(roundThemeGroupMembers.id, member.id));
 
       existingThemeIds.add(member.theme_id);
       position += 1;
     }
 
-    const { error: statusError } = await supabase
-      .from("round_theme_groups")
-      .update({
+    await db
+      .update(roundThemeGroups)
+      .set({
         status: "discarded",
-        ai_draft_label: null,
-        ai_draft_description: null,
-        ai_draft_explanation: null,
-        ai_draft_created_at: null,
-        ai_draft_created_by: null,
+        aiDraftLabel: null,
+        aiDraftDescription: null,
+        aiDraftExplanation: null,
+        aiDraftCreatedAt: null,
+        aiDraftCreatedBy: null,
+        updatedAt: new Date(),
       })
-      .eq("id", group.id);
-
-    if (statusError) {
-      throw statusError;
-    }
+      .where(eq(roundThemeGroups.id, group.id));
   }
 
   await refreshGroupDraftForCurrentMembers({
-    supabase,
     userId,
     round,
     groupId: primaryGroup.id,
@@ -1475,14 +1434,10 @@ export async function splitRoundThemeGroup(
     throw new Error("Select at least one theme to split into a new group.");
   }
 
-  const { supabase, userId } = await requireAuthenticatedContext();
-  const currentGroup = await loadGroupWithRoundContext({ supabase, userId, groupId });
-  const round = await loadOwnedRound({
-    supabase,
-    userId,
-    roundId: currentGroup.round.id,
-  });
-  const members = await loadGroupMembers({ supabase, groupId });
+  const { userId } = await requireAuthenticatedContext();
+  const currentGroup = await loadGroupWithRoundContext({ userId, groupId });
+  const round = currentGroup.round;
+  const members = await loadGroupMembers({ groupId });
   const selectedMembers = members.filter((member) => themeIds.includes(member.theme_id));
 
   if (selectedMembers.length === 0) {
@@ -1490,51 +1445,40 @@ export async function splitRoundThemeGroup(
   }
 
   const selectedThemes = await loadThemesForRound({
-    supabase,
     userId,
     roundId: round.id,
     themeIds: selectedMembers.map((member) => member.theme_id),
   });
   const defaultLabel =
     selectedThemes.length === 1 ? selectedThemes[0].label : "Split theme group";
-  const { data, error } = await supabase
-    .from("round_theme_groups")
-    .insert({
-      round_id: round.id,
-      user_id: userId,
+  const [created] = await db
+    .insert(roundThemeGroups)
+    .values({
+      roundId: round.id,
+      userId,
       label: defaultLabel,
       description:
         selectedThemes.length === 1 ? selectedThemes[0].description ?? null : null,
       status: "draft",
       origin: "manual",
-      created_by: userId,
-      last_structural_change_by: userId,
+      createdBy: userId,
+      lastStructuralChangeBy: userId,
     })
-    .select("*")
-    .single();
+    .returning();
 
-  if (error) {
-    throw error;
-  }
-
-  const newGroup = data as RoundThemeGroup;
+  const newGroup = mapRoundThemeGroupRecord(created);
 
   for (const [index, member] of selectedMembers.entries()) {
-    const { error: moveError } = await supabase
-      .from("round_theme_group_members")
-      .update({
-        group_id: newGroup.id,
+    await db
+      .update(roundThemeGroupMembers)
+      .set({
+        groupId: newGroup.id,
         position: index,
       })
-      .eq("id", member.id);
-
-    if (moveError) {
-      throw moveError;
-    }
+      .where(eq(roundThemeGroupMembers.id, member.id));
   }
 
   await refreshGroupDraftForCurrentMembers({
-    supabase,
     userId,
     round,
     groupId: newGroup.id,
@@ -1542,13 +1486,11 @@ export async function splitRoundThemeGroup(
   });
 
   const discarded = await maybeDiscardEmptyGroup({
-    supabase,
     group: currentGroup.group,
   });
 
   if (!discarded) {
     await refreshGroupDraftForCurrentMembers({
-      supabase,
       userId,
       round,
       groupId,
@@ -1574,25 +1516,22 @@ export async function updateRoundThemeGroup(
   groupId: string,
   patch: { label?: string; description?: string | null }
 ) {
-  const { supabase, userId } = await requireAuthenticatedContext();
-  const context = await loadGroupWithRoundContext({ supabase, userId, groupId });
+  const { userId } = await requireAuthenticatedContext();
+  const context = await loadGroupWithRoundContext({ userId, groupId });
   const nextLabel = trimToNull(patch.label) ?? context.group.label;
   const nextDescription =
     patch.description === undefined
       ? context.group.description
       : trimToNull(patch.description);
 
-  const { error } = await supabase
-    .from("round_theme_groups")
-    .update({
+  await db
+    .update(roundThemeGroups)
+    .set({
       label: nextLabel,
       description: nextDescription,
+      updatedAt: new Date(),
     })
-    .eq("id", groupId);
-
-  if (error) {
-    throw error;
-  }
+    .where(eq(roundThemeGroups.id, groupId));
 
   await emitAuditEvent({
     action: AUDIT_ACTIONS.ROUND_THEME_GROUP_UPDATED,
@@ -1613,25 +1552,19 @@ export async function acceptRoundTarget(
   targetType: RoundDecisionTargetType,
   targetId: string
 ) {
-  const { supabase, userId } = await requireAuthenticatedContext();
+  const { userId } = await requireAuthenticatedContext();
 
   if (targetType === "theme_group") {
     const { group, round } = await loadGroupWithRoundContext({
-      supabase,
       userId,
       groupId: targetId,
     });
-    const { error } = await supabase
-      .from("round_theme_groups")
-      .update({ status: "accepted" })
-      .eq("id", group.id);
-
-    if (error) {
-      throw error;
-    }
+    await db
+      .update(roundThemeGroups)
+      .set({ status: "accepted", updatedAt: new Date() })
+      .where(eq(roundThemeGroups.id, group.id));
 
     await insertRoundDecision({
-      supabase,
       roundId: round.id,
       userId,
       targetType,
@@ -1656,10 +1589,9 @@ export async function acceptRoundTarget(
   }
 
   if (targetType === "source_theme") {
-    const theme = await loadThemeWithRoundContext({ supabase, userId, themeId: targetId });
+    const theme = await loadThemeWithRoundContext({ userId, themeId: targetId });
 
     await insertRoundDecision({
-      supabase,
       roundId: theme.consultation.round_id as string,
       userId,
       targetType,
@@ -1683,10 +1615,9 @@ export async function acceptRoundTarget(
     return { targetId };
   }
 
-  const output = await loadRoundOutputForContext({ supabase, userId, outputId: targetId });
+  const output = await loadRoundOutputForContext({ userId, outputId: targetId });
 
   await insertRoundDecision({
-    supabase,
     roundId: output.round_id,
     userId,
     targetType,
@@ -1715,9 +1646,8 @@ export async function discardRoundTarget(
     throw new Error("Only draft round theme groups can be discarded.");
   }
 
-  const { supabase, userId } = await requireAuthenticatedContext();
+  const { userId } = await requireAuthenticatedContext();
   const { group, round } = await loadGroupWithRoundContext({
-    supabase,
     userId,
     groupId: targetId,
   });
@@ -1726,24 +1656,20 @@ export async function discardRoundTarget(
     throw new Error("Only draft round theme groups can be discarded.");
   }
 
-  const { error } = await supabase
-    .from("round_theme_groups")
-    .update({
+  await db
+    .update(roundThemeGroups)
+    .set({
       status: "discarded",
-      ai_draft_label: null,
-      ai_draft_description: null,
-      ai_draft_explanation: null,
-      ai_draft_created_at: null,
-      ai_draft_created_by: null,
+      aiDraftLabel: null,
+      aiDraftDescription: null,
+      aiDraftExplanation: null,
+      aiDraftCreatedAt: null,
+      aiDraftCreatedBy: null,
+      updatedAt: new Date(),
     })
-    .eq("id", targetId);
-
-  if (error) {
-    throw error;
-  }
+    .where(eq(roundThemeGroups.id, targetId));
 
   await insertRoundDecision({
-    supabase,
     roundId: round.id,
     userId,
     targetType,
@@ -1773,16 +1699,14 @@ export async function managementRejectRoundTarget(
   rationale: string
 ) {
   const trimmedRationale = trimToNull(rationale);
-  const { supabase, userId } = await requireAuthenticatedContext();
+  const { userId } = await requireAuthenticatedContext();
 
   if (targetType === "theme_group") {
     const { group, round } = await loadGroupWithRoundContext({
-      supabase,
       userId,
       groupId: targetId,
     });
     const requiresRationale = await groupHasLockedMembers({
-      supabase,
       groupId: targetId,
     });
 
@@ -1790,17 +1714,12 @@ export async function managementRejectRoundTarget(
       throw new Error("Management rejection rationale is required for locked themes.");
     }
 
-    const { error } = await supabase
-      .from("round_theme_groups")
-      .update({ status: "management_rejected" })
-      .eq("id", targetId);
-
-    if (error) {
-      throw error;
-    }
+    await db
+      .update(roundThemeGroups)
+      .set({ status: "management_rejected", updatedAt: new Date() })
+      .where(eq(roundThemeGroups.id, targetId));
 
     await insertRoundDecision({
-      supabase,
       roundId: round.id,
       userId,
       targetType,
@@ -1827,9 +1746,8 @@ export async function managementRejectRoundTarget(
   }
 
   if (targetType === "source_theme") {
-    const theme = await loadThemeWithRoundContext({ supabase, userId, themeId: targetId });
+    const theme = await loadThemeWithRoundContext({ userId, themeId: targetId });
     const lockedFromSource = await themeIsLockedFromSource({
-      supabase,
       consultationId: theme.consultation.id,
     });
 
@@ -1838,7 +1756,6 @@ export async function managementRejectRoundTarget(
     }
 
     await insertRoundDecision({
-      supabase,
       roundId: theme.consultation.round_id as string,
       userId,
       targetType,
@@ -1866,14 +1783,13 @@ export async function managementRejectRoundTarget(
     return { targetId };
   }
 
-  const output = await loadRoundOutputForContext({ supabase, userId, outputId: targetId });
+  const output = await loadRoundOutputForContext({ userId, outputId: targetId });
 
   if (!trimmedRationale) {
     throw new Error("Management rejection rationale is required.");
   }
 
   await insertRoundDecision({
-    supabase,
     roundId: output.round_id,
     userId,
     targetType,
@@ -1897,9 +1813,8 @@ export async function managementRejectRoundTarget(
 }
 
 export async function acceptRoundThemeGroupDraft(groupId: string) {
-  const { supabase, userId } = await requireAuthenticatedContext();
+  const { userId } = await requireAuthenticatedContext();
   const { group, round } = await loadGroupWithRoundContext({
-    supabase,
     userId,
     groupId,
   });
@@ -1910,24 +1825,21 @@ export async function acceptRoundThemeGroupDraft(groupId: string) {
     throw new Error("This group has no pending AI draft to accept.");
   }
 
-  const { error } = await supabase
-    .from("round_theme_groups")
-    .update({
+  await db
+    .update(roundThemeGroups)
+    .set({
       label: draftLabel ?? group.label,
       description:
         draftDescription ?? group.description ?? null,
       origin: "ai_refined",
-      ai_draft_label: null,
-      ai_draft_description: null,
-      ai_draft_explanation: null,
-      ai_draft_created_at: null,
-      ai_draft_created_by: null,
+      aiDraftLabel: null,
+      aiDraftDescription: null,
+      aiDraftExplanation: null,
+      aiDraftCreatedAt: null,
+      aiDraftCreatedBy: null,
+      updatedAt: new Date(),
     })
-    .eq("id", groupId);
-
-  if (error) {
-    throw error;
-  }
+    .where(eq(roundThemeGroups.id, groupId));
 
   await emitAuditEvent({
     action: AUDIT_ACTIONS.ROUND_THEME_GROUP_DRAFT_ACCEPTED,
@@ -1943,27 +1855,23 @@ export async function acceptRoundThemeGroupDraft(groupId: string) {
 }
 
 export async function discardRoundThemeGroupDraft(groupId: string) {
-  const { supabase, userId } = await requireAuthenticatedContext();
+  const { userId } = await requireAuthenticatedContext();
   const { round } = await loadGroupWithRoundContext({
-    supabase,
     userId,
     groupId,
   });
 
-  const { error } = await supabase
-    .from("round_theme_groups")
-    .update({
-      ai_draft_label: null,
-      ai_draft_description: null,
-      ai_draft_explanation: null,
-      ai_draft_created_at: null,
-      ai_draft_created_by: null,
+  await db
+    .update(roundThemeGroups)
+    .set({
+      aiDraftLabel: null,
+      aiDraftDescription: null,
+      aiDraftExplanation: null,
+      aiDraftCreatedAt: null,
+      aiDraftCreatedBy: null,
+      updatedAt: new Date(),
     })
-    .eq("id", groupId);
-
-  if (error) {
-    throw error;
-  }
+    .where(eq(roundThemeGroups.id, groupId));
 
   await emitAuditEvent({
     action: AUDIT_ACTIONS.ROUND_THEME_GROUP_DRAFT_DISCARDED,
@@ -2025,59 +1933,49 @@ export async function suggestThemeGroups(
 }
 
 async function loadThemeWithRoundContext(params: {
-  supabase: SupabaseServerClient;
   userId: string;
   themeId: string;
 }) {
-  const { supabase, userId, themeId } = params;
-  const { data: themeData, error: themeError } = await supabase
-    .from("themes")
-    .select("*")
-    .eq("id", themeId)
-    .single();
+  const { userId, themeId } = params;
+  const [row] = await db
+    .select({
+      theme: themes,
+      consultation: consultations,
+    })
+    .from(themes)
+    .innerJoin(consultations, eq(themes.consultationId, consultations.id))
+    .where(and(eq(themes.id, themeId), eq(consultations.userId, userId)))
+    .limit(1);
 
-  if (themeError) {
-    throw themeError;
-  }
-
-  const theme = themeData as Theme;
-  const { data: consultationData, error: consultationError } = await supabase
-    .from("consultations")
-    .select("*")
-    .eq("id", theme.consultation_id)
-    .eq("user_id", userId)
-    .single();
-
-  if (consultationError) {
-    throw consultationError;
+  if (!row) {
+    throw new Error("Theme not found");
   }
 
   return {
-    ...theme,
-    consultation: consultationData as Consultation,
+    ...mapThemeRecord(row.theme),
+    consultation: mapConsultationRecord(row.consultation),
   } satisfies ThemeWithConsultation;
 }
 
 async function loadGroupWithRoundContext(params: {
-  supabase: SupabaseServerClient;
   userId: string;
   groupId: string;
 }) {
-  const { supabase, userId, groupId } = params;
-  const { data, error } = await supabase
-    .from("round_theme_groups")
-    .select("*")
-    .eq("id", groupId)
-    .eq("user_id", userId)
-    .single();
+  const { userId, groupId } = params;
+  const [row] = await db
+    .select()
+    .from(roundThemeGroups)
+    .where(
+      and(eq(roundThemeGroups.id, groupId), eq(roundThemeGroups.userId, userId))
+    )
+    .limit(1);
 
-  if (error) {
-    throw error;
+  if (!row) {
+    throw new Error("Round theme group not found");
   }
 
-  const group = data as RoundThemeGroup;
+  const group = mapRoundThemeGroupRecord(row);
   const round = await loadOwnedRound({
-    supabase,
     userId,
     roundId: group.round_id,
   });
@@ -2086,73 +1984,67 @@ async function loadGroupWithRoundContext(params: {
 }
 
 async function loadThemeMembershipForRound(params: {
-  supabase: SupabaseServerClient;
   roundId: string;
   themeId: string;
 }) {
-  const { supabase, roundId, themeId } = params;
-  const { data, error } = await supabase
-    .from("round_theme_group_members")
-    .select("*")
-    .eq("round_id", roundId)
-    .eq("theme_id", themeId)
+  const { roundId, themeId } = params;
+  const [row] = await db
+    .select()
+    .from(roundThemeGroupMembers)
+    .where(
+      and(
+        eq(roundThemeGroupMembers.roundId, roundId),
+        eq(roundThemeGroupMembers.themeId, themeId)
+      )
+    )
     .limit(1);
 
-  if (error) {
-    throw error;
-  }
-
-  return ((data ?? []) as RoundThemeGroupMember[])[0] ?? null;
+  return row ? mapRoundThemeGroupMemberRecord(row) : null;
 }
 
 async function loadThemeMembershipsForRound(params: {
-  supabase: SupabaseServerClient;
   roundId: string;
   themeIds: string[];
 }) {
-  const { supabase, roundId, themeIds } = params;
+  const { roundId, themeIds } = params;
 
   if (themeIds.length === 0) {
     return [] as RoundThemeGroupMember[];
   }
 
-  const { data, error } = await supabase
-    .from("round_theme_group_members")
-    .select("*")
-    .eq("round_id", roundId)
-    .in("theme_id", themeIds);
+  const rows = await db
+    .select()
+    .from(roundThemeGroupMembers)
+    .where(
+      and(
+        eq(roundThemeGroupMembers.roundId, roundId),
+        inArray(roundThemeGroupMembers.themeId, themeIds)
+      )
+    );
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as RoundThemeGroupMember[];
+  return rows.map(mapRoundThemeGroupMemberRecord);
 }
 
 async function refreshGroupDraftForCurrentMembers(params: {
-  supabase: SupabaseServerClient;
   userId: string;
   round: ConsultationRound;
   groupId: string;
   structuralChange: string;
 }) {
-  const { supabase, userId, round, groupId, structuralChange } = params;
+  const { userId, round, groupId, structuralChange } = params;
   const group = await loadGroupForRound({
-    supabase,
     userId,
     roundId: round.id,
     groupId,
   });
-  const members = await loadGroupMembers({ supabase, groupId });
+  const members = await loadGroupMembers({ groupId });
   const memberThemes = await loadThemesForRound({
-    supabase,
     userId,
     roundId: round.id,
     themeIds: members.map((member) => member.theme_id),
   });
 
   await writeGroupDraftSuggestion({
-    supabase,
     group,
     round,
     memberThemes,
@@ -2162,30 +2054,22 @@ async function refreshGroupDraftForCurrentMembers(params: {
 }
 
 async function themeIsLockedFromSource(params: {
-  supabase: SupabaseServerClient;
   consultationId: string;
 }) {
-  const { supabase, consultationId } = params;
-  const { data, error } = await supabase
-    .from("evidence_emails")
-    .select("status")
-    .eq("consultation_id", consultationId);
+  const { consultationId } = params;
+  const rows = await db
+    .select({ status: evidenceEmails.status })
+    .from(evidenceEmails)
+    .where(eq(evidenceEmails.consultationId, consultationId));
 
-  if (error) {
-    throw error;
-  }
-
-  return ((data ?? []) as Pick<EvidenceEmail, "status">[]).some((email) =>
-    isEvidenceLocked(email.status)
-  );
+  return rows.some((email) => isEvidenceLocked(email.status));
 }
 
 async function groupHasLockedMembers(params: {
-  supabase: SupabaseServerClient;
   groupId: string;
 }) {
-  const { supabase, groupId } = params;
-  const members = await loadGroupMembers({ supabase, groupId });
+  const { groupId } = params;
+  const members = await loadGroupMembers({ groupId });
   const consultationIds = Array.from(new Set(members.map((member) => member.source_consultation_id)));
 
   if (consultationIds.length === 0) {
@@ -2195,7 +2079,6 @@ async function groupHasLockedMembers(params: {
   const lockStates = await Promise.all(
     consultationIds.map((consultationId) =>
       themeIsLockedFromSource({
-        supabase,
         consultationId,
       })
     )
@@ -2205,23 +2088,26 @@ async function groupHasLockedMembers(params: {
 }
 
 async function loadRoundOutputForContext(params: {
-  supabase: SupabaseServerClient;
   userId: string;
   outputId: string;
 }) {
-  const { supabase, userId, outputId } = params;
-  const { data, error } = await supabase
-    .from("round_output_artifacts")
-    .select("*")
-    .eq("id", outputId)
-    .eq("user_id", userId)
-    .single();
+  const { userId, outputId } = params;
+  const [row] = await db
+    .select()
+    .from(roundOutputArtifacts)
+    .where(
+      and(
+        eq(roundOutputArtifacts.id, outputId),
+        eq(roundOutputArtifacts.userId, userId)
+      )
+    )
+    .limit(1);
 
-  if (error) {
-    throw error;
+  if (!row) {
+    throw new Error("Round output artifact not found");
   }
 
-  return data as RoundOutputArtifact;
+  return mapRoundOutputArtifactRecord(row);
 }
 
 async function generateRoundOutput(
@@ -2233,7 +2119,7 @@ async function generateRoundOutput(
     throw new Error("Round not found.");
   }
 
-  const { supabase, userId } = await requireAuthenticatedContext();
+  const { userId } = await requireAuthenticatedContext();
   const acceptedRoundThemes = detail.themeGroups
     .filter((group) => group.status === "accepted")
     .map((group) => ({
@@ -2316,29 +2202,26 @@ async function generateRoundOutput(
     accepted_round_themes: acceptedRoundThemes,
     supporting_consultation_themes: supportingConsultationThemes,
   };
-  const { data, error } = await supabase
-    .from("round_output_artifacts")
-    .insert({
-      round_id: roundId,
-      user_id: userId,
-      artifact_type: artifactType,
+  const [created] = await db
+    .insert(roundOutputArtifacts)
+    .values({
+      roundId,
+      userId,
+      artifactType,
       status: "generated",
       title: generated.title,
       content: generated.content,
-      input_snapshot: inputSnapshot,
-      created_by: userId,
+      inputSnapshot,
+      createdBy: userId,
     })
-    .select("*")
-    .single();
+    .returning();
 
-  if (error) {
-    throw error;
-  }
+  const output = mapRoundOutputArtifactRecord(created);
 
   await emitAuditEvent({
     action: AUDIT_ACTIONS.ROUND_OUTPUT_GENERATED,
     entityType: "round_output_artifact",
-    entityId: (data as RoundOutputArtifact).id,
+    entityId: output.id,
     metadata: {
       round_id: roundId,
       artifact_type: artifactType,
@@ -2348,14 +2231,14 @@ async function generateRoundOutput(
   });
 
   return {
-    id: (data as RoundOutputArtifact).id,
+    id: output.id,
     artifactType,
     status: "generated" as const,
     title: generated.title,
     content: generated.content,
     contentPreview: previewText(generated.content, 260) ?? "",
-    generatedAt: (data as RoundOutputArtifact).generated_at,
-    updatedAt: (data as RoundOutputArtifact).updated_at,
+    generatedAt: output.generated_at,
+    updatedAt: output.updated_at,
     inputSnapshot,
   } satisfies RoundOutputSummary;
 }

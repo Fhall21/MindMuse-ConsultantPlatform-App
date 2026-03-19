@@ -1,0 +1,8 @@
+{
+  "name": "consultant-platform-migrations",
+  "private": true,
+  "dependencies": {
+    "drizzle-orm": "0.44.7",
+    "pg": "8.20.0"
+  }
+}

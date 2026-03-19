@@ -68,7 +68,6 @@ docker compose up
 
 This starts:
 - `db` on port `5432`
-- `migrate` to apply Drizzle migrations
 - `app` on port `3000`
 - `ai` on port `8000`
 
@@ -89,8 +88,6 @@ Recommended defaults:
 - `AI_SERVICE_URL=http://ai:8000`
 - `DATABASE_NAME=consultant_platform`
 - `DATABASE_USER=postgres`
-- `DB_MIGRATION_MAX_ATTEMPTS=20`
-- `DB_MIGRATION_RETRY_DELAY_SECONDS=5`
 
 Optional database override:
 - `DATABASE_HOST=db`
@@ -104,8 +101,7 @@ Optional database override:
 Notes:
 - The included `db` service runs PostgreSQL inside the stack.
 - You only configure `DATABASE_*` vars in this project. Compose maps them onto the Postgres image's internal `POSTGRES_*` vars for the `db` container.
-- The included `migrate` service applies checked-in Drizzle migrations before the app starts.
-- The `app` and `migrate` services now receive the same `DATABASE_HOST`/`DATABASE_PORT`/`DATABASE_NAME`/`DATABASE_USER`/`DATABASE_PASSWORD` settings, so they cannot drift onto different databases.
+- Migrations are now run manually instead of as an always-on service.
 - Keep the `ai` service private and only expose the `app` service publicly.
 - The app image now receives its required auth/database env values at build time as well as runtime, which is necessary for `next build`.
 
@@ -121,6 +117,28 @@ docker compose -f docker-compose.coolify.yml config
 - Apply migrations: `bun run db:migrate`
 - Push schema directly in dev: `bun run db:push`
 - Open Drizzle Studio: `bun run db:studio`
+
+### Manual Migrations On The Coolify Server
+
+Run these from a checkout of this repo on the server:
+
+```bash
+MIGRATION_NETWORK=<your-coolify-network> \
+DATABASE_HOST=db \
+DATABASE_PORT=5432 \
+DATABASE_NAME=consultant_platform \
+DATABASE_USER=postgres \
+DATABASE_PASSWORD=your-password \
+./scripts/run-manual-migrations.sh
+```
+
+To find the network name:
+
+```bash
+docker network ls
+```
+
+Then pick the network used by this Coolify stack and pass it as `MIGRATION_NETWORK`.
 
 The generated SQL lives in [`drizzle/`](/Users/felixhall/Documents/0.WorkLife/MindMuse/2026/Product/Customer/ConsultantPlatform/ConsultantPlatformApp/drizzle).
 

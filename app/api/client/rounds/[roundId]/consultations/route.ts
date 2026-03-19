@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { listConsultationsForRound } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../../_helpers";
 
 export async function GET(
@@ -11,17 +12,18 @@ export async function GET(
     return client.response;
   }
 
-  const { supabase } = client;
-  const { data, error } = await supabase
-    .from("consultations")
-    .select("id, title, status")
-    .eq("round_id", roundId)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    return jsonError(error.message);
+  try {
+    const consultations = await listConsultationsForRound(roundId, client.userId);
+    return NextResponse.json(
+      consultations.map((consultation) => ({
+        id: consultation.id,
+        title: consultation.title,
+        status: consultation.status,
+      }))
+    );
+  } catch (error) {
+    return jsonError(
+      error instanceof Error ? error.message : "Failed to load round consultations"
+    );
   }
-
-  return NextResponse.json(data ?? []);
 }
-

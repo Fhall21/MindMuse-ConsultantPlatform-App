@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getAiServiceUrl } from "@/lib/env";
+import { getCurrentUserId } from "@/lib/data/auth-context";
 
 const AI_PROXY_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -18,21 +18,12 @@ function sanitizeUpstreamError(err: unknown): string {
 }
 
 export async function requireAuthenticatedApiUser(): Promise<NextResponse | { id: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error) {
-    return NextResponse.json({ detail: "Failed to validate session" }, { status: 503 });
-  }
-
-  if (!user) {
+  const userId = await getCurrentUserId();
+  if (!userId) {
     return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
   }
 
-  return { id: user.id };
+  return { id: userId };
 }
 
 export function getAiServiceUrlOrResponse(): string | NextResponse {

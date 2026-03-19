@@ -1,6 +1,13 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { consultationPeople, people } from "@/db/schema";
+import { requireCurrentUserId } from "@/lib/data/auth-context";
+import {
+  requireOwnedConsultation,
+  requireOwnedPerson,
+} from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "./audit-actions";
 import { emitAuditEvent } from "./audit";
 
@@ -28,7 +35,7 @@ function normalizePeopleWriteError(error: unknown) {
 
   if (isClassificationSchemaError) {
     return new Error(
-      "The database is missing the new People classification fields. Run the latest Supabase migration, then try again."
+      "The database is missing the new People classification fields. Run the latest database migration, then try again."
     );
   }
 
@@ -50,37 +57,36 @@ export async function createPerson({
   role,
   email,
 }: CreatePersonParams) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
 
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) {
-    throw new Error("Not authenticated");
-  }
-
-  const personPayload: Record<string, string | null> = {
-    user_id: user.user.id,
+  const personPayload: {
+    name: string;
+    userId: string;
+    role: string | null;
+    email: string | null;
+    workingGroup?: string | null;
+    workType?: string | null;
+  } = {
+    userId,
     name,
     role: role || null,
     email: email || null,
   };
 
   if (working_group !== undefined) {
-    personPayload.working_group = working_group || null;
+    personPayload.workingGroup = working_group || null;
   }
 
   if (work_type !== undefined) {
-    personPayload.work_type = work_type || null;
+    personPayload.workType = work_type || null;
   }
 
-  const { data, error } = await supabase
-    .from("people")
-    .insert(personPayload)
-    .select("id")
-    .single();
+  const [created] = await db
+    .insert(people)
+    .values(personPayload)
+    .returning({ id: people.id });
 
-  if (error) throw normalizePeopleWriteError(error);
-
-  return data.id;
+  return created.id;
 }
 
 interface UpdatePersonParams {
@@ -100,21 +106,24 @@ export async function updatePerson({
   role,
   email,
 }: UpdatePersonParams) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedPerson(id, userId);
 
   const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name;
-  if (working_group !== undefined) updates.working_group = working_group || null;
-  if (work_type !== undefined) updates.work_type = work_type || null;
+  if (working_group !== undefined) updates.workingGroup = working_group || null;
+  if (work_type !== undefined) updates.workType = work_type || null;
   if (role !== undefined) updates.role = role || null;
   if (email !== undefined) updates.email = email || null;
 
-  const { error } = await supabase
-    .from("people")
-    .update(updates)
-    .eq("id", id);
-
-  if (error) throw normalizePeopleWriteError(error);
+  try {
+    await db
+      .update(people)
+      .set(updates)
+      .where(and(eq(people.id, id), eq(people.userId, userId)));
+  } catch (error) {
+    throw normalizePeopleWriteError(error);
+  }
 
   await emitAuditEvent({
     consultationId: null,
@@ -126,11 +135,10 @@ export async function updatePerson({
 }
 
 export async function deletePerson(id: string) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedPerson(id, userId);
 
-  const { error } = await supabase.from("people").delete().eq("id", id);
-
-  if (error) throw error;
+  await db.delete(people).where(and(eq(people.id, id), eq(people.userId, userId)));
 
   await emitAuditEvent({
     consultationId: null,
@@ -144,17 +152,19 @@ export async function linkPersonToConsultation(
   consultationId: string,
   personId: string
 ) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedPerson(personId, userId);
 
-  const { error } = await supabase
-    .from("consultation_people")
-    .insert({
-      consultation_id: consultationId,
-      person_id: personId,
-    });
-
-  if (error && error.code !== "23505") {
-    // 23505 is unique constraint violation (already linked)
+  try {
+    await db
+      .insert(consultationPeople)
+      .values({
+        consultationId,
+        personId,
+      })
+      .onConflictDoNothing();
+  } catch (error) {
     throw error;
   }
 
@@ -171,15 +181,18 @@ export async function unlinkPersonFromConsultation(
   consultationId: string,
   personId: string
 ) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedPerson(personId, userId);
 
-  const { error } = await supabase
-    .from("consultation_people")
-    .delete()
-    .eq("consultation_id", consultationId)
-    .eq("person_id", personId);
-
-  if (error) throw error;
+  await db
+    .delete(consultationPeople)
+    .where(
+      and(
+        eq(consultationPeople.consultationId, consultationId),
+        eq(consultationPeople.personId, personId)
+      )
+    );
 
   await emitAuditEvent({
     consultationId,

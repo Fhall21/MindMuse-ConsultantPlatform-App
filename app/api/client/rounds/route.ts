@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { ConsultationRound } from "@/types/db";
+import { listRoundsForUser } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../_helpers";
 
 export async function GET() {
@@ -8,16 +8,10 @@ export async function GET() {
     return client.response;
   }
 
-  const { supabase } = client;
-  const { data, error } = await supabase
-    .from("consultation_rounds")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return jsonError(error.message);
+  try {
+    const rounds = await listRoundsForUser(client.userId);
+    return NextResponse.json(rounds);
+  } catch (error) {
+    return jsonError(error instanceof Error ? error.message : "Failed to load rounds");
   }
-
-  return NextResponse.json((data ?? []) as ConsultationRound[]);
 }
-

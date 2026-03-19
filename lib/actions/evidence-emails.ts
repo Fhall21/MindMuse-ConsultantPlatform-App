@@ -1,6 +1,10 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { evidenceEmails } from "@/db/schema";
+import { requireCurrentUserId } from "@/lib/data/auth-context";
+import { requireOwnedConsultation } from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "./audit-actions";
 import { emitAuditEvent } from "./audit";
 
@@ -29,27 +33,25 @@ export async function saveEmailDraft({
   body,
   themeSelections,
 }: SaveEmailDraftParams) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedConsultation(consultationId, userId);
 
-  const { data, error } = await supabase
-    .from("evidence_emails")
-    .insert({
-      consultation_id: consultationId,
+  const [created] = await db
+    .insert(evidenceEmails)
+    .values({
+      consultationId,
       subject,
-      body_draft: body,
+      bodyDraft: body,
       status: "draft",
-      generated_at: new Date().toISOString(),
+      generatedAt: new Date(),
     })
-    .select("id")
-    .single();
-
-  if (error) throw error;
+    .returning({ id: evidenceEmails.id });
 
   await emitAuditEvent({
     consultationId,
     action: AUDIT_ACTIONS.EVIDENCE_EMAIL_GENERATED,
     entityType: "evidence_email",
-    entityId: data.id,
+    entityId: created.id,
     metadata: {
       subjectLength: subject.length,
       bodyLength: body.length,
@@ -61,24 +63,23 @@ export async function saveEmailDraft({
     },
   });
 
-  return data.id;
+  return created.id;
 }
 
 export async function acceptEmailDraft(
   id: string,
   consultationId: string
 ) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedConsultation(consultationId, userId);
 
-  const { error } = await supabase
-    .from("evidence_emails")
-    .update({
+  await db
+    .update(evidenceEmails)
+    .set({
       status: "accepted",
-      accepted_at: new Date().toISOString(),
+      acceptedAt: new Date(),
     })
-    .eq("id", id);
-
-  if (error) throw error;
+    .where(and(eq(evidenceEmails.id, id), eq(evidenceEmails.consultationId, consultationId)));
 
   await emitAuditEvent({
     consultationId,
@@ -89,17 +90,16 @@ export async function acceptEmailDraft(
 }
 
 export async function markEmailSent(id: string, consultationId: string) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedConsultation(consultationId, userId);
 
-  const { error } = await supabase
-    .from("evidence_emails")
-    .update({
+  await db
+    .update(evidenceEmails)
+    .set({
       status: "sent",
-      sent_at: new Date().toISOString(),
+      sentAt: new Date(),
     })
-    .eq("id", id);
-
-  if (error) throw error;
+    .where(and(eq(evidenceEmails.id, id), eq(evidenceEmails.consultationId, consultationId)));
 
   await emitAuditEvent({
     consultationId,

@@ -1,6 +1,10 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { and, count, eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { consultationRounds, consultations } from "@/db/schema";
+import { requireCurrentUserId } from "@/lib/data/auth-context";
+import { requireOwnedRound } from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";
 import { emitAuditEvent } from "@/lib/actions/audit";
 
@@ -16,51 +20,42 @@ interface UpdateRoundParams {
 }
 
 export async function createRound({ label, description }: CreateRoundParams) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
 
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) {
-    throw new Error("Not authenticated");
-  }
-
-  const { data, error } = await supabase
-    .from("consultation_rounds")
-    .insert({
-      user_id: user.user.id,
+  const [created] = await db
+    .insert(consultationRounds)
+    .values({
+      userId,
       label,
       description: description || null,
     })
-    .select("id")
-    .single();
-
-  if (error) throw error;
+    .returning({ id: consultationRounds.id });
 
   await emitAuditEvent({
     consultationId: null,
     action: AUDIT_ACTIONS.ROUND_CREATED,
     entityType: "consultation_round",
-    entityId: data.id,
+    entityId: created.id,
     metadata: {
       label,
       description: description || null,
     },
   });
 
-  return data.id;
+  return created.id;
 }
 
 export async function updateRound({ id, label, description }: UpdateRoundParams) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedRound(id, userId);
 
-  const { error } = await supabase
-    .from("consultation_rounds")
-    .update({
+  await db
+    .update(consultationRounds)
+    .set({
       label,
       description: description || null,
     })
-    .eq("id", id);
-
-  if (error) throw error;
+    .where(and(eq(consultationRounds.id, id), eq(consultationRounds.userId, userId)));
 
   await emitAuditEvent({
     consultationId: null,
@@ -75,22 +70,23 @@ export async function updateRound({ id, label, description }: UpdateRoundParams)
 }
 
 export async function deleteRound(id: string) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedRound(id, userId);
 
-  const { count, error: countError } = await supabase
-    .from("consultations")
-    .select("id", { count: "exact", head: true })
-    .eq("round_id", id);
+  const [{ linkedCount }] = await db
+    .select({ linkedCount: count() })
+    .from(consultations)
+    .where(
+      and(eq(consultations.roundId, id), eq(consultations.userId, userId))
+    );
 
-  if (countError) throw countError;
-
-  if ((count ?? 0) > 0) {
+  if ((linkedCount ?? 0) > 0) {
     throw new Error("Cannot delete round with linked consultations.");
   }
 
-  const { error } = await supabase.from("consultation_rounds").delete().eq("id", id);
-
-  if (error) throw error;
+  await db
+    .delete(consultationRounds)
+    .where(and(eq(consultationRounds.id, id), eq(consultationRounds.userId, userId)));
 
   await emitAuditEvent({
     consultationId: null,

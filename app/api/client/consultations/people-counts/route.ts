@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { countPeopleByConsultationIds } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../_helpers";
 
 export async function POST(request: Request) {
@@ -14,21 +15,15 @@ export async function POST(request: Request) {
     return NextResponse.json({});
   }
 
-  const { supabase } = client;
-  const { data, error } = await supabase
-    .from("consultation_people")
-    .select("consultation_id")
-    .in("consultation_id", consultationIds);
-
-  if (error) {
-    return jsonError(error.message);
+  try {
+    const counts = await countPeopleByConsultationIds(
+      consultationIds,
+      client.userId
+    );
+    return NextResponse.json(counts);
+  } catch (error) {
+    return jsonError(
+      error instanceof Error ? error.message : "Failed to load consultation people counts"
+    );
   }
-
-  const counts = (data ?? []).reduce<Record<string, number>>((acc, row) => {
-    acc[row.consultation_id] = (acc[row.consultation_id] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  return NextResponse.json(counts);
 }
-

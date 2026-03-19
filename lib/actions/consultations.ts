@@ -1,6 +1,10 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { consultations } from "@/db/schema";
+import { requireCurrentUserId } from "@/lib/data/auth-context";
+import { requireOwnedConsultation, requireOwnedRound } from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "./audit-actions";
 import { emitAuditEvent } from "./audit";
 
@@ -13,35 +17,31 @@ export async function createConsultation({
   title,
   roundId,
 }: CreateConsultationParams) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
 
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) {
-    throw new Error("Not authenticated");
+  if (roundId) {
+    await requireOwnedRound(roundId, userId);
   }
 
-  const { data, error } = await supabase
-    .from("consultations")
-    .insert({
-      user_id: user.user.id,
+  const [created] = await db
+    .insert(consultations)
+    .values({
+      userId,
       title,
-      round_id: roundId || null,
+      roundId: roundId || null,
       status: "draft",
     })
-    .select("id")
-    .single();
-
-  if (error) throw error;
+    .returning({ id: consultations.id });
 
   await emitAuditEvent({
-    consultationId: data.id,
+    consultationId: created.id,
     action: AUDIT_ACTIONS.CONSULTATION_CREATED,
     entityType: "consultation",
-    entityId: data.id,
-    metadata: { title, roundId: roundId || null },
+    entityId: created.id,
+    metadata: { title, round_id: roundId || null, roundId: roundId || null },
   });
 
-  return data.id;
+  return created.id;
 }
 
 interface UpdateTranscriptParams {
@@ -66,14 +66,13 @@ export async function updateConsultationTitle({
     throw new Error("Title must be 255 characters or fewer");
   }
 
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedConsultation(id, userId);
 
-  const { error } = await supabase
-    .from("consultations")
-    .update({ title: trimmedTitle })
-    .eq("id", id);
-
-  if (error) throw error;
+  await db
+    .update(consultations)
+    .set({ title: trimmedTitle })
+    .where(and(eq(consultations.id, id), eq(consultations.userId, userId)));
 
   await emitAuditEvent({
     consultationId: id,
@@ -88,14 +87,13 @@ export async function updateTranscript({
   id,
   transcriptRaw,
 }: UpdateTranscriptParams) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedConsultation(id, userId);
 
-  const { error } = await supabase
-    .from("consultations")
-    .update({ transcript_raw: transcriptRaw })
-    .eq("id", id);
-
-  if (error) throw error;
+  await db
+    .update(consultations)
+    .set({ transcriptRaw })
+    .where(and(eq(consultations.id, id), eq(consultations.userId, userId)));
 
   await emitAuditEvent({
     consultationId: id,
@@ -110,25 +108,26 @@ export async function setConsultationRound(
   id: string,
   roundId: string | null
 ) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedConsultation(id, userId);
+  if (roundId) {
+    await requireOwnedRound(roundId, userId);
+  }
 
-  const { error } = await supabase
-    .from("consultations")
-    .update({ round_id: roundId })
-    .eq("id", id);
-
-  if (error) throw error;
+  await db
+    .update(consultations)
+    .set({ roundId })
+    .where(and(eq(consultations.id, id), eq(consultations.userId, userId)));
 
   await emitAuditEvent({
     consultationId: id,
     action: AUDIT_ACTIONS.CONSULTATION_ROUND_ASSIGNED,
     entityType: "consultation",
     entityId: id,
-    metadata: { roundId },
+    metadata: { round_id: roundId, roundId },
   });
 }
 
-// TODO: Agent 1 — add `notes text` column to consultations migration before this works
 export async function updateNotes({
   id,
   notes,
@@ -136,33 +135,22 @@ export async function updateNotes({
   id: string;
   notes: string;
 }) {
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("consultations")
-    .update({ notes } as Record<string, unknown>)
-    .eq("id", id);
-
-  if (error) throw error;
-
-  await emitAuditEvent({
-    consultationId: id,
-    action: AUDIT_ACTIONS.CONSULTATION_NOTES_EDITED,
-    entityType: "consultation",
-    entityId: id,
-    metadata: { notesLength: notes.length },
-  });
+  const userId = await requireCurrentUserId();
+  await requireOwnedConsultation(id, userId);
+  void notes;
+  throw new Error(
+    "Consultation notes are not available yet in the Drizzle schema. Add the notes column migration before using this action."
+  );
 }
 
 export async function markConsultationComplete(id: string) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedConsultation(id, userId);
 
-  const { error } = await supabase
-    .from("consultations")
-    .update({ status: "complete" })
-    .eq("id", id);
-
-  if (error) throw error;
+  await db
+    .update(consultations)
+    .set({ status: "complete" })
+    .where(and(eq(consultations.id, id), eq(consultations.userId, userId)));
 
   await emitAuditEvent({
     consultationId: id,

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import type { Theme } from "@/types/db";
+import {
+  deleteThemesForConsultation,
+  listThemesForConsultation,
+} from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../../_helpers";
 
 export async function GET(
@@ -12,18 +15,15 @@ export async function GET(
     return client.response;
   }
 
-  const { supabase } = client;
-  const { data, error } = await supabase
-    .from("themes")
-    .select("*")
-    .eq("consultation_id", consultationId)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return jsonError(error.message);
+  try {
+    const themes = await listThemesForConsultation(
+      consultationId,
+      client.userId
+    );
+    return NextResponse.json(themes);
+  } catch (error) {
+    return jsonError(error instanceof Error ? error.message : "Failed to load themes");
   }
-
-  return NextResponse.json((data ?? []) as Theme[]);
 }
 
 export async function DELETE(
@@ -36,15 +36,10 @@ export async function DELETE(
     return client.response;
   }
 
-  const { supabase } = client;
-  const { error } = await supabase
-    .from("themes")
-    .delete()
-    .eq("consultation_id", consultationId);
-
-  if (error) {
-    return jsonError(error.message);
+  try {
+    await deleteThemesForConsultation(consultationId, client.userId);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return jsonError(error instanceof Error ? error.message : "Failed to delete themes");
   }
-
-  return NextResponse.json({ ok: true });
 }

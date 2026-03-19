@@ -1,15 +1,24 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { and, asc, count, eq, sql } from "drizzle-orm";
+import { db } from "@/db/client";
+import {
+  consultationGroupMembers,
+  consultationGroups,
+} from "@/db/schema";
+import { requireCurrentUserId } from "@/lib/data/auth-context";
+import {
+  requireOwnedConsultation,
+  requireOwnedConsultationGroup,
+  requireOwnedRound,
+} from "@/lib/data/ownership";
 import { callAIService } from "@/lib/openai/client";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 async function requireUser() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
-  return { supabase, userId: user.id };
+  const userId = await requireCurrentUserId();
+  return { userId };
 }
 
 // ─── Group CRUD ───────────────────────────────────────────────────────────────
@@ -19,37 +28,39 @@ async function requireUser() {
  * label defaults to "Group N" where N is existing_count + 1.
  */
 export async function createConsultationGroup(roundId: string, label?: string) {
-  const { supabase, userId } = await requireUser();
+  const { userId } = await requireUser();
+  await requireOwnedRound(roundId, userId);
 
   // Count existing groups to generate a default label
   let resolvedLabel = label;
   if (!resolvedLabel) {
-    const { count } = await supabase
-      .from("consultation_groups")
-      .select("id", { count: "exact", head: true })
-      .eq("round_id", roundId);
-    resolvedLabel = `Group ${(count ?? 0) + 1}`;
+    const [{ groupCount }] = await db
+      .select({ groupCount: count() })
+      .from(consultationGroups)
+      .where(eq(consultationGroups.roundId, roundId));
+    resolvedLabel = `Group ${(groupCount ?? 0) + 1}`;
   }
 
   // Position = existing count (appended at end)
-  const { count: posCount } = await supabase
-    .from("consultation_groups")
-    .select("id", { count: "exact", head: true })
-    .eq("round_id", roundId);
+  const [{ positionCount }] = await db
+    .select({ positionCount: count() })
+    .from(consultationGroups)
+    .where(eq(consultationGroups.roundId, roundId));
 
-  const { data, error } = await supabase
-    .from("consultation_groups")
-    .insert({
-      round_id: roundId,
-      user_id: userId,
+  const [data] = await db
+    .insert(consultationGroups)
+    .values({
+      roundId,
+      userId,
       label: resolvedLabel,
-      position: posCount ?? 0,
-      created_by: userId,
+      position: positionCount ?? 0,
+      createdBy: userId,
     })
-    .select("id, label, position")
-    .single();
-
-  if (error) throw error;
+    .returning({
+      id: consultationGroups.id,
+      label: consultationGroups.label,
+      position: consultationGroups.position,
+    });
 
   return data;
 }
@@ -58,28 +69,25 @@ export async function createConsultationGroup(roundId: string, label?: string) {
  * Rename a consultation group.
  */
 export async function updateConsultationGroup(groupId: string, label: string) {
-  const { supabase } = await requireUser();
+  const { userId } = await requireUser();
+  await requireOwnedConsultationGroup(groupId, userId);
 
-  const { error } = await supabase
-    .from("consultation_groups")
-    .update({ label })
-    .eq("id", groupId);
-
-  if (error) throw error;
+  await db
+    .update(consultationGroups)
+    .set({ label })
+    .where(and(eq(consultationGroups.id, groupId), eq(consultationGroups.userId, userId)));
 }
 
 /**
  * Delete a group. Members cascade-delete via FK.
  */
 export async function deleteConsultationGroup(groupId: string) {
-  const { supabase } = await requireUser();
+  const { userId } = await requireUser();
+  await requireOwnedConsultationGroup(groupId, userId);
 
-  const { error } = await supabase
-    .from("consultation_groups")
-    .delete()
-    .eq("id", groupId);
-
-  if (error) throw error;
+  await db
+    .delete(consultationGroups)
+    .where(and(eq(consultationGroups.id, groupId), eq(consultationGroups.userId, userId)));
 }
 
 // ─── Membership ───────────────────────────────────────────────────────────────
@@ -97,36 +105,48 @@ export async function assignConsultationToGroup(
   groupId: string | null,
   position: number = 0
 ) {
-  const { supabase, userId } = await requireUser();
+  const { userId } = await requireUser();
+  await requireOwnedRound(roundId, userId);
+  await requireOwnedConsultation(consultationId, userId);
 
   if (groupId === null) {
     // Ungroup: remove from any group in this round
-    const { error } = await supabase
-      .from("consultation_group_members")
-      .delete()
-      .eq("consultation_id", consultationId)
-      .eq("round_id", roundId);
-
-    if (error) throw error;
+    await db
+      .delete(consultationGroupMembers)
+      .where(
+        and(
+          eq(consultationGroupMembers.consultationId, consultationId),
+          eq(consultationGroupMembers.roundId, roundId)
+        )
+      );
     return;
   }
 
-  // Assign: upsert on (round_id, consultation_id)
-  const { error } = await supabase
-    .from("consultation_group_members")
-    .upsert(
-      {
-        group_id: groupId,
-        round_id: roundId,
-        consultation_id: consultationId,
-        user_id: userId,
-        position,
-        created_by: userId,
-      },
-      { onConflict: "round_id,consultation_id" }
-    );
+  await requireOwnedConsultationGroup(groupId, userId);
 
-  if (error) throw error;
+  // Assign: upsert on (round_id, consultation_id)
+  await db
+    .insert(consultationGroupMembers)
+    .values({
+        groupId,
+        roundId,
+        consultationId,
+        userId,
+        position,
+        createdBy: userId,
+      })
+    .onConflictDoUpdate({
+      target: [
+        consultationGroupMembers.roundId,
+        consultationGroupMembers.consultationId,
+      ],
+      set: {
+        groupId,
+        userId,
+        position,
+        createdBy: userId,
+      },
+    });
 }
 
 /**
@@ -138,38 +158,52 @@ export async function reorderGroupMembers(
   roundId: string,
   orderedConsultationIds: string[]
 ) {
-  const { supabase, userId } = await requireUser();
+  const { userId } = await requireUser();
+  await requireOwnedRound(roundId, userId);
+  await requireOwnedConsultationGroup(groupId, userId);
 
   // Fetch current members to get their IDs
-  const { data: currentMembers, error: fetchError } = await supabase
-    .from("consultation_group_members")
-    .select("id, consultation_id")
-    .eq("group_id", groupId);
-
-  if (fetchError) throw fetchError;
+  const currentMembers = await db
+    .select({
+      id: consultationGroupMembers.id,
+      consultationId: consultationGroupMembers.consultationId,
+    })
+    .from(consultationGroupMembers)
+    .where(eq(consultationGroupMembers.groupId, groupId))
+    .orderBy(asc(consultationGroupMembers.position));
 
   const memberIdByConsultationId = new Map(
-    (currentMembers ?? []).map((m) => [m.consultation_id, m.id])
+    currentMembers.map((m) => [m.consultationId, m.id])
   );
 
   // Build upsert payload with new positions
   const updates = orderedConsultationIds.map((cId, idx) => ({
     id: memberIdByConsultationId.get(cId),
-    group_id: groupId,
-    round_id: roundId,
-    consultation_id: cId,
-    user_id: userId,
+    groupId,
+    roundId,
+    consultationId: cId,
+    userId,
     position: idx,
-    created_by: userId,
+    createdBy: userId,
   })).filter((u) => u.id !== undefined);
 
   if (updates.length === 0) return;
 
-  const { error } = await supabase
-    .from("consultation_group_members")
-    .upsert(updates, { onConflict: "round_id,consultation_id" });
-
-  if (error) throw error;
+  await db
+    .insert(consultationGroupMembers)
+    .values(updates)
+    .onConflictDoUpdate({
+      target: [
+        consultationGroupMembers.roundId,
+        consultationGroupMembers.consultationId,
+      ],
+      set: {
+        groupId,
+        userId,
+        position: sql`excluded.position`,
+        createdBy: userId,
+      },
+    });
 }
 
 // ─── AI actions ───────────────────────────────────────────────────────────────

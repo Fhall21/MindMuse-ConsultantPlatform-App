@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { emitAuditEvent as emitAppAuditEvent } from "@/lib/data/audit-log";
 
 interface EmitAuditEventParams {
   consultationId?: string | null;
@@ -21,34 +21,11 @@ export async function emitAuditEvent({
   entityId,
   metadata,
 }: EmitAuditEventParams) {
-  const supabase = await createClient();
-
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) {
-    throw new Error("Not authenticated");
-  }
-
-  const auditEvent = {
-    consultation_id: consultationId ?? null,
+  await emitAppAuditEvent({
+    consultationId,
     action,
-    entity_type: entityType,
-    entity_id: entityId,
-    payload: metadata || null,
-    user_id: user.user.id,
-  };
-
-  const { error } = await supabase.from("audit_log").insert(auditEvent);
-
-  if (error) {
-    console.error("Audit event emission failed:", {
-      action,
-      consultationId,
-      entityType,
-      entityId,
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-    });
-  }
+    entityType,
+    entityId,
+    metadata,
+  });
 }

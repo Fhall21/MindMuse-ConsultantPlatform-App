@@ -1,6 +1,13 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { consultations, themeDecisionLogs, themes } from "@/db/schema";
+import { requireCurrentUserId } from "@/lib/data/auth-context";
+import {
+  requireOwnedConsultation,
+  requireOwnedTheme,
+} from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "./audit-actions";
 import { emitAuditEvent } from "./audit";
 
@@ -17,30 +24,29 @@ function trimToNull(value?: string | null) {
 
 export async function saveThemes(
   consultationId: string,
-  themes: ThemeData[]
+  themeItems: ThemeData[]
 ) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  await requireOwnedConsultation(consultationId, userId);
 
-  const themesWithConsultationId = themes.map((theme) => ({
-    consultation_id: consultationId,
+  const themesWithConsultationId = themeItems.map((theme) => ({
+    consultationId,
     label: theme.label,
     description: theme.description ?? null,
     accepted: false,
-    is_user_added: false,
+    isUserAdded: false,
   }));
 
-  const { data, error } = await supabase
-    .from("themes")
-    .insert(themesWithConsultationId)
-    .select("id");
-
-  if (error) throw error;
+  const data = await db
+    .insert(themes)
+    .values(themesWithConsultationId)
+    .returning({ id: themes.id });
 
   await emitAuditEvent({
     consultationId,
     action: AUDIT_ACTIONS.THEME_EXTRACTION_REQUESTED,
     entityType: "themes",
-    metadata: { count: themes.length },
+    metadata: { count: themeItems.length },
   });
 
   return data;
@@ -55,43 +61,23 @@ export async function acceptTheme(
   consultationId: string,
   roundId?: string
 ) {
-  const supabase = await createClient();
+  const userId = await requireCurrentUserId();
+  const { theme } = await requireOwnedTheme(id, consultationId, userId);
 
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) {
-    throw new Error("Not authenticated");
-  }
+  await db
+    .update(themes)
+    .set({ accepted: true })
+    .where(and(eq(themes.id, id), eq(themes.consultationId, consultationId)));
 
-  const { data: theme, error: themeError } = await supabase
-    .from("themes")
-    .select("id, label")
-    .eq("id", id)
-    .eq("consultation_id", consultationId)
-    .single();
-
-  if (themeError) throw themeError;
-
-  const { error } = await supabase
-    .from("themes")
-    .update({ accepted: true })
-    .eq("id", id);
-
-  if (error) throw error;
-
-  // Log the decision for learning signals
-  const { error: logError } = await supabase
-    .from("theme_decision_logs")
-    .insert({
-      user_id: user.user.id,
-      consultation_id: consultationId,
-      theme_id: id,
-      theme_label: theme.label,
-      round_id: roundId || null,
-      decision_type: "accept",
-      rationale: null,
-    });
-
-  if (logError) throw logError;
+  await db.insert(themeDecisionLogs).values({
+    userId,
+    consultationId,
+    themeId: id,
+    themeLabel: theme.label,
+    roundId: roundId || null,
+    decisionType: "accept",
+    rationale: null,
+  });
 
   // Emit audit event with decision context
   await emitAuditEvent({
@@ -118,58 +104,35 @@ export async function rejectTheme(
   rationale: string = "",
   roundId?: string
 ) {
-  const supabase = await createClient();
   const trimmedRationale = trimToNull(rationale);
-
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) {
-    throw new Error("Not authenticated");
-  }
-
-  const [{ data: consultation, error: consultationError }, { data: theme, error: themeError }] =
-    await Promise.all([
-      supabase
-        .from("consultations")
-        .select("status")
-        .eq("id", consultationId)
-        .single(),
-      supabase
-        .from("themes")
-        .select("id, label, consultation_id")
-        .eq("id", id)
-        .eq("consultation_id", consultationId)
-        .single(),
-    ]);
-
-  if (consultationError) throw consultationError;
-  if (themeError) throw themeError;
+  const userId = await requireCurrentUserId();
+  const { consultation, theme } = await requireOwnedTheme(id, consultationId, userId);
 
   const requiresRationale = consultation.status !== "draft";
   if (requiresRationale && !trimmedRationale) {
     throw new Error("A rejection rationale is required once the consultation is locked.");
   }
 
-  const { data: logRecord, error: logError } = await supabase
-    .from("theme_decision_logs")
-    .insert({
-      user_id: user.user.id,
-      consultation_id: consultationId,
-      theme_id: id,
-      theme_label: theme.label,
-      round_id: roundId || null,
-      decision_type: "reject",
+  const [logRecord] = await db
+    .insert(themeDecisionLogs)
+    .values({
+      userId,
+      consultationId,
+      themeId: id,
+      themeLabel: theme.label,
+      roundId: roundId || null,
+      decisionType: "reject",
       rationale: trimmedRationale,
     })
-    .select("id")
-    .single();
-
-  if (logError) throw logError;
+    .returning({ id: themeDecisionLogs.id });
 
   // Delete the theme
-  const { error } = await supabase.from("themes").delete().eq("id", id);
-
-  if (error) {
-    await supabase.from("theme_decision_logs").delete().eq("id", logRecord.id);
+  try {
+    await db
+      .delete(themes)
+      .where(and(eq(themes.id, id), eq(themes.consultationId, consultationId)));
+  } catch (error) {
+    await db.delete(themeDecisionLogs).where(eq(themeDecisionLogs.id, logRecord.id));
     throw error;
   }
 
@@ -198,45 +161,34 @@ export async function addUserTheme(
   description?: string,
   roundId?: string
 ) {
-  const supabase = await createClient();
-
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) {
-    throw new Error("Not authenticated");
-  }
+  const userId = await requireCurrentUserId();
+  await requireOwnedConsultation(consultationId, userId);
 
   // Insert the theme with user_added flag and higher weight
-  const { data: themeData, error: insertError } = await supabase
-    .from("themes")
-    .insert({
-      consultation_id: consultationId,
+  const [themeData] = await db
+    .insert(themes)
+    .values({
+      consultationId,
       label,
       description: description || null,
       accepted: true, // User-added themes start as accepted
-      is_user_added: true,
-      weight: 2.0, // Higher weight for user-added themes
+      isUserAdded: true,
+      weight: "2.0", // Higher weight for user-added themes
     })
-    .select("id")
-    .single();
-
-  if (insertError) throw insertError;
+    .returning({ id: themes.id });
 
   const themeId = themeData.id;
 
   // Log the decision for learning signals
-  const { error: logError } = await supabase
-    .from("theme_decision_logs")
-    .insert({
-      user_id: user.user.id,
-      consultation_id: consultationId,
-      theme_id: themeId,
-      theme_label: label,
-      round_id: roundId || null,
-      decision_type: "user_added",
+  await db.insert(themeDecisionLogs).values({
+      userId,
+      consultationId,
+      themeId,
+      themeLabel: label,
+      roundId: roundId || null,
+      decisionType: "user_added",
       rationale: null,
     });
-
-  if (logError) throw logError;
 
   // Emit audit event
   await emitAuditEvent({

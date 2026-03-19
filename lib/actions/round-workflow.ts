@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { callAIService } from "@/lib/openai/client";
 import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";
 import { emitAuditEvent } from "@/lib/actions/audit";
+import { getServerSession } from "@/lib/auth/session";
 import type {
   AuditLogEntry,
   Consultation,
@@ -343,14 +344,15 @@ function buildFallbackOutput(params: {
 }
 
 async function requireAuthenticatedContext() {
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
+  const session = await getServerSession();
 
-  if (!auth.user) {
+  if (!session) {
     throw new Error("Not authenticated");
   }
 
-  return { supabase, userId: auth.user.id };
+  const supabase = await createClient();
+
+  return { supabase, userId: session.user.id };
 }
 
 async function loadOwnedRound(params: {

@@ -113,12 +113,13 @@ async function getClarificationQuestions(payload: { transcript: string; themes: 
     throw new Error(await readError(response));
   }
 
-  const body = (await response.json()) as { questions?: string[] } | string[];
+  const body = (await response.json()) as { questions?: Array<{ question: string } | string> } | string[];
   if (Array.isArray(body)) {
-    return body;
+    return body.map((q) => (typeof q === "string" ? q : q.question));
   }
 
-  return Array.isArray(body.questions) ? body.questions : [];
+  if (!Array.isArray(body.questions)) return [];
+  return body.questions.map((q) => (typeof q === "string" ? q : q.question));
 }
 
 function getConfidenceLabel(confidence?: number) {

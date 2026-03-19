@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useMemo } from "react";
+import { use, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -42,26 +42,29 @@ export default function RoundDetailPage({
   // Adapt Agent 1 types to component-friendly shapes
   const adaptedSourceThemes: SourceTheme[] = data?.sourceThemes
     ? data.sourceThemes.map((theme) => ({
-      id: theme.sourceThemeId,
-      sourceConsultationId: theme.consultationId,
-      sourceConsultationTitle: theme.consultationTitle,
-      label: theme.label,
-      description: theme.description,
-      editableLabel: theme.editableLabel,
-      editableDescription: theme.editableDescription,
-      lockedFromSource: theme.lockedFromSource,
-      isGrouped: theme.isGrouped,
-      isUserAdded: theme.isUserAdded,
-      groupId: theme.groupId,
-    }))
+        id: theme.sourceThemeId,
+        sourceConsultationId: theme.consultationId,
+        sourceConsultationTitle: theme.consultationTitle,
+        label: theme.label,
+        description: theme.description,
+        editableLabel: theme.editableLabel,
+        editableDescription: theme.editableDescription,
+        lockedFromSource: theme.lockedFromSource,
+        isGrouped: theme.isGrouped,
+        isUserAdded: theme.isUserAdded,
+        groupId: theme.groupId,
+      }))
     : [];
 
   const adaptedConsultations: RoundConsultationSummary[] = data?.consultations
     ? (() => {
-    const themeCountMap = new Map<string, number>();
+        const themeCountMap = new Map<string, number>();
       for (const theme of data.sourceThemes ?? []) {
-      themeCountMap.set(theme.consultationId, (themeCountMap.get(theme.consultationId) || 0) + 1);
-    }
+          themeCountMap.set(
+            theme.consultationId,
+            (themeCountMap.get(theme.consultationId) || 0) + 1
+          );
+        }
       return data.consultations.map((consultation) => ({
         id: consultation.id,
         title: consultation.title,
@@ -69,8 +72,8 @@ export default function RoundDetailPage({
         evidenceEmailSubject: consultation.evidenceEmail?.subject ?? null,
         evidenceEmailStatus: consultation.evidenceEmail?.status ?? null,
         themeCount: themeCountMap.get(consultation.id) ?? 0,
-      groupId: null,
-    }));
+        groupId: null,
+      }));
     })()
     : [];
 
@@ -86,7 +89,7 @@ export default function RoundDetailPage({
         await generateRoundSummary(roundId);
         await queryClient.invalidateQueries({ queryKey: ["consultation_rounds", roundId, "detail"] });
         toast.success("Summary generated");
-      } catch (err) {
+      } catch {
         toast.error("Failed to generate summary");
       }
     },
@@ -99,7 +102,7 @@ export default function RoundDetailPage({
         await generateRoundReport(roundId);
         await queryClient.invalidateQueries({ queryKey: ["consultation_rounds", roundId, "detail"] });
         toast.success("Report generated");
-      } catch (err) {
+      } catch {
         toast.error("Failed to generate report");
       }
     },
@@ -112,7 +115,7 @@ export default function RoundDetailPage({
         await generateRoundEmail(roundId);
         await queryClient.invalidateQueries({ queryKey: ["consultation_rounds", roundId, "detail"] });
         toast.success("Email generated");
-      } catch (err) {
+      } catch {
         toast.error("Failed to generate email");
       }
     },

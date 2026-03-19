@@ -7,6 +7,7 @@ import {
   getRoundOutputArtifactForUser,
   listAuditEventsForUser,
   listConsultationsForRound,
+  listPeopleForConsultation,
   listRoundOutputArtifactsForRound,
   listRoundOutputArtifactsForUser,
   listRoundsByIdsForUser,
@@ -491,47 +492,21 @@ export async function getReportArtifact(
     : 0;
 
   // Load live consultation metadata (dates + linked people) for compliance display
-  const { data: consultationRows } = await supabase
-    .from("consultations")
-    .select("id, title, created_at")
-    .eq("round_id", artifact.round_id)
-    .order("created_at", { ascending: true });
-
-  const liveConsultations = (consultationRows ?? []) as Array<{
-    id: string;
-    title: string;
-    created_at: string;
-  }>;
+  const liveConsultations = await listConsultationsForRound(artifact.round_id, userId);
   const liveConsultationIds = liveConsultations.map((c) => c.id);
 
-  const peopleByConsultationId = new Map<string, string[]>();
-  if (liveConsultationIds.length > 0) {
-    const { data: cpLinks } = await supabase
-      .from("consultation_people")
-      .select("consultation_id, person_id")
-      .in("consultation_id", liveConsultationIds);
-
-    const personIds = [...new Set((cpLinks ?? []).map((cp: { consultation_id: string; person_id: string }) => cp.person_id))];
-
-    if (personIds.length > 0) {
-      const { data: personRows } = await supabase
-        .from("people")
-        .select("id, name")
-        .in("id", personIds);
-
-      const personNameById = new Map(
-        (personRows ?? []).map((p: { id: string; name: string }) => [p.id, p.name])
-      );
-
-      for (const cp of (cpLinks ?? []) as Array<{ consultation_id: string; person_id: string }>) {
-        const name = personNameById.get(cp.person_id);
-        if (!name) continue;
-        const arr = peopleByConsultationId.get(cp.consultation_id) ?? [];
-        arr.push(name);
-        peopleByConsultationId.set(cp.consultation_id, arr);
-      }
-    }
-  }
+  const consultationPeople = await Promise.all(
+    liveConsultations.map(async (consultation) => ({
+      consultationId: consultation.id,
+      people: await listPeopleForConsultation(consultation.id, userId),
+    }))
+  );
+  const peopleByConsultationId = new Map(
+    consultationPeople.map(({ consultationId, people }) => [
+      consultationId,
+      people.map((person) => person.name),
+    ])
+  );
 
   const consultations: ConsultationMeta[] = liveConsultations.map((c) => ({
     id: c.id,
@@ -541,23 +516,16 @@ export async function getReportArtifact(
   }));
 
   // Load key audit events for the report's compliance trail section
-  let auditSummary: AuditSummaryEvent[] = [];
-  if (liveConsultationIds.length > 0) {
-    const { data: auditRows } = await supabase
-      .from("audit_log")
-      .select("action, created_at, entity_type")
-      .in("consultation_id", liveConsultationIds)
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    auditSummary = (auditRows ?? []).map(
-      (row: { action: string; created_at: string; entity_type: string | null }) => ({
-        action: row.action,
-        createdAt: row.created_at,
-        entityType: row.entity_type ?? null,
-      })
-    );
-  }
+  const auditSummary: AuditSummaryEvent[] =
+    liveConsultationIds.length > 0
+      ? (await listAuditEventsForUser(userId, { consultationIds: liveConsultationIds }))
+          .slice(0, 20)
+          .map((event) => ({
+            action: event.action,
+            createdAt: event.created_at,
+            entityType: event.entity_type ?? null,
+          }))
+      : [];
 
   return {
     id: artifact.id,

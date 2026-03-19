@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,14 @@ import {
   formatShortDate,
   estimateReadTime,
 } from "@/lib/report-formatting";
+import {
+  filterMajorEvents,
+  clusterAuditEvents,
+  getAuditDotColor,
+  type AuditCluster,
+} from "@/lib/report-audit";
+import { cn } from "@/lib/utils";
+import { ReportCoverPage, deriveMatterRef } from "@/components/reports/report-cover-page";
 import { toast } from "sonner";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -333,36 +341,59 @@ function EvidenceSection({ report }: { report: ReportArtifactDetail }) {
 
 // ─── Audit trail section (compliance) ────────────────────────────────────────
 
-function AuditTrailSection({ report }: { report: ReportArtifactDetail }) {
-  if (!report.auditSummary || report.auditSummary.length === 0) return null;
+function AuditClusterItem({
+  cluster,
+  isLast,
+}: {
+  cluster: AuditCluster;
+  isLast: boolean;
+}) {
+  return (
+    <div className="flex gap-3">
+      <div className="flex w-4 flex-col items-center">
+        <span
+          className={cn(
+            "mt-1 size-2 shrink-0 rounded-full",
+            getAuditDotColor(cluster.action)
+          )}
+        />
+        {!isLast && <span className="mt-1 h-full w-px bg-border/60" />}
+      </div>
+      <div className="flex-1 pb-3">
+        <p className="text-sm text-foreground/85">
+          {cluster.count > 1
+            ? `${cluster.label} (×${cluster.count})`
+            : cluster.label}
+        </p>
+        <time className="text-xs text-muted-foreground">
+          {formatShortDate(cluster.createdAt)}
+        </time>
+      </div>
+    </div>
+  );
+}
 
-  function formatAuditAction(action: string): string {
-    return action
-      .replace(/\./g, " → ")
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-  }
+function AuditTrailSection({ report }: { report: ReportArtifactDetail }) {
+  const clusters = useMemo(() => {
+    const major = filterMajorEvents(report.auditSummary ?? []);
+    return clusterAuditEvents(major);
+  }, [report.auditSummary]);
+
+  if (clusters.length === 0) return null;
 
   return (
-    <section className="space-y-3">
+    // print:break-before-page ensures the audit trail starts on a fresh page in PDF
+    <section className="space-y-4 print:break-before-page">
       <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Audit Trail ({report.auditSummary.length} events)
+        Audit Trail ({clusters.length} milestone{clusters.length === 1 ? "" : "s"})
       </h3>
-      <div className="rounded-lg border border-border/50 bg-muted/5 divide-y divide-border/30">
-        {report.auditSummary.map((event, i) => (
-          <div key={i} className="flex items-start justify-between px-4 py-2.5 gap-4">
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-foreground/80">
-                {formatAuditAction(event.action)}
-              </p>
-              {event.entityType && (
-                <p className="text-[11px] text-muted-foreground">{event.entityType}</p>
-              )}
-            </div>
-            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-              {formatShortDate(event.createdAt)}
-            </span>
-          </div>
+      <div className="rounded-lg border border-border/50 bg-muted/5 px-4 py-4">
+        {clusters.map((cluster, i) => (
+          <AuditClusterItem
+            key={`${cluster.action}-${cluster.createdAt}`}
+            cluster={cluster}
+            isLast={i === clusters.length - 1}
+          />
         ))}
       </div>
     </section>
@@ -630,8 +661,20 @@ export function ReportView({ artifactId }: ReportViewProps) {
 
   const readTime = estimateReadTime(report.content);
 
+  const consultationCount =
+    report.consultations.length || report.consultationTitles.length;
+
   return (
     <div className="mx-auto max-w-4xl space-y-8">
+      {/* Cover page — visible on screen as a styled header, full-page in PDF */}
+      <ReportCoverPage
+        title={report.title}
+        roundLabel={report.roundLabel}
+        generatedAt={report.generatedAt}
+        matterRef={deriveMatterRef(report.id)}
+        consultationCount={consultationCount}
+      />
+
       {/* Navigation */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground print:hidden">
         <Link

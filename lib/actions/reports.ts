@@ -519,7 +519,7 @@ export async function getReportArtifact(
   const auditSummary: AuditSummaryEvent[] =
     liveConsultationIds.length > 0
       ? (await listAuditEventsForUser(userId, { consultationIds: liveConsultationIds }))
-          .slice(0, 20)
+          .slice(0, 100)
           .map((event) => ({
             action: event.action,
             createdAt: event.created_at,

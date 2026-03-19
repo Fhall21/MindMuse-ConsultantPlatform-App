@@ -68,3 +68,10 @@ cd services/ai && uvicorn main:app --reload --port 8000
 ```
 
 Or run `docker compose up` for the whole stack.
+
+## Testing
+
+- Run `bun run test` for the Vitest suite
+- Run `bun run typecheck` before shipping
+- See `TESTING.md` for current conventions and scope
+- When adding new logic, add or update a regression test in the same slice

@@ -74,7 +74,7 @@ This starts:
 
 ## Coolify Deployment
 
-Deploy this repository as a single Docker Compose application using [docker-compose.coolify.yml](/Users/felixhall/Documents/0.WorkLife/MindMuse/2026/Product/Customer/ConsultantPlatform/ConsultantPlatformApp/worktrees/stage5-integration/docker-compose.coolify.yml).
+Deploy this repository as a single Docker Compose application using [docker-compose.coolify.yml](/Users/felixhall/Documents/0.WorkLife/MindMuse/2026/Product/Customer/ConsultantPlatform/ConsultantPlatformApp/docker-compose.coolify.yml).
 
 Required environment variables:
 - `APP_SITE_URL=https://app.example.com`
@@ -93,6 +93,7 @@ Notes:
 - The included `db` service runs PostgreSQL inside the stack.
 - The included `migrate` service applies checked-in Drizzle migrations before the app starts.
 - Keep the `ai` service private and only expose the `app` service publicly.
+- The app image now receives its required auth/database env values at build time as well as runtime, which is necessary for `next build`.
 
 Validate the stack before deploy:
 
@@ -107,7 +108,7 @@ docker compose -f docker-compose.coolify.yml config
 - Push schema directly in dev: `bun run db:push`
 - Open Drizzle Studio: `bun run db:studio`
 
-The generated SQL lives in [`drizzle/`](/Users/felixhall/Documents/0.WorkLife/MindMuse/2026/Product/Customer/ConsultantPlatform/ConsultantPlatformApp/worktrees/stage5-integration/drizzle).
+The generated SQL lives in [`drizzle/`](/Users/felixhall/Documents/0.WorkLife/MindMuse/2026/Product/Customer/ConsultantPlatform/ConsultantPlatformApp/drizzle).
 
 ## Project Structure
 

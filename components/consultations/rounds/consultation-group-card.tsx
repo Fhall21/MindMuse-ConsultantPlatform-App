@@ -72,7 +72,6 @@ export function ConsultationGroupCard({
     setIsGeneratingSummary(true);
     try {
       const memberConsultations = group.members.map((m) => {
-        const c = consultationMap.get(m.consultationId);
         return {
           consultation_id: m.consultationId,
           consultation_title: m.consultationTitle,

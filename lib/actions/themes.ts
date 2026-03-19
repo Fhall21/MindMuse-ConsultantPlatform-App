@@ -2,7 +2,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { consultations, themeDecisionLogs, themes } from "@/db/schema";
+import { themeDecisionLogs, themes } from "@/db/schema";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
 import {
   requireOwnedConsultation,

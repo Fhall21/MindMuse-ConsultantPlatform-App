@@ -20,7 +20,7 @@ import { ManagementRejectionDialog } from "./management-rejection-dialog";
 import { AiThemeGroupSuggestionDialog } from "./ai-theme-group-suggestion-dialog";
 import type {
   RoundThemeGroupDetail,
-  RoundThemeGroupDraftState,
+  RoundThemeGroupMemberDetail,
   SourceTheme,
 } from "@/types/round-detail";
 import {
@@ -60,7 +60,7 @@ export function ThemeGroupingWorkspace({
 }: ThemeGroupingWorkspaceProps) {
   // ─── State ─────────────────────────────────────────────────────────────────
 
-  const [groups, setGroups] = useState<any[]>(initialGroups);
+  const [groups, setGroups] = useState<RoundThemeGroupDetail[]>(initialGroups);
   const [selectedThemeIds, setSelectedThemeIds] = useState<Set<string>>(new Set());
 
   // Sync local state when the server-fetched groups change (e.g. after AI group creation)
@@ -136,7 +136,7 @@ export function ThemeGroupingWorkspace({
         // Remove from any existing group (use themeId, not member row id)
         const cleaned = prev.map((g) => ({
           ...g,
-          members: g.members.filter((m: any) => m.themeId !== themeId),
+          members: g.members.filter((member) => member.themeId !== themeId),
         }));
 
         // Add to target group
@@ -144,7 +144,20 @@ export function ThemeGroupingWorkspace({
           if (g.id === targetGroupId) {
             return {
               ...g,
-              members: [...g.members, { ...theme, themeId: themeId, isGrouped: true, groupId: targetGroupId }],
+              members: [
+                ...g.members,
+                {
+                  id: theme.id,
+                  themeId: theme.id,
+                  sourceConsultationId: theme.sourceConsultationId,
+                  sourceConsultationTitle: theme.sourceConsultationTitle,
+                  label: theme.label,
+                  description: theme.description,
+                  lockedFromSource: theme.lockedFromSource,
+                  isUserAdded: theme.isUserAdded,
+                  position: g.members.length,
+                } satisfies RoundThemeGroupMemberDetail,
+              ],
               lastStructuralChangeAt: new Date().toISOString(),
             };
           }
@@ -172,7 +185,7 @@ export function ThemeGroupingWorkspace({
 
       // Only act if the theme was actually in a group
       const wasGrouped = groups.some((g) =>
-        g.members.some((m: any) => m.themeId === themeId)
+        g.members.some((member) => member.themeId === themeId)
       );
       if (!wasGrouped) return;
 
@@ -180,8 +193,8 @@ export function ThemeGroupingWorkspace({
       setGroups((prev) =>
         prev.map((g) => ({
           ...g,
-          members: g.members.filter((m: any) => m.themeId !== themeId),
-          lastStructuralChangeAt: g.members.some((m: any) => m.themeId === themeId)
+          members: g.members.filter((member) => member.themeId !== themeId),
+          lastStructuralChangeAt: g.members.some((member) => member.themeId === themeId)
             ? new Date().toISOString()
             : g.lastStructuralChangeAt,
         }))
@@ -252,82 +265,44 @@ export function ThemeGroupingWorkspace({
     onStructuralChange?.();
   }
 
-  function handleMergeGroups() {
+  async function handleMergeGroups() {
     if (mergeSelectedGroupIds.size < 2) {
       toast.error("Select at least 2 groups to merge");
       return;
     }
 
-    const toMerge = groups.filter((g) => mergeSelectedGroupIds.has(g.id));
-    const allMembers = toMerge.flatMap((g) => g.members);
-    const remaining = groups.filter((g) => !mergeSelectedGroupIds.has(g.id));
-
-    const mergedGroup: any = {
-      id: crypto.randomUUID(),
-      label: toMerge.map((g) => g.label).join(" + "),
-      description: null,
-      status: "draft" as const,
-      origin: "manual" as const,
-      members: allMembers,
-      pendingDraft: null,
-      lastStructuralChangeAt: new Date().toISOString(),
-      lastStructuralChangeBy: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      actorId: "",
-    };
-
-    setGroups([...remaining, mergedGroup]);
-    setMergeSelectedGroupIds(new Set());
-    onStructuralChange?.();
+    try {
+      await mergeRoundThemeGroups(roundId, Array.from(mergeSelectedGroupIds));
+      setMergeSelectedGroupIds(new Set());
+      setSelectedThemeIds(new Set());
+      invalidateDetail();
+      onStructuralChange?.();
+    } catch {
+      toast.error("Failed to merge groups");
+    }
   }
 
-  function handleSplitGroup(groupId: string) {
+  async function handleSplitGroup(groupId: string) {
     const group = groups.find((g) => g.id === groupId);
     if (!group) return;
 
-    const selectedInGroup = group.members.filter((m: any) =>
-      selectedThemeIds.has(m.id)
-    );
-    if (selectedInGroup.length === 0) {
+    const selectedThemeIdsInGroup = group.members
+      .filter((member) => selectedThemeIds.has(member.themeId))
+      .map((member) => member.themeId);
+
+    if (selectedThemeIdsInGroup.length === 0) {
       toast.error("Select themes within the group to split out");
       return;
     }
 
-    const remainingMembers = group.members.filter(
-      (m: any) => !selectedThemeIds.has(m.id)
-    );
-
-    const splitGroup: any = {
-      id: crypto.randomUUID(),
-      label: `Split from ${group.label}`,
-      description: null,
-      status: "draft" as const,
-      origin: "manual" as const,
-      members: selectedInGroup,
-      pendingDraft: null,
-      lastStructuralChangeAt: new Date().toISOString(),
-      lastStructuralChangeBy: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      actorId: "",
-    };
-
-    setGroups((prev) =>
-      prev.map((g) => {
-        if (g.id === groupId) {
-          return {
-            ...g,
-            members: remainingMembers,
-            lastStructuralChangeAt: new Date().toISOString(),
-          };
-        }
-        return g;
-      }).concat(splitGroup)
-    );
-
-    setSelectedThemeIds(new Set());
-    onStructuralChange?.();
+    try {
+      await splitRoundThemeGroup(groupId, selectedThemeIdsInGroup);
+      setSelectedThemeIds(new Set());
+      invalidateDetail();
+      onStructuralChange?.();
+    } catch {
+      toast.error("Failed to split group");
+    }
   }
 
   // ─── Decision handlers ─────────────────────────────────────────────────────
@@ -357,7 +332,7 @@ export function ThemeGroupingWorkspace({
     const group = groups.find((g) => g.id === groupId);
     if (!group) return;
 
-    const hasLocked = group.members.some((m: any) => m.lockedFromSource);
+    const hasLocked = group.members.some((member) => member.lockedFromSource);
     if (hasLocked) {
       setRejectionTarget({
         type: "group",
@@ -389,7 +364,7 @@ export function ThemeGroupingWorkspace({
       type: "group",
       id: groupId,
       label: group.label,
-      isLocked: group.members.some((m: any) => m.lockedFromSource),
+      isLocked: group.members.some((member) => member.lockedFromSource),
     });
   }
 

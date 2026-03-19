@@ -4,18 +4,17 @@ const REQUIRED_ENV_VARS = [
   "AI_SERVICE_URL",
 ] as const;
 
-const DATABASE_ENV_VARS = [
-  "DATABASE_URL",
-  "DATABASE_HOST",
-  "DATABASE_PORT",
-  "DATABASE_NAME",
-  "DATABASE_USER",
-  "DATABASE_PASSWORD",
-] as const;
+type DatabaseEnvVar =
+  | "DATABASE_URL"
+  | "DATABASE_HOST"
+  | "DATABASE_PORT"
+  | "DATABASE_NAME"
+  | "DATABASE_USER"
+  | "DATABASE_PASSWORD";
 
 type RequiredEnvVar =
   | (typeof REQUIRED_ENV_VARS)[number]
-  | (typeof DATABASE_ENV_VARS)[number];
+  | DatabaseEnvVar;
 
 export function requireEnv(name: RequiredEnvVar): string {
   const value = process.env[name];

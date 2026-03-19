@@ -146,10 +146,6 @@ function getConfidenceLabel(confidence?: number) {
   };
 }
 
-function getThemeDescription(description?: string | null) {
-  return description ?? "Awaiting persisted theme details from the shared schema.";
-}
-
 export function ThemePanel({ consultationId }: ThemePanelProps) {
   const queryClient = useQueryClient();
   const consultationQuery = useConsultation(consultationId);

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import type { RoundDetail } from "@/types/round-detail";
 
 interface RoundDetailHeaderProps {

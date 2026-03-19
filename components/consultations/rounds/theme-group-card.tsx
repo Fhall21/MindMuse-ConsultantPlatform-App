@@ -14,7 +14,11 @@ import { cn } from "@/lib/utils";
 import { DecisionBadge } from "./decision-badge";
 import { AIDraftReview } from "./ai-draft-review";
 import { SourceThemeCard } from "./source-theme-card";
-import type { RoundThemeGroup, SourceTheme } from "@/types/round-detail";
+import type {
+  RoundThemeGroup,
+  RoundThemeGroupMemberDetail,
+  SourceTheme,
+} from "@/types/round-detail";
 
 interface ThemeGroupCardProps {
   group: RoundThemeGroup;
@@ -58,9 +62,9 @@ export function ThemeGroupCard({
   const [editDescription, setEditDescription] = useState(group.description ?? "");
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const hasLockedMembers = group.members.some((m: any) => m.lockedFromSource);
-  const selectedMembersCount = group.members.filter((m: any) =>
-    selectedThemeIds.has(m.id)
+  const hasLockedMembers = group.members.some((member) => member.lockedFromSource);
+  const selectedMembersCount = group.members.filter((member) =>
+    selectedThemeIds.has(member.themeId)
   ).length;
 
   function handleSaveEdit() {
@@ -182,7 +186,7 @@ export function ThemeGroupCard({
           </p>
         ) : (
           <div className="space-y-1.5">
-            {group.members.map((member: any) => {
+            {group.members.map((member: RoundThemeGroupMemberDetail) => {
               const adaptedTheme: SourceTheme = {
                 id: member.themeId,
                 sourceConsultationId: member.sourceConsultationId,

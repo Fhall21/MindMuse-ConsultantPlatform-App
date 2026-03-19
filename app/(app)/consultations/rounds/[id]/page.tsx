@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useMemo } from "react";
+import { use, useCallback } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -38,9 +38,8 @@ export default function RoundDetailPage({
   const { data, isLoading, error } = useRoundDetail(id);
 
   // Adapt Agent 1 types to component-friendly shapes
-  const adaptedSourceThemes = useMemo((): SourceTheme[] => {
-    if (!data?.sourceThemes) return [];
-    return data.sourceThemes.map((theme) => ({
+  const adaptedSourceThemes: SourceTheme[] = data?.sourceThemes
+    ? data.sourceThemes.map((theme) => ({
       id: theme.sourceThemeId,
       sourceConsultationId: theme.consultationId,
       sourceConsultationTitle: theme.consultationTitle,
@@ -52,30 +51,28 @@ export default function RoundDetailPage({
       isGrouped: theme.isGrouped,
       isUserAdded: theme.isUserAdded,
       groupId: theme.groupId,
-    }));
-  }, [data?.sourceThemes]);
+    }))
+    : [];
 
-  const adaptedConsultations = useMemo((): RoundConsultationSummary[] => {
-    if (!data?.consultations) return [];
+  const adaptedConsultations: RoundConsultationSummary[] = data?.consultations
+    ? (() => {
     const themeCountMap = new Map<string, number>();
-    for (const theme of data.sourceThemes || []) {
+      for (const theme of data.sourceThemes ?? []) {
       themeCountMap.set(theme.consultationId, (themeCountMap.get(theme.consultationId) || 0) + 1);
     }
-    return data.consultations.map((c) => ({
-      id: c.id,
-      title: c.title,
-      status: c.status,
-      evidenceEmailSubject: c.evidenceEmail?.subject ?? null,
-      evidenceEmailStatus: c.evidenceEmail?.status ?? null,
-      themeCount: themeCountMap.get(c.id) ?? 0,
+      return data.consultations.map((consultation) => ({
+        id: consultation.id,
+        title: consultation.title,
+        status: consultation.status,
+        evidenceEmailSubject: consultation.evidenceEmail?.subject ?? null,
+        evidenceEmailStatus: consultation.evidenceEmail?.status ?? null,
+        themeCount: themeCountMap.get(consultation.id) ?? 0,
       groupId: null,
     }));
-  }, [data?.consultations, data?.sourceThemes]);
+    })()
+    : [];
 
-  const adaptedThemeGroups = useMemo((): RoundThemeGroup[] => {
-    if (!data?.themeGroups) return [];
-    return data.themeGroups;
-  }, [data?.themeGroups]);
+  const adaptedThemeGroups: RoundThemeGroup[] = data?.themeGroups ?? [];
 
   const handleStructuralChange = useCallback(() => {
     toast.info("Structural change detected — AI refinement will be triggered when available.");
@@ -86,7 +83,7 @@ export default function RoundDetailPage({
       try {
         await generateRoundSummary(roundId);
         toast.success("Summary generation requested");
-      } catch (err) {
+      } catch {
         toast.error("Failed to generate summary");
       }
     },
@@ -98,7 +95,7 @@ export default function RoundDetailPage({
       try {
         await generateRoundReport(roundId);
         toast.success("Report generation requested");
-      } catch (err) {
+      } catch {
         toast.error("Failed to generate report");
       }
     },
@@ -110,7 +107,7 @@ export default function RoundDetailPage({
       try {
         await generateRoundEmail(roundId);
         toast.success("Email generation requested");
-      } catch (err) {
+      } catch {
         toast.error("Failed to generate email");
       }
     },

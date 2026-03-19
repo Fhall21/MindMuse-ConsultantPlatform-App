@@ -39,10 +39,6 @@ interface ThemeRoundPanelProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function LoadingSpinner() {
-  return <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />;
-}
-
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "string" && error) return error;

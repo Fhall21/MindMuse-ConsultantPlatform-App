@@ -175,3 +175,49 @@ html[data-accessibility-motion="reduced"] *::after {
   scroll-behavior: auto !important;
   transition-duration: 0.01ms !important;
 }
+
+/* ─── Print styles (Cmd+P / Ctrl+P) ─── */
+@media print {
+  /* Hide navigation, sidebar, and interactive elements */
+  nav,
+  .sidebar,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: #1f2937 !important;
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+  }
+
+  /* Clean up page margins */
+  @page {
+    margin: 0.75in;
+    size: letter;
+  }
+
+  /* Prevent cards from breaking across pages */
+  [class*="theme-card"],
+  [class*="rounded-lg"] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Headings should not be orphaned at page bottom */
+  h1, h2, h3, h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Remove shadows and backgrounds for clean printing */
+  * {
+    box-shadow: none !important;
+  }
+
+  /* Ensure links are visible as text */
+  a[href] {
+    text-decoration: underline;
+  }
+}

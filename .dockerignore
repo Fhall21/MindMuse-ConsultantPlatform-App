@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.env
+.env.local
+.env.coolify
+.DS_Store
+coverage
+dist
+build
+worktrees
+.gstack
+.claude
+services/ai/.venv
+services/ai/__pycache__
+**/__pycache__
+**/*.pyc

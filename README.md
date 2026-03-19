@@ -106,9 +106,21 @@ You will also need the Supabase `anon` key and `service_role` key from that serv
 
 ### 2. Apply this repo's migrations to the self-hosted database
 
-After the Supabase service is healthy, push the checked-in SQL migrations from this repo to the self-hosted Postgres instance.
+This repository now includes a dedicated migration runner service in `docker-compose.coolify.yml`.
+It uses the checked-in `supabase/` directory plus the Supabase CLI already listed in `package.json`.
 
-If the database port is not publicly exposed, run the command from any machine that can reach the database on the Coolify network, or use the Coolify terminal on the Supabase service host.
+Set this env var on the app stack:
+
+- `MIGRATION_DATABASE_URL=<postgres connection string>`
+
+Recommended options for that connection string:
+
+- direct internal Postgres connection on port `5432`
+- or Supavisor session mode on port `5432` if direct Postgres is not reachable from the app stack
+
+Supabase's docs recommend direct connections for long-lived services, and session-mode pooler as the fallback when direct routing is not available.
+
+If your Supabase resource is deployed in another Coolify stack, enable `Connect to Predefined Network` on this app stack and use the renamed internal hostname Coolify gives the database service, such as `postgres-<uuid>`.
 
 From `ConsultantPlatformApp/`:
 
@@ -131,6 +143,23 @@ supabase db push --db-url 'postgres://postgres:<PASSWORD>@<HOST>:5432/postgres' 
 
 This applies your schema, Row Level Security policies, and any future migration files in `supabase/migrations/`.
 
+In Coolify, the included `migrate` service will do the same automatically on deploy before the `app` service starts.
+
+Useful migration env vars for the app stack:
+
+- `MIGRATION_DATABASE_URL=postgresql://postgres:<password>@postgres-<uuid>:5432/postgres`
+- `MIGRATION_AUTO_APPLY=true`
+- `MIGRATION_INCLUDE_SEED=false`
+- `MIGRATION_MAX_ATTEMPTS=20`
+- `MIGRATION_RETRY_DELAY_SECONDS=5`
+
+If you want to inspect or rerun commands manually, open the terminal for the `migrate` service and run:
+
+```bash
+./node_modules/.bin/supabase migration list --db-url "$MIGRATION_DATABASE_URL"
+./node_modules/.bin/supabase db push --db-url "$MIGRATION_DATABASE_URL"
+```
+
 ### 3. Deploy the app stack
 
 Create a Docker Compose application in Coolify:
@@ -145,6 +174,7 @@ Required app environment variables:
 - `SUPABASE_SERVICE_ROLE_KEY=<service_role key from Coolify Supabase>`
 - `OPENAI_API_KEY=<your OpenAI key>`
 - `ALLOWED_ORIGINS=https://app.example.com`
+- `MIGRATION_DATABASE_URL=<postgres connection string reachable from this stack>`
 
 Recommended defaults:
 

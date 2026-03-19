@@ -1,4 +1,22 @@
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrations
+    restart: unless-stopped
+    environment:
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?}
+      MIGRATION_AUTO_APPLY: ${MIGRATION_AUTO_APPLY:-true}
+      MIGRATION_INCLUDE_SEED: ${MIGRATION_INCLUDE_SEED:-false}
+      MIGRATION_MAX_ATTEMPTS: ${MIGRATION_MAX_ATTEMPTS:-20}
+      MIGRATION_RETRY_DELAY_SECONDS: ${MIGRATION_RETRY_DELAY_SECONDS:-5}
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/migrate-ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
   ai:
     build:
       context: ./services/ai
@@ -32,6 +50,8 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?}
       AI_SERVICE_URL: http://ai:${AI_SERVICE_PORT:-8000}
     depends_on:
+      migrate:
+        condition: service_healthy
       ai:
         condition: service_healthy
     healthcheck:

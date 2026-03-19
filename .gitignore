@@ -72,3 +72,4 @@ supabase/.temp/
 
 # Git worktrees
 worktrees/
+.claude/worktrees/

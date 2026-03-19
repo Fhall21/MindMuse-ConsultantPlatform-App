@@ -6,8 +6,6 @@ const ACTIVE_STATUSES = new Set<string>(["queued", "processing"]);
 /**
  * Polls transcription job status every 3s while active, stops when completed/failed.
  * Returns undefined when no jobId is provided.
- *
- * TODO: implement when Agent 2 transcription endpoint is available.
  */
 export function useTranscriptionStatus(jobId: string | null) {
   return useQuery({

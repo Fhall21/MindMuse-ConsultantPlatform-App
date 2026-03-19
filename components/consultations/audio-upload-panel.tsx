@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useTranscriptionStatus } from "@/hooks/use-transcription";
-import { uploadAudioForTranscription } from "@/lib/actions/ingestion";
+import {
+  updateTranscriptionJob,
+  uploadAudioForTranscription,
+} from "@/lib/actions/ingestion";
 import type { TranscriptionJobStatus } from "@/lib/actions/ingestion";
 
 interface AudioUploadPanelProps {
@@ -69,6 +72,7 @@ export function AudioUploadPanel({
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    let createdJobId: string | null = null;
 
     if (!ACCEPTED_AUDIO_TYPES.includes(file.type)) {
       setUploadError(
@@ -83,29 +87,59 @@ export function AudioUploadPanel({
     setTranscriptConsumed(false);
 
     try {
-      // Read file as base64
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          // Strip data URI prefix
-          resolve(result.split(",")[1] ?? result);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
       const { jobId: newJobId } = await uploadAudioForTranscription({
         consultationId,
         fileName: file.name,
         fileType: file.type,
-        fileBase64: base64,
+        fileBase64: "",
       });
 
+      createdJobId = newJobId;
       setJobId(newJobId);
+
+      await updateTranscriptionJob({
+        jobId: newJobId,
+        consultationId,
+        status: "processing",
+        startedAt: new Date().toISOString(),
+      });
+
+      const formData = new FormData();
+      formData.append("audio_file", file, file.name);
+
+      const response = await fetch("/api/transcribe/audio", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { detail?: string };
+        throw new Error(body.detail ?? `Transcription request failed (${response.status})`);
+      }
+
+      const result = await response.json() as { transcript: string };
+
+      await updateTranscriptionJob({
+        jobId: newJobId,
+        consultationId,
+        status: "completed",
+        transcriptText: result.transcript,
+        completedAt: new Date().toISOString(),
+      });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Upload failed. Please try again.";
+
+      if (createdJobId) {
+        await updateTranscriptionJob({
+          jobId: createdJobId,
+          consultationId,
+          status: "failed",
+          errorMessage: message,
+          completedAt: new Date().toISOString(),
+        }).catch(() => undefined);
+      }
+
       // Show user-friendly message for stub state
       if (message.includes("not yet implemented")) {
         setUploadError(
@@ -166,6 +200,13 @@ export function AudioUploadPanel({
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           <p className="font-medium">Upload failed</p>
           <p className="mt-0.5 text-destructive/80">{uploadError}</p>
+        </div>
+      )}
+
+      {jobError && !uploadError && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <p className="font-medium">Transcription lookup failed</p>
+          <p className="mt-0.5 text-destructive/80">{jobError.message}</p>
         </div>
       )}
 

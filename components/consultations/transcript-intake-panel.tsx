@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { TranscriptEditor } from "./transcript-editor";
 import { AudioUploadPanel } from "./audio-upload-panel";
 
-// TODO: Agent 1 — when file processing service is available, call an ingestion
-// action here to store the file reference in Supabase Storage and return processed text.
+// TODO: When file processing is expanded beyond local extraction, persist an
+// ingestion artifact and capture any server-side processing metadata.
 
 type Tab = "paste" | "file" | "audio";
 

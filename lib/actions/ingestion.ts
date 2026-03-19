@@ -31,6 +31,10 @@ function mapTranscriptionJob(job: DatabaseTranscriptionJob): TranscriptionJob {
   };
 }
 
+function mapOcrJob(job: DatabaseOcrJob): DatabaseOcrJob {
+  return job;
+}
+
 function buildAudioFileKey(consultationId: string, fileName: string) {
   return `audio/${consultationId}/${Date.now()}-${fileName}`;
 }
@@ -63,6 +67,22 @@ export async function getTranscriptionJob(jobId: string): Promise<TranscriptionJ
   if (error) throw error;
 
   return mapTranscriptionJob(data as DatabaseTranscriptionJob);
+}
+
+export async function getTranscriptionJobsForConsultation(
+  consultationId: string
+): Promise<DatabaseTranscriptionJob[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("transcription_jobs")
+    .select("*")
+    .eq("consultation_id", consultationId)
+    .order("requested_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []).map((job) => job as DatabaseTranscriptionJob);
 }
 
 interface CreateTranscriptionJobParams {
@@ -179,16 +199,7 @@ interface GetTranscriptionJobTimelineParams {
 export async function getTranscriptionJobTimeline({
   consultationId,
 }: GetTranscriptionJobTimelineParams): Promise<DatabaseTranscriptionJob[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("transcription_jobs")
-    .select("*")
-    .eq("consultation_id", consultationId)
-    .order("requested_at", { ascending: false });
-
-  if (error) throw error;
-  return (data || []) as DatabaseTranscriptionJob[];
+  return getTranscriptionJobsForConsultation(consultationId);
 }
 
 interface CreateOcrJobParams {
@@ -302,13 +313,9 @@ export async function updateOcrJob({
   return updated as DatabaseOcrJob;
 }
 
-interface GetOcrJobTimelineParams {
-  consultationId: string;
-}
-
-export async function getOcrJobTimeline({
-  consultationId,
-}: GetOcrJobTimelineParams): Promise<DatabaseOcrJob[]> {
+export async function getOcrJobsForConsultation(
+  consultationId: string
+): Promise<DatabaseOcrJob[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -318,7 +325,32 @@ export async function getOcrJobTimeline({
     .order("requested_at", { ascending: false });
 
   if (error) throw error;
-  return (data || []) as DatabaseOcrJob[];
+
+  return (data || []).map((job) => mapOcrJob(job as DatabaseOcrJob));
+}
+
+export async function getOcrJob(jobId: string): Promise<DatabaseOcrJob> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("ocr_jobs")
+    .select("*")
+    .eq("id", jobId)
+    .single();
+
+  if (error) throw error;
+
+  return mapOcrJob(data as DatabaseOcrJob);
+}
+
+interface GetOcrJobTimelineParams {
+  consultationId: string;
+}
+
+export async function getOcrJobTimeline({
+  consultationId,
+}: GetOcrJobTimelineParams): Promise<DatabaseOcrJob[]> {
+  return getOcrJobsForConsultation(consultationId);
 }
 
 interface CreateIngestionArtifactParams {
@@ -436,5 +468,45 @@ export async function getIngestionArtifactTimeline({
     .order("created_at", { ascending: false });
 
   if (error) throw error;
+  return (data || []) as DatabaseIngestionArtifact[];
+}
+
+export async function getIngestionArtifactsForConsultation(
+  consultationId: string
+): Promise<DatabaseIngestionArtifact[]> {
+  return getIngestionArtifactTimeline({ consultationId });
+}
+
+export async function getIngestionArtifactById(
+  artifactId: string
+): Promise<DatabaseIngestionArtifact> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("ingestion_artifacts")
+    .select("*")
+    .eq("id", artifactId)
+    .single();
+
+  if (error) throw error;
+
+  return data as DatabaseIngestionArtifact;
+}
+
+export async function getIngestionArtifactsByType(
+  consultationId: string,
+  artifactType: string
+): Promise<DatabaseIngestionArtifact[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("ingestion_artifacts")
+    .select("*")
+    .eq("consultation_id", consultationId)
+    .eq("artifact_type", artifactType)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
   return (data || []) as DatabaseIngestionArtifact[];
 }

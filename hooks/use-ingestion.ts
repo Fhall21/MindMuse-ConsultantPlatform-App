@@ -1,10 +1,19 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import {
+  getIngestionArtifactById,
+  getIngestionArtifactsByType,
+  getIngestionArtifactsForConsultation,
+  getOcrJob,
+  getOcrJobsForConsultation,
+  getTranscriptionJob,
+  getTranscriptionJobsForConsultation,
+} from "@/lib/actions/ingestion";
 import type {
   TranscriptionJob,
   OcrJob,
-  IngestionArtifact,
 } from "@/types/db";
+
+const ACTIVE_STATUSES = new Set(["queued", "processing"]);
 
 // ============================================================
 // Transcription Jobs Hooks
@@ -18,18 +27,13 @@ import type {
 export function useTranscriptionJobs(consultationId: string) {
   return useQuery({
     queryKey: ["transcription_jobs", consultationId],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("transcription_jobs")
-        .select("*")
-        .eq("consultation_id", consultationId)
-        .order("requested_at", { ascending: false });
-
-      if (error) throw error;
-      return (data || []) as TranscriptionJob[];
-    },
+    queryFn: () => getTranscriptionJobsForConsultation(consultationId),
     enabled: !!consultationId,
+    refetchInterval: (query) => {
+      const jobs = query.state.data as TranscriptionJob[] | undefined;
+      const latestJob = jobs?.[0];
+      return latestJob && ACTIVE_STATUSES.has(latestJob.status) ? 3_000 : false;
+    },
   });
 }
 
@@ -41,19 +45,26 @@ export function useTranscriptionJob(jobId: string) {
   return useQuery({
     queryKey: ["transcription_jobs", jobId],
     queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("transcription_jobs")
-        .select("*")
-        .eq("id", jobId)
-        .single();
-
-      if (error) throw error;
-      return data as TranscriptionJob;
+      const data = await getTranscriptionJob(jobId);
+      return {
+        id: data.jobId,
+        consultation_id: "",
+        audio_file_key: "",
+        status: data.status,
+        transcript_text: data.transcript,
+        error_message: data.errorMessage,
+        requested_at: data.updatedAt,
+        started_at: null,
+        completed_at: null,
+        created_at: data.updatedAt,
+        updated_at: data.updatedAt,
+      } as TranscriptionJob;
     },
     enabled: !!jobId,
-    // TODO: Enable Supabase Realtime subscription here for live status updates
-    // For now, use default staleTime/refetch intervals
+    refetchInterval: (query) => {
+      const job = query.state.data as TranscriptionJob | undefined;
+      return job && ACTIVE_STATUSES.has(job.status) ? 3_000 : false;
+    },
   });
 }
 
@@ -68,18 +79,13 @@ export function useTranscriptionJob(jobId: string) {
 export function useOcrJobs(consultationId: string) {
   return useQuery({
     queryKey: ["ocr_jobs", consultationId],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("ocr_jobs")
-        .select("*")
-        .eq("consultation_id", consultationId)
-        .order("requested_at", { ascending: false });
-
-      if (error) throw error;
-      return (data || []) as OcrJob[];
-    },
+    queryFn: () => getOcrJobsForConsultation(consultationId),
     enabled: !!consultationId,
+    refetchInterval: (query) => {
+      const jobs = query.state.data as OcrJob[] | undefined;
+      const latestJob = jobs?.[0];
+      return latestJob && ACTIVE_STATUSES.has(latestJob.status) ? 3_000 : false;
+    },
   });
 }
 
@@ -90,19 +96,12 @@ export function useOcrJobs(consultationId: string) {
 export function useOcrJob(jobId: string) {
   return useQuery({
     queryKey: ["ocr_jobs", jobId],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("ocr_jobs")
-        .select("*")
-        .eq("id", jobId)
-        .single();
-
-      if (error) throw error;
-      return data as OcrJob;
-    },
+    queryFn: () => getOcrJob(jobId),
     enabled: !!jobId,
-    // TODO: Enable Supabase Realtime subscription here for live status updates
+    refetchInterval: (query) => {
+      const job = query.state.data as OcrJob | undefined;
+      return job && ACTIVE_STATUSES.has(job.status) ? 3_000 : false;
+    },
   });
 }
 
@@ -117,17 +116,7 @@ export function useOcrJob(jobId: string) {
 export function useIngestionArtifacts(consultationId: string) {
   return useQuery({
     queryKey: ["ingestion_artifacts", consultationId],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("ingestion_artifacts")
-        .select("*")
-        .eq("consultation_id", consultationId)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return (data || []) as IngestionArtifact[];
-    },
+    queryFn: () => getIngestionArtifactsForConsultation(consultationId),
     enabled: !!consultationId,
   });
 }
@@ -139,17 +128,7 @@ export function useIngestionArtifacts(consultationId: string) {
 export function useIngestionArtifact(artifactId: string) {
   return useQuery({
     queryKey: ["ingestion_artifacts", artifactId],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("ingestion_artifacts")
-        .select("*")
-        .eq("id", artifactId)
-        .single();
-
-      if (error) throw error;
-      return data as IngestionArtifact;
-    },
+    queryFn: () => getIngestionArtifactById(artifactId),
     enabled: !!artifactId,
   });
 }
@@ -165,18 +144,7 @@ export function useIngestionArtifactsByType(
 ) {
   return useQuery({
     queryKey: ["ingestion_artifacts", consultationId, artifactType],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("ingestion_artifacts")
-        .select("*")
-        .eq("consultation_id", consultationId)
-        .eq("artifact_type", artifactType)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return (data || []) as IngestionArtifact[];
-    },
+    queryFn: () => getIngestionArtifactsByType(consultationId, artifactType),
     enabled: !!consultationId && !!artifactType,
   });
 }

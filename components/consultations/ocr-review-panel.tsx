@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useOcrJobs } from "@/hooks/use-ingestion";
-import { saveOcrCorrections, submitOcrResult } from "@/lib/actions/ocr";
+import { saveOcrCorrections } from "@/lib/actions/ocr";
+import { createOcrJob, updateOcrJob } from "@/lib/actions/ingestion";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -76,6 +77,7 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    let createdJobId: string | null = null;
     // Reset so selecting the same file again still fires onChange
     if (inputRef.current) inputRef.current.value = "";
 
@@ -91,6 +93,18 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
     setIsExtracting(true);
 
     try {
+      createdJobId = await createOcrJob({
+        consultationId,
+        imageFileKey: `inline/${consultationId}/${Date.now()}-${file.name}`,
+      });
+
+      await updateOcrJob({
+        jobId: createdJobId,
+        consultationId,
+        status: "processing",
+        startedAt: new Date().toISOString(),
+      });
+
       let imageBlob: Blob = file;
 
       if (isHeic) {
@@ -114,10 +128,13 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
 
       const result = await response.json() as { extracted_text: string; confidence: number };
 
-      await submitOcrResult({
+      await updateOcrJob({
+        jobId: createdJobId,
         consultationId,
+        status: "completed",
         extractedText: result.extracted_text,
         confidenceScore: result.confidence,
+        completedAt: new Date().toISOString(),
       });
 
       await queryClient.invalidateQueries({ queryKey: ["ocr_jobs", consultationId] });
@@ -127,7 +144,19 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
       setEditedText(result.extracted_text);
       setIsDirty(false);
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Failed to extract text. Please try again.");
+      const message = err instanceof Error ? err.message : "Failed to extract text. Please try again.";
+
+      if (createdJobId) {
+        await updateOcrJob({
+          jobId: createdJobId,
+          consultationId,
+          status: "failed",
+          errorMessage: message,
+          completedAt: new Date().toISOString(),
+        }).catch(() => undefined);
+      }
+
+      setUploadError(message);
     } finally {
       setIsExtracting(false);
     }

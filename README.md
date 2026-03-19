@@ -93,9 +93,9 @@ Recommended defaults:
 - `DB_MIGRATION_RETRY_DELAY_SECONDS=5`
 
 Optional database override:
-- `DATABASE_URL=postgresql://...`
-- If `DATABASE_URL` is set, both `app` and `migrate` use it directly.
-- If `DATABASE_URL` is unset, the stack falls back to the internal `db` service URL.
+- `DATABASE_URL_OVERRIDE=postgresql://...`
+- If `DATABASE_URL_OVERRIDE` is set, both `app` and `migrate` use it directly.
+- If `DATABASE_URL_OVERRIDE` is unset, the stack uses the internal `db` service URL.
 - If `AI_SERVICE_URL` is unset, the stack falls back to the internal `ai` service URL.
 
 Notes:

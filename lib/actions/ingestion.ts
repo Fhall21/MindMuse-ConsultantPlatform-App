@@ -1,6 +1,8 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { and, desc, eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { ingestionArtifacts, ocrJobs, transcriptionJobs } from "@/db/schema";
 import { AUDIT_ACTIONS } from "./audit-actions";
 import { emitAuditEvent } from "./audit";
 import type {
@@ -35,6 +37,72 @@ function mapOcrJob(job: DatabaseOcrJob): DatabaseOcrJob {
   return job;
 }
 
+function toIsoString(value: Date | null | undefined) {
+  return value ? value.toISOString() : null;
+}
+
+function toConfidenceScore(value: string | number | null | undefined) {
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function mapTranscriptionRow(row: typeof transcriptionJobs.$inferSelect): DatabaseTranscriptionJob {
+  return {
+    id: row.id,
+    consultation_id: row.consultationId,
+    audio_file_key: row.audioFileKey,
+    status: row.status as DatabaseTranscriptionJob["status"],
+    transcript_text: row.transcriptText,
+    error_message: row.errorMessage,
+    requested_at: row.requestedAt.toISOString(),
+    started_at: toIsoString(row.startedAt),
+    completed_at: toIsoString(row.completedAt),
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+  };
+}
+
+function mapOcrRow(row: typeof ocrJobs.$inferSelect): DatabaseOcrJob {
+  return {
+    id: row.id,
+    consultation_id: row.consultationId,
+    image_file_key: row.imageFileKey,
+    status: row.status as DatabaseOcrJob["status"],
+    extracted_text: row.extractedText,
+    confidence_score: toConfidenceScore(row.confidenceScore),
+    error_message: row.errorMessage,
+    requested_at: row.requestedAt.toISOString(),
+    started_at: toIsoString(row.startedAt),
+    completed_at: toIsoString(row.completedAt),
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+  };
+}
+
+function mapIngestionArtifactRow(
+  row: typeof ingestionArtifacts.$inferSelect
+): DatabaseIngestionArtifact {
+  return {
+    id: row.id,
+    consultation_id: row.consultationId,
+    artifact_type: row.artifactType as DatabaseIngestionArtifact["artifact_type"],
+    source_file_key: row.sourceFileKey,
+    metadata: row.metadata,
+    accepted: row.accepted,
+    notes: row.notes,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+  };
+}
+
 function buildAudioFileKey(consultationId: string, fileName: string) {
   return `audio/${consultationId}/${Date.now()}-${fileName}`;
 }
@@ -56,33 +124,29 @@ export async function uploadAudioForTranscription(params: {
 }
 
 export async function getTranscriptionJob(jobId: string): Promise<TranscriptionJob> {
-  const supabase = await createClient();
+  const [job] = await db
+    .select()
+    .from(transcriptionJobs)
+    .where(eq(transcriptionJobs.id, jobId))
+    .limit(1);
 
-  const { data, error } = await supabase
-    .from("transcription_jobs")
-    .select("*")
-    .eq("id", jobId)
-    .single();
+  if (!job) {
+    throw new Error("Transcription job not found");
+  }
 
-  if (error) throw error;
-
-  return mapTranscriptionJob(data as DatabaseTranscriptionJob);
+  return mapTranscriptionJob(mapTranscriptionRow(job));
 }
 
 export async function getTranscriptionJobsForConsultation(
   consultationId: string
 ): Promise<DatabaseTranscriptionJob[]> {
-  const supabase = await createClient();
+  const rows = await db
+    .select()
+    .from(transcriptionJobs)
+    .where(eq(transcriptionJobs.consultationId, consultationId))
+    .orderBy(desc(transcriptionJobs.requestedAt));
 
-  const { data, error } = await supabase
-    .from("transcription_jobs")
-    .select("*")
-    .eq("consultation_id", consultationId)
-    .order("requested_at", { ascending: false });
-
-  if (error) throw error;
-
-  return (data || []).map((job) => job as DatabaseTranscriptionJob);
+  return rows.map(mapTranscriptionRow);
 }
 
 interface CreateTranscriptionJobParams {
@@ -94,25 +158,20 @@ export async function createTranscriptionJob({
   consultationId,
   audioFileKey,
 }: CreateTranscriptionJobParams): Promise<string> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("transcription_jobs")
-    .insert({
-      consultation_id: consultationId,
-      audio_file_key: audioFileKey,
+  const [created] = await db
+    .insert(transcriptionJobs)
+    .values({
+      consultationId,
+      audioFileKey,
       status: "queued",
     })
-    .select("id")
-    .single();
-
-  if (error) throw error;
+    .returning({ id: transcriptionJobs.id });
 
   await emitAuditEvent({
     consultationId,
     action: AUDIT_ACTIONS.AUDIO_UPLOADED,
     entityType: "transcription_job",
-    entityId: data.id,
+    entityId: created.id,
     metadata: { audioFileKey },
   });
 
@@ -120,11 +179,11 @@ export async function createTranscriptionJob({
     consultationId,
     action: AUDIT_ACTIONS.AUDIO_TRANSCRIPTION_REQUESTED,
     entityType: "transcription_job",
-    entityId: data.id,
+    entityId: created.id,
     metadata: { audioFileKey },
   });
 
-  return data.id;
+  return created.id;
 }
 
 interface UpdateTranscriptionJobParams {
@@ -146,24 +205,26 @@ export async function updateTranscriptionJob({
   startedAt,
   completedAt,
 }: UpdateTranscriptionJobParams): Promise<DatabaseTranscriptionJob> {
-  const supabase = await createClient();
+  const updatePayload: Partial<typeof transcriptionJobs.$inferInsert> = {
+    status,
+    updatedAt: new Date(),
+  };
+  if (transcriptText !== undefined) updatePayload.transcriptText = transcriptText;
+  if (errorMessage !== undefined) updatePayload.errorMessage = errorMessage;
+  if (startedAt !== undefined) updatePayload.startedAt = new Date(startedAt);
+  if (completedAt !== undefined) updatePayload.completedAt = new Date(completedAt);
 
-  const updatePayload: Record<string, string | null> = { status };
-  if (transcriptText) updatePayload.transcript_text = transcriptText;
-  if (errorMessage) updatePayload.error_message = errorMessage;
-  if (startedAt) updatePayload.started_at = startedAt;
-  if (completedAt) updatePayload.completed_at = completedAt;
+  const [updated] = await db
+    .update(transcriptionJobs)
+    .set(updatePayload)
+    .where(eq(transcriptionJobs.id, jobId))
+    .returning();
 
-  const { data: updated, error: updateError } = await supabase
-    .from("transcription_jobs")
-    .update(updatePayload)
-    .eq("id", jobId)
-    .select()
-    .single();
+  if (!updated) {
+    throw new Error("Transcription job not found");
+  }
 
-  if (updateError) throw updateError;
-
-  const resolvedConsultationId = consultationId ?? updated.consultation_id;
+  const resolvedConsultationId = consultationId ?? updated.consultationId;
 
   let auditAction = "";
   let metadata: Record<string, string | number | null | undefined> = {
@@ -189,7 +250,7 @@ export async function updateTranscriptionJob({
     });
   }
 
-  return updated as DatabaseTranscriptionJob;
+  return mapTranscriptionRow(updated);
 }
 
 interface GetTranscriptionJobTimelineParams {
@@ -211,25 +272,20 @@ export async function createOcrJob({
   consultationId,
   imageFileKey,
 }: CreateOcrJobParams): Promise<string> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("ocr_jobs")
-    .insert({
-      consultation_id: consultationId,
-      image_file_key: imageFileKey,
+  const [created] = await db
+    .insert(ocrJobs)
+    .values({
+      consultationId,
+      imageFileKey,
       status: "queued",
     })
-    .select("id")
-    .single();
-
-  if (error) throw error;
+    .returning({ id: ocrJobs.id });
 
   await emitAuditEvent({
     consultationId,
     action: AUDIT_ACTIONS.OCR_UPLOADED,
     entityType: "ocr_job",
-    entityId: data.id,
+    entityId: created.id,
     metadata: { imageFileKey },
   });
 
@@ -237,11 +293,11 @@ export async function createOcrJob({
     consultationId,
     action: AUDIT_ACTIONS.OCR_EXTRACTION_REQUESTED,
     entityType: "ocr_job",
-    entityId: data.id,
+    entityId: created.id,
     metadata: { imageFileKey },
   });
 
-  return data.id;
+  return created.id;
 }
 
 interface UpdateOcrJobParams {
@@ -265,25 +321,27 @@ export async function updateOcrJob({
   startedAt,
   completedAt,
 }: UpdateOcrJobParams): Promise<DatabaseOcrJob> {
-  const supabase = await createClient();
+  const updatePayload: Partial<typeof ocrJobs.$inferInsert> = {
+    status,
+    updatedAt: new Date(),
+  };
+  if (extractedText !== undefined) updatePayload.extractedText = extractedText;
+  if (confidenceScore !== undefined) updatePayload.confidenceScore = confidenceScore.toString();
+  if (errorMessage !== undefined) updatePayload.errorMessage = errorMessage;
+  if (startedAt !== undefined) updatePayload.startedAt = new Date(startedAt);
+  if (completedAt !== undefined) updatePayload.completedAt = new Date(completedAt);
 
-  const updatePayload: Record<string, string | number | null> = { status };
-  if (extractedText) updatePayload.extracted_text = extractedText;
-  if (confidenceScore !== undefined) updatePayload.confidence_score = confidenceScore;
-  if (errorMessage) updatePayload.error_message = errorMessage;
-  if (startedAt) updatePayload.started_at = startedAt;
-  if (completedAt) updatePayload.completed_at = completedAt;
+  const [updated] = await db
+    .update(ocrJobs)
+    .set(updatePayload)
+    .where(eq(ocrJobs.id, jobId))
+    .returning();
 
-  const { data: updated, error: updateError } = await supabase
-    .from("ocr_jobs")
-    .update(updatePayload)
-    .eq("id", jobId)
-    .select()
-    .single();
+  if (!updated) {
+    throw new Error("OCR job not found");
+  }
 
-  if (updateError) throw updateError;
-
-  const resolvedConsultationId = consultationId ?? updated.consultation_id;
+  const resolvedConsultationId = consultationId ?? updated.consultationId;
 
   let auditAction = "";
   let metadata: Record<string, string | number | null | undefined> = {
@@ -310,37 +368,33 @@ export async function updateOcrJob({
     });
   }
 
-  return updated as DatabaseOcrJob;
+  return mapOcrRow(updated);
 }
 
 export async function getOcrJobsForConsultation(
   consultationId: string
 ): Promise<DatabaseOcrJob[]> {
-  const supabase = await createClient();
+  const rows = await db
+    .select()
+    .from(ocrJobs)
+    .where(eq(ocrJobs.consultationId, consultationId))
+    .orderBy(desc(ocrJobs.requestedAt));
 
-  const { data, error } = await supabase
-    .from("ocr_jobs")
-    .select("*")
-    .eq("consultation_id", consultationId)
-    .order("requested_at", { ascending: false });
-
-  if (error) throw error;
-
-  return (data || []).map((job) => mapOcrJob(job as DatabaseOcrJob));
+  return rows.map((job) => mapOcrJob(mapOcrRow(job)));
 }
 
 export async function getOcrJob(jobId: string): Promise<DatabaseOcrJob> {
-  const supabase = await createClient();
+  const [job] = await db
+    .select()
+    .from(ocrJobs)
+    .where(eq(ocrJobs.id, jobId))
+    .limit(1);
 
-  const { data, error } = await supabase
-    .from("ocr_jobs")
-    .select("*")
-    .eq("id", jobId)
-    .single();
+  if (!job) {
+    throw new Error("OCR job not found");
+  }
 
-  if (error) throw error;
-
-  return mapOcrJob(data as DatabaseOcrJob);
+  return mapOcrJob(mapOcrRow(job));
 }
 
 interface GetOcrJobTimelineParams {
@@ -366,20 +420,15 @@ export async function createIngestionArtifact({
   sourceFileKey,
   metadata,
 }: CreateIngestionArtifactParams): Promise<string> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("ingestion_artifacts")
-    .insert({
-      consultation_id: consultationId,
-      artifact_type: artifactType,
-      source_file_key: sourceFileKey,
+  const [created] = await db
+    .insert(ingestionArtifacts)
+    .values({
+      consultationId,
+      artifactType,
+      sourceFileKey,
       metadata: metadata || null,
     })
-    .select("id")
-    .single();
-
-  if (error) throw error;
+    .returning({ id: ingestionArtifacts.id });
 
   let auditAction = "";
   if (artifactType === "transcript_file") {
@@ -397,12 +446,12 @@ export async function createIngestionArtifact({
       consultationId,
       action: auditAction,
       entityType: "ingestion_artifact",
-      entityId: data.id,
+      entityId: created.id,
       metadata: { artifactType, ...metadata },
     });
   }
 
-  return data.id;
+  return created.id;
 }
 
 interface UpdateIngestionArtifactParams {
@@ -418,22 +467,23 @@ export async function updateIngestionArtifact({
   accepted,
   notes,
 }: UpdateIngestionArtifactParams): Promise<DatabaseIngestionArtifact> {
-  const supabase = await createClient();
-
-  const updatePayload: Record<string, boolean | string> = {};
+  const updatePayload: Partial<typeof ingestionArtifacts.$inferInsert> = {
+    updatedAt: new Date(),
+  };
   if (accepted !== undefined) updatePayload.accepted = accepted;
   if (notes !== undefined) updatePayload.notes = notes;
 
-  const { data: updated, error: updateError } = await supabase
-    .from("ingestion_artifacts")
-    .update(updatePayload)
-    .eq("id", artifactId)
-    .select()
-    .single();
+  const [updated] = await db
+    .update(ingestionArtifacts)
+    .set(updatePayload)
+    .where(eq(ingestionArtifacts.id, artifactId))
+    .returning();
 
-  if (updateError) throw updateError;
+  if (!updated) {
+    throw new Error("Ingestion artifact not found");
+  }
 
-  const resolvedConsultationId = consultationId ?? updated.consultation_id;
+  const resolvedConsultationId = consultationId ?? updated.consultationId;
 
   if (accepted !== undefined) {
     const auditAction = accepted
@@ -449,7 +499,7 @@ export async function updateIngestionArtifact({
     });
   }
 
-  return updated as DatabaseIngestionArtifact;
+  return mapIngestionArtifactRow(updated);
 }
 
 interface GetIngestionArtifactTimelineParams {
@@ -459,16 +509,13 @@ interface GetIngestionArtifactTimelineParams {
 export async function getIngestionArtifactTimeline({
   consultationId,
 }: GetIngestionArtifactTimelineParams): Promise<DatabaseIngestionArtifact[]> {
-  const supabase = await createClient();
+  const rows = await db
+    .select()
+    .from(ingestionArtifacts)
+    .where(eq(ingestionArtifacts.consultationId, consultationId))
+    .orderBy(desc(ingestionArtifacts.createdAt));
 
-  const { data, error } = await supabase
-    .from("ingestion_artifacts")
-    .select("*")
-    .eq("consultation_id", consultationId)
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  return (data || []) as DatabaseIngestionArtifact[];
+  return rows.map(mapIngestionArtifactRow);
 }
 
 export async function getIngestionArtifactsForConsultation(
@@ -480,33 +527,33 @@ export async function getIngestionArtifactsForConsultation(
 export async function getIngestionArtifactById(
   artifactId: string
 ): Promise<DatabaseIngestionArtifact> {
-  const supabase = await createClient();
+  const [artifact] = await db
+    .select()
+    .from(ingestionArtifacts)
+    .where(eq(ingestionArtifacts.id, artifactId))
+    .limit(1);
 
-  const { data, error } = await supabase
-    .from("ingestion_artifacts")
-    .select("*")
-    .eq("id", artifactId)
-    .single();
+  if (!artifact) {
+    throw new Error("Ingestion artifact not found");
+  }
 
-  if (error) throw error;
-
-  return data as DatabaseIngestionArtifact;
+  return mapIngestionArtifactRow(artifact);
 }
 
 export async function getIngestionArtifactsByType(
   consultationId: string,
   artifactType: string
 ): Promise<DatabaseIngestionArtifact[]> {
-  const supabase = await createClient();
+  const rows = await db
+    .select()
+    .from(ingestionArtifacts)
+    .where(
+      and(
+        eq(ingestionArtifacts.consultationId, consultationId),
+        eq(ingestionArtifacts.artifactType, artifactType as IngestionArtifactType)
+      )
+    )
+    .orderBy(desc(ingestionArtifacts.createdAt));
 
-  const { data, error } = await supabase
-    .from("ingestion_artifacts")
-    .select("*")
-    .eq("consultation_id", consultationId)
-    .eq("artifact_type", artifactType)
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-
-  return (data || []) as DatabaseIngestionArtifact[];
+  return rows.map(mapIngestionArtifactRow);
 }

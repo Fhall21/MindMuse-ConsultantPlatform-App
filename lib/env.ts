@@ -1,7 +1,12 @@
 const REQUIRED_ENV_VARS = [
+  "APP_SITE_URL",
+  "BETTER_AUTH_SECRET",
+  "AI_SERVICE_URL",
+] as const;
+
+const LEGACY_TRANSITION_ENV_VARS = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  "AI_SERVICE_URL",
 ] as const;
 
 const DATABASE_ENV_VARS = [
@@ -15,6 +20,7 @@ const DATABASE_ENV_VARS = [
 
 type RequiredEnvVar =
   | (typeof REQUIRED_ENV_VARS)[number]
+  | (typeof LEGACY_TRANSITION_ENV_VARS)[number]
   | (typeof DATABASE_ENV_VARS)[number];
 
 export function requireEnv(name: RequiredEnvVar): string {
@@ -39,28 +45,61 @@ export function validateRequiredEnv(): void {
 
 const PRODUCTION_BLOCKED_HOSTNAMES = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
 
-export function getAiServiceUrl(): string {
-  const rawUrl = requireEnv("AI_SERVICE_URL");
-
+function parseHttpUrl(rawUrl: string, envName: string): URL {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
   } catch {
-    throw new Error("AI_SERVICE_URL must be a valid URL");
+    throw new Error(`${envName} must be a valid URL`);
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error("AI_SERVICE_URL must use http or https");
+    throw new Error(`${envName} must use http or https`);
   }
 
   if (
     process.env.NODE_ENV === "production" &&
     PRODUCTION_BLOCKED_HOSTNAMES.has(parsed.hostname)
   ) {
-    throw new Error("AI_SERVICE_URL cannot point to localhost in production");
+    throw new Error(`${envName} cannot point to localhost in production`);
   }
 
+  return parsed;
+}
+
+export function getAiServiceUrl(): string {
+  const rawUrl = requireEnv("AI_SERVICE_URL");
+  const parsed = parseHttpUrl(rawUrl, "AI_SERVICE_URL");
   return parsed.toString().replace(/\/$/, "");
+}
+
+export function getAppSiteUrl(): string {
+  const parsed = parseHttpUrl(requireEnv("APP_SITE_URL"), "APP_SITE_URL");
+  return parsed.toString().replace(/\/$/, "");
+}
+
+export function getBetterAuthSecret(): string {
+  return requireEnv("BETTER_AUTH_SECRET");
+}
+
+export function getTrustedOrigins(): string[] {
+  const origins = new Set<string>([getAppSiteUrl()]);
+  const rawAllowedOrigins = process.env.ALLOWED_ORIGINS;
+
+  if (!rawAllowedOrigins) {
+    return [...origins];
+  }
+
+  for (const origin of rawAllowedOrigins.split(",")) {
+    const trimmed = origin.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    origins.add(parseHttpUrl(trimmed, "ALLOWED_ORIGINS").toString().replace(/\/$/, ""));
+  }
+
+  return [...origins];
 }
 
 export function getDatabaseUrl(): string {

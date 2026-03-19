@@ -1,7 +1,6 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
-import { useState } from "react";
+import { authClient } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -30,10 +29,9 @@ function getInitials(displayName?: string, email?: string) {
 
 export function UserNav({ email, displayName }: { email?: string; displayName?: string }) {
   const router = useRouter();
-  const [supabase] = useState(() => createClient());
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    await authClient.signOut();
     router.push("/login");
     router.refresh();
   }

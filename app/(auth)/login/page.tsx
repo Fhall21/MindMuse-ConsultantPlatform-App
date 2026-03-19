@@ -1,13 +1,12 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { useState } from "react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -15,27 +14,19 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabaseRef = useRef<SupabaseClient | null>(null);
-
-  function getSupabase() {
-    if (!supabaseRef.current) {
-      supabaseRef.current = createClient();
-    }
-    return supabaseRef.current;
-  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const { error } = await getSupabase().auth.signInWithPassword({
+    const { error } = await authClient.signIn.email({
       email,
       password,
     });
 
     if (error) {
-      setError(error.message);
+      setError(error.message ?? "Unable to sign in.");
       setLoading(false);
       return;
     }
@@ -49,28 +40,27 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const { data, error } = await getSupabase().auth.signUp({
+    const displayName =
+      email
+        .trim()
+        .split("@")[0]
+        ?.replace(/[._-]+/g, " ")
+        .trim() || "New user";
+
+    const { error } = await authClient.signUp.email({
+      name: displayName,
       email,
       password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/callback`,
-      },
     });
 
     if (error) {
-      setError(error.message);
+      setError(error.message ?? "Unable to create your account.");
       setLoading(false);
       return;
     }
 
-    if (data.session) {
-      router.push("/dashboard");
-      router.refresh();
-      return;
-    }
-
-    setError("Check your email for a confirmation link.");
-    setLoading(false);
+    router.push("/dashboard");
+    router.refresh();
   }
 
   return (

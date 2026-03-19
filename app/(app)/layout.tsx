@@ -1,30 +1,20 @@
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { UserNav } from "@/components/layout/user-nav";
 import { Separator } from "@/components/ui/separator";
+import { getAuthSession, getSessionDisplayName } from "@/lib/auth";
 
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthSession();
 
-  if (!user) {
+  if (!session) {
     redirect("/login");
   }
-
-  const displayName =
-    typeof user.user_metadata.display_name === "string"
-      ? user.user_metadata.display_name
-      : typeof user.user_metadata.full_name === "string"
-        ? user.user_metadata.full_name
-        : undefined;
 
   return (
     <SidebarProvider>
@@ -34,7 +24,10 @@ export default async function AppLayout({
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-6" />
           <div className="flex-1" />
-          <UserNav email={user.email} displayName={displayName} />
+          <UserNav
+            email={session.user.email}
+            displayName={getSessionDisplayName(session)}
+          />
         </header>
         <main className="flex-1 p-6">{children}</main>
       </SidebarInset>

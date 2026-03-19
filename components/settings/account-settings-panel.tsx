@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,8 +12,17 @@ import { Label } from "@/components/ui/label";
 
 const MIN_PASSWORD_LENGTH = 8;
 
+interface AccountResponse {
+  email: string;
+  displayName: string;
+  fullName: string;
+}
+
+interface ErrorResponse {
+  detail?: string;
+}
+
 export function AccountSettingsPanel() {
-  const [supabase] = useState(() => createClient());
   const [isLoading, setIsLoading] = useState(true);
   const [currentEmail, setCurrentEmail] = useState("");
   const [fullNameValue, setFullNameValue] = useState("");
@@ -22,6 +31,7 @@ export function AccountSettingsPanel() {
   const [emailValue, setEmailValue] = useState("");
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [isSavingEmail, setIsSavingEmail] = useState(false);
+  const [currentPasswordValue, setCurrentPasswordValue] = useState("");
   const [passwordValue, setPasswordValue] = useState("");
   const [confirmPasswordValue, setConfirmPasswordValue] = useState("");
   const [isSavingPassword, setIsSavingPassword] = useState(false);
@@ -30,32 +40,38 @@ export function AccountSettingsPanel() {
     let isMounted = true;
 
     async function loadUser() {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
+      try {
+        const response = await fetch("/api/account", {
+          cache: "no-store",
+        });
 
-      if (!isMounted) {
-        return;
+        const payload = (await response.json()) as AccountResponse | ErrorResponse;
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (!response.ok) {
+          const errorPayload = payload as ErrorResponse;
+          toast.error(errorPayload.detail ?? "Failed to load your account.");
+          setIsLoading(false);
+          return;
+        }
+
+        const account = payload as AccountResponse;
+        setCurrentEmail(account.email);
+        setFullNameValue(account.fullName);
+        setDisplayNameValue(account.displayName);
+        setEmailValue(account.email);
+        setIsLoading(false);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        toast.error("Failed to load your account.");
+        setIsLoading(false);
       }
-
-      if (error) {
-        toast.error(error.message);
-      }
-
-      const email = user?.email ?? "";
-      const fullName = typeof user?.user_metadata.full_name === "string"
-        ? user.user_metadata.full_name
-        : "";
-      const displayName = typeof user?.user_metadata.display_name === "string"
-        ? user.user_metadata.display_name
-        : "";
-
-      setCurrentEmail(email);
-      setFullNameValue(fullName);
-      setDisplayNameValue(displayName);
-      setEmailValue(email);
-      setIsLoading(false);
     }
 
     void loadUser();
@@ -63,7 +79,7 @@ export function AccountSettingsPanel() {
     return () => {
       isMounted = false;
     };
-  }, [supabase]);
+  }, []);
 
   const normalizedEmail = emailValue.trim().toLowerCase();
   const normalizedFullName = fullNameValue.trim();
@@ -76,17 +92,22 @@ export function AccountSettingsPanel() {
 
     setIsSavingProfile(true);
 
-    const { error } = await supabase.auth.updateUser({
-      data: {
-        display_name: normalizedDisplayName || null,
-        full_name: normalizedFullName || null,
+    const response = await fetch("/api/account", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        displayName: normalizedDisplayName,
+        fullName: normalizedFullName,
+      }),
     });
 
     setIsSavingProfile(false);
 
-    if (error) {
-      toast.error(error.message);
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
+      toast.error(payload?.detail ?? "Failed to save your profile.");
       return;
     }
 
@@ -102,7 +123,9 @@ export function AccountSettingsPanel() {
 
     setIsSavingEmail(true);
 
-    const { error } = await supabase.auth.updateUser({ email: normalizedEmail });
+    const { error } = await authClient.changeEmail({
+      newEmail: normalizedEmail,
+    });
 
     setIsSavingEmail(false);
 
@@ -111,8 +134,10 @@ export function AccountSettingsPanel() {
       return;
     }
 
-    setPendingEmail(normalizedEmail);
-    toast.success("Email update requested. Check your inbox to confirm the new address.");
+    setCurrentEmail(normalizedEmail);
+    setEmailValue(normalizedEmail);
+    setPendingEmail(null);
+    toast.success("Email updated.");
   }
 
   async function handlePasswordUpdate(event: React.FormEvent<HTMLFormElement>) {
@@ -128,9 +153,18 @@ export function AccountSettingsPanel() {
       return;
     }
 
+    if (currentPasswordValue.length === 0) {
+      toast.error("Enter your current password before saving a new one.");
+      return;
+    }
+
     setIsSavingPassword(true);
 
-    const { error } = await supabase.auth.updateUser({ password: passwordValue });
+    const { error } = await authClient.changePassword({
+      currentPassword: currentPasswordValue,
+      newPassword: passwordValue,
+      revokeOtherSessions: false,
+    });
 
     setIsSavingPassword(false);
 
@@ -139,6 +173,7 @@ export function AccountSettingsPanel() {
       return;
     }
 
+    setCurrentPasswordValue("");
     setPasswordValue("");
     setConfirmPasswordValue("");
     toast.success("Password updated.");
@@ -174,7 +209,7 @@ export function AccountSettingsPanel() {
           <div className="rounded-xl border bg-muted/30 p-4">
             <p className="text-sm font-medium">Security note</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Email updates may require inbox confirmation depending on your Supabase auth setup.
+              Password changes now require your current password so account updates stay deliberate.
             </p>
           </div>
         </CardContent>
@@ -283,7 +318,18 @@ export function AccountSettingsPanel() {
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={handlePasswordUpdate}>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="settings-password-current">Current password</Label>
+                <Input
+                  id="settings-password-current"
+                  type="password"
+                  value={currentPasswordValue}
+                  onChange={(event) => setCurrentPasswordValue(event.target.value)}
+                  disabled={isSavingPassword}
+                  autoComplete="current-password"
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="settings-password">New password</Label>
                 <Input
@@ -316,6 +362,7 @@ export function AccountSettingsPanel() {
               type="submit"
               disabled={
                 isSavingPassword ||
+                currentPasswordValue.length === 0 ||
                 passwordValue.length < MIN_PASSWORD_LENGTH ||
                 confirmPasswordValue.length < MIN_PASSWORD_LENGTH
               }

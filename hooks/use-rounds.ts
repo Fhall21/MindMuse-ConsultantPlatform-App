@@ -1,28 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { createClient } from "@/lib/supabase/client";
 import {
   getRoundDetail,
   type RoundDetail,
 } from "@/lib/actions/round-workflow";
 import type { ConsultationRound } from "@/types/db";
+import { fetchJson } from "@/hooks/api";
 
 export function useConsultationRounds() {
   return useQuery({
     queryKey: ["consultation_rounds"],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("consultation_rounds")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        throw error;
-      }
-
-      return (data ?? []) as ConsultationRound[];
-    },
+    queryFn: () => fetchJson<ConsultationRound[]>("/api/client/rounds"),
   });
 }
 

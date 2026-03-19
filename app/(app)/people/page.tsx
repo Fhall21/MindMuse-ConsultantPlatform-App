@@ -16,10 +16,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { fetchJson } from "@/hooks/api";
 import { usePeople } from "@/hooks/use-people";
 import { deletePerson, createPerson, updatePerson } from "@/lib/actions/people";
 import { getDistinctCaseInsensitiveValues, isNonEmptyString } from "@/lib/people-classifications";
-import { createClient } from "@/lib/supabase/client";
 import type { Person } from "@/types/db";
 import type { PersonFormData } from "@/lib/validations/consultation";
 
@@ -68,24 +68,14 @@ export default function PeoplePage() {
 
   const consultationCountsQuery = useQuery({
     queryKey: ["people", "consultation_counts", personIds],
-    queryFn: async () => {
-      if (personIds.length === 0) {
-        return {} as Record<string, number>;
-      }
-
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("consultation_people")
-        .select("person_id")
-        .in("person_id", personIds);
-
-      if (error) throw error;
-
-      return (data ?? []).reduce<Record<string, number>>((acc, row) => {
-        acc[row.person_id] = (acc[row.person_id] ?? 0) + 1;
-        return acc;
-      }, {});
-    },
+    queryFn: () =>
+      fetchJson<Record<string, number>>("/api/client/people/consultation-counts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ids: personIds }),
+      }),
     enabled: personIds.length > 0,
   });
 

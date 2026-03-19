@@ -2,9 +2,9 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { PDFDocument, StandardFonts } from "pdf-lib";
-import { createClient } from "@/lib/supabase/client";
 import { generateAuditExport } from "@/lib/actions/audit-export";
 import type { AuditExportFilters, AuditExportFormat, AuditExportPackage } from "@/types/db";
+import { fetchJson } from "@/hooks/api";
 
 export interface AuditExportUserOption {
   id: string;
@@ -317,32 +317,7 @@ async function buildExportBlob(format: AuditExportFormat, exportPackage: AuditEx
 export function useAuditExportUsers() {
   return useQuery({
     queryKey: ["audit-export", "users"],
-    queryFn: async () => {
-      const supabase = createClient();
-      const [{ data: auditRows, error }, userResult] = await Promise.all([
-        supabase
-          .from("audit_log")
-          .select("user_id")
-          .order("created_at", { ascending: false })
-          .limit(1000),
-        supabase.auth.getUser(),
-      ]);
-
-      if (error) {
-        throw error;
-      }
-
-      const visibleUserIds = Array.from(
-        new Set((auditRows ?? []).map((row) => row.user_id).filter(Boolean))
-      );
-      const currentUserId = userResult.data.user?.id ?? null;
-      const currentUserEmail = userResult.data.user?.email ?? "Current user";
-
-      return visibleUserIds.map<AuditExportUserOption>((userId) => ({
-        id: userId,
-        label: userId === currentUserId ? `${currentUserEmail} (me)` : userId,
-      }));
-    },
+    queryFn: () => fetchJson<AuditExportUserOption[]>("/api/client/audit/users"),
   });
 }
 

@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { fetchJson } from "@/hooks/api";
 import { useConsultation } from "@/hooks/use-consultations";
 import { useThemes } from "@/hooks/use-themes";
 import { acceptTheme, addUserTheme, rejectTheme, saveThemes } from "@/lib/actions/themes";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Theme } from "@/types/db";
 import { Badge } from "@/components/ui/badge";
@@ -287,12 +287,12 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
       }
 
       if (options?.replaceExisting) {
-        const supabase = createClient();
-        const { error } = await supabase.from("themes").delete().eq("consultation_id", consultationId);
-
-        if (error) {
-          throw error;
-        }
+        await fetchJson<{ ok: true }>(
+          `/api/client/themes/consultations/${consultationId}`,
+          {
+            method: "DELETE",
+          }
+        );
       }
 
       const savedThemeIds = (await saveThemes(

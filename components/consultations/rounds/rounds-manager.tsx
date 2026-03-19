@@ -11,11 +11,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { fetchJson } from "@/hooks/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useConsultationRounds } from "@/hooks/use-consultations";
 import { deleteRound, createRound, updateRound } from "@/lib/actions/rounds";
-import { createClient } from "@/lib/supabase/client";
 import { consultationRoundSchema } from "@/lib/validations/consultation";
 
 export function RoundsManager() {
@@ -37,20 +37,14 @@ export function RoundsManager() {
 
   const consultationCountsQuery = useQuery({
     queryKey: ["consultation_rounds", "counts", roundIds],
-    queryFn: async () => {
-      if (roundIds.length === 0) return {} as Record<string, number>;
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("consultations")
-        .select("round_id")
-        .in("round_id", roundIds);
-      if (error) throw error;
-      return (data ?? []).reduce<Record<string, number>>((acc, row) => {
-        if (!row.round_id) return acc;
-        acc[row.round_id] = (acc[row.round_id] ?? 0) + 1;
-        return acc;
-      }, {});
-    },
+    queryFn: () =>
+      fetchJson<Record<string, number>>("/api/client/rounds/consultation-counts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ids: roundIds }),
+      }),
     enabled: roundIds.length > 0,
   });
 

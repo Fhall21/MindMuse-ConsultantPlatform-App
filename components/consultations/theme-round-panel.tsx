@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { fetchJson } from "@/hooks/api";
 import { acceptTheme, rejectTheme } from "@/lib/actions/themes";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Theme } from "@/types/db";
 import { Badge } from "@/components/ui/badge";
@@ -54,16 +54,10 @@ function getErrorMessage(error: unknown) {
 function useRoundConsultations(roundId: string) {
   return useQuery({
     queryKey: ["consultations", "round", roundId],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("consultations")
-        .select("id, title, status")
-        .eq("round_id", roundId)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as ConsultationSummary[];
-    },
+    queryFn: () =>
+      fetchJson<ConsultationSummary[]>(
+        `/api/client/rounds/${roundId}/consultations`
+      ),
     enabled: !!roundId,
   });
 }
@@ -71,16 +65,13 @@ function useRoundConsultations(roundId: string) {
 function useRoundThemes(consultationIds: string[]) {
   return useQuery({
     queryKey: ["themes", "round-consultations", ...consultationIds],
-    queryFn: async () => {
-      if (consultationIds.length === 0) return [] as Theme[];
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("themes")
-        .select("*")
-        .in("consultation_id", consultationIds)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as Theme[];
+    queryFn: () => {
+      const params = new URLSearchParams();
+      consultationIds.forEach((consultationId) =>
+        params.append("consultationId", consultationId)
+      );
+
+      return fetchJson<Theme[]>(`/api/client/rounds/themes?${params.toString()}`);
     },
     enabled: consultationIds.length > 0,
   });

@@ -152,7 +152,13 @@ export function ConsultationGroupingSection({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => handleCreateGroup().then((id) => id && handleGroupSelected(id))}>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    const id = await handleCreateGroup();
+                    if (!id) return;
+                    await handleGroupSelected(id);
+                  }}
+                >
                   New group from selection
                 </DropdownMenuItem>
                 {groups.map((g) => (

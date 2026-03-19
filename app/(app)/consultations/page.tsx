@@ -23,8 +23,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { fetchJson } from "@/hooks/api";
 import { useConsultationRounds, useConsultations } from "@/hooks/use-consultations";
-import { createClient } from "@/lib/supabase/client";
 import type { Consultation } from "@/types/db";
 
 type StatusFilter = "all" | "draft" | "complete";
@@ -61,24 +61,14 @@ export default function ConsultationsPage() {
 
   const peopleCountsQuery = useQuery({
     queryKey: ["consultation_people_counts", consultationIds],
-    queryFn: async () => {
-      if (consultationIds.length === 0) {
-        return {} as Record<string, number>;
-      }
-
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("consultation_people")
-        .select("consultation_id")
-        .in("consultation_id", consultationIds);
-
-      if (error) throw error;
-
-      return (data ?? []).reduce<Record<string, number>>((acc, row) => {
-        acc[row.consultation_id] = (acc[row.consultation_id] ?? 0) + 1;
-        return acc;
-      }, {});
-    },
+    queryFn: () =>
+      fetchJson<Record<string, number>>("/api/client/consultations/people-counts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ids: consultationIds }),
+      }),
     enabled: consultationIds.length > 0,
   });
 

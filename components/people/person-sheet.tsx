@@ -11,7 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { createClient } from "@/lib/supabase/client";
+import { fetchJson } from "@/hooks/api";
 import type { Consultation, Person } from "@/types/db";
 
 interface PersonSheetProps {
@@ -36,45 +36,8 @@ function formatDate(value: string) {
 export function PersonSheet({ personId, open, onClose }: PersonSheetProps) {
   const sheetQuery = useQuery({
     queryKey: ["people", "sheet", personId],
-    queryFn: async () => {
-      const supabase = createClient();
-
-      const { data: person, error: personError } = await supabase
-        .from("people")
-        .select("*")
-        .eq("id", personId)
-        .single();
-
-      if (personError) throw personError;
-
-      const { data: links, error: linksError } = await supabase
-        .from("consultation_people")
-        .select("consultation_id")
-        .eq("person_id", personId);
-
-      if (linksError) throw linksError;
-
-      const consultationIds = (links ?? []).map((link) => link.consultation_id);
-      if (consultationIds.length === 0) {
-        return {
-          person,
-          consultations: [],
-        } satisfies PersonSheetData;
-      }
-
-      const { data: consultations, error: consultationsError } = await supabase
-        .from("consultations")
-        .select("id,title,status,created_at")
-        .in("id", consultationIds)
-        .order("created_at", { ascending: false });
-
-      if (consultationsError) throw consultationsError;
-
-      return {
-        person,
-        consultations: consultations ?? [],
-      } satisfies PersonSheetData;
-    },
+    queryFn: () =>
+      fetchJson<PersonSheetData>(`/api/client/people/${personId}`),
     enabled: open && !!personId,
   });
 

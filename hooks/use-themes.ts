@@ -1,20 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
 import type { Theme } from "@/types/db";
+import { fetchJson } from "@/hooks/api";
 
 export function useThemes(consultationId: string) {
   return useQuery({
     queryKey: ["themes", consultationId],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("themes")
-        .select("*")
-        .eq("consultation_id", consultationId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as Theme[];
-    },
+    queryFn: () =>
+      fetchJson<Theme[]>(`/api/client/themes/consultations/${consultationId}`),
     enabled: !!consultationId,
   });
 }

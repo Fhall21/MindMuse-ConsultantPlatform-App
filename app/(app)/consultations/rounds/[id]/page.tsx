@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ export default function RoundDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const queryClient = useQueryClient();
   const { data, isLoading, error } = useRoundDetail(id);
 
   // Adapt Agent 1 types to component-friendly shapes
@@ -85,36 +87,39 @@ export default function RoundDetailPage({
     async (roundId: string) => {
       try {
         await generateRoundSummary(roundId);
-        toast.success("Summary generation requested");
+        await queryClient.invalidateQueries({ queryKey: ["consultation_rounds", roundId, "detail"] });
+        toast.success("Summary generated");
       } catch (err) {
         toast.error("Failed to generate summary");
       }
     },
-    []
+    [queryClient]
   );
 
   const handleGenerateReport = useCallback(
     async (roundId: string) => {
       try {
         await generateRoundReport(roundId);
-        toast.success("Report generation requested");
+        await queryClient.invalidateQueries({ queryKey: ["consultation_rounds", roundId, "detail"] });
+        toast.success("Report generated");
       } catch (err) {
         toast.error("Failed to generate report");
       }
     },
-    []
+    [queryClient]
   );
 
   const handleGenerateEmail = useCallback(
     async (roundId: string) => {
       try {
         await generateRoundEmail(roundId);
-        toast.success("Email generation requested");
+        await queryClient.invalidateQueries({ queryKey: ["consultation_rounds", roundId, "detail"] });
+        toast.success("Email generated");
       } catch (err) {
         toast.error("Failed to generate email");
       }
     },
-    []
+    [queryClient]
   );
 
   // ─── Loading ───────────────────────────────────────────────────────────────

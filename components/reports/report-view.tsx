@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import {
   useReportArtifact,
   useReportArtifactVersions,
 } from "@/hooks/use-reports";
-import type { ReportArtifactDetail } from "@/lib/actions/reports";
+import type { ReportArtifactDetail, ConsultationMeta } from "@/lib/actions/reports";
 import {
   formatDate,
   formatShortDate,
@@ -69,11 +69,12 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 
 function QuickStats({ report }: { report: ReportArtifactDetail }) {
   const readTime = estimateReadTime(report.content);
+  const consultationCount = report.consultations.length || report.consultationTitles.length;
 
   const stats = [
     {
       label: "Consultations",
-      value: report.consultationTitles.length,
+      value: consultationCount,
     },
     {
       label: "Accepted Themes",
@@ -135,9 +136,34 @@ function FindingsSection({
 
   if (!acceptedToShow?.length && !supportingThemes?.length) return null;
 
+  // Build map: accepted theme label (normalised) → linked supporting themes
+  const supportingByAccepted = new Map<
+    string,
+    Array<{ label: string; description?: string | null; consultation_title?: string | null }>
+  >();
+  const unlinkedSupporting: Array<{
+    label: string;
+    description?: string | null;
+    consultation_title?: string | null;
+  }> = [];
+
+  if (showSupporting && supportingThemes && inputThemes) {
+    const acceptedLabelSet = new Set(inputThemes.map((t) => t.label.toLowerCase()));
+    for (const st of supportingThemes) {
+      const key = st.label.toLowerCase();
+      if (acceptedLabelSet.has(key)) {
+        const arr = supportingByAccepted.get(key) ?? [];
+        arr.push(st);
+        supportingByAccepted.set(key, arr);
+      } else {
+        unlinkedSupporting.push(st);
+      }
+    }
+  }
+
   return (
     <section className="space-y-6">
-      {/* Accepted themes */}
+      {/* Accepted (round-level) themes with linked consultation evidence */}
       {acceptedToShow && acceptedToShow.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -148,54 +174,82 @@ function FindingsSection({
               </span>
             )}
           </h3>
-          <div className="grid gap-2">
-            {acceptedToShow.map((theme, i) => (
-              <div
-                key={i}
-                className="group rounded-lg border border-emerald-200/60 border-l-4 border-l-emerald-500 bg-emerald-50/20 px-4 py-3 dark:border-emerald-800/40 dark:border-l-emerald-600 dark:bg-emerald-950/10"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-foreground">
-                        {theme.label}
-                      </p>
-                      <Badge
-                        variant="outline"
-                        className="shrink-0 border-emerald-300 text-[10px] text-emerald-700 dark:border-emerald-700 dark:text-emerald-400"
-                      >
-                        Accepted
-                      </Badge>
+          <div className="grid gap-3">
+            {acceptedToShow.map((theme, i) => {
+              const linked = supportingByAccepted.get(theme.label.toLowerCase());
+              return (
+                <div key={i}>
+                  {/* Primary accepted theme */}
+                  <div className="group rounded-lg border border-emerald-200/60 border-l-4 border-l-emerald-500 bg-emerald-50/20 px-4 py-3 dark:border-emerald-800/40 dark:border-l-emerald-600 dark:bg-emerald-950/10">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-foreground">{theme.label}</p>
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 border-emerald-300 text-[10px] text-emerald-700 dark:border-emerald-700 dark:text-emerald-400"
+                          >
+                            Accepted
+                          </Badge>
+                        </div>
+                        {theme.description && (
+                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                            {theme.description}
+                          </p>
+                        )}
+                      </div>
+                      <CopyButton
+                        text={theme.description ? `${theme.label}: ${theme.description}` : theme.label}
+                        label={theme.label}
+                      />
                     </div>
-                    {theme.description && (
-                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                        {theme.description}
-                      </p>
-                    )}
                   </div>
-                  <CopyButton
-                    text={
-                      theme.description
-                        ? `${theme.label}: ${theme.description}`
-                        : theme.label
-                    }
-                    label={theme.label}
-                  />
+
+                  {/* Linked consultation-level evidence for this theme */}
+                  {showSupporting && linked && linked.length > 0 && (
+                    <div className="ml-4 mt-1 space-y-1 border-l-2 border-emerald-200/40 pl-3 dark:border-emerald-800/30">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 pb-0.5">
+                        Evidence from consultations
+                      </p>
+                      {linked.map((st, j) => (
+                        <div
+                          key={j}
+                          className="flex items-start gap-2 rounded-md border border-border/30 bg-muted/5 px-3 py-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p className="text-xs font-medium text-foreground/80">{st.label}</p>
+                              {st.consultation_title && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  {st.consultation_title}
+                                </Badge>
+                              )}
+                            </div>
+                            {st.description && (
+                              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                                {st.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Supporting themes */}
-      {showSupporting && supportingThemes && supportingThemes.length > 0 && (
+      {/* Unlinked supporting themes (don't match any accepted label) */}
+      {showSupporting && unlinkedSupporting.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Supporting Themes ({supportingThemes.length})
+            Additional Supporting Themes ({unlinkedSupporting.length})
           </h3>
           <div className="grid gap-2">
-            {supportingThemes.map((theme, i) => (
+            {unlinkedSupporting.map((theme, i) => (
               <div
                 key={i}
                 className="group rounded-lg border border-border/40 border-l-4 border-l-slate-300 bg-slate-50/20 px-4 py-3 dark:border-slate-700/40 dark:border-l-slate-600 dark:bg-slate-900/10"
@@ -203,9 +257,7 @@ function FindingsSection({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-foreground">
-                        {theme.label}
-                      </p>
+                      <p className="text-sm font-medium text-foreground">{theme.label}</p>
                       {theme.consultation_title && (
                         <Badge variant="outline" className="text-[10px]">
                           {theme.consultation_title}
@@ -219,11 +271,7 @@ function FindingsSection({
                     )}
                   </div>
                   <CopyButton
-                    text={
-                      theme.description
-                        ? `${theme.label}: ${theme.description}`
-                        : theme.label
-                    }
+                    text={theme.description ? `${theme.label}: ${theme.description}` : theme.label}
                     label={theme.label}
                   />
                 </div>
@@ -239,31 +287,99 @@ function FindingsSection({
 // ─── Evidence Section ────────────────────────────────────────────────────────
 
 function EvidenceSection({ report }: { report: ReportArtifactDetail }) {
-  if (report.consultationTitles.length === 0) return null;
+  const consultations: ConsultationMeta[] = report.consultations.length > 0
+    ? report.consultations
+    : report.consultationTitles.map((title) => ({ id: title, title, date: "", people: [] }));
+
+  if (consultations.length === 0) return null;
 
   return (
     <section className="space-y-3">
       <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Source Consultations ({report.consultationTitles.length})
+        Source Consultations ({consultations.length})
       </h3>
       <div className="grid gap-2">
-        {report.consultationTitles.map((title, i) => (
+        {consultations.map((c, i) => (
           <div
-            key={i}
-            className="group flex items-center justify-between rounded-lg border border-border/50 bg-muted/5 px-4 py-3"
+            key={c.id}
+            className="group flex items-start justify-between rounded-lg border border-border/50 bg-muted/5 px-4 py-3"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-start gap-3">
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted/60 text-xs font-medium text-muted-foreground">
                 {i + 1}
               </div>
-              <p className="text-sm text-foreground">{title}</p>
+              <div>
+                <p className="text-sm text-foreground">{c.title}</p>
+                <div className="mt-0.5 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                  {c.date && (
+                    <span>{formatShortDate(c.date)}</span>
+                  )}
+                  {c.people.length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <span className="opacity-40">·</span>
+                      {c.people.join(", ")}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-            <CopyButton text={title} label={title} />
+            <CopyButton text={c.title} label={c.title} />
           </div>
         ))}
       </div>
     </section>
   );
+}
+
+// ─── Audit trail section (compliance) ────────────────────────────────────────
+
+function AuditTrailSection({ report }: { report: ReportArtifactDetail }) {
+  if (!report.auditSummary || report.auditSummary.length === 0) return null;
+
+  function formatAuditAction(action: string): string {
+    return action
+      .replace(/\./g, " → ")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        Audit Trail ({report.auditSummary.length} events)
+      </h3>
+      <div className="rounded-lg border border-border/50 bg-muted/5 divide-y divide-border/30">
+        {report.auditSummary.map((event, i) => (
+          <div key={i} className="flex items-start justify-between px-4 py-2.5 gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-foreground/80">
+                {formatAuditAction(event.action)}
+              </p>
+              {event.entityType && (
+                <p className="text-[11px] text-muted-foreground">{event.entityType}</p>
+              )}
+            </div>
+            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+              {formatShortDate(event.createdAt)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─── Inline bold renderer ─────────────────────────────────────────────────────
+
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
 }
 
 // ─── Content renderer ────────────────────────────────────────────────────────
@@ -316,6 +432,9 @@ function ReportContent({ content }: { content: string }) {
             line.trim().startsWith("* ") ||
             line.trim() === ""
         );
+        const isNumberedList = lines.every(
+          (line) => /^\d+\.\s/.test(line.trim()) || line.trim() === ""
+        );
 
         if (isBulletList) {
           return (
@@ -326,11 +445,24 @@ function ReportContent({ content }: { content: string }) {
               {lines
                 .filter((line) => line.trim())
                 .map((line, j) => (
-                  <li key={j}>
-                    {line.replace(/^[\s]*[-\u2022*]\s*/, "")}
-                  </li>
+                  <li key={j}>{renderInline(line.replace(/^[\s]*[-\u2022*]\s*/, ""))}</li>
                 ))}
             </ul>
+          );
+        }
+
+        if (isNumberedList) {
+          return (
+            <ol
+              key={i}
+              className="list-inside list-decimal space-y-1 pl-1 text-sm leading-relaxed text-foreground/90"
+            >
+              {lines
+                .filter((line) => line.trim())
+                .map((line, j) => (
+                  <li key={j}>{renderInline(line.replace(/^\d+\.\s*/, ""))}</li>
+                ))}
+            </ol>
           );
         }
 
@@ -339,7 +471,7 @@ function ReportContent({ content }: { content: string }) {
             key={i}
             className="text-sm leading-relaxed text-foreground/90"
           >
-            {trimmed}
+            {renderInline(trimmed)}
           </p>
         );
       })}
@@ -594,6 +726,8 @@ export function ReportView({ artifactId }: ReportViewProps) {
             <>
               <Separator />
               <EvidenceSection report={report} />
+              <Separator />
+              <AuditTrailSection report={report} />
             </>
           )}
         </article>

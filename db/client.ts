@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { getDatabaseUrl } from "../lib/env";
+import { logRuntimeDiagnostics } from "@/lib/runtime-diagnostics";
 import * as schema from "./schema";
 
 declare global {
@@ -14,6 +15,16 @@ function createPool() {
 }
 
 const pool = globalThis.__consultantPlatformDbPool ?? createPool();
+
+pool.on("error", (error) => {
+  console.error("[db] pool error", {
+    message: error.message,
+    name: error.name,
+    code: (error as { code?: string }).code,
+  });
+});
+
+logRuntimeDiagnostics("db-client");
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.__consultantPlatformDbPool = pool;

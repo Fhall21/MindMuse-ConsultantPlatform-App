@@ -30,6 +30,9 @@ export function validateRequiredEnv(): void {
   const missing = REQUIRED_ENV_VARS.filter((name) => !process.env[name]);
 
   if (missing.length > 0) {
+    console.error("[boot] missing required environment variables", {
+      missing,
+    });
     throw new Error(
       `Missing required environment variables: ${missing.join(", ")}`
     );

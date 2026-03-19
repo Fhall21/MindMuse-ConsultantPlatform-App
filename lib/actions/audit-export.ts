@@ -1,6 +1,13 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireCurrentUserId } from "@/lib/data/auth-context";
+import {
+  listAuditEventsForUser,
+  listConsultationsByIdsForUser,
+  listEvidenceEmailsForConsultations,
+  listRoundsByIdsForUser,
+  listThemesForConsultations,
+} from "@/lib/data/domain-read";
 import type {
   AuditExportConsultationRecord,
   AuditExportEvent,
@@ -202,12 +209,7 @@ function buildConsultationRecord(params: {
 export async function generateAuditExport(
   rawFilters: AuditExportFilters = {}
 ): Promise<AuditExportPackage> {
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-
-  if (!auth.user) {
-    throw new Error("Not authenticated");
-  }
+  const currentUserId = await requireCurrentUserId();
 
   const filters = normalizeFilters(rawFilters);
   const dateFromIso = normalizeDateBoundary(filters.dateFrom, "start");
@@ -215,35 +217,13 @@ export async function generateAuditExport(
 
   validateDateRange(dateFromIso, dateToIso);
 
-  let auditQuery = supabase.from("audit_log").select("*").order("created_at", { ascending: true });
-
-  if (filters.consultationId) {
-    auditQuery = auditQuery.eq("consultation_id", filters.consultationId);
-  }
-
-  if (filters.userId) {
-    auditQuery = auditQuery.eq("user_id", filters.userId);
-  }
-
-  if (dateFromIso) {
-    auditQuery = auditQuery.gte("created_at", dateFromIso);
-  }
-
-  if (dateToIso) {
-    auditQuery = auditQuery.lt("created_at", dateToIso);
-  }
-
-  const { data: auditRows, error: auditError } = await auditQuery;
-
-  if (auditError) {
-    console.error("Audit export query failed", {
-      code: auditError.code,
-      message: auditError.message,
-    });
-    throw new Error("Unable to load audit events for export. Please retry.");
-  }
-
-  const auditEvents = (auditRows ?? []) as AuditLogEntry[];
+  const auditEvents = await listAuditEventsForUser(currentUserId, {
+    actorUserId: filters.userId,
+    consultationId: filters.consultationId,
+    dateFromIso,
+    dateToIso,
+    ascending: true,
+  });
 
   const consultationIds = Array.from(
     new Set(
@@ -259,55 +239,11 @@ export async function generateAuditExport(
   let rounds: ConsultationRound[] = [];
 
   if (consultationIds.length > 0) {
-    const [
-      consultationsResult,
-      evidenceEmailsResult,
-      themesResult,
-    ] = await Promise.all([
-      supabase
-        .from("consultations")
-        .select("*")
-        .in("id", consultationIds)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("evidence_emails")
-        .select("*")
-        .in("consultation_id", consultationIds)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("themes")
-        .select("*")
-        .in("consultation_id", consultationIds)
-        .order("created_at", { ascending: true }),
+    [consultations, evidenceEmails, themes] = await Promise.all([
+      listConsultationsByIdsForUser(consultationIds, currentUserId),
+      listEvidenceEmailsForConsultations(consultationIds, currentUserId),
+      listThemesForConsultations(consultationIds, currentUserId),
     ]);
-
-    if (consultationsResult.error) {
-      console.error("Consultation query for audit export failed", {
-        code: consultationsResult.error.code,
-        message: consultationsResult.error.message,
-      });
-      throw new Error("Unable to load consultation details for export. Please retry.");
-    }
-
-    if (evidenceEmailsResult.error) {
-      console.error("Evidence email query for audit export failed", {
-        code: evidenceEmailsResult.error.code,
-        message: evidenceEmailsResult.error.message,
-      });
-      throw new Error("Unable to load evidence email details for export. Please retry.");
-    }
-
-    if (themesResult.error) {
-      console.error("Theme query for audit export failed", {
-        code: themesResult.error.code,
-        message: themesResult.error.message,
-      });
-      throw new Error("Unable to load theme details for export. Please retry.");
-    }
-
-    consultations = (consultationsResult.data ?? []) as Consultation[];
-    evidenceEmails = (evidenceEmailsResult.data ?? []) as EvidenceEmail[];
-    themes = (themesResult.data ?? []) as Theme[];
 
     const roundIds = Array.from(
       new Set(
@@ -318,20 +254,7 @@ export async function generateAuditExport(
     );
 
     if (roundIds.length > 0) {
-      const { data: roundRows, error: roundsError } = await supabase
-        .from("consultation_rounds")
-        .select("*")
-        .in("id", roundIds);
-
-      if (roundsError) {
-        console.error("Consultation round query for audit export failed", {
-          code: roundsError.code,
-          message: roundsError.message,
-        });
-        throw new Error("Unable to load consultation round details for export. Please retry.");
-      }
-
-      rounds = (roundRows ?? []) as ConsultationRound[];
+      rounds = await listRoundsByIdsForUser(roundIds, currentUserId);
     }
   }
 

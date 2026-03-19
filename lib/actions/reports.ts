@@ -1,6 +1,18 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireCurrentUserId } from "@/lib/data/auth-context";
+import {
+  getConsultationForUser,
+  getRoundForUser,
+  getRoundOutputArtifactForUser,
+  listAuditEventsForUser,
+  listConsultationsForRound,
+  listRoundOutputArtifactsForRound,
+  listRoundOutputArtifactsForUser,
+  listRoundsByIdsForUser,
+  listThemesForConsultation,
+  listThemesForConsultations,
+} from "@/lib/data/domain-read";
 import type {
   AuditLogEntry,
   Consultation,
@@ -247,122 +259,63 @@ function buildIncludedThemes(
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
-async function requireAuthenticatedClient() {
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-
-  if (!auth.user) {
-    throw new Error("Not authenticated");
-  }
-
-  return { supabase, userId: auth.user.id };
-}
-
 async function loadConsultationById(params: {
+  userId: string;
   consultationId: string;
 }): Promise<Consultation | null> {
-  const { consultationId } = params;
-  const { supabase } = await requireAuthenticatedClient();
-
-  const { data, error } = await supabase
-    .from("consultations")
-    .select("*")
-    .eq("id", consultationId)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  return (data as Consultation | null) ?? null;
+  const { consultationId, userId } = params;
+  return getConsultationForUser(consultationId, userId);
 }
 
 async function loadRoundContext(params: {
-  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
   roundId: string;
 }): Promise<RoundContext | null> {
-  const { supabase, roundId } = params;
-  const { data, error } = await supabase
-    .from("consultation_rounds")
-    .select("*")
-    .eq("id", roundId)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  return (data as ConsultationRound | null) ?? null;
+  const { roundId, userId } = params;
+  return getRoundForUser(roundId, userId);
 }
 
 async function loadRejectedAuditEvents(params: {
-  supabase: Awaited<ReturnType<typeof createClient>>;
   userId: string;
   consultationIds: string[];
 }): Promise<AuditLogEntry[]> {
-  const { supabase, userId, consultationIds } = params;
+  const { userId, consultationIds } = params;
 
   if (consultationIds.length === 0) {
     return [];
   }
 
-  const { data, error } = await supabase
-    .from("audit_log")
-    .select("*")
-    .eq("action", "theme.rejected")
-    .eq("user_id", userId)
-    .in("consultation_id", consultationIds)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as AuditLogEntry[];
+  return listAuditEventsForUser(userId, {
+    action: "theme.rejected",
+    consultationIds,
+  });
 }
 
 async function loadRoundSummaryInternal(params: {
-  supabase: Awaited<ReturnType<typeof createClient>>;
   userId: string;
   round: RoundContext;
 }): Promise<RoundSummaryData> {
-  const { supabase, userId, round } = params;
-
-  const { data: consultationRows, error: consultationError } = await supabase
-    .from("consultations")
-    .select("id, title, round_id")
-    .eq("round_id", round.id)
-    .order("created_at", { ascending: true });
-
-  if (consultationError) {
-    throw consultationError;
-  }
-
-  const consultations = (consultationRows ?? []) as ConsultationContext[];
+  const { userId, round } = params;
+  const consultations = (await listConsultationsForRound(round.id, userId)).map(
+    (consultation) => ({
+      id: consultation.id,
+      title: consultation.title,
+      round_id: consultation.round_id,
+    })
+  ) as ConsultationContext[];
   const consultationIds = consultations.map((consultation) => consultation.id);
   const consultationById = new Map(
     consultations.map((consultation) => [consultation.id, consultation])
   );
 
-  let acceptedThemes: Theme[] = [];
-
-  if (consultationIds.length > 0) {
-    const { data: themeRows, error: themeError } = await supabase
-      .from("themes")
-      .select("*")
-      .eq("accepted", true)
-      .in("consultation_id", consultationIds)
-      .order("created_at", { ascending: false });
-
-    if (themeError) {
-      throw themeError;
-    }
-
-    acceptedThemes = (themeRows ?? []) as Theme[];
-  }
+  const acceptedThemes =
+    consultationIds.length > 0
+      ? await listThemesForConsultations(consultationIds, userId, {
+          accepted: true,
+        })
+      : [];
 
   const rejectedEvents = await loadRejectedAuditEvents({
-    supabase,
     userId,
     consultationIds,
   });
@@ -395,15 +348,14 @@ async function loadRoundSummaryInternal(params: {
 export async function getRoundSummaryData(
   roundId: string
 ): Promise<RoundSummaryData | null> {
-  const { supabase, userId } = await requireAuthenticatedClient();
-  const round = await loadRoundContext({ supabase, roundId });
+  const userId = await requireCurrentUserId();
+  const round = await loadRoundContext({ userId, roundId });
 
   if (!round) {
     return null;
   }
 
   return loadRoundSummaryInternal({
-    supabase,
     userId,
     round,
   });
@@ -448,20 +400,10 @@ function previewContent(content: string, maxLength = 200): string {
 }
 
 export async function getReportArtifacts(): Promise<ReportArtifactListItem[]> {
-  const { supabase } = await requireAuthenticatedClient();
+  const userId = await requireCurrentUserId();
+  const artifacts = await listRoundOutputArtifactsForUser(userId);
 
-  // Get the latest artifact per (round_id, artifact_type) using distinct on
-  // Supabase JS doesn't support DISTINCT ON, so we fetch all and dedupe client-side
-  const { data: artifacts, error: artifactsError } = await supabase
-    .from("round_output_artifacts")
-    .select("*")
-    .order("generated_at", { ascending: false });
-
-  if (artifactsError) {
-    throw artifactsError;
-  }
-
-  if (!artifacts || artifacts.length === 0) {
+  if (artifacts.length === 0) {
     return [];
   }
 
@@ -479,13 +421,10 @@ export async function getReportArtifacts(): Promise<ReportArtifactListItem[]> {
 
   // Load round labels
   const roundIds = Array.from(new Set(latestArtifacts.map((a) => a.round_id)));
-  const { data: rounds } = await supabase
-    .from("consultation_rounds")
-    .select("id, label")
-    .in("id", roundIds);
+  const rounds = await listRoundsByIdsForUser(roundIds, userId);
 
   const roundLabelById = new Map(
-    (rounds ?? []).map((r: { id: string; label: string }) => [r.id, r.label])
+    rounds.map((round) => [round.id, round.label])
   );
 
   return latestArtifacts.map((artifact) => ({
@@ -503,39 +442,27 @@ export async function getReportArtifacts(): Promise<ReportArtifactListItem[]> {
 export async function getReportArtifact(
   artifactId: string
 ): Promise<ReportArtifactDetail | null> {
-  const { supabase } = await requireAuthenticatedClient();
+  const userId = await requireCurrentUserId();
+  const artifact = await getRoundOutputArtifactForUser(artifactId, userId);
 
-  const { data: artifact, error: artifactError } = await supabase
-    .from("round_output_artifacts")
-    .select("*")
-    .eq("id", artifactId)
-    .single();
-
-  if (artifactError || !artifact) {
+  if (!artifact) {
     return null;
   }
 
   // Load round context
-  const { data: round } = await supabase
-    .from("consultation_rounds")
-    .select("id, label, description")
-    .eq("id", artifact.round_id)
-    .single();
-
-  // Count versions of this artifact type for this round
-  const { count: totalVersions } = await supabase
-    .from("round_output_artifacts")
-    .select("id", { count: "exact", head: true })
-    .eq("round_id", artifact.round_id)
-    .eq("artifact_type", artifact.artifact_type);
-
-  // Determine version number (1 = oldest)
-  const { count: olderCount } = await supabase
-    .from("round_output_artifacts")
-    .select("id", { count: "exact", head: true })
-    .eq("round_id", artifact.round_id)
-    .eq("artifact_type", artifact.artifact_type)
-    .lte("generated_at", artifact.generated_at);
+  const round = await getRoundForUser(artifact.round_id, userId);
+  const versions = await listRoundOutputArtifactsForRound(
+    artifact.round_id,
+    userId,
+    artifact.artifact_type
+  );
+  const ascendingVersions = [...versions].sort((left, right) =>
+    left.generated_at.localeCompare(right.generated_at)
+  );
+  const versionNumber = Math.max(
+    1,
+    ascendingVersions.findIndex((candidate) => candidate.id === artifact.id) + 1
+  );
 
   const inputSnapshot = (artifact.input_snapshot ?? {}) as Record<string, unknown>;
   const consultationTitles = Array.isArray(inputSnapshot.consultations)
@@ -562,8 +489,8 @@ export async function getReportArtifact(
     consultationTitles,
     acceptedThemeCount,
     supportingThemeCount,
-    versionNumber: olderCount ?? 1,
-    totalVersions: totalVersions ?? 1,
+    versionNumber,
+    totalVersions: versions.length || 1,
   };
 }
 
@@ -571,29 +498,15 @@ export async function getReportArtifactVersions(
   roundId: string,
   artifactType: string
 ): Promise<ReportArtifactListItem[]> {
-  const { supabase } = await requireAuthenticatedClient();
-
-  const { data: artifacts, error } = await supabase
-    .from("round_output_artifacts")
-    .select("*")
-    .eq("round_id", roundId)
-    .eq("artifact_type", artifactType)
-    .order("generated_at", { ascending: false });
-
-  if (error) {
-    throw error;
-  }
-
-  // Load round label
-  const { data: round } = await supabase
-    .from("consultation_rounds")
-    .select("id, label")
-    .eq("id", roundId)
-    .single();
+  const userId = await requireCurrentUserId();
+  const [artifacts, round] = await Promise.all([
+    listRoundOutputArtifactsForRound(roundId, userId, artifactType),
+    getRoundForUser(roundId, userId),
+  ]);
 
   const roundLabel = round?.label ?? "Unknown round";
 
-  return (artifacts ?? []).map((artifact) => ({
+  return artifacts.map((artifact) => ({
     id: artifact.id,
     artifactType: artifact.artifact_type as "summary" | "report" | "email",
     title: artifact.title ?? null,
@@ -608,8 +521,8 @@ export async function getReportArtifactVersions(
 export async function getConsultationReportData(
   consultationId: string
 ): Promise<ConsultationReportData | null> {
-  const { supabase, userId } = await requireAuthenticatedClient();
-  const consultation = await loadConsultationById({ consultationId });
+  const userId = await requireCurrentUserId();
+  const consultation = await loadConsultationById({ consultationId, userId });
 
   if (!consultation) {
     return null;
@@ -621,20 +534,13 @@ export async function getConsultationReportData(
     round_id: consultation.round_id,
   };
 
-  const { data: localThemeRows, error: localThemeError } = await supabase
-    .from("themes")
-    .select("*")
-    .eq("consultation_id", consultationId)
-    .eq("accepted", true)
-    .order("created_at", { ascending: false });
-
-  if (localThemeError) {
-    throw localThemeError;
-  }
-
-  const localAcceptedThemes = (localThemeRows ?? []) as Theme[];
+  const localAcceptedThemes = await listThemesForConsultation(
+    consultationId,
+    userId,
+    { accepted: true }
+  );
   const round = consultation.round_id
-    ? await loadRoundContext({ supabase, roundId: consultation.round_id })
+    ? await loadRoundContext({ userId, roundId: consultation.round_id })
     : null;
 
   const consultationThemes = localAcceptedThemes
@@ -649,7 +555,6 @@ export async function getConsultationReportData(
 
   if (!round) {
     const rejectedEvents = await loadRejectedAuditEvents({
-      supabase,
       userId,
       consultationIds: [consultationId],
     });
@@ -679,7 +584,6 @@ export async function getConsultationReportData(
   }
 
   const roundSummary = await loadRoundSummaryInternal({
-    supabase,
     userId,
     round,
   });

@@ -93,16 +93,19 @@ Recommended defaults:
 - `DB_MIGRATION_RETRY_DELAY_SECONDS=5`
 
 Optional database override:
-- `DATABASE_URL_OVERRIDE=postgresql://...`
-- If `DATABASE_URL_OVERRIDE` is set, both `app` and `migrate` use it directly.
-- If `DATABASE_URL_OVERRIDE` is unset, the stack uses the internal `db` service URL.
+- `DATABASE_HOST=db`
+- `DATABASE_PORT=5432`
+- `DATABASE_NAME=consultant_platform`
+- `DATABASE_USER=postgres`
+- `DATABASE_PASSWORD=<password>`
+- To point at a different database, change those values explicitly.
 - If `AI_SERVICE_URL` is unset, the stack falls back to the internal `ai` service URL.
 
 Notes:
 - The included `db` service runs PostgreSQL inside the stack.
 - You only configure `DATABASE_*` vars in this project. Compose maps them onto the Postgres image's internal `POSTGRES_*` vars for the `db` container.
 - The included `migrate` service applies checked-in Drizzle migrations before the app starts.
-- The `migrate` service now uses the same `DATABASE_URL` resolution as the app, so they cannot drift onto different databases.
+- The `app` and `migrate` services now receive the same `DATABASE_HOST`/`DATABASE_PORT`/`DATABASE_NAME`/`DATABASE_USER`/`DATABASE_PASSWORD` settings, so they cannot drift onto different databases.
 - Keep the `ai` service private and only expose the `app` service publicly.
 - The app image now receives its required auth/database env values at build time as well as runtime, which is necessary for `next build`.
 

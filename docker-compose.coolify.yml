@@ -21,7 +21,11 @@ services:
       dockerfile: db/Dockerfile.migrations
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:?}@db:5432/${DATABASE_NAME:-consultant_platform}}
+      DATABASE_HOST: ${DATABASE_HOST:-db}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:-consultant_platform}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?}
       NODE_ENV: production
       DB_MIGRATION_MAX_ATTEMPTS: ${DB_MIGRATION_MAX_ATTEMPTS:-20}
       DB_MIGRATION_RETRY_DELAY_SECONDS: ${DB_MIGRATION_RETRY_DELAY_SECONDS:-5}
@@ -63,7 +67,11 @@ services:
         BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}
         AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai:${AI_SERVICE_PORT:-8000}}
         ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?}
-        DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:?}@db:5432/${DATABASE_NAME:-consultant_platform}}
+        DATABASE_HOST: ${DATABASE_HOST:-db}
+        DATABASE_PORT: ${DATABASE_PORT:-5432}
+        DATABASE_NAME: ${DATABASE_NAME:-consultant_platform}
+        DATABASE_USER: ${DATABASE_USER:-postgres}
+        DATABASE_PASSWORD: ${DATABASE_PASSWORD:?}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -71,7 +79,11 @@ services:
       PORT: ${APP_PORT:-3000}
       APP_SITE_URL: ${APP_SITE_URL:?}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}
-      DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:?}@db:5432/${DATABASE_NAME:-consultant_platform}}
+      DATABASE_HOST: ${DATABASE_HOST:-db}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:-consultant_platform}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?}
       AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai:${AI_SERVICE_PORT:-8000}}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?}
     depends_on:

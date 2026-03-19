@@ -409,6 +409,202 @@ export async function getRoundSummaryData(
   });
 }
 
+// ─── Report artifact listing and loading ─────────────────────────────────────
+
+export interface ReportArtifactListItem {
+  id: string;
+  artifactType: "summary" | "report" | "email";
+  title: string | null;
+  contentPreview: string;
+  roundId: string;
+  roundLabel: string;
+  generatedAt: string;
+  updatedAt: string;
+}
+
+export interface ReportArtifactDetail {
+  id: string;
+  artifactType: "summary" | "report" | "email";
+  title: string | null;
+  content: string;
+  roundId: string;
+  roundLabel: string;
+  roundDescription: string | null;
+  generatedAt: string;
+  updatedAt: string;
+  inputSnapshot: Record<string, unknown>;
+  consultationTitles: string[];
+  acceptedThemeCount: number;
+  supportingThemeCount: number;
+  versionNumber: number;
+  totalVersions: number;
+}
+
+function previewContent(content: string, maxLength = 200): string {
+  if (content.length <= maxLength) {
+    return content;
+  }
+  return content.slice(0, maxLength).trimEnd() + "…";
+}
+
+export async function getReportArtifacts(): Promise<ReportArtifactListItem[]> {
+  const { supabase } = await requireAuthenticatedClient();
+
+  // Get the latest artifact per (round_id, artifact_type) using distinct on
+  // Supabase JS doesn't support DISTINCT ON, so we fetch all and dedupe client-side
+  const { data: artifacts, error: artifactsError } = await supabase
+    .from("round_output_artifacts")
+    .select("*")
+    .order("generated_at", { ascending: false });
+
+  if (artifactsError) {
+    throw artifactsError;
+  }
+
+  if (!artifacts || artifacts.length === 0) {
+    return [];
+  }
+
+  // Dedupe to latest per (round_id, artifact_type)
+  const seen = new Set<string>();
+  const latestArtifacts: typeof artifacts = [];
+
+  for (const artifact of artifacts) {
+    const key = `${artifact.round_id}:${artifact.artifact_type}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      latestArtifacts.push(artifact);
+    }
+  }
+
+  // Load round labels
+  const roundIds = Array.from(new Set(latestArtifacts.map((a) => a.round_id)));
+  const { data: rounds } = await supabase
+    .from("consultation_rounds")
+    .select("id, label")
+    .in("id", roundIds);
+
+  const roundLabelById = new Map(
+    (rounds ?? []).map((r: { id: string; label: string }) => [r.id, r.label])
+  );
+
+  return latestArtifacts.map((artifact) => ({
+    id: artifact.id,
+    artifactType: artifact.artifact_type as "summary" | "report" | "email",
+    title: artifact.title ?? null,
+    contentPreview: previewContent(artifact.content),
+    roundId: artifact.round_id,
+    roundLabel: roundLabelById.get(artifact.round_id) ?? "Unknown round",
+    generatedAt: artifact.generated_at,
+    updatedAt: artifact.updated_at,
+  }));
+}
+
+export async function getReportArtifact(
+  artifactId: string
+): Promise<ReportArtifactDetail | null> {
+  const { supabase } = await requireAuthenticatedClient();
+
+  const { data: artifact, error: artifactError } = await supabase
+    .from("round_output_artifacts")
+    .select("*")
+    .eq("id", artifactId)
+    .single();
+
+  if (artifactError || !artifact) {
+    return null;
+  }
+
+  // Load round context
+  const { data: round } = await supabase
+    .from("consultation_rounds")
+    .select("id, label, description")
+    .eq("id", artifact.round_id)
+    .single();
+
+  // Count versions of this artifact type for this round
+  const { count: totalVersions } = await supabase
+    .from("round_output_artifacts")
+    .select("id", { count: "exact", head: true })
+    .eq("round_id", artifact.round_id)
+    .eq("artifact_type", artifact.artifact_type);
+
+  // Determine version number (1 = oldest)
+  const { count: olderCount } = await supabase
+    .from("round_output_artifacts")
+    .select("id", { count: "exact", head: true })
+    .eq("round_id", artifact.round_id)
+    .eq("artifact_type", artifact.artifact_type)
+    .lte("generated_at", artifact.generated_at);
+
+  const inputSnapshot = (artifact.input_snapshot ?? {}) as Record<string, unknown>;
+  const consultationTitles = Array.isArray(inputSnapshot.consultations)
+    ? (inputSnapshot.consultations as string[])
+    : [];
+  const acceptedThemeCount = Array.isArray(inputSnapshot.accepted_round_themes)
+    ? inputSnapshot.accepted_round_themes.length
+    : 0;
+  const supportingThemeCount = Array.isArray(inputSnapshot.supporting_consultation_themes)
+    ? inputSnapshot.supporting_consultation_themes.length
+    : 0;
+
+  return {
+    id: artifact.id,
+    artifactType: artifact.artifact_type as "summary" | "report" | "email",
+    title: artifact.title ?? null,
+    content: artifact.content,
+    roundId: artifact.round_id,
+    roundLabel: round?.label ?? "Unknown round",
+    roundDescription: round?.description ?? null,
+    generatedAt: artifact.generated_at,
+    updatedAt: artifact.updated_at,
+    inputSnapshot,
+    consultationTitles,
+    acceptedThemeCount,
+    supportingThemeCount,
+    versionNumber: olderCount ?? 1,
+    totalVersions: totalVersions ?? 1,
+  };
+}
+
+export async function getReportArtifactVersions(
+  roundId: string,
+  artifactType: string
+): Promise<ReportArtifactListItem[]> {
+  const { supabase } = await requireAuthenticatedClient();
+
+  const { data: artifacts, error } = await supabase
+    .from("round_output_artifacts")
+    .select("*")
+    .eq("round_id", roundId)
+    .eq("artifact_type", artifactType)
+    .order("generated_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  // Load round label
+  const { data: round } = await supabase
+    .from("consultation_rounds")
+    .select("id, label")
+    .eq("id", roundId)
+    .single();
+
+  const roundLabel = round?.label ?? "Unknown round";
+
+  return (artifacts ?? []).map((artifact) => ({
+    id: artifact.id,
+    artifactType: artifact.artifact_type as "summary" | "report" | "email",
+    title: artifact.title ?? null,
+    contentPreview: previewContent(artifact.content),
+    roundId: artifact.round_id,
+    roundLabel,
+    generatedAt: artifact.generated_at,
+    updatedAt: artifact.updated_at,
+  }));
+}
+
 export async function getConsultationReportData(
   consultationId: string
 ): Promise<ConsultationReportData | null> {

@@ -11,7 +11,7 @@ export function useAuditEvents(consultationId: string) {
         .from("audit_log")
         .select("*")
         .eq("consultation_id", consultationId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data as AuditLogEntry[];
     },
@@ -50,7 +50,7 @@ export function useRoundAuditEvents(roundId: string) {
           merged.push(event as AuditLogEntry);
         }
       }
-      merged.sort((a, b) => a.created_at.localeCompare(b.created_at));
+      merged.sort((a, b) => b.created_at.localeCompare(a.created_at));
       return merged;
     },
     enabled: !!roundId,

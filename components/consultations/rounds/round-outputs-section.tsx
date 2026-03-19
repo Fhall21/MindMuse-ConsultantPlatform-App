@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -106,6 +107,16 @@ export function RoundOutputsSection({
                   <Badge variant="outline" className={statusConfig.className}>
                     {statusConfig.label}
                   </Badge>
+                ) : null}
+                {output ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    asChild
+                  >
+                    <Link href={`/reports/${output.id}`}>View</Link>
+                  </Button>
                 ) : null}
                 <Button
                   size="sm"

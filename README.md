@@ -86,6 +86,7 @@ Required environment variables:
 Recommended defaults:
 - `APP_PORT=3000`
 - `AI_SERVICE_PORT=8000`
+- `AI_SERVICE_URL=http://ai:8000`
 - `DATABASE_NAME=consultant_platform`
 - `DATABASE_USER=postgres`
 - `DB_MIGRATION_MAX_ATTEMPTS=20`
@@ -95,9 +96,11 @@ Optional database override:
 - `DATABASE_URL=postgresql://...`
 - If `DATABASE_URL` is set, both `app` and `migrate` use it directly.
 - If `DATABASE_URL` is unset, the stack falls back to the internal `db` service URL.
+- If `AI_SERVICE_URL` is unset, the stack falls back to the internal `ai` service URL.
 
 Notes:
 - The included `db` service runs PostgreSQL inside the stack.
+- You only configure `DATABASE_*` vars in this project. Compose maps them onto the Postgres image's internal `POSTGRES_*` vars for the `db` container.
 - The included `migrate` service applies checked-in Drizzle migrations before the app starts.
 - The `migrate` service now uses the same `DATABASE_URL` resolution as the app, so they cannot drift onto different databases.
 - Keep the `ai` service private and only expose the `app` service publicly.

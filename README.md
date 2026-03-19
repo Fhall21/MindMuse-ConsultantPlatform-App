@@ -68,6 +68,7 @@ docker compose up
 
 This starts:
 - `db` on port `5432`
+- `migrate` as a manual migration shell
 - `app` on port `3000`
 - `ai` on port `8000`
 
@@ -101,15 +102,18 @@ Optional database override:
 Notes:
 - The included `db` service runs PostgreSQL inside the stack.
 - You only configure `DATABASE_*` vars in this project. Compose maps them onto the Postgres image's internal `POSTGRES_*` vars for the `db` container.
-- Migrations are now run manually instead of as an always-on service.
+- The included `migrate` service is a manual migration shell. It stays running, is excluded from Coolify's overall healthchecks, and is intended to be used through the Coolify terminal.
+- The app and migration code now prefer `DATABASE_HOST` / `DATABASE_PORT` / `DATABASE_NAME` / `DATABASE_USER` / `DATABASE_PASSWORD` over `DATABASE_URL`, so a stale `DATABASE_URL` env var cannot silently redirect the connection.
 - Keep the `ai` service private and only expose the `app` service publicly.
 - The app image now receives its required auth/database env values at build time as well as runtime, which is necessary for `next build`.
 
-Validate the stack before deploy:
+Validate the local stack before deploy:
 
 ```bash
-docker compose -f docker-compose.coolify.yml config
+docker compose config
 ```
+
+Note: [docker-compose.coolify.yml](/Users/felixhall/Documents/0.WorkLife/MindMuse/2026/Product/Customer/ConsultantPlatform/ConsultantPlatformApp/docker-compose.coolify.yml) contains Coolify's `exclude_from_hc` extension for the manual `migrate` service, so standard local `docker compose config` will not understand that file.
 
 ## Database Workflow
 
@@ -120,25 +124,23 @@ docker compose -f docker-compose.coolify.yml config
 
 ### Manual Migrations On The Coolify Server
 
-Run these from a checkout of this repo on the server:
+Open the terminal for the `migrate` service in Coolify and run:
 
 ```bash
-MIGRATION_NETWORK=<your-coolify-network> \
-DATABASE_HOST=db \
-DATABASE_PORT=5432 \
-DATABASE_NAME=consultant_platform \
-DATABASE_USER=postgres \
-DATABASE_PASSWORD=your-password \
-./scripts/run-manual-migrations.sh
+bun run db/migrate.ts
 ```
 
-To find the network name:
+The `migrate` container already has:
+- the checked-in `drizzle/` migrations
+- the DB schema files
+- Bun installed
+- the same `DATABASE_HOST` / `DATABASE_PORT` / `DATABASE_NAME` / `DATABASE_USER` / `DATABASE_PASSWORD` env vars as the app stack
+
+If you want to inspect connectivity first, run:
 
 ```bash
-docker network ls
+bun -e "import { Client } from 'pg'; const client = new Client({ host: process.env.DATABASE_HOST, port: Number(process.env.DATABASE_PORT), database: process.env.DATABASE_NAME, user: process.env.DATABASE_USER, password: process.env.DATABASE_PASSWORD }); await client.connect(); console.log('db ok'); await client.end();"
 ```
-
-Then pick the network used by this Coolify stack and pass it as `MIGRATION_NETWORK`.
 
 The generated SQL lives in [`drizzle/`](/Users/felixhall/Documents/0.WorkLife/MindMuse/2026/Product/Customer/ConsultantPlatform/ConsultantPlatformApp/drizzle).
 

@@ -27,6 +27,19 @@ describe("lib/env", () => {
     );
   });
 
+  it("prefers discrete Postgres environment variables over DATABASE_URL", () => {
+    vi.stubEnv("DATABASE_URL", "postgresql://postgres:wrong@127.0.0.1:5432/wrong_db");
+    vi.stubEnv("DATABASE_HOST", "db");
+    vi.stubEnv("DATABASE_PORT", "5432");
+    vi.stubEnv("DATABASE_NAME", "consultant_platform");
+    vi.stubEnv("DATABASE_USER", "postgres");
+    vi.stubEnv("DATABASE_PASSWORD", "secret");
+
+    expect(getDatabaseUrl()).toBe(
+      "postgresql://postgres:secret@db:5432/consultant_platform"
+    );
+  });
+
   it("normalizes app and AI URLs without trailing slashes", () => {
     vi.stubEnv("APP_SITE_URL", "https://app.example.com/");
     vi.stubEnv("AI_SERVICE_URL", "http://ai.internal:8000/");

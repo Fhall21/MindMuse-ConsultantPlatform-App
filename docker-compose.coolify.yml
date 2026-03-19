@@ -15,6 +15,24 @@ services:
       retries: 10
       start_period: 20s
 
+  migrate:
+    build:
+      context: .
+      dockerfile: db/Dockerfile.migrations
+    restart: unless-stopped
+    exclude_from_hc: true
+    command: ["sh", "-lc", "echo 'Migration shell ready'; tail -f /dev/null"]
+    environment:
+      DATABASE_HOST: ${DATABASE_HOST:-db}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:-consultant_platform}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?}
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+
   ai:
     build:
       context: ./services/ai

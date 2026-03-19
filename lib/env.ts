@@ -122,19 +122,30 @@ function addTrustedOrigin(origins: Set<string>, origin: string) {
 }
 
 export function getDatabaseUrl(): string {
+  const host = process.env.DATABASE_HOST;
+  const name = process.env.DATABASE_NAME;
+  const user = process.env.DATABASE_USER;
+  const password = process.env.DATABASE_PASSWORD;
+
+  if (host && name && user && password) {
+    const port = process.env.DATABASE_PORT || "5432";
+    const constructedUrl = `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${name}`;
+    return validateDatabaseUrl(constructedUrl);
+  }
+
   const directUrl = process.env.DATABASE_URL;
 
   if (directUrl) {
     return validateDatabaseUrl(directUrl);
   }
 
-  const host = requireEnv("DATABASE_HOST");
+  const requiredHost = requireEnv("DATABASE_HOST");
   const port = process.env.DATABASE_PORT || "5432";
-  const name = requireEnv("DATABASE_NAME");
-  const user = requireEnv("DATABASE_USER");
-  const password = requireEnv("DATABASE_PASSWORD");
+  const requiredName = requireEnv("DATABASE_NAME");
+  const requiredUser = requireEnv("DATABASE_USER");
+  const requiredPassword = requireEnv("DATABASE_PASSWORD");
 
-  const constructedUrl = `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${name}`;
+  const constructedUrl = `postgresql://${encodeURIComponent(requiredUser)}:${encodeURIComponent(requiredPassword)}@${requiredHost}:${port}/${requiredName}`;
   return validateDatabaseUrl(constructedUrl);
 }
 

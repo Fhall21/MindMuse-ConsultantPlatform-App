@@ -29,6 +29,7 @@ interface ConsultationSummary {
 interface ThemeWithConsultation extends Theme {
   consultationId: string;
   consultationTitle: string;
+  consultationStatus: string;
 }
 
 interface ThemeRoundPanelProps {
@@ -126,6 +127,7 @@ export function ThemeRoundPanel({ roundId, roundLabel }: ThemeRoundPanelProps) {
           ...theme,
           consultationId: theme.consultation_id,
           consultationTitle: consultation?.title ?? "Untitled",
+          consultationStatus: consultation?.status ?? "draft",
         });
       }
     }
@@ -258,6 +260,7 @@ export function ThemeRoundPanel({ roundId, roundLabel }: ThemeRoundPanelProps) {
       <ThemeRejectionDialog
         open={rejectionDialogTheme !== null}
         themeLabel={rejectionDialogTheme?.label ?? ""}
+        requiresRationale={rejectionDialogTheme?.consultationStatus !== "draft"}
         onConfirm={handleRejectionConfirm}
         onCancel={handleRejectionCancel}
       />

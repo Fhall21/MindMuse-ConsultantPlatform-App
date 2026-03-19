@@ -138,7 +138,7 @@ export function ConsultationGroupCard({
           )}
 
           <Badge variant="secondary" className="shrink-0 text-xs">
-            {group.memberCount} consultation{group.memberCount !== 1 ? "s" : ""}
+            {group.members.length} consultation{group.members.length !== 1 ? "s" : ""}
           </Badge>
 
           {/* Actions */}
@@ -161,7 +161,7 @@ export function ConsultationGroupCard({
                 variant="ghost"
                 className="h-7 w-7"
                 onClick={handleGenerateSummary}
-                disabled={isGeneratingSummary || group.memberCount === 0}
+                disabled={isGeneratingSummary || group.members.length === 0}
                 aria-label="Generate group summary"
               >
                 {isGeneratingSummary ? (

@@ -56,6 +56,10 @@ export function AiThemeGroupSuggestionDialog({
     });
   };
 
+  const handleSelectAllFocusThemes = () => {
+    setSelectedFocusLabels(new Set(uniqueThemeLabels));
+  };
+
   const handleSuggest = async () => {
     if (selectedFocusLabels.size < 2) return;
 
@@ -130,7 +134,19 @@ export function AiThemeGroupSuggestionDialog({
 
         {/* Focus theme picker */}
         <div className="space-y-2">
-          <p className="text-sm font-medium">Select focus themes</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium">Select focus themes</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleSelectAllFocusThemes}
+              disabled={uniqueThemeLabels.length === 0}
+              className="h-7 px-2.5 text-xs"
+            >
+              Select all
+            </Button>
+          </div>
           <div className="space-y-1.5 max-h-48 overflow-y-auto border rounded-md p-3">
             {uniqueThemeLabels.length === 0 ? (
               <p className="text-xs text-muted-foreground">

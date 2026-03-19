@@ -617,3 +617,34 @@ export async function listRoundOutputArtifactsForRound(
 
   return rows.map(mapRoundOutputArtifactRecord);
 }
+
+export interface DashboardStats {
+  totalConsultations: number;
+  totalPeople: number;
+  emailsSent: number;
+}
+
+export async function getDashboardStats(userId: string): Promise<DashboardStats> {
+  const [consultationCountResult, peopleCountResult, emailsSentResult] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(consultations)
+      .where(eq(consultations.userId, userId)),
+    db
+      .select({ count: sql<number>`count(distinct ${consultationPeople.personId})::int` })
+      .from(consultationPeople)
+      .innerJoin(consultations, eq(consultationPeople.consultationId, consultations.id))
+      .where(eq(consultations.userId, userId)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(evidenceEmails)
+      .innerJoin(consultations, eq(evidenceEmails.consultationId, consultations.id))
+      .where(and(eq(consultations.userId, userId), eq(evidenceEmails.status, "sent"))),
+  ]);
+
+  return {
+    totalConsultations: consultationCountResult[0]?.count ?? 0,
+    totalPeople: peopleCountResult[0]?.count ?? 0,
+    emailsSent: emailsSentResult[0]?.count ?? 0,
+  };
+}

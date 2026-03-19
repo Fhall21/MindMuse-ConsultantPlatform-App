@@ -37,3 +37,6 @@ export const consultationRoundSchema = z.object({
 });
 
 export type ConsultationRoundFormData = z.infer<typeof consultationRoundSchema>;
+
+export const uuidArraySchema = (maxLength = 100) =>
+  z.array(z.uuid()).max(maxLength, `No more than ${maxLength} IDs allowed`);

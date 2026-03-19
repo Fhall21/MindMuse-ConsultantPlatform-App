@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { countPeopleByConsultationIds } from "@/lib/data/domain-read";
+import { uuidArraySchema } from "@/lib/validations/consultation";
 import { jsonError, requireRouteClient } from "../../_helpers";
 
 export async function POST(request: Request) {
@@ -8,8 +9,12 @@ export async function POST(request: Request) {
     return client.response;
   }
 
-  const { ids } = (await request.json()) as { ids?: string[] };
-  const consultationIds = Array.isArray(ids) ? ids.filter(Boolean) : [];
+  const body = (await request.json()) as { ids?: unknown };
+  const parsed = uuidArraySchema(100).safeParse(body.ids ?? []);
+  if (!parsed.success) {
+    return jsonError("Invalid consultation IDs", 400);
+  }
+  const consultationIds = parsed.data;
 
   if (consultationIds.length === 0) {
     return NextResponse.json({});

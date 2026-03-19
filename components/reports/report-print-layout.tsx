@@ -57,7 +57,7 @@ Font.register({
 });
 
 // Disable hyphenation for cleaner text
-Font.registerHyphenationCallback((word) => [word]);
+Font.registerHyphenationCallback((word: string) => [word]);
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
@@ -508,7 +508,7 @@ export function ReportPrintLayout({
           <Text style={s.confidential}>Confidential</Text>
           <Text
             style={s.footerText}
-            render={({ pageNumber, totalPages }) =>
+            render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
               `Page ${pageNumber} of ${totalPages}`
             }
           />

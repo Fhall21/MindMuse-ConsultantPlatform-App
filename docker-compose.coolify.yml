@@ -67,6 +67,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      HOSTNAME: 0.0.0.0
       APP_SITE_URL: ${APP_SITE_URL:?}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}
       DATABASE_HOST: ${DATABASE_HOST:-db}

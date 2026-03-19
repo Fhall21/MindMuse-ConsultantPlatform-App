@@ -88,10 +88,18 @@ Recommended defaults:
 - `AI_SERVICE_PORT=8000`
 - `DATABASE_NAME=consultant_platform`
 - `DATABASE_USER=postgres`
+- `DB_MIGRATION_MAX_ATTEMPTS=20`
+- `DB_MIGRATION_RETRY_DELAY_SECONDS=5`
+
+Optional database override:
+- `DATABASE_URL=postgresql://...`
+- If `DATABASE_URL` is set, both `app` and `migrate` use it directly.
+- If `DATABASE_URL` is unset, the stack falls back to the internal `db` service URL.
 
 Notes:
 - The included `db` service runs PostgreSQL inside the stack.
 - The included `migrate` service applies checked-in Drizzle migrations before the app starts.
+- The `migrate` service now uses the same `DATABASE_URL` resolution as the app, so they cannot drift onto different databases.
 - Keep the `ai` service private and only expose the `app` service publicly.
 - The app image now receives its required auth/database env values at build time as well as runtime, which is necessary for `next build`.
 

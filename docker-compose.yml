@@ -23,7 +23,8 @@ services:
       dockerfile: db/Dockerfile.migrations
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@db:5432/${DATABASE_NAME:-consultant_platform}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@db:5432/${DATABASE_NAME:-consultant_platform}}
+      NODE_ENV: production
       DB_MIGRATION_MAX_ATTEMPTS: ${DB_MIGRATION_MAX_ATTEMPTS:-20}
       DB_MIGRATION_RETRY_DELAY_SECONDS: ${DB_MIGRATION_RETRY_DELAY_SECONDS:-5}
     depends_on:
@@ -45,7 +46,7 @@ services:
         BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me}
         AI_SERVICE_URL: http://ai:${AI_SERVICE_PORT:-8000}
         ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
-        DATABASE_URL: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@db:5432/${DATABASE_NAME:-consultant_platform}
+        DATABASE_URL: ${DATABASE_URL:-postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@db:5432/${DATABASE_NAME:-consultant_platform}}
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -55,7 +56,7 @@ services:
       DATABASE_NAME: ${DATABASE_NAME:-consultant_platform}
       DATABASE_USER: ${DATABASE_USER:-postgres}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
-      DATABASE_URL: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@db:5432/${DATABASE_NAME:-consultant_platform}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@db:5432/${DATABASE_NAME:-consultant_platform}}
       APP_SITE_URL: ${APP_SITE_URL:-http://localhost:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me}
       AI_SERVICE_URL: http://ai:${AI_SERVICE_PORT:-8000}

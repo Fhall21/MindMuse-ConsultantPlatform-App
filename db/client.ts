@@ -30,6 +30,7 @@ if (process.env.NODE_ENV !== "production") {
   globalThis.__consultantPlatformDbPool = pool;
 }
 
+export { pool };
 export const db = drizzle(pool, { schema });
 
 export type AppDatabase = typeof db;

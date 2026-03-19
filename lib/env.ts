@@ -4,11 +4,6 @@ const REQUIRED_ENV_VARS = [
   "AI_SERVICE_URL",
 ] as const;
 
-const LEGACY_TRANSITION_ENV_VARS = [
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-] as const;
-
 const DATABASE_ENV_VARS = [
   "DATABASE_URL",
   "DATABASE_HOST",
@@ -20,7 +15,6 @@ const DATABASE_ENV_VARS = [
 
 type RequiredEnvVar =
   | (typeof REQUIRED_ENV_VARS)[number]
-  | (typeof LEGACY_TRANSITION_ENV_VARS)[number]
   | (typeof DATABASE_ENV_VARS)[number];
 
 export function requireEnv(name: RequiredEnvVar): string {

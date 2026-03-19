@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { getDatabaseUrl } from "../lib/env";
-import { logRuntimeDiagnostics } from "@/lib/runtime-diagnostics";
+import { logRuntimeDiagnostics } from "../lib/runtime-diagnostics";
 import * as schema from "./schema";
 
 declare global {

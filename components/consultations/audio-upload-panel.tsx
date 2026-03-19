@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useTranscriptionStatus } from "@/hooks/use-transcription";
 import {
@@ -52,6 +53,7 @@ export function AudioUploadPanel({
   consultationId,
   onTranscriptReady,
 }: AudioUploadPanelProps) {
+  const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -126,6 +128,9 @@ export function AudioUploadPanel({
         transcriptText: result.transcript,
         completedAt: new Date().toISOString(),
       });
+
+      await queryClient.invalidateQueries({ queryKey: ["transcription_jobs", consultationId] });
+      await queryClient.invalidateQueries({ queryKey: ["audit_log", consultationId] });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Upload failed. Please try again.";
@@ -138,6 +143,9 @@ export function AudioUploadPanel({
           errorMessage: message,
           completedAt: new Date().toISOString(),
         }).catch(() => undefined);
+
+        await queryClient.invalidateQueries({ queryKey: ["transcription_jobs", consultationId] });
+        await queryClient.invalidateQueries({ queryKey: ["audit_log", consultationId] });
       }
 
       // Show user-friendly message for stub state

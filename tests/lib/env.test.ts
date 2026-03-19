@@ -47,4 +47,15 @@ describe("lib/env", () => {
       "https://admin.example.com",
     ]);
   });
+
+  it("treats localhost and loopback aliases as trusted in local development", () => {
+    vi.stubEnv("APP_SITE_URL", "http://localhost:3000");
+    vi.stubEnv("ALLOWED_ORIGINS", "http://localhost:3000");
+
+    expect(getTrustedOrigins()).toEqual([
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://[::1]:3000",
+    ]);
+  });
 });

@@ -37,6 +37,12 @@ export function validateRequiredEnv(): void {
 }
 
 const PRODUCTION_BLOCKED_HOSTNAMES = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
+const LOCAL_DEV_HOST_ALIASES = new Map<string, string[]>([
+  ["localhost", ["127.0.0.1", "[::1]"]],
+  ["127.0.0.1", ["localhost", "[::1]"]],
+  ["[::1]", ["localhost", "127.0.0.1"]],
+  ["0.0.0.0", ["localhost", "127.0.0.1", "[::1]"]],
+]);
 
 function parseHttpUrl(rawUrl: string, envName: string): URL {
   let parsed: URL;
@@ -76,7 +82,8 @@ export function getBetterAuthSecret(): string {
 }
 
 export function getTrustedOrigins(): string[] {
-  const origins = new Set<string>([getAppSiteUrl()]);
+  const origins = new Set<string>();
+  addTrustedOrigin(origins, getAppSiteUrl());
   const rawAllowedOrigins = process.env.ALLOWED_ORIGINS;
 
   if (!rawAllowedOrigins) {
@@ -89,10 +96,29 @@ export function getTrustedOrigins(): string[] {
       continue;
     }
 
-    origins.add(parseHttpUrl(trimmed, "ALLOWED_ORIGINS").toString().replace(/\/$/, ""));
+    addTrustedOrigin(
+      origins,
+      parseHttpUrl(trimmed, "ALLOWED_ORIGINS").toString().replace(/\/$/, "")
+    );
   }
 
   return [...origins];
+}
+
+function addTrustedOrigin(origins: Set<string>, origin: string) {
+  origins.add(origin);
+
+  const parsed = new URL(origin);
+  const aliases = LOCAL_DEV_HOST_ALIASES.get(parsed.hostname);
+  if (!aliases) {
+    return;
+  }
+
+  for (const alias of aliases) {
+    const aliasUrl = new URL(origin);
+    aliasUrl.hostname = alias;
+    origins.add(aliasUrl.toString().replace(/\/$/, ""));
+  }
 }
 
 export function getDatabaseUrl(): string {

@@ -244,6 +244,16 @@ const s = StyleSheet.create({
   bulletText: {
     flex: 1,
   },
+  numberedItem: {
+    flexDirection: "row",
+    marginBottom: 3,
+  },
+  numberedIndex: {
+    fontFamily: "Helvetica-Bold",
+    width: 16,
+    fontSize: 10,
+    color: colors.mid,
+  },
 
   // Theme cards
   themeCard: {
@@ -383,6 +393,9 @@ function PdfContentBlocks({ content }: { content: string }) {
             line.trim().startsWith("* ") ||
             line.trim() === ""
         );
+        const isNumberedList = lines.every(
+          (line) => /^\d+\.\s/.test(line.trim()) || line.trim() === ""
+        );
 
         if (isBulletList) {
           return (
@@ -393,7 +406,24 @@ function PdfContentBlocks({ content }: { content: string }) {
                   <View key={j} style={s.bulletItem}>
                     <Text style={s.bulletDot}>{"\u2022"}</Text>
                     <Text style={s.bulletText}>
-                      {line.replace(/^[\s]*[-\u2022*]\s*/, "")}
+                      {line.replace(/^[\s]*[-\u2022*]\s*/, "").replace(/\*\*([^*]+)\*\*/g, "$1")}
+                    </Text>
+                  </View>
+                ))}
+            </View>
+          );
+        }
+
+        if (isNumberedList) {
+          return (
+            <View key={i} style={s.bulletList}>
+              {lines
+                .filter((line) => line.trim())
+                .map((line, j) => (
+                  <View key={j} style={s.numberedItem}>
+                    <Text style={s.numberedIndex}>{j + 1}.</Text>
+                    <Text style={s.bulletText}>
+                      {line.replace(/^\d+\.\s*/, "").replace(/\*\*([^*]+)\*\*/g, "$1")}
                     </Text>
                   </View>
                 ))}
@@ -403,7 +433,7 @@ function PdfContentBlocks({ content }: { content: string }) {
 
         return (
           <Text key={i} style={s.paragraph}>
-            {trimmed}
+            {trimmed.replace(/\*\*([^*]+)\*\*/g, "$1")}
           </Text>
         );
       })}
@@ -577,18 +607,67 @@ export function ReportPrintLayout({
           )}
 
         {/* ─── Source Evidence ─── */}
-        {showEvidence && report.consultationTitles.length > 0 && (
+        {showEvidence && (report.consultations.length > 0 || report.consultationTitles.length > 0) && (
           <>
             <View wrap={false} style={{ marginTop: 12 }}>
               <View style={s.divider} />
               <Text style={s.sectionHeading}>
-                Source Consultations ({report.consultationTitles.length})
+                Source Consultations ({report.consultations.length || report.consultationTitles.length})
               </Text>
             </View>
-            {report.consultationTitles.map((title, i) => (
+            {(report.consultations.length > 0
+              ? report.consultations.map((c, i) => ({ i, title: c.title, date: c.date, people: c.people }))
+              : report.consultationTitles.map((title, i) => ({ i, title, date: "", people: [] }))
+            ).map(({ i, title, date, people }) => (
               <View key={i} style={s.evidenceCard} wrap={false}>
                 <Text style={s.evidenceNumber}>{i + 1}</Text>
-                <Text style={s.evidenceTitle}>{title}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.evidenceTitle}>{title}</Text>
+                  {(date || people.length > 0) && (
+                    <Text style={[s.themeDescription, { marginTop: 1 }]}>
+                      {[
+                        date ? new Date(date).toLocaleDateString("en-US", { dateStyle: "medium" }) : null,
+                        people.length > 0 ? people.join(", ") : null,
+                      ]
+                        .filter(Boolean)
+                        .join("  ·  ")}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </>
+        )}
+
+        {/* ─── Audit Trail (compliance page) ─── */}
+        {report.auditSummary && report.auditSummary.length > 0 && (
+          <>
+            <View wrap={false} style={{ marginTop: 20 }}>
+              <View style={s.divider} />
+              <Text style={s.sectionHeading}>
+                Audit Trail ({report.auditSummary.length} events)
+              </Text>
+            </View>
+            {report.auditSummary.map((event, i) => (
+              <View
+                key={i}
+                style={[s.evidenceCard, { flexDirection: "row", justifyContent: "space-between" }]}
+                wrap={false}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={s.evidenceTitle}>
+                    {event.action
+                      .replace(/\./g, " \u2192 ")
+                      .replace(/_/g, " ")
+                      .replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                  </Text>
+                  {event.entityType && (
+                    <Text style={s.themeDescription}>{event.entityType}</Text>
+                  )}
+                </View>
+                <Text style={[s.themeDescription, { marginLeft: 8 }]}>
+                  {new Date(event.createdAt).toLocaleDateString("en-US", { dateStyle: "medium" })}
+                </Text>
               </View>
             ))}
           </>

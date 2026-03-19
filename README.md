@@ -72,54 +72,95 @@ This starts:
 - **ai** — FastAPI on port 8000
 - **db** — PostgreSQL 15 on port 5432
 
-## Coolify Deployment (Compose Service Stack)
+## Coolify Deployment (Recommended)
 
-This repository now includes a dedicated Coolify stack file: `docker-compose.coolify.yml`.
-Keep local development on `docker-compose.yml` and use the Coolify file only for deployment.
+Use two separate Coolify resources:
 
-### 1. In Coolify, create a Docker Compose Service Stack
+1. A dedicated **Supabase** service using Coolify's one-click Supabase template.
+2. This repository as a separate **Docker Compose application** using `docker-compose.coolify.yml`.
 
-- Select this repository and branch.
-- Set Compose file path to `ConsultantPlatformApp/docker-compose.coolify.yml`.
-- Use standard Compose Service Stack mode (not Raw Compose Deployment).
+This is the safest production shape because local `supabase start` is a dev-only stack, while self-hosted Supabase on Coolify has its own API gateway, Postgres initialization, and auth/runtime wiring.
 
-### 2. Set environment variables in a single Coolify panel
+### 1. Deploy Supabase first
 
-The stack uses Compose interpolation so Coolify can validate required values.
+Create a Supabase service in Coolify and give it its own public domain, for example:
 
-Required values:
+- App: `https://app.example.com`
+- Supabase API gateway: `https://supabase.example.com`
 
-- `APP_SITE_URL`
-- `SUPABASE_PUBLIC_URL`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `SUPABASE_JWT_SECRET`
-- `POSTGRES_PASSWORD`
-- `OPENAI_API_KEY`
+In the Supabase service, make sure these values line up:
+
+- `SUPABASE_PUBLIC_URL=https://supabase.example.com`
+- `API_EXTERNAL_URL=https://supabase.example.com`
+- `SITE_URL=https://app.example.com`
+- `ADDITIONAL_REDIRECT_URLS=https://app.example.com/callback`
+
+For email sign-up to work in production, also configure SMTP in the Supabase service.
+If you are only doing internal testing first, you can temporarily enable email autoconfirm instead.
+
+If you later add Google/GitHub OAuth, the provider callback URL should point to:
+
+- `https://supabase.example.com/auth/v1/callback`
+
+You will also need the Supabase `anon` key and `service_role` key from that service for the app deployment.
+
+### 2. Apply this repo's migrations to the self-hosted database
+
+After the Supabase service is healthy, push the checked-in SQL migrations from this repo to the self-hosted Postgres instance.
+
+If the database port is not publicly exposed, run the command from any machine that can reach the database on the Coolify network, or use the Coolify terminal on the Supabase service host.
+
+From `ConsultantPlatformApp/`:
+
+```bash
+supabase db push --db-url 'postgres://postgres:<PASSWORD>@<HOST>:5432/postgres'
+```
+
+To seed local reference data as well:
+
+```bash
+supabase db push --db-url 'postgres://postgres:<PASSWORD>@<HOST>:5432/postgres' --include-seed
+```
+
+Useful checks:
+
+```bash
+supabase migration list --db-url 'postgres://postgres:<PASSWORD>@<HOST>:5432/postgres'
+supabase db push --db-url 'postgres://postgres:<PASSWORD>@<HOST>:5432/postgres' --dry-run
+```
+
+This applies your schema, Row Level Security policies, and any future migration files in `supabase/migrations/`.
+
+### 3. Deploy the app stack
+
+Create a Docker Compose application in Coolify:
+
+- Repository: this repo
+- Compose file: `ConsultantPlatformApp/docker-compose.coolify.yml`
+
+Required app environment variables:
+
+- `NEXT_PUBLIC_SUPABASE_URL=https://supabase.example.com`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key from Coolify Supabase>`
+- `SUPABASE_SERVICE_ROLE_KEY=<service_role key from Coolify Supabase>`
+- `OPENAI_API_KEY=<your OpenAI key>`
+- `ALLOWED_ORIGINS=https://app.example.com`
 
 Recommended defaults:
 
 - `APP_PORT=3000`
 - `AI_SERVICE_PORT=8000`
-- `SUPABASE_JWT_EXP=3600`
-- `POSTGRES_DB=postgres`
 - `OPENAI_MODEL=gpt-4o-mini`
 - `OPENAI_VISION_MODEL=gpt-4o`
 - `OPENAI_AUDIO_MODEL=whisper-1`
-- `ALLOWED_ORIGINS=https://your-app-domain`
-- `GOTRUE_DISABLE_SIGNUP=false`
-- `GOTRUE_MAILER_AUTOCONFIRM=true`
 
-Use `SUPABASE_PUBLIC_URL` as the single public Supabase endpoint for both the app client config and Supabase auth site URL. You still set the actual public domain once in Coolify, but the stack reuses it everywhere else.
+### 4. Domain routing
 
-### 3. Domain routing and service exposure
+- Assign your public app domain to the `app` service on port `3000`.
+- Do not expose `ai` publicly.
+- Keep Supabase on its own Coolify-managed domain so browser Supabase requests go through its Kong gateway.
 
-- Assign your public app domain to the `app` service using container port `3000`.
-- Assign a separate public domain to `supabase-kong` if browser clients should call Supabase APIs directly.
-- Do not expose `db`, `ai`, `supabase-auth`, `supabase-rest`, or `supabase-meta` directly.
-
-### 4. Validate before first deploy
+### 5. Validate before first deploy
 
 From this directory:
 
@@ -127,12 +168,23 @@ From this directory:
 docker compose -f docker-compose.coolify.yml config
 ```
 
-If interpolation succeeds, deploy in Coolify and verify:
+After deployment, verify:
 
-- app health endpoint responds through your domain
-- AI health endpoint is healthy internally
-- signup/login and consultation data reads/writes work
-- theme/email generation requests reach the AI service
+- sign up / sign in works against the Coolify Supabase domain
+- consultation reads and writes succeed
+- theme and draft generation reaches the internal AI service
+
+### Optional: custom Kong overrides
+
+If you ever choose to override Coolify's Supabase service with your own custom self-hosted stack, this repo now includes a production-style Kong reference at `supabase/kong.yml` plus `supabase/kong-entrypoint.sh`.
+
+That config mirrors the current upstream Supabase pattern:
+
+- env substitution is handled before Kong starts
+- `apikey` is translated into `Authorization` for Auth and PostgREST
+- open auth endpoints (`/auth/v1/verify`, `/callback`, `/authorize`, JWKS) stay publicly reachable
+
+For the recommended Coolify one-click Supabase deployment, you do not need to mount that Kong config from this app repo.
 
 ## Supabase Local Notes
 

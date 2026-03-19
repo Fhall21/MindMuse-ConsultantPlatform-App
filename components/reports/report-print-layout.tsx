@@ -5,7 +5,6 @@ import {
   Text,
   View,
   StyleSheet,
-  Font,
 } from "@react-pdf/renderer";
 import type { ReportArtifactDetail } from "@/lib/actions/reports";
 
@@ -19,45 +18,9 @@ interface ReportPrintLayoutProps {
 }
 
 // ─── Fonts ───────────────────────────────────────────────────────────────────
-
-Font.register({
-  family: "Inter",
-  fonts: [
-    {
-      src: "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hjQ.ttf",
-      fontWeight: 400,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuI6fAZ9hjQ.ttf",
-      fontWeight: 500,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hjQ.ttf",
-      fontWeight: 600,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYAZ9hjQ.ttf",
-      fontWeight: 700,
-    },
-  ],
-});
-
-Font.register({
-  family: "Lora",
-  fonts: [
-    {
-      src: "https://fonts.gstatic.com/s/lora/v35/0QI6MX1D_JOuGQbT0gvTJPa787weuxJBkq0.ttf",
-      fontWeight: 400,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/lora/v35/0QI6MX1D_JOuGQbT0gvTJPa787z5vBJBkq0.ttf",
-      fontWeight: 500,
-    },
-  ],
-});
-
-// Disable hyphenation for cleaner text
-Font.registerHyphenationCallback((word: string) => [word]);
+// Using built-in PDF fonts (no CDN dependency):
+// Helvetica / Helvetica-Bold for UI labels and headings
+// Times-Roman / Times-Bold for body copy
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
@@ -81,7 +44,7 @@ const colors = {
 
 const s = StyleSheet.create({
   page: {
-    fontFamily: "Lora",
+    fontFamily: "Times-Roman",
     fontSize: 10.5,
     lineHeight: 1.65,
     color: colors.dark,
@@ -105,15 +68,14 @@ const s = StyleSheet.create({
     paddingBottom: 8,
   },
   headerLeft: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 7,
-    fontWeight: 500,
     color: colors.faint,
     textTransform: "uppercase",
     letterSpacing: 1.5,
   },
   headerRight: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica",
     fontSize: 7,
     color: colors.faint,
   },
@@ -132,14 +94,13 @@ const s = StyleSheet.create({
     paddingTop: 8,
   },
   footerText: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica",
     fontSize: 7,
     color: colors.faint,
   },
   confidential: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 7,
-    fontWeight: 600,
     color: colors.faint,
     textTransform: "uppercase",
     letterSpacing: 2,
@@ -150,24 +111,22 @@ const s = StyleSheet.create({
     marginBottom: 24,
   },
   reportType: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 8,
-    fontWeight: 600,
     color: colors.emerald,
     textTransform: "uppercase",
     letterSpacing: 1.5,
     marginBottom: 8,
   },
   title: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 22,
-    fontWeight: 700,
     color: colors.black,
     lineHeight: 1.25,
     marginBottom: 6,
   },
   subtitle: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica",
     fontSize: 10,
     color: colors.light,
     marginBottom: 4,
@@ -178,7 +137,7 @@ const s = StyleSheet.create({
     marginTop: 10,
   },
   metaItem: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica",
     fontSize: 8,
     color: colors.light,
   },
@@ -211,34 +170,30 @@ const s = StyleSheet.create({
     backgroundColor: colors.slateBg,
   },
   statLabel: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 7,
-    fontWeight: 600,
     color: colors.light,
     textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 3,
   },
   statValue: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 16,
-    fontWeight: 700,
     color: colors.black,
   },
 
   // Section heading
   sectionHeading: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 13,
-    fontWeight: 700,
     color: colors.black,
     marginBottom: 10,
     marginTop: 4,
   },
   sectionSubheading: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 8,
-    fontWeight: 600,
     color: colors.light,
     textTransform: "uppercase",
     letterSpacing: 1.2,
@@ -251,25 +206,22 @@ const s = StyleSheet.create({
     textAlign: "justify",
   },
   h1: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 16,
-    fontWeight: 700,
     color: colors.black,
     marginTop: 16,
     marginBottom: 6,
   },
   h2: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 13,
-    fontWeight: 600,
     color: colors.dark,
     marginTop: 14,
     marginBottom: 5,
   },
   h3: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 10,
-    fontWeight: 600,
     color: colors.mid,
     textTransform: "uppercase",
     letterSpacing: 0.8,
@@ -310,16 +262,14 @@ const s = StyleSheet.create({
     backgroundColor: colors.slateBg,
   },
   themeLabel: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 9.5,
-    fontWeight: 600,
     color: colors.dark,
     marginBottom: 2,
   },
   themeBadge: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 6.5,
-    fontWeight: 600,
     color: colors.emerald,
     textTransform: "uppercase",
     letterSpacing: 0.8,
@@ -329,6 +279,7 @@ const s = StyleSheet.create({
     color: colors.light,
   },
   themeDescription: {
+    fontFamily: "Times-Roman",
     fontSize: 9,
     color: colors.mid,
     lineHeight: 1.5,
@@ -351,9 +302,8 @@ const s = StyleSheet.create({
     gap: 10,
   },
   evidenceNumber: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica-Bold",
     fontSize: 9,
-    fontWeight: 700,
     color: colors.light,
     width: 18,
     height: 18,
@@ -363,9 +313,8 @@ const s = StyleSheet.create({
     lineHeight: 18,
   },
   evidenceTitle: {
-    fontFamily: "Inter",
+    fontFamily: "Helvetica",
     fontSize: 9.5,
-    fontWeight: 500,
     color: colors.dark,
     flex: 1,
   },

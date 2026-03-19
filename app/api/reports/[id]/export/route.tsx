@@ -28,7 +28,7 @@ export async function GET(
 
     const filename = `report-${report.id.slice(0, 8)}.pdf`;
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

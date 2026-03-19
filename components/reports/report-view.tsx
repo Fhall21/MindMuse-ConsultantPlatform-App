@@ -292,6 +292,49 @@ function FindingsSection({
   );
 }
 
+// ─── Draft Groups Section ─────────────────────────────────────────────────────
+
+function DraftGroupsSection({ report }: { report: ReportArtifactDetail }) {
+  const draftGroups = report.draftThemeGroups;
+
+  if (!draftGroups || draftGroups.length === 0) return null;
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        Pending Review ({draftGroups.length})
+      </h3>
+      <div className="grid gap-2">
+        {draftGroups.map((group) => (
+          <div
+            key={group.id}
+            className="rounded-lg border border-amber-200/60 border-l-4 border-l-amber-400 bg-amber-50/20 px-4 py-3 dark:border-amber-800/40 dark:border-l-amber-500 dark:bg-amber-950/10"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-foreground">{group.label}</p>
+                  <Badge
+                    variant="outline"
+                    className="shrink-0 border-amber-300 text-[10px] text-amber-700 dark:border-amber-700 dark:text-amber-400"
+                  >
+                    Pending Review
+                  </Badge>
+                </div>
+                {group.description && (
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {group.description}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ─── Evidence Section ────────────────────────────────────────────────────────
 
 function EvidenceSection({ report }: { report: ReportArtifactDetail }) {
@@ -764,6 +807,13 @@ export function ReportView({ artifactId }: ReportViewProps) {
           <Separator />
 
           <FindingsSection report={report} template={template} />
+
+          {report.draftThemeGroups && report.draftThemeGroups.length > 0 && (
+            <>
+              <Separator />
+              <DraftGroupsSection report={report} />
+            </>
+          )}
 
           {template === "standard" && (
             <>

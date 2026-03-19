@@ -7,6 +7,7 @@ import {
   getRoundOutputArtifactForUser,
   listAuditEventsForUser,
   listConsultationsForRound,
+  listDraftRoundThemeGroupsForRound,
   listPeopleForConsultation,
   listRoundOutputArtifactsForRound,
   listRoundOutputArtifactsForUser,
@@ -406,6 +407,7 @@ export interface ReportArtifactDetail {
   versionNumber: number;
   totalVersions: number;
   auditSummary: AuditSummaryEvent[];
+  draftThemeGroups: Array<{ id: string; label: string; description: string | null }>;
 }
 
 function previewContent(content: string, maxLength = 200): string {
@@ -515,6 +517,15 @@ export async function getReportArtifact(
     people: peopleByConsultationId.get(c.id) ?? [],
   }));
 
+  // Load draft (unapproved) theme groups for the round
+  const draftThemeGroups = (
+    await listDraftRoundThemeGroupsForRound(artifact.round_id, userId)
+  ).map((group) => ({
+    id: group.id,
+    label: group.label,
+    description: group.description,
+  }));
+
   // Load key audit events for the report's compliance trail section
   const auditSummary: AuditSummaryEvent[] =
     liveConsultationIds.length > 0
@@ -545,6 +556,7 @@ export async function getReportArtifact(
     versionNumber,
     totalVersions: versions.length || 1,
     auditSummary,
+    draftThemeGroups,
   };
 }
 

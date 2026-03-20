@@ -12,6 +12,24 @@ interface EmitAuditEventParams {
   metadata?: Record<string, unknown>;
 }
 
+export async function insertAuditLogEntry({
+  userId,
+  consultationId,
+  action,
+  entityType,
+  entityId,
+  metadata,
+}: EmitAuditEventParams & { userId: string }) {
+  await db.insert(auditLog).values({
+    consultationId: consultationId ?? null,
+    action,
+    entityType: entityType ?? null,
+    entityId: entityId ?? null,
+    payload: metadata ?? null,
+    userId,
+  });
+}
+
 export async function emitAuditEvent({
   consultationId,
   action,
@@ -22,13 +40,13 @@ export async function emitAuditEvent({
   try {
     const userId = await requireCurrentUserId();
 
-    await db.insert(auditLog).values({
-      consultationId: consultationId ?? null,
-      action,
-      entityType: entityType ?? null,
-      entityId: entityId ?? null,
-      payload: metadata ?? null,
+    await insertAuditLogEntry({
       userId,
+      consultationId,
+      action,
+      entityType,
+      entityId,
+      metadata,
     });
   } catch (error) {
     console.error("Audit event emission failed:", {

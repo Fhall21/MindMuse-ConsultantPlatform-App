@@ -7,6 +7,11 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 import type { ReportArtifactDetail } from "@/lib/actions/reports";
+import {
+  buildReportGraphModel,
+  formatConnectionTypeLabel,
+  type ReportGraphModel,
+} from "@/lib/report-graph";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -441,6 +446,163 @@ function PdfContentBlocks({ content }: { content: string }) {
   );
 }
 
+function PdfGraphOverview({ graphModel }: { graphModel: ReportGraphModel }) {
+  return (
+    <>
+      <View wrap={false}>
+        <View style={s.divider} />
+        <Text style={s.sectionHeading}>Evidence Network</Text>
+        <Text style={s.sectionSubheading}>
+          Snapshot saved {formatPdfDate(graphModel.snapshot.snapshotAt)}
+        </Text>
+      </View>
+      <View style={s.statsRow}>
+        <View style={s.statBox}>
+          <Text style={s.statLabel}>Nodes</Text>
+          <Text style={s.statValue}>{graphModel.nodeCount}</Text>
+        </View>
+        <View style={s.statBox}>
+          <Text style={s.statLabel}>Connections</Text>
+          <Text style={s.statValue}>{graphModel.connectionCount}</Text>
+        </View>
+        <View style={s.statBox}>
+          <Text style={s.statLabel}>Groups</Text>
+          <Text style={s.statValue}>{graphModel.acceptedThemeCount}</Text>
+        </View>
+        <View style={s.statBox}>
+          <Text style={s.statLabel}>Source Themes</Text>
+          <Text style={s.statValue}>{graphModel.supportingThemeCount}</Text>
+        </View>
+      </View>
+    </>
+  );
+}
+
+function PdfGraphConnections({
+  graphModel,
+  template,
+}: {
+  graphModel: ReportGraphModel;
+  template: ReportTemplate;
+}) {
+  const groupsToShow =
+    template === "executive"
+      ? graphModel.connectionsByType
+          .map((group) => ({
+            ...group,
+            connections: group.connections.slice(0, 2),
+          }))
+          .filter((group) => group.connections.length > 0)
+          .slice(0, 2)
+      : graphModel.connectionsByType;
+
+  return (
+    <>
+      <View wrap={false}>
+        <Text style={s.sectionHeading}>
+          Network Connections ({graphModel.connectionCount})
+        </Text>
+      </View>
+      {groupsToShow.length === 0 ? (
+        <View style={s.evidenceCard} wrap={false}>
+          <Text style={s.themeDescription}>
+            No saved typed connections were available on this artifact. The saved network still
+            preserves nodes for future graph-aware report generations.
+          </Text>
+        </View>
+      ) : (
+        groupsToShow.map((group) => (
+          <View key={group.type}>
+            <Text style={s.sectionSubheading}>
+              {group.label} ({group.connections.length})
+            </Text>
+            {group.connections.map((connection) => (
+              <View key={connection.key} style={s.evidenceCard} wrap={false}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.evidenceTitle}>
+                    {connection.fromLabel}
+                    {" \u2192 "}
+                    {formatConnectionTypeLabel(connection.connectionType)}
+                    {" \u2192 "}
+                    {connection.toLabel}
+                  </Text>
+                  <Text style={s.themeDescription}>
+                    {connection.origin === "ai_suggested" ? "AI accepted" : "Manual"}
+                    {connection.notes ? `  ·  ${connection.notes}` : ""}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        ))
+      )}
+    </>
+  );
+}
+
+function PdfGraphNodes({
+  graphModel,
+  template,
+}: {
+  graphModel: ReportGraphModel;
+  template: ReportTemplate;
+}) {
+  const nodesToShow =
+    template === "executive"
+      ? graphModel.topNodes.slice(0, 4)
+      : graphModel.nodes;
+
+  if (nodesToShow.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      <View wrap={false}>
+        <Text style={s.sectionHeading}>Network Nodes ({graphModel.nodeCount})</Text>
+      </View>
+      {nodesToShow.map((node) => {
+        const cardStyle =
+          node.nodeType === "insight"
+            ? [s.themeCard, s.themeCardSupporting]
+            : [s.themeCard];
+        const badgeStyle =
+          node.nodeType === "insight"
+            ? [s.themeBadge, s.themeBadgeSupporting]
+            : [s.themeBadge];
+
+        return (
+          <View
+            key={node.key}
+            style={cardStyle}
+            wrap={false}
+          >
+            <View style={s.themeLabelRow}>
+              <Text style={s.themeLabel}>{node.label}</Text>
+              <Text style={badgeStyle}>
+                {node.nodeType}
+              </Text>
+              {node.consultationTitle && (
+                <Text style={[s.themeBadge, s.themeBadgeSupporting]}>
+                  {"\u2014"} {node.consultationTitle}
+                </Text>
+              )}
+            </View>
+            {node.description && (
+              <Text style={s.themeDescription}>{node.description}</Text>
+            )}
+            <Text style={s.themeDescription}>
+              Degree {node.degree}
+              {node.memberCount !== null ? `  ·  ${node.memberCount} members` : ""}
+              {node.isUserAdded ? "  ·  User added" : ""}
+            </Text>
+          </View>
+        );
+      })}
+    </>
+  );
+}
+
 // ─── Document component ──────────────────────────────────────────────────────
 
 export function ReportPrintLayout({
@@ -451,6 +613,7 @@ export function ReportPrintLayout({
   const typeLabel =
     artifactTypeLabels[report.artifactType] ?? report.artifactType;
   const generatedDate = formatPdfDate(report.generatedAt);
+  const graphModel = buildReportGraphModel(report.inputSnapshot);
 
   const inputThemes = report.inputSnapshot.accepted_round_themes as
     | Array<{ label: string; description?: string | null }>
@@ -537,74 +700,86 @@ export function ReportPrintLayout({
 
         <View style={s.dividerThick} />
 
-        {/* ─── Report content ─── */}
-        <PdfContentBlocks content={report.content} />
-
-        {/* ─── Key Findings ─── */}
-        {acceptedToShow && acceptedToShow.length > 0 && (
-          <View wrap={false}>
+        {graphModel ? (
+          <>
+            <PdfGraphOverview graphModel={graphModel} />
+            <PdfGraphConnections graphModel={graphModel} template={template} />
+            <PdfGraphNodes graphModel={graphModel} template={template} />
             <View style={s.divider} />
-            <Text style={s.sectionHeading}>
-              Key Findings
-              {template === "executive" &&
-                inputThemes &&
-                inputThemes.length > 3 &&
-                ` (Top 3 of ${inputThemes.length})`}
-            </Text>
-          </View>
-        )}
-        {acceptedToShow?.map((theme, i) => (
-          <View key={i} style={s.themeCard} wrap={false}>
-            <View style={s.themeLabelRow}>
-              <Text style={s.themeLabel}>{theme.label}</Text>
-              <Text style={s.themeBadge}>Accepted</Text>
-            </View>
-            {theme.description && (
-              <Text style={s.themeDescription}>{theme.description}</Text>
-            )}
-          </View>
-        ))}
+            <PdfContentBlocks content={report.content} />
+          </>
+        ) : (
+          <>
+            {/* ─── Report content ─── */}
+            <PdfContentBlocks content={report.content} />
 
-        {/* ─── Supporting Themes ─── */}
-        {showSupporting &&
-          supportingThemes &&
-          supportingThemes.length > 0 && (
-            <>
-              <View wrap={false} style={{ marginTop: 12 }}>
-                <Text style={s.sectionSubheading}>
-                  Supporting Themes ({supportingThemes.length})
+            {/* ─── Key Findings ─── */}
+            {acceptedToShow && acceptedToShow.length > 0 && (
+              <View wrap={false}>
+                <View style={s.divider} />
+                <Text style={s.sectionHeading}>
+                  Key Findings
+                  {template === "executive" &&
+                    inputThemes &&
+                    inputThemes.length > 3 &&
+                    ` (Top 3 of ${inputThemes.length})`}
                 </Text>
               </View>
-              {supportingThemes.map((theme, i) => (
-                <View
-                  key={i}
-                  style={[s.themeCard, s.themeCardSupporting]}
-                  wrap={false}
-                >
-                  <View style={s.themeLabelRow}>
-                    <Text style={s.themeLabel}>{theme.label}</Text>
-                    <Text style={[s.themeBadge, s.themeBadgeSupporting]}>
-                      Supporting
-                    </Text>
-                    {theme.consultation_title && (
-                      <Text
-                        style={[
-                          s.themeBadge,
-                          s.themeBadgeSupporting,
-                          { marginLeft: 4 },
-                        ]}
-                      >
-                        {"\u2014"} {theme.consultation_title}
-                      </Text>
-                    )}
-                  </View>
-                  {theme.description && (
-                    <Text style={s.themeDescription}>{theme.description}</Text>
-                  )}
+            )}
+            {acceptedToShow?.map((theme, i) => (
+              <View key={i} style={s.themeCard} wrap={false}>
+                <View style={s.themeLabelRow}>
+                  <Text style={s.themeLabel}>{theme.label}</Text>
+                  <Text style={s.themeBadge}>Accepted</Text>
                 </View>
-              ))}
-            </>
-          )}
+                {theme.description && (
+                  <Text style={s.themeDescription}>{theme.description}</Text>
+                )}
+              </View>
+            ))}
+
+            {/* ─── Supporting Themes ─── */}
+            {showSupporting &&
+              supportingThemes &&
+              supportingThemes.length > 0 && (
+                <>
+                  <View wrap={false} style={{ marginTop: 12 }}>
+                    <Text style={s.sectionSubheading}>
+                      Supporting Themes ({supportingThemes.length})
+                    </Text>
+                  </View>
+                  {supportingThemes.map((theme, i) => (
+                    <View
+                      key={i}
+                      style={[s.themeCard, s.themeCardSupporting]}
+                      wrap={false}
+                    >
+                      <View style={s.themeLabelRow}>
+                        <Text style={s.themeLabel}>{theme.label}</Text>
+                        <Text style={[s.themeBadge, s.themeBadgeSupporting]}>
+                          Supporting
+                        </Text>
+                        {theme.consultation_title && (
+                          <Text
+                            style={[
+                              s.themeBadge,
+                              s.themeBadgeSupporting,
+                              { marginLeft: 4 },
+                            ]}
+                          >
+                            {"\u2014"} {theme.consultation_title}
+                          </Text>
+                        )}
+                      </View>
+                      {theme.description && (
+                        <Text style={s.themeDescription}>{theme.description}</Text>
+                      )}
+                    </View>
+                  ))}
+                </>
+              )}
+          </>
+        )}
 
         {/* ─── Source Evidence ─── */}
         {showEvidence && (report.consultations.length > 0 || report.consultationTitles.length > 0) && (

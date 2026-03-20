@@ -7,22 +7,18 @@ import { cn } from "@/lib/utils";
 const settingsSections = [
   {
     title: "General",
-    description: "Account profile, email, and password updates.",
     href: "/settings",
   },
   {
     title: "Accessibility",
-    description: "Improve readability, motion, and focus visibility.",
     href: "/settings/accessibility",
   },
   {
     title: "Billing",
-    description: "Subscription, pricing, and future billing tools.",
     href: "/settings/billing",
   },
   {
     title: "Integrations",
-    description: "Connections to your external tools and workflows.",
     href: "/settings/integrations",
   },
 ];
@@ -33,9 +29,9 @@ export function SettingsNav() {
   return (
     <nav
       aria-label="Settings sections"
-      className="overflow-x-auto border-b border-border/80 pb-1"
+      className="overflow-x-auto"
     >
-      <ul className="flex min-w-max items-center gap-5">
+      <ul className="flex min-w-max items-center gap-5 border-b border-border/80">
         {settingsSections.map((section) => {
           const isActive =
             section.href === "/settings"
@@ -47,7 +43,7 @@ export function SettingsNav() {
               <Link
                 href={section.href}
                 className={cn(
-                  "inline-flex border-b-2 px-0 pb-3 text-sm font-medium tracking-tight transition-colors",
+                  "inline-flex border-b-2 px-0 py-2 text-sm font-medium tracking-tight transition-colors",
                   isActive
                     ? "border-foreground/70 text-foreground"
                     : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchJson } from "@/hooks/api";
 import type {
+  AiConnectionSuggestion,
   CanvasEdge,
   CanvasNode,
   CanvasViewport,
@@ -130,6 +131,69 @@ export function useSaveLayout(consultationId: string) {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: canvasKey(consultationId) });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// AI suggestions
+// ---------------------------------------------------------------------------
+
+function suggestionsKey(consultationId: string) {
+  return ["canvas", consultationId, "suggestions"] as const;
+}
+
+export function useCanvasSuggestions(consultationId: string) {
+  return useQuery<AiConnectionSuggestion[]>({
+    queryKey: suggestionsKey(consultationId),
+    queryFn: () =>
+      fetchJson<AiConnectionSuggestion[]>(
+        `/api/client/consultations/${consultationId}/canvas/suggestions`
+      ),
+    enabled: Boolean(consultationId),
+  });
+}
+
+export function useAcceptSuggestion(consultationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<CanvasEdge, Error, string>({
+    mutationFn: (suggestionId) =>
+      fetchJson<CanvasEdge>(
+        `/api/client/consultations/${consultationId}/canvas/suggestions/${suggestionId}`,
+        { method: "POST" }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: suggestionsKey(consultationId) });
+      queryClient.invalidateQueries({ queryKey: canvasKey(consultationId) });
+    },
+  });
+}
+
+export function useRejectSuggestion(consultationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (suggestionId) =>
+      fetchJson<void>(
+        `/api/client/consultations/${consultationId}/canvas/suggestions/${suggestionId}`,
+        { method: "DELETE" }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: suggestionsKey(consultationId) });
+      queryClient.invalidateQueries({ queryKey: canvasKey(consultationId) });
+    },
+  });
+}
+
+export function useGenerateSuggestions(consultationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<{ message: string }, Error, void>({
+    mutationFn: () =>
+      fetchJson<{ message: string }>(
+        `/api/client/consultations/${consultationId}/canvas/suggestions`,
+        { method: "POST" }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: suggestionsKey(consultationId) });
     },
   });
 }

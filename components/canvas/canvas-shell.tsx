@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { defaultFilterState, type CanvasFilterState } from "@/types/canvas";
 import { CanvasGraph } from "@/components/canvas/canvas-graph";
 import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
+import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
 import { useCanvas } from "@/hooks/use-canvas";
 
 interface CanvasShellProps {
@@ -113,7 +114,11 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
         {hasSidePanel && (
           <div className="w-80 shrink-0 border-l bg-background">
             {showSuggestions ? (
-              <AiSuggestionsPanelPlaceholder />
+              <AiSuggestionsPanel
+                consultationId={consultationId}
+                nodes={nodes}
+                onClose={() => setShowSuggestions(false)}
+              />
             ) : (
               <NodeDetailPanel
                 selectedNodeId={selectedNodeId}
@@ -156,18 +161,3 @@ function ToolbarFilterBadge({
 }
 
 
-function AiSuggestionsPanelPlaceholder() {
-  return (
-    <div className="flex h-full flex-col gap-2 p-4">
-      <p className="text-sm font-medium">AI suggestions</p>
-      <Separator />
-      <p className="text-xs text-muted-foreground">
-        Suggestions are generated on request.
-        <br />
-        Each card shows: source → target, suggested connection type, rationale.
-        <br />
-        Accept adds the edge. Reject dismisses. Both are audited.
-      </p>
-    </div>
-  );
-}

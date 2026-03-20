@@ -19,21 +19,21 @@ import { ThemeGroupCard } from "./theme-group-card";
 import { ManagementRejectionDialog } from "./management-rejection-dialog";
 import { AiThemeGroupSuggestionDialog } from "./ai-theme-group-suggestion-dialog";
 import type {
-  RoundThemeGroupDetail,
-  RoundThemeGroupMemberDetail,
+  ThemeDetail,
+  ThemeMemberDetail,
   SourceTheme,
 } from "@/types/round-detail";
 import {
-  createRoundThemeGroup,
+  createTheme,
   moveThemeToGroup,
-  mergeRoundThemeGroups,
-  splitRoundThemeGroup,
-  updateRoundThemeGroup,
+  mergeThemes,
+  splitTheme,
+  updateTheme,
   acceptRoundTarget,
   discardRoundTarget,
   managementRejectRoundTarget,
-  acceptRoundThemeGroupDraft,
-  discardRoundThemeGroupDraft,
+  acceptThemeDraft,
+  discardThemeDraft,
   type SuggestedThemeGroup,
 } from "@/lib/actions/round-workflow";
 
@@ -41,7 +41,7 @@ interface ThemeGroupingWorkspaceProps {
   roundId: string;
   roundLabel?: string | null;
   sourceThemes: SourceTheme[];
-  initialGroups: RoundThemeGroupDetail[];
+  initialGroups: ThemeDetail[];
   onStructuralChange?: () => void;
 }
 
@@ -60,7 +60,7 @@ export function ThemeGroupingWorkspace({
 }: ThemeGroupingWorkspaceProps) {
   // ─── State ─────────────────────────────────────────────────────────────────
 
-  const [groups, setGroups] = useState<RoundThemeGroupDetail[]>(initialGroups);
+  const [groups, setGroups] = useState<ThemeDetail[]>(initialGroups);
   const [selectedThemeIds, setSelectedThemeIds] = useState<Set<string>>(new Set());
 
   // Sync local state when the server-fetched groups change (e.g. after AI group creation)
@@ -89,7 +89,7 @@ export function ThemeGroupingWorkspace({
     const ids = new Set<string>();
     for (const group of groups) {
       for (const member of group.members) {
-        ids.add(member.themeId);
+        ids.add(member.insightId);
       }
     }
     return ids;
@@ -136,7 +136,7 @@ export function ThemeGroupingWorkspace({
         // Remove from any existing group (use themeId, not member row id)
         const cleaned = prev.map((g) => ({
           ...g,
-          members: g.members.filter((member) => member.themeId !== themeId),
+          members: g.members.filter((member) => member.insightId !== themeId),
         }));
 
         // Add to target group
@@ -148,7 +148,7 @@ export function ThemeGroupingWorkspace({
                 ...g.members,
                 {
                   id: theme.id,
-                  themeId: theme.id,
+                  insightId: theme.id,
                   sourceConsultationId: theme.sourceConsultationId,
                   sourceConsultationTitle: theme.sourceConsultationTitle,
                   label: theme.label,
@@ -156,7 +156,7 @@ export function ThemeGroupingWorkspace({
                   lockedFromSource: theme.lockedFromSource,
                   isUserAdded: theme.isUserAdded,
                   position: g.members.length,
-                } satisfies RoundThemeGroupMemberDetail,
+                } satisfies ThemeMemberDetail,
               ],
               lastStructuralChangeAt: new Date().toISOString(),
             };
@@ -185,7 +185,7 @@ export function ThemeGroupingWorkspace({
 
       // Only act if the theme was actually in a group
       const wasGrouped = groups.some((g) =>
-        g.members.some((member) => member.themeId === themeId)
+        g.members.some((member) => member.insightId === themeId)
       );
       if (!wasGrouped) return;
 
@@ -193,8 +193,8 @@ export function ThemeGroupingWorkspace({
       setGroups((prev) =>
         prev.map((g) => ({
           ...g,
-          members: g.members.filter((member) => member.themeId !== themeId),
-          lastStructuralChangeAt: g.members.some((member) => member.themeId === themeId)
+          members: g.members.filter((member) => member.insightId !== themeId),
+          lastStructuralChangeAt: g.members.some((member) => member.insightId === themeId)
             ? new Date().toISOString()
             : g.lastStructuralChangeAt,
         }))
@@ -237,7 +237,7 @@ export function ThemeGroupingWorkspace({
       return;
     }
 
-    void createRoundThemeGroup(
+    void createTheme(
       roundId,
       selectedUngrouped.map((t) => t.id)
     ).then(() => {
@@ -250,7 +250,7 @@ export function ThemeGroupingWorkspace({
   }
 
   async function handleAcceptAiSuggestion(suggestion: SuggestedThemeGroup) {
-    // theme_ids in the suggestion are sourceTheme IDs — pass them directly to createRoundThemeGroup
+    // theme_ids in the suggestion are sourceTheme IDs — pass them directly to createTheme
     const validThemeIds = suggestion.theme_ids.filter((id) =>
       sourceThemes.some((t) => t.id === id)
     );
@@ -258,7 +258,7 @@ export function ThemeGroupingWorkspace({
       toast.error("Suggestion contains fewer than 2 valid themes — skipping");
       return;
     }
-    await createRoundThemeGroup(roundId, validThemeIds);
+    await createTheme(roundId, validThemeIds);
     queryClient.invalidateQueries({
       queryKey: ["consultation_rounds", roundId, "detail"],
     });
@@ -272,7 +272,7 @@ export function ThemeGroupingWorkspace({
     }
 
     try {
-      await mergeRoundThemeGroups(roundId, Array.from(mergeSelectedGroupIds));
+      await mergeThemes(roundId, Array.from(mergeSelectedGroupIds));
       setMergeSelectedGroupIds(new Set());
       setSelectedThemeIds(new Set());
       invalidateDetail();
@@ -287,8 +287,8 @@ export function ThemeGroupingWorkspace({
     if (!group) return;
 
     const selectedThemeIdsInGroup = group.members
-      .filter((member) => selectedThemeIds.has(member.themeId))
-      .map((member) => member.themeId);
+      .filter((member) => selectedThemeIds.has(member.insightId))
+      .map((member) => member.insightId);
 
     if (selectedThemeIdsInGroup.length === 0) {
       toast.error("Select themes within the group to split out");
@@ -296,7 +296,7 @@ export function ThemeGroupingWorkspace({
     }
 
     try {
-      await splitRoundThemeGroup(groupId, selectedThemeIdsInGroup);
+      await splitTheme(groupId, selectedThemeIdsInGroup);
       setSelectedThemeIds(new Set());
       invalidateDetail();
       onStructuralChange?.();
@@ -402,7 +402,7 @@ export function ThemeGroupingWorkspace({
     const existing = labelTimers.current.get(groupId);
     if (existing) clearTimeout(existing);
     const timer = setTimeout(() => {
-      void updateRoundThemeGroup(groupId, { label })
+      void updateTheme(groupId, { label })
         .then(invalidateDetail)
         .catch(() => toast.error("Failed to save label"));
       labelTimers.current.delete(groupId);
@@ -420,7 +420,7 @@ export function ThemeGroupingWorkspace({
     const existing = descTimers.current.get(groupId);
     if (existing) clearTimeout(existing);
     const timer = setTimeout(() => {
-      void updateRoundThemeGroup(groupId, { description: description || null })
+      void updateTheme(groupId, { description: description || null })
         .then(invalidateDetail)
         .catch(() => toast.error("Failed to save description"));
       descTimers.current.delete(groupId);
@@ -445,7 +445,7 @@ export function ThemeGroupingWorkspace({
       })
     );
     try {
-      await acceptRoundThemeGroupDraft(groupId);
+      await acceptThemeDraft(groupId);
       invalidateDetail();
     } catch {
       toast.error("Failed to accept AI draft");
@@ -460,7 +460,7 @@ export function ThemeGroupingWorkspace({
       )
     );
     try {
-      await discardRoundThemeGroupDraft(groupId);
+      await discardThemeDraft(groupId);
       invalidateDetail();
     } catch {
       toast.error("Failed to discard AI draft");

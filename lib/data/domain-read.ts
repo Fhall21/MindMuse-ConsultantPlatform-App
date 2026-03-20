@@ -20,6 +20,7 @@ import {
   evidenceEmails,
   people,
   roundOutputArtifacts,
+  roundThemeGroups,
   themes,
 } from "@/db/schema";
 import type {
@@ -29,6 +30,7 @@ import type {
   EvidenceEmail,
   Person,
   RoundOutputArtifact,
+  RoundThemeGroup,
   Theme,
 } from "@/types/db";
 import {
@@ -647,4 +649,43 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
     totalPeople: peopleCountResult[0]?.count ?? 0,
     emailsSent: emailsSentResult[0]?.count ?? 0,
   };
+}
+
+export async function listDraftRoundThemeGroupsForRound(
+  roundId: string,
+  userId: string
+): Promise<RoundThemeGroup[]> {
+  await requireOwnedRound(roundId, userId);
+
+  const rows = await db
+    .select()
+    .from(roundThemeGroups)
+    .where(
+      and(
+        eq(roundThemeGroups.roundId, roundId),
+        eq(roundThemeGroups.userId, userId),
+        eq(roundThemeGroups.status, "draft")
+      )
+    )
+    .orderBy(asc(roundThemeGroups.createdAt));
+
+  return rows.map((row) => ({
+    id: row.id,
+    round_id: row.roundId,
+    user_id: row.userId,
+    label: row.label,
+    description: row.description,
+    status: row.status as RoundThemeGroup["status"],
+    origin: row.origin as RoundThemeGroup["origin"],
+    ai_draft_label: row.aiDraftLabel,
+    ai_draft_description: row.aiDraftDescription,
+    ai_draft_explanation: row.aiDraftExplanation,
+    ai_draft_created_at: row.aiDraftCreatedAt?.toISOString() ?? null,
+    ai_draft_created_by: row.aiDraftCreatedBy,
+    last_structural_change_at: row.lastStructuralChangeAt.toISOString(),
+    last_structural_change_by: row.lastStructuralChangeBy,
+    created_by: row.createdBy,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+  }));
 }

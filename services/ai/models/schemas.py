@@ -86,12 +86,20 @@ class RoundOutputTheme(BaseModel):
     is_user_added: bool = False
 
 
+class ReportTemplateOverride(BaseModel):
+    """Optional user-defined template that overrides the default report structure."""
+    sections: list[dict] = []          # [{heading, purpose, prose_guidance, example_excerpt}]
+    style_notes: dict = {}             # {tone, person, formatting_notes}
+    prescriptiveness: str = "moderate" # 'flexible' | 'moderate' | 'strict'
+
+
 class RoundOutputRequest(BaseModel):
     round_label: str
     round_description: str | None = None
     consultations: list[str] = []
     accepted_round_themes: list[RoundOutputTheme] = []
     supporting_consultation_themes: list[RoundOutputTheme] = []
+    report_template: ReportTemplateOverride | None = None
 
 
 class RoundOutputResponse(BaseModel):
@@ -234,3 +242,37 @@ class ShorthandChange(BaseModel):
 class ShorthandExpandResponse(BaseModel):
     expanded_text: str              # Full expanded text
     changes: list[ShorthandChange]  # Log of what was changed and why
+
+
+# --- Report template analysis ---
+
+
+class ReportExampleDocument(BaseModel):
+    """A single example document (text extracted from uploaded PDF/doc)."""
+    file_name: str
+    content: str                    # Full text content extracted client-side
+
+
+class ReportTemplateAnalyseRequest(BaseModel):
+    example_documents: list[ReportExampleDocument]  # 1-3 example reports
+    prescriptiveness: str = "moderate"              # 'flexible' | 'moderate' | 'strict'
+
+
+class AnalysedTemplateSection(BaseModel):
+    heading: str                    # Section heading, e.g. "Executive Summary"
+    purpose: str                    # What this section achieves (1 sentence)
+    prose_guidance: str             # AI guidance for filling in this section
+    example_excerpt: str | None = None  # Short representative excerpt from examples
+
+
+class AnalysedStyleNotes(BaseModel):
+    tone: str | None = None         # e.g. "formal", "conversational", "clinical"
+    person: str | None = None       # e.g. "third person", "first person plural"
+    formatting_notes: str | None = None  # e.g. "uses bullet lists extensively"
+
+
+class ReportTemplateAnalyseResponse(BaseModel):
+    name: str                       # Suggested template name
+    description: str                # 1-2 sentence summary of what this template is for
+    sections: list[AnalysedTemplateSection]
+    style_notes: AnalysedStyleNotes

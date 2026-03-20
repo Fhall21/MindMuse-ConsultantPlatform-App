@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
-from routers import clarification, draft, ocr, rounds, shorthand, themes, transcribe
+from routers import clarification, draft, ocr, rounds, shorthand, templates, themes, transcribe
 
 app = FastAPI(
     title="ConsultantPlatform AI Service",
@@ -29,6 +29,9 @@ app.include_router(transcribe.router)
 app.include_router(ocr.router)
 app.include_router(shorthand.router)
 
+# Stage 5 endpoints
+app.include_router(templates.router)
+
 
 @app.get("/health")
 async def health():
@@ -51,5 +54,6 @@ async def health():
             "/transcribe/audio",
             "/ocr/extract",
             "/shorthand/expand",
+            "/templates/analyse-examples",
         ],
     }

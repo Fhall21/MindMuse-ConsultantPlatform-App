@@ -22,6 +22,7 @@ import { Separator } from "@/components/ui/separator";
 const consultationsSubItems = [
   { title: "All Consultations", href: "/consultations" },
   { title: "Rounds", href: "/consultations/rounds" },
+  { title: "Canvas", href: "/canvas" },
 ];
 
 const settingsSubItems = [

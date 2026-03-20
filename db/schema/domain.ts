@@ -603,3 +603,115 @@ export const userAIPreferences = pgTable(
     userIdx: index("idx_user_ai_preferences_user_id").on(table.userId),
   })
 );
+
+export const canvasConnections = pgTable(
+  "canvas_connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fromNodeType: text("from_node_type")
+      .notNull()
+      .$type<"theme" | "insight" | "person" | "group">(),
+    fromNodeId: uuid("from_node_id").notNull(),
+    toNodeType: text("to_node_type")
+      .notNull()
+      .$type<"theme" | "insight" | "person" | "group">(),
+    toNodeId: uuid("to_node_id").notNull(),
+    connectionType: text("connection_type")
+      .notNull()
+      .$type<"causes" | "influences" | "supports" | "contradicts" | "related_to">(),
+    notes: text("notes"),
+    confidence: numeric("confidence", { precision: 4, scale: 3 }),
+    origin: text("origin")
+      .default("manual")
+      .notNull()
+      .$type<"manual" | "ai_suggested">(),
+    aiSuggestionAcceptedAt: timestamp("ai_suggestion_accepted_at", { withTimezone: true }),
+    aiSuggestionRationale: text("ai_suggestion_rationale"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    ...timestamps,
+  },
+  (table) => ({
+    fromNodeTypeCheck: check(
+      "canvas_connections_from_node_type_check",
+      sql`${table.fromNodeType} in ('theme', 'insight', 'person', 'group')`
+    ),
+    toNodeTypeCheck: check(
+      "canvas_connections_to_node_type_check",
+      sql`${table.toNodeType} in ('theme', 'insight', 'person', 'group')`
+    ),
+    connectionTypeCheck: check(
+      "canvas_connections_connection_type_check",
+      sql`${table.connectionType} in ('causes', 'influences', 'supports', 'contradicts', 'related_to')`
+    ),
+    originCheck: check(
+      "canvas_connections_origin_check",
+      sql`${table.origin} in ('manual', 'ai_suggested')`
+    ),
+    confidenceCheck: check(
+      "canvas_connections_confidence_check",
+      sql`${table.confidence} is null or (${table.confidence} >= 0 and ${table.confidence} <= 1)`
+    ),
+    typedEdgeUnique: unique("canvas_connections_typed_edge_unique").on(
+      table.roundId,
+      table.fromNodeType,
+      table.fromNodeId,
+      table.toNodeType,
+      table.toNodeId,
+      table.connectionType
+    ),
+    roundIdx: index("idx_canvas_connections_round_id").on(table.roundId),
+    roundUserIdx: index("idx_canvas_connections_round_user").on(table.roundId, table.userId),
+    fromNodeIdx: index("idx_canvas_connections_from_node").on(table.fromNodeType, table.fromNodeId),
+    toNodeIdx: index("idx_canvas_connections_to_node").on(table.toNodeType, table.toNodeId),
+    originPendingIdx: index("idx_canvas_connections_origin_pending").on(
+      table.roundId,
+      table.origin
+    ),
+  })
+);
+
+export const canvasLayoutState = pgTable(
+  "canvas_layout_state",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    nodeType: text("node_type")
+      .notNull()
+      .$type<"theme" | "insight" | "person" | "group" | "viewport">(),
+    nodeId: uuid("node_id").notNull(),
+    posX: numeric("pos_x", { precision: 10, scale: 2 }),
+    posY: numeric("pos_y", { precision: 10, scale: 2 }),
+    width: numeric("width", { precision: 10, scale: 2 }),
+    height: numeric("height", { precision: 10, scale: 2 }),
+    zoom: numeric("zoom", { precision: 6, scale: 4 }),
+    panX: numeric("pan_x", { precision: 10, scale: 2 }),
+    panY: numeric("pan_y", { precision: 10, scale: 2 }),
+    ...timestamps,
+  },
+  (table) => ({
+    nodeTypeCheck: check(
+      "canvas_layout_state_node_type_check",
+      sql`${table.nodeType} in ('theme', 'insight', 'person', 'group', 'viewport')`
+    ),
+    nodeUnique: unique("canvas_layout_state_node_unique").on(
+      table.roundId,
+      table.userId,
+      table.nodeType,
+      table.nodeId
+    ),
+    roundUserIdx: index("idx_canvas_layout_state_round_user").on(table.roundId, table.userId),
+  })
+);

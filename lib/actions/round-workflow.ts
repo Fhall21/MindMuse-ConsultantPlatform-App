@@ -207,7 +207,7 @@ export interface RoundDetail {
   };
   consultations: RoundDetailConsultation[];
   sourceThemes: RoundSourceTheme[];
-  themeGroups: RoundThemeGroupDetail[];
+  themeGroups: ThemeDetail[];
   consultationGroups: ConsultationGroupDetail[];
   decisionHistory: RoundDecisionHistoryItem[];
   outputs: RoundOutputCollection;
@@ -707,7 +707,7 @@ function buildOutputCollection(outputs: RoundOutputArtifact[]): RoundOutputColle
   };
 }
 
-async function loadThemesForRound(params: {
+async function loadInsightsForRound(params: {
   userId: string;
   roundId: string;
   themeIds: string[];
@@ -715,28 +715,28 @@ async function loadThemesForRound(params: {
   const { userId, roundId, themeIds } = params;
 
   if (themeIds.length === 0) {
-    return [] as ThemeWithConsultation[];
+    return [] as InsightWithConsultation[];
   }
 
   const rows = await db
     .select({
-      theme: themes,
+      insight: insights,
       consultation: consultations,
     })
-    .from(themes)
-    .innerJoin(consultations, eq(themes.consultationId, consultations.id))
+    .from(insights)
+    .innerJoin(consultations, eq(insights.consultationId, consultations.id))
     .where(
       and(
-        inArray(themes.id, themeIds),
+        inArray(insights.id, themeIds),
         eq(consultations.userId, userId),
         eq(consultations.roundId, roundId)
       )
     )
-    .orderBy(asc(themes.createdAt));
+    .orderBy(asc(insights.createdAt));
 
   return rows.map(
-    ({ theme, consultation }): ThemeWithConsultation => ({
-      ...mapThemeRecord(theme),
+    ({ insight, consultation }): InsightWithConsultation => ({
+      ...mapInsightRecord(insight),
       consultation: mapConsultationRecord(consultation),
     })
   );
@@ -772,7 +772,7 @@ async function loadGroupMembers(params: { groupId: string }) {
   const rows = await db
     .select()
     .from(themeMembers)
-    .where(eq(themeMembers.groupId, groupId))
+    .where(eq(themeMembers.themeId, groupId))
     .orderBy(
       asc(themeMembers.position),
       asc(themeMembers.createdAt)
@@ -782,9 +782,9 @@ async function loadGroupMembers(params: { groupId: string }) {
 }
 
 async function writeGroupDraftSuggestion(params: {
-  group: RoundThemeGroup;
+  group: Theme;
   round: ConsultationRound;
-  memberThemes: ThemeWithConsultation[];
+  memberThemes: InsightWithConsultation[];
   userId: string;
   structuralChange: string;
 }) {
@@ -870,7 +870,7 @@ async function writeGroupDraftSuggestion(params: {
   return draft;
 }
 
-async function maybeDiscardEmptyGroup(params: { group: RoundThemeGroup }) {
+async function maybeDiscardEmptyGroup(params: { group: Theme }) {
   const { group } = params;
   const members = await loadGroupMembers({ groupId: group.id });
 
@@ -937,9 +937,9 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
   const round = await loadOwnedRound({ userId, roundId });
   const consultations = await loadRoundConsultations({ userId, roundId });
   const consultationIds = consultations.map((consultation) => consultation.id);
-  const [themes, groups, members, decisions, outputs, emailMap, history, consultationGroups, consultationGroupMembers] =
+  const [acceptedInsights, groups, members, decisions, outputs, emailMap, history, consultationGroups, consultationGroupMembers] =
     await Promise.all([
-      loadAcceptedThemes({ consultationIds }),
+      loadAcceptedInsights({ consultationIds }),
       loadRoundGroups({ roundId }),
       loadRoundGroupMembers({ roundId }),
       loadRoundDecisions({ roundId }),
@@ -952,10 +952,10 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
 
   const consultationById = new Map(consultations.map((consultation) => [consultation.id, consultation]));
   const latestDecisionMap = latestDecisionByTarget(decisions);
-  const memberByThemeId = new Map<string, RoundThemeGroupMember>();
+  const memberByInsightId = new Map<string, ThemeMember>();
 
   members.forEach((member) => {
-    memberByThemeId.set(member.theme_id, member);
+    memberByInsightId.set(member.insight_id, member);
   });
 
   // Build a map of consultation_id → consultation group id for quick lookup
@@ -977,15 +977,15 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
     };
   });
 
-  const themeById = new Map(themes.map((theme) => [theme.id, theme]));
-  const sourceThemes = themes.map((theme): RoundSourceTheme => {
+  const insightById = new Map(acceptedInsights.map((insight) => [insight.id, insight]));
+  const sourceThemes = acceptedInsights.map((theme): RoundSourceTheme => {
     const consultation = consultationById.get(theme.consultation_id);
     if (!consultation) {
       throw new Error("Theme consultation mismatch in round detail payload");
     }
 
     const consultationSummary = consultationItems.find((item) => item.id === consultation.id);
-    const member = memberByThemeId.get(theme.id);
+    const member = memberByInsightId.get(theme.id);
     const decision = latestDecisionMap.get(`source_theme:${theme.id}`);
 
     return {
@@ -1002,17 +1002,17 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
       isUserAdded: theme.is_user_added,
       roundDecisionStatus: mapTargetStatus(decision),
       effectiveIncluded: decision?.decision_type !== "management_rejected",
-      groupId: member?.group_id ?? null,
-      groupLabel: member ? groups.find((group) => group.id === member.group_id)?.label ?? null : null,
+      groupId: member?.theme_id ?? null,
+      groupLabel: member ? groups.find((group) => group.id === member.theme_id)?.label ?? null : null,
       createdAt: theme.created_at,
     };
   });
 
-  const groupDetails = groups.map((group): RoundThemeGroupDetail => {
+  const groupDetails = groups.map((group): ThemeDetail => {
     const groupMembers = members
-      .filter((member) => member.group_id === group.id)
+      .filter((member) => member.theme_id === group.id)
       .map((member) => {
-        const theme = themeById.get(member.theme_id);
+        const theme = insightById.get(member.insight_id);
         const consultation = consultationById.get(member.source_consultation_id);
         const consultationSummary = consultation
           ? consultationItems.find((item) => item.id === consultation.id)
@@ -1024,7 +1024,7 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
 
         return {
           id: member.id,
-          themeId: theme.id,
+          insightId: theme.id,
           sourceConsultationId: consultation.id,
           sourceConsultationTitle: consultation.title,
           label: theme.label,
@@ -1032,7 +1032,7 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
           lockedFromSource: consultationSummary?.hasLockedEvidence ?? false,
           isUserAdded: theme.is_user_added,
           position: member.position,
-        } satisfies RoundThemeGroupMemberDetail;
+        } satisfies ThemeMemberDetail;
       });
 
     return {
@@ -1141,7 +1141,7 @@ export async function createTheme(
 ) {
   const { userId } = await requireAuthenticatedContext();
   const round = await loadOwnedRound({ userId, roundId });
-  const seedThemes = await loadThemesForRound({
+  const seedThemes = await loadInsightsForRound({
     userId,
     roundId,
     themeIds: seedThemeIds,
@@ -1151,7 +1151,7 @@ export async function createTheme(
     themeIds: seedThemes.map((theme) => theme.id),
   });
   const previousGroupIds = Array.from(
-    new Set(existingMemberships.map((membership) => membership.group_id))
+    new Set(existingMemberships.map((membership) => membership.theme_id))
   );
 
   const defaultLabel =
@@ -1188,9 +1188,9 @@ export async function createTheme(
 
     await db.insert(themeMembers).values(
       seedThemes.map((theme, index) => ({
-        groupId: group.id,
+        themeId: group.id,
         roundId,
-        themeId: theme.id,
+        insightId: theme.id,
         sourceConsultationId: theme.consultation.id,
         userId,
         position: index,
@@ -1259,7 +1259,7 @@ export async function moveThemeToGroup(
     themeId,
   });
 
-  let targetGroup: RoundThemeGroup | null = null;
+  let targetGroup: Theme | null = null;
   if (targetGroupId) {
     targetGroup = await loadGroupForRound({
       userId,
@@ -1268,9 +1268,9 @@ export async function moveThemeToGroup(
     });
   }
 
-  const previousGroupId = currentMembership?.group_id ?? null;
+  const previousGroupId = currentMembership?.theme_id ?? null;
 
-  if (currentMembership && currentMembership.group_id === targetGroupId) {
+  if (currentMembership && currentMembership.theme_id === targetGroupId) {
     if (typeof position === "number") {
       await db
         .update(themeMembers)
@@ -1292,9 +1292,9 @@ export async function moveThemeToGroup(
     const nextPosition =
       typeof position === "number" ? position : targetMembers.length;
     await db.insert(themeMembers).values({
-      groupId: targetGroup.id,
+      themeId: targetGroup.id,
       roundId,
-      themeId: theme.id,
+      insightId: theme.id,
       sourceConsultationId: theme.consultation.id,
       userId,
       position: nextPosition,
@@ -1365,14 +1365,14 @@ export async function mergeThemes(
   const primaryGroup = groups[0];
   const mergedGroupIds = groups.slice(1).map((group) => group.id);
   const primaryMembers = await loadGroupMembers({ groupId: primaryGroup.id });
-  const existingThemeIds = new Set(primaryMembers.map((member) => member.theme_id));
+  const existingThemeIds = new Set(primaryMembers.map((member) => member.insight_id));
   let position = primaryMembers.length;
 
   for (const group of groups.slice(1)) {
     const sourceMembers = await loadGroupMembers({ groupId: group.id });
 
     for (const member of sourceMembers) {
-      if (existingThemeIds.has(member.theme_id)) {
+      if (existingThemeIds.has(member.insight_id)) {
         await db
           .delete(themeMembers)
           .where(eq(themeMembers.id, member.id));
@@ -1383,12 +1383,12 @@ export async function mergeThemes(
       await db
         .update(themeMembers)
         .set({
-          groupId: primaryGroup.id,
+          themeId: primaryGroup.id,
           position,
         })
         .where(eq(themeMembers.id, member.id));
 
-      existingThemeIds.add(member.theme_id);
+      existingThemeIds.add(member.insight_id);
       position += 1;
     }
 
@@ -1439,16 +1439,16 @@ export async function splitTheme(
   const currentGroup = await loadGroupWithRoundContext({ userId, groupId });
   const round = currentGroup.round;
   const members = await loadGroupMembers({ groupId });
-  const selectedMembers = members.filter((member) => themeIds.includes(member.theme_id));
+  const selectedMembers = members.filter((member) => themeIds.includes(member.insight_id));
 
   if (selectedMembers.length === 0) {
     throw new Error("None of the selected themes belong to this group.");
   }
 
-  const selectedThemes = await loadThemesForRound({
+  const selectedThemes = await loadInsightsForRound({
     userId,
     roundId: round.id,
-    themeIds: selectedMembers.map((member) => member.theme_id),
+    themeIds: selectedMembers.map((member) => member.insight_id),
   });
   const defaultLabel =
     selectedThemes.length === 1 ? selectedThemes[0].label : "Split theme group";
@@ -1473,7 +1473,7 @@ export async function splitTheme(
     await db
       .update(themeMembers)
       .set({
-        groupId: newGroup.id,
+        themeId: newGroup.id,
         position: index,
       })
       .where(eq(themeMembers.id, member.id));
@@ -1940,12 +1940,12 @@ async function loadThemeWithRoundContext(params: {
   const { userId, themeId } = params;
   const [row] = await db
     .select({
-      theme: themes,
+      insight: insights,
       consultation: consultations,
     })
-    .from(themes)
-    .innerJoin(consultations, eq(themes.consultationId, consultations.id))
-    .where(and(eq(themes.id, themeId), eq(consultations.userId, userId)))
+    .from(insights)
+    .innerJoin(consultations, eq(insights.consultationId, consultations.id))
+    .where(and(eq(insights.id, themeId), eq(consultations.userId, userId)))
     .limit(1);
 
   if (!row) {
@@ -1953,9 +1953,9 @@ async function loadThemeWithRoundContext(params: {
   }
 
   return {
-    ...mapThemeRecord(row.theme),
+    ...mapInsightRecord(row.insight),
     consultation: mapConsultationRecord(row.consultation),
-  } satisfies ThemeWithConsultation;
+  } satisfies InsightWithConsultation;
 }
 
 async function loadGroupWithRoundContext(params: {
@@ -1995,7 +1995,7 @@ async function loadThemeMembershipForRound(params: {
     .where(
       and(
         eq(themeMembers.roundId, roundId),
-        eq(themeMembers.themeId, themeId)
+        eq(themeMembers.insightId, themeId)
       )
     )
     .limit(1);
@@ -2010,7 +2010,7 @@ async function loadThemeMembershipsForRound(params: {
   const { roundId, themeIds } = params;
 
   if (themeIds.length === 0) {
-    return [] as RoundThemeGroupMember[];
+    return [] as ThemeMember[];
   }
 
   const rows = await db
@@ -2019,7 +2019,7 @@ async function loadThemeMembershipsForRound(params: {
     .where(
       and(
         eq(themeMembers.roundId, roundId),
-        inArray(themeMembers.themeId, themeIds)
+        inArray(themeMembers.insightId, themeIds)
       )
     );
 
@@ -2039,10 +2039,10 @@ async function refreshGroupDraftForCurrentMembers(params: {
     groupId,
   });
   const members = await loadGroupMembers({ groupId });
-  const memberThemes = await loadThemesForRound({
+  const memberThemes = await loadInsightsForRound({
     userId,
     roundId: round.id,
-    themeIds: members.map((member) => member.theme_id),
+    themeIds: members.map((member) => member.insight_id),
   });
 
   await writeGroupDraftSuggestion({

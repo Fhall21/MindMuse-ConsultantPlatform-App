@@ -3,7 +3,7 @@ import type {
   Consultation,
   ConsultationRound,
   EvidenceEmail,
-  Theme,
+  Insight,
 } from "@/types/db";
 import { fetchJson } from "@/hooks/api";
 
@@ -20,7 +20,7 @@ export function useConsultation(id: string) {
     queryFn: () =>
       fetchJson<{
         consultation: Consultation;
-        themes: Theme[];
+        themes: Insight[];
         people: Array<{ person_id: string }>;
         latestEvidenceEmail: EvidenceEmail | null;
       }>(`/api/client/consultations/${id}`),

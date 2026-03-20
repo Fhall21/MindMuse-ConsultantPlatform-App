@@ -16,7 +16,7 @@ import { AIDraftReview } from "./ai-draft-review";
 import { SourceThemeCard } from "./source-theme-card";
 import type {
   RoundThemeGroup,
-  RoundThemeGroupMemberDetail,
+  ThemeMemberDetail,
   SourceTheme,
 } from "@/types/round-detail";
 
@@ -64,7 +64,7 @@ export function ThemeGroupCard({
 
   const hasLockedMembers = group.members.some((member) => member.lockedFromSource);
   const selectedMembersCount = group.members.filter((member) =>
-    selectedThemeIds.has(member.themeId)
+    selectedThemeIds.has(member.insightId)
   ).length;
 
   function handleSaveEdit() {
@@ -186,9 +186,9 @@ export function ThemeGroupCard({
           </p>
         ) : (
           <div className="space-y-1.5">
-            {group.members.map((member: RoundThemeGroupMemberDetail) => {
+            {group.members.map((member: ThemeMemberDetail) => {
               const adaptedTheme: SourceTheme = {
-                id: member.themeId,
+                id: member.insightId,
                 sourceConsultationId: member.sourceConsultationId,
                 sourceConsultationTitle: member.sourceConsultationTitle,
                 label: member.label,
@@ -204,7 +204,7 @@ export function ThemeGroupCard({
                 <SourceThemeCard
                   key={member.id}
                   theme={adaptedTheme}
-                  selected={selectedThemeIds.has(member.themeId)}
+                  selected={selectedThemeIds.has(member.insightId)}
                   onSelect={onThemeSelect}
                   onDragStart={onThemeDragStart}
                   compact

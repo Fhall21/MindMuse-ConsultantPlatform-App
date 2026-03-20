@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   mapConsultationRecord,
   mapRoundOutputArtifactRecord,
-  mapThemeRecord,
+  mapInsightRecord,
 } from "@/lib/data/mappers";
 
 describe("lib/data/mappers", () => {
@@ -38,7 +38,7 @@ describe("lib/data/mappers", () => {
     const createdAt = new Date("2026-03-19T01:02:03.000Z");
 
     expect(
-      mapThemeRecord({
+      mapInsightRecord({
         id: "theme-1",
         consultationId: "consultation-1",
         label: "Workload",

@@ -6,7 +6,7 @@ import {
   listConsultationsByIdsForUser,
   listEvidenceEmailsForConsultations,
   listRoundsByIdsForUser,
-  listThemesForConsultations,
+  listInsightsForConsultations,
 } from "@/lib/data/domain-read";
 import type {
   AuditExportConsultationRecord,
@@ -18,7 +18,7 @@ import type {
   Consultation,
   ConsultationRound,
   EvidenceEmail,
-  Theme,
+  Insight,
 } from "@/types/db";
 
 const ACTION_LABELS: Record<string, string> = {
@@ -139,7 +139,7 @@ function buildFilenameBase(filters: Required<AuditExportFilters>) {
 }
 
 function buildArtifactSummary(
-  themes: Theme[],
+  themes: Insight[],
   evidenceEmails: EvidenceEmail[]
 ): AuditExportConsultationRecord["artifactSummary"] {
   const acceptedThemeCount = themes.filter((theme) => theme.accepted).length;
@@ -187,7 +187,7 @@ function buildConsultationRecord(params: {
   consultation: Consultation | null;
   roundLabel: string | null;
   events: AuditExportEvent[];
-  themes: Theme[];
+  themes: Insight[];
   evidenceEmails: EvidenceEmail[];
 }): AuditExportConsultationRecord {
   const { consultation, roundLabel, events, themes, evidenceEmails } = params;
@@ -235,14 +235,14 @@ export async function generateAuditExport(
 
   let consultations: Consultation[] = [];
   let evidenceEmails: EvidenceEmail[] = [];
-  let themes: Theme[] = [];
+  let themes: Insight[] = [];
   let rounds: ConsultationRound[] = [];
 
   if (consultationIds.length > 0) {
     [consultations, evidenceEmails, themes] = await Promise.all([
       listConsultationsByIdsForUser(consultationIds, currentUserId),
       listEvidenceEmailsForConsultations(consultationIds, currentUserId),
-      listThemesForConsultations(consultationIds, currentUserId),
+      listInsightsForConsultations(consultationIds, currentUserId),
     ]);
 
     const roundIds = Array.from(
@@ -271,12 +271,12 @@ export async function generateAuditExport(
     eventsByConsultationId.set(key, currentEvents);
   }
 
-  const themesByConsultationId = themes.reduce<Map<string, Theme[]>>((accumulator, theme) => {
+  const themesByConsultationId = themes.reduce<Map<string, Insight[]>>((accumulator, theme) => {
     const currentThemes = accumulator.get(theme.consultation_id) ?? [];
     currentThemes.push(theme);
     accumulator.set(theme.consultation_id, currentThemes);
     return accumulator;
-  }, new Map<string, Theme[]>());
+  }, new Map<string, Insight[]>());
 
   const evidenceEmailsByConsultationId = evidenceEmails.reduce<Map<string, EvidenceEmail[]>>(
     (accumulator, evidenceEmail) => {

@@ -222,7 +222,7 @@ function EdgeEditForm({ edge, nodes, consultationId, onDeleted }: EdgeEditFormPr
         <label className="text-xs text-muted-foreground">Connection type</label>
         <Select
           value={connectionType}
-          onValueChange={(v) => setConnectionType(v as ConnectionType)}
+          onValueChange={(v: string) => setConnectionType(v as ConnectionType)}
           disabled={isBusy}
         >
           <SelectTrigger className="h-8 text-xs">

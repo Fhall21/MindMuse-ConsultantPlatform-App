@@ -21,7 +21,6 @@ export async function PATCH(
 
     const edge = await updateCanvasConnection(
       consultation.roundId,
-      consultationId,
       client.userId,
       edgeId,
       {
@@ -49,7 +48,7 @@ export async function DELETE(
     const consultation = await requireOwnedConsultation(consultationId, client.userId);
     if (!consultation.roundId) return jsonError("Consultation has no active round", 400);
 
-    await deleteCanvasConnection(consultation.roundId, consultationId, client.userId, edgeId);
+    await deleteCanvasConnection(consultation.roundId, client.userId, edgeId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

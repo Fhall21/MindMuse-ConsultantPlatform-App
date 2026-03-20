@@ -25,6 +25,9 @@ The canvas makes the interrelated nature of themes and insights **visible, edita
 - Persistent graph canvas per consultation
 - Typed connections between themes and insights (see [Connection Types](#connection-types))
 - Connection notes (freetext, max 500 chars)
+- Insight cards remain first-class cards with source-consultation pills
+- Card-to-card grouping: dropping one insight onto another creates a group
+- Multi-select drag/group for insight cards
 - Quick filters: node type, connection type, subgroup, accepted-only, search
 - Multi-select and bulk subgroup assignment
 - AI connection suggestions — review-gated, not auto-applied
@@ -184,6 +187,13 @@ Report generation
 │                                │    review list         │
 └────────────────────────────────┴────────────────────────┘
 ```
+
+## Interaction Notes
+
+- Insight cards preserve the round-grouping visual language on canvas: readable card body, consultation source pill, accepted state, and explicit connect affordance.
+- Dropping one insight card onto another ungrouped insight creates a new group.
+- Dragging a selected set of insights onto another card or group applies the whole selection in one action.
+- Creating a connection immediately opens a quick type-and-note prompt; the same prompt can be reopened from the connection label for fast relabeling.
 
 ---
 

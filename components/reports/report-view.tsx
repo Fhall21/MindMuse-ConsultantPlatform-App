@@ -708,15 +708,16 @@ function ReportContent({ content }: { content: string }) {
         }
 
         const lines = trimmed.split("\n");
-        const isBulletList = lines.every(
+        const nonEmptyLines = lines.filter((line) => line.trim() !== "");
+
+        const isBulletList = nonEmptyLines.length > 0 && nonEmptyLines.every(
           (line) =>
             line.trim().startsWith("- ") ||
             line.trim().startsWith("\u2022 ") ||
-            line.trim().startsWith("* ") ||
-            line.trim() === ""
+            line.trim().startsWith("* ")
         );
-        const isNumberedList = lines.every(
-          (line) => /^\d+\.\s/.test(line.trim()) || line.trim() === ""
+        const isNumberedList = nonEmptyLines.length > 0 && nonEmptyLines.every(
+          (line) => /^\d+\.\s/.test(line.trim())
         );
 
         if (isBulletList) {
@@ -1029,13 +1030,9 @@ export function ReportView({ artifactId }: ReportViewProps) {
                 graphModel={graphModel}
                 template={template}
               />
-              <Separator />
-              <ReportContent content={report.content} />
             </>
           ) : (
             <>
-              <ReportContent content={report.content} />
-              <Separator />
               <LegacyFindingsSection report={report} template={template} />
             </>
           )}

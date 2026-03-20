@@ -21,6 +21,11 @@ import type {
   ConsultationRound,
   Insight,
 } from "@/types/db";
+import {
+  buildReportGraphModel,
+  toReportInputSnapshot,
+  type ReportInputSnapshot,
+} from "@/lib/report-graph";
 
 type ConsultationContext = Pick<Consultation, "id" | "title" | "round_id">;
 type RoundContext = Pick<ConsultationRound, "id" | "label" | "description">;
@@ -399,7 +404,7 @@ export interface ReportArtifactDetail {
   roundDescription: string | null;
   generatedAt: string;
   updatedAt: string;
-  inputSnapshot: Record<string, unknown>;
+  inputSnapshot: ReportInputSnapshot;
   consultationTitles: string[];
   consultations: ConsultationMeta[];
   acceptedThemeCount: number;
@@ -482,16 +487,21 @@ export async function getReportArtifact(
     ascendingVersions.findIndex((candidate) => candidate.id === artifact.id) + 1
   );
 
-  const inputSnapshot = (artifact.input_snapshot ?? {}) as Record<string, unknown>;
+  const inputSnapshot = toReportInputSnapshot(artifact.input_snapshot ?? {});
+  const graphModel = buildReportGraphModel(inputSnapshot);
   const consultationTitles = Array.isArray(inputSnapshot.consultations)
     ? (inputSnapshot.consultations as string[])
     : [];
-  const acceptedThemeCount = Array.isArray(inputSnapshot.accepted_round_themes)
-    ? inputSnapshot.accepted_round_themes.length
-    : 0;
-  const supportingThemeCount = Array.isArray(inputSnapshot.supporting_consultation_themes)
-    ? inputSnapshot.supporting_consultation_themes.length
-    : 0;
+  const acceptedThemeCount = graphModel
+    ? graphModel.acceptedThemeCount
+    : Array.isArray(inputSnapshot.accepted_round_themes)
+      ? inputSnapshot.accepted_round_themes.length
+      : 0;
+  const supportingThemeCount = graphModel
+    ? graphModel.supportingThemeCount
+    : Array.isArray(inputSnapshot.supporting_consultation_themes)
+      ? inputSnapshot.supporting_consultation_themes.length
+      : 0;
 
   // Load live consultation metadata (dates + linked people) for compliance display
   const liveConsultations = await listConsultationsForRound(artifact.round_id, userId);

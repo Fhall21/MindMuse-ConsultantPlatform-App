@@ -28,6 +28,10 @@ import {
   mapInsightRecord,
   mapRoundOutputArtifactRecord,
 } from "@/lib/data/mappers";
+import {
+  buildLegacyReportGraphSnapshot,
+  type ReportInputSnapshot,
+} from "@/lib/report-graph";
 import type {
   Consultation,
   ConsultationRound,
@@ -154,7 +158,7 @@ export interface RoundOutputSummary {
   contentPreview: string;
   generatedAt: string;
   updatedAt: string;
-  inputSnapshot: Record<string, unknown>;
+  inputSnapshot: ReportInputSnapshot;
 }
 
 export interface RoundHistoryEvent {
@@ -2210,11 +2214,44 @@ async function generateRoundOutput(
   }
 
   const inputSnapshot = {
+    roundId,
     round_id: roundId,
     consultations: requestPayload.consultations,
     accepted_round_themes: acceptedRoundThemes,
     supporting_consultation_themes: supportingConsultationThemes,
-  };
+    graphNetwork: buildLegacyReportGraphSnapshot({
+      roundId,
+      snapshotAt: new Date().toISOString(),
+      themeGroups: detail.themeGroups.map((group) => ({
+        id: group.id,
+        label: group.label,
+        description: group.description,
+        status: group.status,
+        origin: group.origin,
+        members: group.members.map((member) => ({
+          insightId: member.insightId,
+          sourceConsultationId: member.sourceConsultationId,
+          sourceConsultationTitle: member.sourceConsultationTitle,
+          label: member.label,
+          description: member.description,
+          isUserAdded: member.isUserAdded,
+          position: member.position,
+        })),
+      })),
+      sourceThemes: detail.sourceThemes.map((theme) => ({
+        sourceThemeId: theme.sourceThemeId,
+        consultationId: theme.consultationId,
+        consultationTitle: theme.consultationTitle,
+        label: theme.label,
+        description: theme.description,
+        effectiveIncluded: theme.effectiveIncluded,
+        groupId: theme.groupId,
+        groupLabel: theme.groupLabel,
+        isUserAdded: theme.isUserAdded,
+        createdAt: theme.createdAt,
+      })),
+    }),
+  } satisfies ReportInputSnapshot;
   const [created] = await db
     .insert(roundOutputArtifacts)
     .values({

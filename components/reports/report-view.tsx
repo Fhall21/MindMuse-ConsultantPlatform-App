@@ -17,6 +17,11 @@ import {
   estimateReadTime,
 } from "@/lib/report-formatting";
 import {
+  buildReportGraphModel,
+  formatConnectionTypeLabel,
+  type ReportGraphModel,
+} from "@/lib/report-graph";
+import {
   filterMajorEvents,
   clusterAuditEvents,
   getAuditDotColor,
@@ -119,7 +124,211 @@ function QuickStats({ report }: { report: ReportArtifactDetail }) {
 
 // ─── Findings Section ────────────────────────────────────────────────────────
 
-function FindingsSection({
+function GraphOverviewSection({
+  graphModel,
+}: {
+  graphModel: ReportGraphModel;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Evidence Network
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          Snapshot saved {formatDate(graphModel.snapshot.snapshotAt)}
+        </p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-lg border border-border/60 bg-gradient-to-br from-muted/30 to-background px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Nodes
+          </p>
+          <p className="mt-1 text-xl font-semibold text-foreground">
+            {graphModel.nodeCount}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {graphModel.acceptedThemeCount} groups · {graphModel.supportingThemeCount} source themes
+          </p>
+        </div>
+        <div className="rounded-lg border border-border/60 bg-gradient-to-br from-muted/30 to-background px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Connections
+          </p>
+          <p className="mt-1 text-xl font-semibold text-foreground">
+            {graphModel.connectionCount}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {graphModel.connectionsByType.length} relationship type
+            {graphModel.connectionsByType.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border/60 bg-gradient-to-br from-muted/30 to-background px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Layout
+          </p>
+          <p className="mt-1 text-xl font-semibold text-foreground">
+            {Math.max(graphModel.snapshot.layoutState.length - 1, 0)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            saved node positions
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function GraphConnectionsSection({
+  graphModel,
+  template,
+}: {
+  graphModel: ReportGraphModel;
+  template: ReportTemplate;
+}) {
+  const groupsToShow =
+    template === "executive"
+      ? graphModel.connectionsByType
+          .map((group) => ({
+            ...group,
+            connections: group.connections.slice(0, 2),
+          }))
+          .filter((group) => group.connections.length > 0)
+          .slice(0, 2)
+      : graphModel.connectionsByType;
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        Network Connections ({graphModel.connectionCount})
+      </h3>
+      {groupsToShow.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border/60 bg-muted/5 px-4 py-4 text-sm text-muted-foreground">
+          No saved typed connections were available on this artifact. The snapshot still preserves
+          the network nodes and can be enriched by later canvas-aware generations.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {groupsToShow.map((group) => (
+            <div
+              key={group.type}
+              className="rounded-lg border border-border/50 bg-muted/5 px-4 py-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-sm font-medium text-foreground">{group.label}</h4>
+                <Badge variant="outline" className="text-[10px]">
+                  {group.connections.length}
+                </Badge>
+              </div>
+              <div className="mt-3 space-y-2">
+                {group.connections.map((connection) => (
+                  <div
+                    key={connection.key}
+                    className="rounded-md border border-border/50 bg-background px-3 py-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">
+                        {connection.fromLabel}
+                      </p>
+                      <Badge variant="secondary" className="text-[10px] uppercase">
+                        {formatConnectionTypeLabel(connection.connectionType)}
+                      </Badge>
+                      <p className="text-sm font-medium text-foreground">
+                        {connection.toLabel}
+                      </p>
+                      <Badge variant="outline" className="text-[10px]">
+                        {connection.origin === "ai_suggested" ? "AI accepted" : "Manual"}
+                      </Badge>
+                    </div>
+                    {connection.notes && (
+                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                        {connection.notes}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function GraphNodesSection({
+  graphModel,
+  template,
+}: {
+  graphModel: ReportGraphModel;
+  template: ReportTemplate;
+}) {
+  const nodesToShow =
+    template === "executive"
+      ? graphModel.topNodes.slice(0, 4)
+      : graphModel.nodes;
+
+  if (nodesToShow.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        Network Nodes ({graphModel.nodeCount})
+      </h3>
+      <div className="grid gap-3">
+        {nodesToShow.map((node) => (
+          <div
+            key={node.key}
+            className="rounded-lg border border-border/50 bg-muted/5 px-4 py-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-medium text-foreground">{node.label}</p>
+                  <Badge variant="outline" className="text-[10px] capitalize">
+                    {node.nodeType}
+                  </Badge>
+                  {node.consultationTitle && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {node.consultationTitle}
+                    </Badge>
+                  )}
+                  {node.memberCount !== null && (
+                    <Badge variant="outline" className="text-[10px]">
+                      {node.memberCount} member{node.memberCount === 1 ? "" : "s"}
+                    </Badge>
+                  )}
+                  {node.isUserAdded && (
+                    <Badge variant="outline" className="text-[10px]">
+                      User added
+                    </Badge>
+                  )}
+                </div>
+                {node.description && (
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {node.description}
+                  </p>
+                )}
+                {node.groupLabel && template === "executive" && (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Grouped under {node.groupLabel}
+                  </p>
+                )}
+              </div>
+              <Badge variant="secondary" className="text-[10px]">
+                Degree {node.degree}
+              </Badge>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function LegacyFindingsSection({
   report,
   template,
 }: {
@@ -703,6 +912,7 @@ export function ReportView({ artifactId }: ReportViewProps) {
   }
 
   const readTime = estimateReadTime(report.content);
+  const graphModel = buildReportGraphModel(report.inputSnapshot);
 
   const consultationCount =
     report.consultations.length || report.consultationTitles.length;
@@ -806,7 +1016,29 @@ export function ReportView({ artifactId }: ReportViewProps) {
 
           <Separator />
 
-          <FindingsSection report={report} template={template} />
+          {graphModel ? (
+            <>
+              <GraphOverviewSection graphModel={graphModel} />
+              <Separator />
+              <GraphConnectionsSection
+                graphModel={graphModel}
+                template={template}
+              />
+              <Separator />
+              <GraphNodesSection
+                graphModel={graphModel}
+                template={template}
+              />
+              <Separator />
+              <ReportContent content={report.content} />
+            </>
+          ) : (
+            <>
+              <ReportContent content={report.content} />
+              <Separator />
+              <LegacyFindingsSection report={report} template={template} />
+            </>
+          )}
 
           {report.draftThemeGroups && report.draftThemeGroups.length > 0 && (
             <>

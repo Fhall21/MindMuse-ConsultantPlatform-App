@@ -2,6 +2,8 @@
 
 Psychosocial consultation evidence platform. Turn post-interview admin into a repeatable evidence workflow: transcript capture, theme clarification, person linking, and evidence email generation.
 
+Design source of truth: [DESIGN.md](./DESIGN.md)
+
 ## Stack
 
 - Next.js 16 + React 19

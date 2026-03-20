@@ -1,4 +1,5 @@
 import {
+  bigserial,
   boolean,
   check,
   index,
@@ -10,7 +11,9 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
+  vector,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { users } from "./auth";
@@ -713,5 +716,293 @@ export const canvasLayoutState = pgTable(
       table.nodeId
     ),
     roundUserIdx: index("idx_canvas_layout_state_round_user").on(table.roundId, table.userId),
+  })
+);
+
+type AnalyticsJobPhase =
+  | "queued"
+  | "extracting"
+  | "embedding"
+  | "clustering"
+  | "syncing"
+  | "complete"
+  | "failed";
+
+type AnalyticsExtractor = "langextract" | "spacy" | "combined";
+
+type AnalyticsTermEntityType =
+  | "THEME"
+  | "ISSUE"
+  | "PERSON"
+  | "ORG"
+  | "LOCATION"
+  | "DATE"
+  | "OTHER";
+
+type AnalyticsOutboxEventType = "consultation_projection_refresh";
+
+export const analyticsJobs = pgTable(
+  "analytics_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    consultationId: uuid("consultation_id")
+      .notNull()
+      .references(() => consultations.id, { onDelete: "cascade" }),
+    roundId: uuid("round_id").references(() => consultationRounds.id, { onDelete: "set null" }),
+    phase: text("phase").default("queued").notNull().$type<AnalyticsJobPhase>(),
+    progress: integer("progress").default(-1).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    errorMessage: text("error_message"),
+    ...timestamps,
+  },
+  (table) => ({
+    phaseCheck: check(
+      "analytics_jobs_phase_check",
+      sql`${table.phase} in ('queued', 'extracting', 'embedding', 'clustering', 'syncing', 'complete', 'failed')`
+    ),
+    progressCheck: check(
+      "analytics_jobs_progress_check",
+      sql`${table.progress} >= -1 and ${table.progress} <= 100`
+    ),
+    consultationCreatedIdx: index("idx_analytics_jobs_consultation_created").on(
+      table.consultationId,
+      table.createdAt.desc()
+    ),
+    roundCreatedIdx: index("idx_analytics_jobs_round_created").on(
+      table.roundId,
+      table.createdAt.desc()
+    ),
+    activeConsultationIdx: uniqueIndex("idx_analytics_jobs_active_consultation")
+      .on(table.consultationId)
+      .where(
+        sql`${table.phase} in ('queued', 'extracting', 'embedding', 'clustering', 'syncing')`
+      ),
+  })
+);
+
+export const extractionResults = pgTable(
+  "extraction_results",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    consultationId: uuid("consultation_id")
+      .notNull()
+      .references(() => consultations.id, { onDelete: "cascade" }),
+    roundId: uuid("round_id").references(() => consultationRounds.id, { onDelete: "set null" }),
+    extractedAt: timestamp("extracted_at", { withTimezone: true }).defaultNow().notNull(),
+    extractor: text("extractor").notNull().$type<AnalyticsExtractor>(),
+    modelVersion: text("model_version").notNull(),
+    transcriptWordCount: integer("transcript_word_count").notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    confidence: numeric("confidence", { precision: 4, scale: 3 }).notNull(),
+    fallbackUsed: boolean("fallback_used").default(false).notNull(),
+    reducedRecall: boolean("reduced_recall").default(false).notNull(),
+    errorMessages: jsonb("error_messages")
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    resultJson: jsonb("result_json").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    extractorCheck: check(
+      "extraction_results_extractor_check",
+      sql`${table.extractor} in ('langextract', 'spacy', 'combined')`
+    ),
+    confidenceCheck: check(
+      "extraction_results_confidence_check",
+      sql`${table.confidence} >= 0 and ${table.confidence} <= 1`
+    ),
+    consultationExtractedIdx: index("idx_extraction_results_consultation_extracted").on(
+      table.consultationId,
+      table.extractedAt.desc()
+    ),
+    roundExtractedIdx: index("idx_extraction_results_round_extracted").on(
+      table.roundId,
+      table.extractedAt.desc()
+    ),
+  })
+);
+
+export const termExtractionOffsets = pgTable(
+  "term_extraction_offsets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    extractionResultId: uuid("extraction_result_id")
+      .notNull()
+      .references(() => extractionResults.id, { onDelete: "cascade" }),
+    consultationId: uuid("consultation_id")
+      .notNull()
+      .references(() => consultations.id, { onDelete: "cascade" }),
+    term: text("term").notNull(),
+    original: text("original"),
+    entityType: text("entity_type").notNull().$type<AnalyticsTermEntityType>(),
+    confidence: numeric("confidence", { precision: 4, scale: 3 }).notNull(),
+    charStart: integer("char_start").notNull(),
+    charEnd: integer("char_end").notNull(),
+    sourceSpan: text("source_span").notNull(),
+    extractionSource: text("extraction_source"),
+    posTags: jsonb("pos_tags").$type<string[]>().default(sql`'[]'::jsonb`).notNull(),
+    negationContext: boolean("negation_context").default(false).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    entityTypeCheck: check(
+      "term_extraction_offsets_entity_type_check",
+      sql`${table.entityType} in ('THEME', 'ISSUE', 'PERSON', 'ORG', 'LOCATION', 'DATE', 'OTHER')`
+    ),
+    confidenceCheck: check(
+      "term_extraction_offsets_confidence_check",
+      sql`${table.confidence} >= 0 and ${table.confidence} <= 1`
+    ),
+    charRangeCheck: check(
+      "term_extraction_offsets_char_range_check",
+      sql`${table.charStart} >= 0 and ${table.charEnd} > ${table.charStart}`
+    ),
+    consultationCharIdx: index("idx_term_extraction_offsets_consultation_char").on(
+      table.consultationId,
+      table.charStart
+    ),
+    extractionResultIdx: index("idx_term_extraction_offsets_extraction_result").on(
+      table.extractionResultId
+    ),
+  })
+);
+
+export const termEmbeddings = pgTable(
+  "term_embeddings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    consultationId: uuid("consultation_id")
+      .notNull()
+      .references(() => consultations.id, { onDelete: "cascade" }),
+    term: text("term").notNull(),
+    entityType: text("entity_type").notNull().$type<AnalyticsTermEntityType>(),
+    embedding: vector("embedding", { dimensions: 1536 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    entityTypeCheck: check(
+      "term_embeddings_entity_type_check",
+      sql`${table.entityType} in ('THEME', 'ISSUE', 'PERSON', 'ORG', 'LOCATION', 'DATE', 'OTHER')`
+    ),
+    consultationTermEntityUnique: unique("term_embeddings_consultation_term_entity_key").on(
+      table.consultationId,
+      table.term,
+      table.entityType
+    ),
+    consultationIdx: index("idx_term_embeddings_consultation_id").on(table.consultationId),
+    embeddingCosineIdx: index("idx_term_embeddings_embedding_cosine").using(
+      "ivfflat",
+      table.embedding.op("vector_cosine_ops")
+    ),
+  })
+);
+
+export const termClusters = pgTable(
+  "term_clusters",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+    clusterId: integer("cluster_id").notNull(),
+    label: text("label").notNull(),
+    representativeTerms: jsonb("representative_terms")
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    allTerms: jsonb("all_terms").$type<string[]>().default(sql`'[]'::jsonb`).notNull(),
+    consultationCount: integer("consultation_count").notNull(),
+    clusteredAt: timestamp("clustered_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    consultationCountCheck: check(
+      "term_clusters_consultation_count_check",
+      sql`${table.consultationCount} >= 0`
+    ),
+    roundClusterUnique: unique("term_clusters_round_cluster_key").on(
+      table.roundId,
+      table.clusterId
+    ),
+    roundClusteredIdx: index("idx_term_clusters_round_clustered").on(
+      table.roundId,
+      table.clusteredAt.desc()
+    ),
+  })
+);
+
+export const termClusterMemberships = pgTable(
+  "term_cluster_memberships",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+    consultationId: uuid("consultation_id")
+      .notNull()
+      .references(() => consultations.id, { onDelete: "cascade" }),
+    term: text("term").notNull(),
+    clusterId: integer("cluster_id").notNull(),
+    membershipProbability: numeric("membership_probability", { precision: 4, scale: 3 })
+      .notNull()
+      .default("0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    membershipProbabilityCheck: check(
+      "term_cluster_memberships_probability_check",
+      sql`${table.membershipProbability} >= 0 and ${table.membershipProbability} <= 1`
+    ),
+    roundConsultationTermUnique: unique("term_cluster_memberships_round_consultation_term_key").on(
+      table.roundId,
+      table.consultationId,
+      table.term
+    ),
+    roundClusterIdx: index("idx_term_cluster_memberships_round_cluster").on(
+      table.roundId,
+      table.clusterId
+    ),
+    consultationIdx: index("idx_term_cluster_memberships_consultation_id").on(table.consultationId),
+  })
+);
+
+export const analyticsOutbox = pgTable(
+  "analytics_outbox",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    consultationId: uuid("consultation_id")
+      .notNull()
+      .references(() => consultations.id, { onDelete: "cascade" }),
+    roundId: uuid("round_id").references(() => consultationRounds.id, { onDelete: "set null" }),
+    eventType: text("event_type")
+      .default("consultation_projection_refresh")
+      .notNull()
+      .$type<AnalyticsOutboxEventType>(),
+    sourceTable: text("source_table").default("extraction_results").notNull(),
+    sourceId: uuid("source_id").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    lastError: text("last_error"),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    eventTypeCheck: check(
+      "analytics_outbox_event_type_check",
+      sql`${table.eventType} in ('consultation_projection_refresh')`
+    ),
+    attemptCountCheck: check(
+      "analytics_outbox_attempt_count_check",
+      sql`${table.attemptCount} >= 0`
+    ),
+    pendingIdx: index("idx_analytics_outbox_pending")
+      .on(table.id)
+      .where(sql`${table.processedAt} is null`),
+    consultationCreatedIdx: index("idx_analytics_outbox_consultation_created").on(
+      table.consultationId,
+      table.createdAt.desc()
+    ),
   })
 );

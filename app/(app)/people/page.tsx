@@ -168,18 +168,19 @@ export default function PeoplePage() {
         </Button>
       </div>
 
-      <Input
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search by name, working group, work type, role, or email"
-        className="w-full sm:max-w-xs"
-      />
+      {!hasNoPeople ? (
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search by name, working group, work type, role, or email"
+          className="w-full sm:max-w-sm"
+        />
+      ) : null}
 
       {hasNoPeople ? (
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <p className="mb-4 text-muted-foreground">No people added yet.</p>
+        <div className="space-y-3 border-t border-border/80 pt-4">
+          <p className="text-sm text-muted-foreground">No people yet.</p>
           <Button
-            size="lg"
             onClick={() => {
               setEditingPerson(null);
               setDialogOpen(true);

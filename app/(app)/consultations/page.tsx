@@ -204,11 +204,9 @@ export default function ConsultationsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">All consultations</h2>
-          <p className="text-sm text-muted-foreground">
-            Search, filter, and open consultation records from here.
-          </p>
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">Consultations</h2>
+          <p className="text-sm text-muted-foreground">Open or create a consultation.</p>
         </div>
         <Button asChild>
           <Link href="/consultations/new">New Consultation</Link>
@@ -234,14 +232,14 @@ export default function ConsultationsPage() {
       </div>
 
       {hasNoConsultations ? (
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <p className="mb-4 text-muted-foreground">No consultations yet.</p>
-          <Button asChild size="lg">
+        <div className="space-y-3 border-t border-border/80 pt-4">
+          <p className="text-sm text-muted-foreground">No consultations yet.</p>
+          <Button asChild>
             <Link href="/consultations/new">New Consultation</Link>
           </Button>
         </div>
       ) : hasNoFilteredRows ? (
-        <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+        <div className="border-t border-border/80 pt-4 text-sm text-muted-foreground">
           No matching consultations.
         </div>
       ) : (

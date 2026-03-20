@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { createConsultation } from "@/lib/actions/consultations";
 import { useConsultationRounds } from "@/hooks/use-consultations";
 
@@ -50,15 +49,13 @@ export default function NewConsultationPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
-      <div>
+    <div className="mx-auto max-w-xl space-y-5">
+      <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">New Consultation</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Create a record first. You can add the transcript after.
+        <p className="text-sm text-muted-foreground">
+          Create the record first. Add material after.
         </p>
       </div>
-
-      <Separator />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <div className="space-y-2">
@@ -95,7 +92,7 @@ export default function NewConsultationPage() {
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             onClick={() => router.push("/consultations")}
           >
             Cancel

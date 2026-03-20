@@ -26,6 +26,15 @@ export interface CanvasNode {
   accepted: boolean;
   /** Free-text subgroup tag applied by the consultant. */
   subgroup: string | null;
+  /** Source consultation metadata for continuity with round grouping. */
+  sourceConsultationId: string | null;
+  sourceConsultationTitle: string | null;
+  /** Group-membership metadata used for canvas grouping actions. */
+  groupId: string | null;
+  memberIds: string[];
+  /** Mirrors source insight flags for card rendering. */
+  isUserAdded: boolean;
+  lockedFromSource: boolean;
   /** Persisted x/y position on the canvas. */
   position: CanvasPosition;
 }
@@ -33,6 +42,10 @@ export interface CanvasNode {
 export interface CanvasPosition {
   x: number;
   y: number;
+}
+
+export interface CanvasLayoutPosition extends CanvasPosition {
+  nodeType: CanvasNodeType;
 }
 
 // ---------------------------------------------------------------------------

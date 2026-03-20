@@ -5,6 +5,7 @@ import { fetchJson } from "@/hooks/api";
 import type {
   AiConnectionSuggestion,
   CanvasEdge,
+  CanvasLayoutPosition,
   CanvasNode,
   CanvasViewport,
   ConnectionType,
@@ -27,7 +28,9 @@ export interface CanvasData {
 // ---------------------------------------------------------------------------
 
 export interface CreateEdgePayload {
+  source_node_type: CanvasNode["type"];
   source_node_id: string;
+  target_node_type: CanvasNode["type"];
   target_node_id: string;
   connection_type: ConnectionType;
   note?: string | null;
@@ -40,7 +43,7 @@ export interface UpdateEdgePayload {
 }
 
 export interface SaveLayoutPayload {
-  positions: Record<string, { x: number; y: number }>;
+  positions: Record<string, CanvasLayoutPosition>;
   viewport: CanvasViewport;
 }
 
@@ -50,6 +53,16 @@ export interface SaveLayoutPayload {
 
 function canvasKey(consultationId: string) {
   return ["canvas", consultationId] as const;
+}
+
+function updateCanvasCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  consultationId: string,
+  updater: (current: CanvasData) => CanvasData
+) {
+  queryClient.setQueryData<CanvasData>(canvasKey(consultationId), (current) =>
+    current ? updater(current) : current
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -79,15 +92,21 @@ export function useCreateEdge(consultationId: string) {
           body: JSON.stringify(payload),
         }
       ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: canvasKey(consultationId) });
+    onSuccess: (createdEdge) => {
+      updateCanvasCache(queryClient, consultationId, (current) => ({
+        ...current,
+        edges: [
+          createdEdge,
+          ...current.edges.filter((edge) => edge.id !== createdEdge.id),
+        ],
+      }));
     },
   });
 }
 
 export function useUpdateEdge(consultationId: string) {
   const queryClient = useQueryClient();
-  return useMutation<CanvasEdge, Error, UpdateEdgePayload>({
+  return useMutation<CanvasEdge, Error, UpdateEdgePayload, { previous?: CanvasData }>({
     mutationFn: ({ id, ...payload }) =>
       fetchJson<CanvasEdge>(
         `/api/client/consultations/${consultationId}/canvas/edges/${id}`,
@@ -97,29 +116,66 @@ export function useUpdateEdge(consultationId: string) {
           body: JSON.stringify(payload),
         }
       ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: canvasKey(consultationId) });
+    onMutate: async ({ id, ...updates }) => {
+      const previous = queryClient.getQueryData<CanvasData>(canvasKey(consultationId));
+      updateCanvasCache(queryClient, consultationId, (current) => ({
+        ...current,
+        edges: current.edges.map((edge) =>
+          edge.id === id
+            ? {
+                ...edge,
+                connection_type: updates.connection_type ?? edge.connection_type,
+                note:
+                  updates.note === undefined ? edge.note : updates.note,
+              }
+            : edge
+        ),
+      }));
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(canvasKey(consultationId), context.previous);
+      }
+    },
+    onSuccess: (updatedEdge) => {
+      updateCanvasCache(queryClient, consultationId, (current) => ({
+        ...current,
+        edges: current.edges.map((edge) =>
+          edge.id === updatedEdge.id ? updatedEdge : edge
+        ),
+      }));
     },
   });
 }
 
 export function useDeleteEdge(consultationId: string) {
   const queryClient = useQueryClient();
-  return useMutation<void, Error, string>({
+  return useMutation<void, Error, string, { previous?: CanvasData }>({
     mutationFn: (edgeId) =>
       fetchJson<void>(
         `/api/client/consultations/${consultationId}/canvas/edges/${edgeId}`,
         { method: "DELETE" }
       ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: canvasKey(consultationId) });
+    onMutate: async (edgeId) => {
+      const previous = queryClient.getQueryData<CanvasData>(canvasKey(consultationId));
+      updateCanvasCache(queryClient, consultationId, (current) => ({
+        ...current,
+        edges: current.edges.filter((edge) => edge.id !== edgeId),
+      }));
+      return { previous };
+    },
+    onError: (_error, _edgeId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(canvasKey(consultationId), context.previous);
+      }
     },
   });
 }
 
 export function useSaveLayout(consultationId: string) {
   const queryClient = useQueryClient();
-  return useMutation<void, Error, SaveLayoutPayload>({
+  return useMutation<void, Error, SaveLayoutPayload, { previous?: CanvasData }>({
     mutationFn: (payload) =>
       fetchJson<void>(
         `/api/client/consultations/${consultationId}/canvas/layout`,
@@ -129,8 +185,22 @@ export function useSaveLayout(consultationId: string) {
           body: JSON.stringify(payload),
         }
       ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: canvasKey(consultationId) });
+    onMutate: async (payload) => {
+      const previous = queryClient.getQueryData<CanvasData>(canvasKey(consultationId));
+      updateCanvasCache(queryClient, consultationId, (current) => ({
+        ...current,
+        viewport: payload.viewport,
+        nodes: current.nodes.map((node) => ({
+          ...node,
+          position: payload.positions[node.id] ?? node.position,
+        })),
+      }));
+      return { previous };
+    },
+    onError: (_error, _payload, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(canvasKey(consultationId), context.previous);
+      }
     },
   });
 }

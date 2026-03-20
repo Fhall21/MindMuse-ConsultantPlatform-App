@@ -9,6 +9,10 @@ interface SourceThemeCardProps {
   selected?: boolean;
   onSelect?: (themeId: string) => void;
   onDragStart?: (e: React.DragEvent, themeId: string) => void;
+  onDragOverCard?: (themeId: string) => void;
+  onDragLeaveCard?: () => void;
+  onDropOnCard?: (e: React.DragEvent, themeId: string) => void;
+  dropTarget?: boolean;
   compact?: boolean;
 }
 
@@ -17,12 +21,29 @@ export function SourceThemeCard({
   selected,
   onSelect,
   onDragStart,
+  onDragOverCard,
+  onDragLeaveCard,
+  onDropOnCard,
+  dropTarget,
   compact,
 }: SourceThemeCardProps) {
   return (
     <div
       draggable={!!onDragStart}
       onDragStart={(e) => onDragStart?.(e, theme.id)}
+      onDragOver={(e) => {
+        if (!onDropOnCard) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        onDragOverCard?.(theme.id);
+      }}
+      onDragLeave={() => onDragLeaveCard?.()}
+      onDrop={(e) => {
+        if (!onDropOnCard) return;
+        e.preventDefault();
+        onDragLeaveCard?.();
+        onDropOnCard(e, theme.id);
+      }}
       onClick={() => onSelect?.(theme.id)}
       className={cn(
         "rounded-md border px-3 py-2 transition-colors",
@@ -30,7 +51,9 @@ export function SourceThemeCard({
         selected && "border-primary bg-primary/5 ring-1 ring-primary/20",
         !selected && "hover:bg-accent/50",
         theme.lockedFromSource && "border-l-2 border-l-amber-400",
+        dropTarget && "border-primary bg-primary/10 ring-1 ring-primary/30",
       )}
+      data-testid="source-theme-card"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
@@ -42,14 +65,15 @@ export function SourceThemeCard({
               {theme.description}
             </p>
           ) : null}
-          {!compact ? (
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              from {theme.sourceConsultationTitle}
-            </p>
-          ) : null}
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-1">
+          <Badge
+            variant="outline"
+            className="h-4 border-amber-200 bg-amber-50 px-1 text-[10px] text-amber-800"
+          >
+            {theme.sourceConsultationTitle}
+          </Badge>
           {theme.lockedFromSource ? (
             <Badge
               variant="outline"

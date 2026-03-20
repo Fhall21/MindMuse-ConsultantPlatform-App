@@ -3,21 +3,21 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
-  auditLog,
   canvasConnections,
   canvasLayoutState,
-  consultationRounds,
-  consultations,
 } from "@/db/schema";
 import type {
   CanvasEdge,
-  CanvasNode,
+  CanvasLayoutPosition,
   CanvasPosition,
   CanvasViewport,
   ConnectionType,
 } from "@/types/canvas";
 import { requireOwnedRound } from "./ownership";
 import { insertAuditLogEntry } from "./audit-log";
+
+type CanvasConnectionInsert = typeof canvasConnections.$inferInsert;
+type CanvasLayoutInsert = typeof canvasLayoutState.$inferInsert;
 
 /**
  * Load all canvas edges (connections) for a round.
@@ -126,12 +126,12 @@ export async function createCanvasConnection(
 
   await db.insert(canvasConnections).values({
     id,
-    roundId,
-    userId,
-    fromNodeType: connectionData.fromNodeType as any,
-    fromNodeId: connectionData.fromNodeId as any,
-    toNodeType: connectionData.toNodeType as any,
-    toNodeId: connectionData.toNodeId as any,
+      roundId,
+      userId,
+      fromNodeType: connectionData.fromNodeType as CanvasConnectionInsert["fromNodeType"],
+      fromNodeId: connectionData.fromNodeId as CanvasConnectionInsert["fromNodeId"],
+      toNodeType: connectionData.toNodeType as CanvasConnectionInsert["toNodeType"],
+      toNodeId: connectionData.toNodeId as CanvasConnectionInsert["toNodeId"],
     connectionType: connectionData.connectionType,
     notes: connectionData.note || null,
     createdBy: userId,
@@ -190,7 +190,7 @@ export async function updateCanvasConnection(
   }
 
   const now = new Date();
-  const updateData: any = { updatedAt: now };
+  const updateData: Partial<CanvasConnectionInsert> = { updatedAt: now };
 
   if (updates.connectionType) {
     updateData.connectionType = updates.connectionType;
@@ -274,7 +274,7 @@ export async function saveCanvasLayout(
   roundId: string,
   userId: string,
   layout: {
-    positions: Record<string, CanvasPosition>;
+    positions: Record<string, CanvasLayoutPosition>;
     viewport: CanvasViewport;
   }
 ): Promise<void> {
@@ -290,8 +290,8 @@ export async function saveCanvasLayout(
         id: crypto.randomUUID(),
         roundId,
         userId,
-        nodeType: "theme", // TODO: infer from nodeId type
-        nodeId: nodeId as any,
+        nodeType: position.nodeType,
+        nodeId: nodeId as CanvasLayoutInsert["nodeId"],
         posX: position.x.toString(),
         posY: position.y.toString(),
         createdAt: now,
@@ -320,7 +320,7 @@ export async function saveCanvasLayout(
       roundId,
       userId,
       nodeType: "viewport",
-      nodeId: roundId as any,
+      nodeId: roundId as CanvasLayoutInsert["nodeId"],
       zoom: layout.viewport.zoom.toString(),
       panX: layout.viewport.x.toString(),
       panY: layout.viewport.y.toString(),

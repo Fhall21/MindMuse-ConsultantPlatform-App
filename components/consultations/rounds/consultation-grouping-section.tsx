@@ -88,13 +88,17 @@ export function ConsultationGroupingSection({
 
   // dnd-kit sensors: pointer (mouse) + touch with 8px distance to avoid click conflicts
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+    useSensor(PointerSensor),
+    useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 4 } })
   );
 
   const activeDragConsultation = activeDragId
     ? consultations.find((c) => c.id === activeDragId)
     : null;
+  const activeDragCount =
+    activeDragId && selectedIds.has(activeDragId) && selectedIds.size > 1
+      ? selectedIds.size
+      : 1;
 
   // Accept an AI suggestion: create group + assign its consultations
   const handleAcceptAiSuggestion = async (suggestion: SuggestedConsultationGroup) => {
@@ -258,7 +262,7 @@ export function ConsultationGroupingSection({
         {/* Drag overlay */}
         <DragOverlay>
           {activeDragConsultation ? (
-            <div className="opacity-80 rotate-1">
+            <div className="rotate-1 space-y-2 opacity-80">
               <DraggableConsultationCard
                 consultationId={activeDragConsultation.id}
                 title={activeDragConsultation.title}
@@ -267,6 +271,11 @@ export function ConsultationGroupingSection({
                 isSelected={false}
                 onToggleSelect={() => {}}
               />
+              {activeDragCount > 1 ? (
+                <div className="rounded-full border bg-background px-3 py-1 text-xs font-medium shadow-sm">
+                  Moving {activeDragCount} consultations together
+                </div>
+              ) : null}
             </div>
           ) : null}
         </DragOverlay>

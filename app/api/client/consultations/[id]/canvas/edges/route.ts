@@ -16,8 +16,10 @@ export async function POST(
   }
 
   try {
-    await requireOwnedConsultation(consultationId, client.userId);
-    const roundId = "";
+    const consultation = await requireOwnedConsultation(consultationId, client.userId);
+    if (!consultation.roundId) {
+      return jsonError("Consultation has no active round", 400);
+    }
 
     const body = await request.json();
     const {
@@ -25,28 +27,37 @@ export async function POST(
       from_node_id,
       to_node_type,
       to_node_id,
+      source_node_type,
+      source_node_id,
+      target_node_type,
+      target_node_id,
       connection_type,
       note,
     } = body;
 
+    const resolvedFromNodeType = from_node_type ?? source_node_type;
+    const resolvedFromNodeId = from_node_id ?? source_node_id;
+    const resolvedToNodeType = to_node_type ?? target_node_type;
+    const resolvedToNodeId = to_node_id ?? target_node_id;
+
     if (
-      !from_node_type ||
-      !from_node_id ||
-      !to_node_type ||
-      !to_node_id ||
+      !resolvedFromNodeType ||
+      !resolvedFromNodeId ||
+      !resolvedToNodeType ||
+      !resolvedToNodeId ||
       !connection_type
     ) {
       return jsonError("Missing required fields", 400);
     }
 
     const edge = await createCanvasConnection(
-      roundId,
+      consultation.roundId,
       client.userId,
       {
-        fromNodeType: from_node_type,
-        fromNodeId: from_node_id,
-        toNodeType: to_node_type,
-        toNodeId: to_node_id,
+        fromNodeType: resolvedFromNodeType,
+        fromNodeId: resolvedFromNodeId,
+        toNodeType: resolvedToNodeType,
+        toNodeId: resolvedToNodeId,
         connectionType: connection_type as ConnectionType,
         note: note || undefined,
       }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { saveCanvasLayout } from "@/lib/data/canvas";
 import { jsonError, requireRouteClient } from "../../../../_helpers";
 import { requireOwnedConsultation } from "@/lib/data/ownership";
-import type { CanvasViewport } from "@/types/canvas";
+import type { CanvasLayoutPosition, CanvasViewport } from "@/types/canvas";
 
 export async function POST(
   request: Request,
@@ -31,7 +31,7 @@ export async function POST(
     }
 
     await saveCanvasLayout(consultation.roundId, client.userId, {
-      positions: positions as Record<string, { nodeType: string; x: number; y: number }>,
+      positions: positions as Record<string, CanvasLayoutPosition>,
       viewport: viewport as CanvasViewport,
     });
 

@@ -195,6 +195,10 @@ export function useConsultationGrouping({
 
       const consultationId = active.id as string;
       if (inFlightIds.current.has(consultationId)) return;
+      const draggedIds =
+        selectedIds.has(consultationId) && selectedIds.size > 1
+          ? Array.from(selectedIds)
+          : [consultationId];
 
       // Determine source container
       const sourceGroup = groups.find((g) =>
@@ -256,59 +260,72 @@ export function useConsultationGrouping({
       const targetGroup = targetGroupId ? groups.find((g) => g.id === targetGroupId) : null;
       const newPosition = targetGroup ? targetGroup.members.length : 0;
 
-      const consultation = consultations.find((c) => c.id === consultationId);
-      if (!consultation) return;
+      const draggedConsultations = draggedIds
+        .map((id) => consultations.find((consultation) => consultation.id === id))
+        .filter((consultation): consultation is RoundConsultationSummary => Boolean(consultation));
+      if (draggedConsultations.length === 0) return;
 
       // Optimistic
       setGroups((prev) =>
         prev.map((g) => {
           // Remove from source
-          if (g.id === sourceContainerId) {
-            return { ...g, members: g.members.filter((m) => m.consultationId !== consultationId) };
+          if (g.id === sourceContainerId || draggedIds.some((id) => g.members.some((m) => m.consultationId === id))) {
+            return {
+              ...g,
+              members: g.members.filter((member) => !draggedIds.includes(member.consultationId)),
+            };
           }
           // Add to target
           if (targetGroupId && g.id === targetGroupId) {
             return {
               ...g,
-              members: [
-                ...g.members,
-                {
-                  id: `optimistic-${consultationId}`,
-                  consultationId,
-                  consultationTitle: consultation.title,
-                  consultationStatus: consultation.status,
-                  position: newPosition,
-                },
-              ],
+                members: [
+                  ...g.members,
+                  ...draggedConsultations.map((consultation, index) => ({
+                    id: `optimistic-${consultation.id}`,
+                    consultationId: consultation.id,
+                    consultationTitle: consultation.title,
+                    consultationStatus: consultation.status,
+                    position: newPosition + index,
+                  })),
+                ],
             };
           }
           return g;
         })
       );
 
-      inFlightIds.current.add(consultationId);
+      draggedIds.forEach((id) => inFlightIds.current.add(id));
       try {
-        await assignConsultationToGroup(consultationId, roundId, targetGroupId, newPosition);
+        await Promise.all(
+          draggedIds.map((id, index) =>
+            assignConsultationToGroup(id, roundId, targetGroupId, newPosition + index)
+          )
+        );
+        clearSelection();
       } catch {
         toast.error("Failed to move consultation");
         // Revert optimistic update on error
         setGroups((prev) =>
           prev.map((g) => {
             if (g.id === targetGroupId) {
-              return { ...g, members: g.members.filter((m) => m.consultationId !== consultationId) };
+              return {
+                ...g,
+                members: g.members.filter((member) => !draggedIds.includes(member.consultationId)),
+              };
             }
-            if (g.id === sourceContainerId) {
+            if (g.id === sourceContainerId || draggedIds.some((id) => g.members.some((m) => m.consultationId === id))) {
               return {
                 ...g,
                 members: [
                   ...g.members,
-                  {
-                    id: `optimistic-${consultationId}`,
-                    consultationId,
+                  ...draggedConsultations.map((consultation, index) => ({
+                    id: `optimistic-${consultation.id}`,
+                    consultationId: consultation.id,
                     consultationTitle: consultation.title,
                     consultationStatus: consultation.status,
-                    position: g.members.length,
-                  },
+                    position: g.members.length + index,
+                  })),
                 ],
               };
             }
@@ -316,10 +333,10 @@ export function useConsultationGrouping({
           })
         );
       } finally {
-        inFlightIds.current.delete(consultationId);
+        draggedIds.forEach((id) => inFlightIds.current.delete(id));
       }
     },
-    [groups, consultations, roundId]
+    [clearSelection, consultations, groups, roundId, selectedIds]
   );
 
   return {

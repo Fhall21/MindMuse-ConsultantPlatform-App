@@ -37,6 +37,36 @@ import {
   type SuggestedThemeGroup,
 } from "@/lib/actions/round-workflow";
 
+const THEME_DRAG_MIME = "application/x-consultant-theme-ids";
+
+function readDraggedThemeIds(event: React.DragEvent) {
+  const payload = event.dataTransfer.getData(THEME_DRAG_MIME);
+  if (payload) {
+    try {
+      const parsed: unknown = JSON.parse(payload);
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        "ids" in parsed &&
+        Array.isArray((parsed as { ids: unknown[] }).ids)
+      ) {
+        return [
+          ...new Set(
+            (parsed as { ids: unknown[] }).ids.filter(
+              (value: unknown): value is string => typeof value === "string"
+            )
+          ),
+        ];
+      }
+    } catch {
+      // Fall through to plain-text fallback.
+    }
+  }
+
+  const fallback = event.dataTransfer.getData("text/plain");
+  return fallback ? [fallback] : [];
+}
+
 interface ThemeGroupingWorkspaceProps {
   roundId: string;
   roundLabel?: string | null;
@@ -69,6 +99,7 @@ export function ThemeGroupingWorkspace({
   }, [initialGroups]);
   const [mergeSelectedGroupIds, setMergeSelectedGroupIds] = useState<Set<string>>(new Set());
   const [isDragOverUngrouped, setIsDragOverUngrouped] = useState(false);
+  const [dragOverThemeId, setDragOverThemeId] = useState<string | null>(null);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
 
   // Management rejection dialog state
@@ -118,45 +149,66 @@ export function ThemeGroupingWorkspace({
 
   // ─── DnD handlers ──────────────────────────────────────────────────────────
 
-  const handleDragStart = useCallback((e: React.DragEvent, themeId: string) => {
-    e.dataTransfer.setData("text/plain", themeId);
-    e.dataTransfer.effectAllowed = "move";
-  }, []);
+  const handleDragStart = useCallback(
+    (e: React.DragEvent, themeId: string) => {
+      const dragIds =
+        selectedThemeIds.has(themeId) && selectedThemeIds.size > 1
+          ? Array.from(selectedThemeIds)
+          : [themeId];
+
+      e.dataTransfer.setData(
+        THEME_DRAG_MIME,
+        JSON.stringify({ ids: dragIds })
+      );
+      e.dataTransfer.setData("text/plain", dragIds[0] ?? themeId);
+      e.dataTransfer.effectAllowed = "move";
+    },
+    [selectedThemeIds]
+  );
 
   const handleDropOnGroup = useCallback(
     (e: React.DragEvent, targetGroupId: string) => {
-      const themeId = e.dataTransfer.getData("text/plain");
-      if (!themeId) return;
+      setDragOverThemeId(null);
+      const draggedIds = readDraggedThemeIds(e);
+      if (draggedIds.length === 0) return;
 
-      const theme = sourceThemes.find((t) => t.id === themeId);
-      if (!theme) return;
+      const draggedThemes = sourceThemes.filter((theme) =>
+        draggedIds.includes(theme.id)
+      );
+      if (draggedThemes.length === 0) return;
 
       // Optimistic update
       setGroups((prev) => {
-        // Remove from any existing group (use themeId, not member row id)
         const cleaned = prev.map((g) => ({
           ...g,
-          members: g.members.filter((member: ThemeMemberDetail) => member.insightId !== themeId),
+          members: g.members.filter(
+            (member: ThemeMemberDetail) => !draggedIds.includes(member.insightId)
+          ),
         }));
 
-        // Add to target group
         return cleaned.map((g) => {
           if (g.id === targetGroupId) {
+            const existingIds = new Set(g.members.map((member) => member.insightId));
             return {
               ...g,
               members: [
                 ...g.members,
-                {
-                  id: theme.id,
-                  insightId: theme.id,
-                  sourceConsultationId: theme.sourceConsultationId,
-                  sourceConsultationTitle: theme.sourceConsultationTitle,
-                  label: theme.label,
-                  description: theme.description,
-                  lockedFromSource: theme.lockedFromSource,
-                  isUserAdded: theme.isUserAdded,
-                  position: g.members.length,
-                } satisfies ThemeMemberDetail,
+                ...draggedThemes
+                  .filter((theme) => !existingIds.has(theme.id))
+                  .map(
+                    (theme, index) =>
+                      ({
+                        id: theme.id,
+                        insightId: theme.id,
+                        sourceConsultationId: theme.sourceConsultationId,
+                        sourceConsultationTitle: theme.sourceConsultationTitle,
+                        label: theme.label,
+                        description: theme.description,
+                        lockedFromSource: theme.lockedFromSource,
+                        isUserAdded: theme.isUserAdded,
+                        position: g.members.length + index,
+                      }) satisfies ThemeMemberDetail
+                  ),
               ],
               lastStructuralChangeAt: new Date().toISOString(),
             };
@@ -166,10 +218,13 @@ export function ThemeGroupingWorkspace({
       });
 
       // Persist to server
-      void moveThemeToGroup(themeId, targetGroupId).then(() => {
+      void Promise.all(
+        draggedIds.map((themeId) => moveThemeToGroup(themeId, targetGroupId))
+      ).then(() => {
         queryClient.invalidateQueries({
           queryKey: ["consultation_rounds", roundId, "detail"],
         });
+        setSelectedThemeIds(new Set());
         onStructuralChange?.();
       });
     },
@@ -180,35 +235,70 @@ export function ThemeGroupingWorkspace({
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragOverUngrouped(false);
-      const themeId = e.dataTransfer.getData("text/plain");
-      if (!themeId) return;
+      setDragOverThemeId(null);
+      const draggedIds = readDraggedThemeIds(e);
+      if (draggedIds.length === 0) return;
 
-      // Only act if the theme was actually in a group
       const wasGrouped = groups.some((g) =>
-        g.members.some((member: ThemeMemberDetail) => member.insightId === themeId)
+        g.members.some((member: ThemeMemberDetail) =>
+          draggedIds.includes(member.insightId)
+        )
       );
       if (!wasGrouped) return;
 
-      // Optimistic update — remove from all groups
       setGroups((prev) =>
         prev.map((g) => ({
           ...g,
-          members: g.members.filter((member: ThemeMemberDetail) => member.insightId !== themeId),
-          lastStructuralChangeAt: g.members.some((member: ThemeMemberDetail) => member.insightId === themeId)
+          members: g.members.filter(
+            (member: ThemeMemberDetail) => !draggedIds.includes(member.insightId)
+          ),
+          lastStructuralChangeAt: g.members.some((member: ThemeMemberDetail) =>
+            draggedIds.includes(member.insightId)
+          )
             ? new Date().toISOString()
             : g.lastStructuralChangeAt,
         }))
       );
 
-      // Persist: null target = ungroup
-      void moveThemeToGroup(themeId, null).then(() => {
+      void Promise.all(
+        draggedIds.map((themeId) => moveThemeToGroup(themeId, null))
+      ).then(() => {
         queryClient.invalidateQueries({
           queryKey: ["consultation_rounds", roundId, "detail"],
         });
+        setSelectedThemeIds(new Set());
         onStructuralChange?.();
       });
     },
     [groups, roundId, queryClient, onStructuralChange]
+  );
+
+  const handleDropOnThemeCard = useCallback(
+    async (e: React.DragEvent, targetThemeId: string) => {
+      const draggedIds = readDraggedThemeIds(e);
+      const groupedIds = new Set<string>([
+        ...draggedIds,
+        targetThemeId,
+      ]);
+      const targetTheme = sourceThemes.find((theme) => theme.id === targetThemeId);
+
+      setDragOverThemeId(null);
+      if (!targetTheme || groupedIds.size < 2) return;
+      if (groupedThemeIds.has(targetThemeId)) return;
+
+      const themeIds = Array.from(groupedIds).filter((themeId) =>
+        sourceThemes.some((theme) => theme.id === themeId)
+      );
+      if (themeIds.length < 2) return;
+
+      await createTheme(roundId, themeIds);
+      queryClient.invalidateQueries({
+        queryKey: ["consultation_rounds", roundId, "detail"],
+      });
+      setSelectedThemeIds(new Set());
+      onStructuralChange?.();
+    },
+    [groupedThemeIds, onStructuralChange, queryClient, roundId, sourceThemes]
   );
 
   // ─── Theme selection ───────────────────────────────────────────────────────
@@ -533,8 +623,12 @@ export function ThemeGroupingWorkspace({
             onDragOver={(e) => {
               e.preventDefault();
               setIsDragOverUngrouped(true);
+              setDragOverThemeId(null);
             }}
-            onDragLeave={() => setIsDragOverUngrouped(false)}
+            onDragLeave={() => {
+              setIsDragOverUngrouped(false);
+              setDragOverThemeId(null);
+            }}
             onDrop={handleDropOnUngrouped}
             className={cn(
               "space-y-4 transition-colors",
@@ -565,6 +659,10 @@ export function ThemeGroupingWorkspace({
                       selected={selectedThemeIds.has(theme.id)}
                       onSelect={handleThemeSelect}
                       onDragStart={handleDragStart}
+                      onDragOverCard={setDragOverThemeId}
+                      onDragLeaveCard={() => setDragOverThemeId(null)}
+                      onDropOnCard={handleDropOnThemeCard}
+                      dropTarget={dragOverThemeId === theme.id}
                     />
                   ))}
                 </div>

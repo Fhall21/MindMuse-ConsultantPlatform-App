@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  getConsultationForUser,
   deleteInsightsForConsultation,
   listInsightsForConsultation,
 } from "@/lib/data/domain-read";
@@ -16,13 +17,23 @@ export async function GET(
   }
 
   try {
+    const consultation = await getConsultationForUser(consultationId, client.userId);
+
+    if (!consultation) {
+      return jsonError("Consultation not found", 404);
+    }
+
     const themes = await listInsightsForConsultation(
       consultationId,
       client.userId
     );
     return NextResponse.json(themes);
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Failed to load themes");
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error(
+      `[consultation-themes] failed to load themes for ${consultationId}: ${detail}`
+    );
+    return NextResponse.json([]);
   }
 }
 

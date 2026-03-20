@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const consultationSections = [
-  { title: "All Consultations", href: "/consultations" },
-  { title: "Consultation Rounds", href: "/consultations/rounds" },
+  { title: "Consultations", href: "/consultations" },
+  { title: "Rounds", href: "/consultations/rounds" },
 ];
 
 export function ConsultationsNav() {
@@ -15,9 +15,9 @@ export function ConsultationsNav() {
   return (
     <nav
       aria-label="Consultation sections"
-      className="overflow-x-auto border-b border-border/80 pb-1"
+      className="overflow-x-auto"
     >
-      <ul className="flex min-w-max items-center gap-5">
+      <ul className="flex min-w-max items-center gap-5 border-b border-border/80">
         {consultationSections.map((section) => {
           const isActive =
             section.href === "/consultations"
@@ -29,7 +29,7 @@ export function ConsultationsNav() {
               <Link
                 href={section.href}
                 className={cn(
-                  "inline-flex border-b-2 px-0 pb-3 text-sm font-medium tracking-tight transition-colors",
+                  "inline-flex border-b-2 px-0 py-2 text-sm font-medium tracking-tight transition-colors",
                   isActive
                     ? "border-foreground/70 text-foreground"
                     : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"

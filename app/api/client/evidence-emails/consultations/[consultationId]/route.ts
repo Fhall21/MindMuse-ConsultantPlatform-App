@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { listEvidenceEmailsForConsultation } from "@/lib/data/domain-read";
+import {
+  getConsultationForUser,
+  listEvidenceEmailsForConsultation,
+} from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../../_helpers";
 
 export async function GET(
@@ -13,14 +16,22 @@ export async function GET(
   }
 
   try {
+    const consultation = await getConsultationForUser(consultationId, client.userId);
+
+    if (!consultation) {
+      return jsonError("Consultation not found", 404);
+    }
+
     const evidenceEmails = await listEvidenceEmailsForConsultation(
       consultationId,
       client.userId
     );
     return NextResponse.json(evidenceEmails);
   } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : "Failed to load evidence emails"
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error(
+      `[consultation-evidence-emails] failed to load evidence emails for ${consultationId}: ${detail}`
     );
+    return NextResponse.json([]);
   }
 }

@@ -1,12 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -180,213 +178,169 @@ export function AccountSettingsPanel() {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <CardTitle>Account Overview</CardTitle>
-            <CardDescription>
-              Keep your sign-in details up to date without mixing them with operational reporting.
-            </CardDescription>
-          </div>
-          <Badge variant="outline">{isLoading ? "Loading account..." : "Signed in"}</Badge>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-xl border bg-muted/30 p-4">
-            <p className="text-sm font-medium">Display name</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {isLoading
-                ? "Loading profile..."
-                : normalizedDisplayName || normalizedFullName || "Not set yet"}
-            </p>
-          </div>
-          <div className="rounded-xl border bg-muted/30 p-4">
-            <p className="text-sm font-medium">Current email</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {isLoading ? "Fetching your account details..." : currentEmail || "No email found"}
-            </p>
-          </div>
-          <div className="rounded-xl border bg-muted/30 p-4">
-            <p className="text-sm font-medium">Security note</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Password changes now require your current password so account updates stay deliberate.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 pb-4">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Account</p>
+          <p className="text-sm text-muted-foreground">
+            {isLoading ? "Loading account details…" : currentEmail || "No email found"}
+          </p>
+        </div>
+        <Badge variant="outline">{isLoading ? "Loading" : "Signed in"}</Badge>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Profile</CardTitle>
-          <CardDescription>
-            Save the name you want shown around the workspace and in your account menu.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={handleProfileUpdate}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="settings-display-name">Preferred name</Label>
-                <Input
-                  id="settings-display-name"
-                  value={displayNameValue}
-                  onChange={(event) => setDisplayNameValue(event.target.value)}
-                  disabled={isLoading || isSavingProfile}
-                  placeholder="How you want to be addressed"
-                  autoComplete="nickname"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="settings-full-name">Full name</Label>
-                <Input
-                  id="settings-full-name"
-                  value={fullNameValue}
-                  onChange={(event) => setFullNameValue(event.target.value)}
-                  disabled={isLoading || isSavingProfile}
-                  placeholder="Your full name"
-                  autoComplete="name"
-                />
-              </div>
-            </div>
+      <section className="space-y-4 border-t border-border/80 pt-5">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">Profile</h2>
+          <p className="text-sm text-muted-foreground">
+            Set the name shown around the workspace.
+          </p>
+        </div>
 
-            <p className="text-sm text-muted-foreground">
-              {hasProfileDetails
-                ? "Your preferred name will be used where the product needs a friendlier label."
-                : "Add a preferred or full name so the workspace feels more personal."}
-            </p>
-
-            <Button type="submit" disabled={isLoading || isSavingProfile}>
-              {isSavingProfile ? "Saving..." : "Save Profile"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Change Email</CardTitle>
-          <CardDescription>
-            Update the address used for sign-in and account notifications.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={handleEmailUpdate}>
+        <form className="space-y-4" onSubmit={handleProfileUpdate}>
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="settings-email">Email address</Label>
+              <Label htmlFor="settings-display-name">Preferred name</Label>
               <Input
-                id="settings-email"
-                type="email"
-                value={emailValue}
-                onChange={(event) => setEmailValue(event.target.value)}
-                disabled={isLoading || isSavingEmail}
-                autoComplete="email"
+                id="settings-display-name"
+                value={displayNameValue}
+                onChange={(event) => setDisplayNameValue(event.target.value)}
+                disabled={isLoading || isSavingProfile}
+                placeholder="How you want to be addressed"
+                autoComplete="nickname"
               />
             </div>
-
-            {pendingEmail ? (
-              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
-                Confirmation is pending for <span className="font-medium text-foreground">{pendingEmail}</span>.
-              </div>
-            ) : null}
-
-            <div className="flex flex-wrap gap-3">
-              <Button type="submit" disabled={!isEmailChanged || isLoading || isSavingEmail}>
-                {isSavingEmail ? "Saving..." : "Update Email"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isLoading || isSavingEmail}
-                onClick={() => {
-                  setEmailValue(currentEmail);
-                  setPendingEmail(null);
-                }}
-              >
-                Reset
-              </Button>
+            <div className="space-y-2">
+              <Label htmlFor="settings-full-name">Full name</Label>
+              <Input
+                id="settings-full-name"
+                value={fullNameValue}
+                onChange={(event) => setFullNameValue(event.target.value)}
+                disabled={isLoading || isSavingProfile}
+                placeholder="Your full name"
+                autoComplete="name"
+              />
             </div>
-          </form>
-        </CardContent>
-      </Card>
+          </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Change Password</CardTitle>
-          <CardDescription>
-            Set a new password for this workspace account.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={handlePasswordUpdate}>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="settings-password-current">Current password</Label>
-                <Input
-                  id="settings-password-current"
-                  type="password"
-                  value={currentPasswordValue}
-                  onChange={(event) => setCurrentPasswordValue(event.target.value)}
-                  disabled={isSavingPassword}
-                  autoComplete="current-password"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="settings-password">New password</Label>
-                <Input
-                  id="settings-password"
-                  type="password"
-                  value={passwordValue}
-                  onChange={(event) => setPasswordValue(event.target.value)}
-                  disabled={isSavingPassword}
-                  autoComplete="new-password"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="settings-password-confirm">Confirm password</Label>
-                <Input
-                  id="settings-password-confirm"
-                  type="password"
-                  value={confirmPasswordValue}
-                  onChange={(event) => setConfirmPasswordValue(event.target.value)}
-                  disabled={isSavingPassword}
-                  autoComplete="new-password"
-                />
-              </div>
-            </div>
+          {!hasProfileDetails ? (
+            <p className="text-sm text-muted-foreground">Optional.</p>
+          ) : null}
 
-            <p className="text-sm text-muted-foreground">
-              Use at least {MIN_PASSWORD_LENGTH} characters for a stronger password.
-            </p>
-
-            <Button
-              type="submit"
-              disabled={
-                isSavingPassword ||
-                currentPasswordValue.length === 0 ||
-                passwordValue.length < MIN_PASSWORD_LENGTH ||
-                confirmPasswordValue.length < MIN_PASSWORD_LENGTH
-              }
-            >
-              {isSavingPassword ? "Saving..." : "Update Password"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Reports Have Moved</CardTitle>
-          <CardDescription>
-            Audit exports and reporting tools now live in their own sidebar destination so this
-            settings area can stay focused on account and workspace preferences.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button asChild variant="outline">
-            <Link href="/reports">Open reports</Link>
+          <Button type="submit" disabled={isLoading || isSavingProfile}>
+            {isSavingProfile ? "Saving..." : "Save Profile"}
           </Button>
-        </CardContent>
-      </Card>
+        </form>
+      </section>
+
+      <section className="space-y-4 border-t border-border/80 pt-5">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">Email</h2>
+          <p className="text-sm text-muted-foreground">
+            Update the address used for sign-in.
+          </p>
+        </div>
+
+        <form className="space-y-4" onSubmit={handleEmailUpdate}>
+          <div className="space-y-2">
+            <Label htmlFor="settings-email">Email address</Label>
+            <Input
+              id="settings-email"
+              type="email"
+              value={emailValue}
+              onChange={(event) => setEmailValue(event.target.value)}
+              disabled={isLoading || isSavingEmail}
+              autoComplete="email"
+            />
+          </div>
+
+          {pendingEmail ? (
+            <p className="text-sm text-muted-foreground">
+              Confirmation is pending for <span className="font-medium text-foreground">{pendingEmail}</span>.
+            </p>
+          ) : null}
+
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" disabled={!isEmailChanged || isLoading || isSavingEmail}>
+              {isSavingEmail ? "Saving..." : "Update Email"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isLoading || isSavingEmail}
+              onClick={() => {
+                setEmailValue(currentEmail);
+                setPendingEmail(null);
+              }}
+            >
+              Reset
+            </Button>
+          </div>
+        </form>
+      </section>
+
+      <section className="space-y-4 border-t border-border/80 pt-5">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">Password</h2>
+          <p className="text-sm text-muted-foreground">
+            Use your current password to set a new one.
+          </p>
+        </div>
+
+        <form className="space-y-4" onSubmit={handlePasswordUpdate}>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="settings-password-current">Current password</Label>
+              <Input
+                id="settings-password-current"
+                type="password"
+                value={currentPasswordValue}
+                onChange={(event) => setCurrentPasswordValue(event.target.value)}
+                disabled={isSavingPassword}
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="settings-password">New password</Label>
+              <Input
+                id="settings-password"
+                type="password"
+                value={passwordValue}
+                onChange={(event) => setPasswordValue(event.target.value)}
+                disabled={isSavingPassword}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="settings-password-confirm">Confirm password</Label>
+              <Input
+                id="settings-password-confirm"
+                type="password"
+                value={confirmPasswordValue}
+                onChange={(event) => setConfirmPasswordValue(event.target.value)}
+                disabled={isSavingPassword}
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Minimum length: {MIN_PASSWORD_LENGTH} characters.
+          </p>
+
+          <Button
+            type="submit"
+            disabled={
+              isSavingPassword ||
+              currentPasswordValue.length === 0 ||
+              passwordValue.length < MIN_PASSWORD_LENGTH ||
+              confirmPasswordValue.length < MIN_PASSWORD_LENGTH
+            }
+          >
+            {isSavingPassword ? "Saving..." : "Update Password"}
+          </Button>
+        </form>
+      </section>
     </div>
   );
 }

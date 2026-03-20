@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConsultations } from "@/hooks/use-consultations";
 import { useDashboardStats } from "@/hooks/use-dashboard-stats";
@@ -26,35 +25,33 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant="secondary">Draft</Badge>;
 }
 
-function MetricCard({
-  title,
+function MetricValue({
+  label,
   value,
   description,
   isLoading,
   isError,
 }: {
-  title: string;
+  label: string;
   value: number;
   description: string;
   isLoading: boolean;
   isError: boolean;
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div className="space-y-1 sm:border-l sm:pl-6 first:sm:border-l-0 first:sm:pl-0">
+      <dt className="text-sm font-medium text-foreground">{label}</dt>
+      <dd className="text-sm text-muted-foreground">{description}</dd>
+      <dd className="pt-1 text-4xl font-semibold tracking-tight">
         {isLoading ? (
-          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-10 w-16" />
         ) : isError ? (
-          <p className="text-sm text-muted-foreground">—</p>
+          "—"
         ) : (
-          <p className="text-3xl font-bold">{value.toLocaleString()}</p>
+          value.toLocaleString()
         )}
-        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
+      </dd>
+    </div>
   );
 }
 
@@ -95,12 +92,9 @@ function RecentConsultationsSkeleton() {
 
 function EmptyState() {
   return (
-    <div className="rounded-lg border border-dashed p-10 text-center">
+    <div className="border border-dashed px-6 py-10 text-center">
       <p className="text-sm text-muted-foreground">No consultations yet.</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Start by creating a consultation and attaching a transcript.
-      </p>
-      <Button asChild size="lg" className="mt-6">
+      <Button asChild size="sm" className="mt-4">
         <Link href="/consultations/new">New Consultation</Link>
       </Button>
     </div>
@@ -116,51 +110,48 @@ export default function DashboardPage() {
   const hasNoConsultations = !isConsultationsLoading && recentConsultations.length === 0;
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">Current workspace activity.</p>
       </div>
 
-      {/* Quick Actions */}
       <div className="flex flex-wrap gap-2">
-        <Button asChild>
-          <Link href="/consultations/new">+ New Consultation</Link>
+        <Button asChild size="sm">
+          <Link href="/consultations/new">New Consultation</Link>
         </Button>
-        <Button asChild variant="outline">
-          <Link href="/people">Manage People</Link>
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/people">People</Link>
         </Button>
-        <Button asChild variant="outline">
+        <Button asChild variant="ghost" size="sm">
           <Link href="/reports">Reports</Link>
         </Button>
       </div>
 
-      {/* Metrics */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard
-          title="Consultations"
+      <dl className="grid gap-4 border-y py-4 sm:grid-cols-3 sm:gap-6">
+        <MetricValue
+          label="Consultations"
           value={statsQuery.data?.totalConsultations ?? 0}
-          description="Total recorded"
+          description="Recorded consultations"
           isLoading={statsQuery.isLoading}
           isError={statsQuery.isError}
         />
-        <MetricCard
-          title="People"
+        <MetricValue
+          label="People"
           value={statsQuery.data?.totalPeople ?? 0}
-          description="Linked across consultations"
+          description="Linked people"
           isLoading={statsQuery.isLoading}
           isError={statsQuery.isError}
         />
-        <MetricCard
-          title="Evidence Emails Sent"
+        <MetricValue
+          label="Evidence Emails"
           value={statsQuery.data?.emailsSent ?? 0}
-          description="Emails sent to date"
+          description="Drafted or sent"
           isLoading={statsQuery.isLoading}
           isError={statsQuery.isError}
         />
-      </div>
+      </dl>
 
-      {/* Recent Consultations */}
       <div>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold tracking-tight">Recent consultations</h2>
@@ -174,9 +165,9 @@ export default function DashboardPage() {
         ) : hasNoConsultations ? (
           <EmptyState />
         ) : (
-          <div className="divide-y rounded-lg border">
+          <div className="divide-y border-t">
             {recentConsultations.map((consultation) => (
-              <div key={consultation.id} className="px-4">
+              <div key={consultation.id} className="px-1">
                 <RecentConsultationRow consultation={consultation} />
               </div>
             ))}

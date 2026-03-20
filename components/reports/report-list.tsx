@@ -3,13 +3,6 @@
 import Link from "next/link";
 import { useReportArtifacts } from "@/hooks/use-reports";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const artifactTypeLabels: Record<string, string> = {
@@ -41,69 +34,59 @@ export function ReportList() {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Generated Reports</CardTitle>
-          <CardDescription>Loading report artifacts…</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <section className="space-y-4 border-t border-border/80 pt-4">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">Generated outputs</h2>
+          <p className="text-sm text-muted-foreground">Loading artifacts…</p>
+        </div>
+        <div className="space-y-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-20 w-full rounded-md" />
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     );
   }
 
   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Generated Reports</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-destructive">
-            Failed to load report artifacts. Please try refreshing.
-          </p>
-        </CardContent>
-      </Card>
+      <section className="space-y-4 border-t border-border/80 pt-4">
+        <h2 className="text-lg font-semibold tracking-tight">Generated outputs</h2>
+        <p className="text-sm text-destructive">
+          Failed to load report artifacts. Please try refreshing.
+        </p>
+      </section>
     );
   }
 
   if (!artifacts || artifacts.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Generated Reports</CardTitle>
-          <CardDescription>
-            Reports are generated from consultation rounds. Go to a round and
-            generate a summary, report, or email to see it here.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="rounded-md border border-dashed border-border/70 bg-muted/10 p-4 text-center text-sm text-muted-foreground">
-            No report artifacts have been generated yet.
+      <section className="space-y-3 border-t border-border/80 pt-4">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">Generated outputs</h2>
+          <p className="text-sm text-muted-foreground">
+            Generate a round summary, report, or email to see it here.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+        <p className="text-sm text-muted-foreground">No outputs yet.</p>
+      </section>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Generated Reports</CardTitle>
-        <CardDescription>
-          Board-pack reports, round summaries, and email drafts generated from
-          your consultation rounds.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2">
+    <section className="space-y-4 border-t border-border/80 pt-4">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold tracking-tight">Generated outputs</h2>
+        <p className="text-sm text-muted-foreground">
+          Reports, summaries, and email drafts.
+        </p>
+      </div>
+      <div className="space-y-1">
         {artifacts.map((artifact) => (
           <Link
             key={artifact.id}
             href={`/reports/${artifact.id}`}
-            className="block rounded-md border border-border/70 bg-background p-4 transition-colors hover:bg-muted/30"
+            className="block rounded-md border border-transparent px-1 py-3 transition-colors hover:bg-muted/30"
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0 flex-1 space-y-1">
@@ -132,7 +115,7 @@ export function ReportList() {
             </div>
           </Link>
         ))}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

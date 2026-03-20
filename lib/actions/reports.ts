@@ -600,11 +600,17 @@ export async function getConsultationReportData(
     round_id: consultation.round_id,
   };
 
-  const localAcceptedThemes = await listInsightsForConsultation(
-    consultationId,
-    userId,
-    { accepted: true }
-  );
+  let localAcceptedThemes: Insight[] = [];
+  try {
+    localAcceptedThemes = await listInsightsForConsultation(consultationId, userId, {
+      accepted: true,
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error(
+      `[consultation-report] failed to load accepted themes for ${consultationId}: ${detail}`
+    );
+  }
   const round = consultation.round_id
     ? await loadRoundContext({ userId, roundId: consultation.round_id })
     : null;

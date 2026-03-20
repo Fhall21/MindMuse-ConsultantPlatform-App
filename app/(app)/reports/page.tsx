@@ -5,12 +5,11 @@ import { ReportList } from "@/components/reports/report-list";
 
 export default function ReportsPage() {
   return (
-    <div className="space-y-8">
-      <div className="space-y-2">
+    <div className="space-y-6">
+      <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          View generated board-pack reports, round summaries, and evidence emails.
-          Export compliance audit packages below.
+        <p className="text-sm text-muted-foreground">
+          Generated outputs and audit exports.
         </p>
       </div>
 

@@ -20,16 +20,16 @@ export default async function AppLayout({
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-14 items-center gap-4 border-b px-6">
+        <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6">
           <SidebarTrigger />
-          <Separator orientation="vertical" className="h-6" />
+          <Separator orientation="vertical" className="h-5" />
           <div className="flex-1" />
           <UserNav
             email={session.user.email}
             displayName={getSessionDisplayName(session)}
           />
         </header>
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 px-4 py-5 sm:px-6">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

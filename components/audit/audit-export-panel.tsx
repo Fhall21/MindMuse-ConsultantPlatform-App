@@ -6,7 +6,6 @@ import { useConsultations } from "@/hooks/use-consultations";
 import { useAuditExport, useAuditExportUsers } from "@/hooks/use-audit-export";
 import type { AuditExportFormat, AuditExportFilters } from "@/types/db";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -66,16 +65,15 @@ export function AuditExportPanel() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Compliance Audit Export</CardTitle>
-        <CardDescription>
-          Export a reconstructable audit package with chronology, lifecycle markers, and
-          artifact summaries.
-        </CardDescription>
-      </CardHeader>
+    <section className="space-y-5 border-t border-border/80 pt-4">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold tracking-tight">Compliance audit export</h2>
+        <p className="text-sm text-muted-foreground">
+          Export a chronology of report activity.
+        </p>
+      </div>
 
-      <CardContent className="space-y-6">
+      <div className="space-y-5">
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="audit-export-date-from">Date from</Label>
@@ -160,9 +158,9 @@ export function AuditExportPanel() {
           </div>
         </div>
 
-        <div className="rounded-md border p-4 text-sm">
-          <p className="font-medium">Export summary</p>
-          <p className="mt-1 text-muted-foreground">
+        <div className="space-y-1 text-sm">
+          <p className="font-medium">Current export</p>
+          <p className="text-muted-foreground">
             Date range: {filters.dateFrom ?? "Any"} to {filters.dateTo ?? "Any"}
           </p>
           <p className="text-muted-foreground">
@@ -228,7 +226,7 @@ export function AuditExportPanel() {
             Clear filters
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

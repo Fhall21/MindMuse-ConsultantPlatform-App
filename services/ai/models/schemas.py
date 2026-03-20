@@ -36,6 +36,46 @@ class ThemeExtractResponse(BaseModel):
     themes: list[ExtractedTheme]
 
 
+# --- Stage 7 extraction pipeline ---
+
+
+class SourceOffset(BaseModel):
+    consultation_id: int | None = None
+    round_number: int | None = None
+    start: int
+    end: int
+
+
+class ExtractedTerm(BaseModel):
+    term: str
+    original: str
+    confidence: float
+    extraction_source: str
+    pos_tags: list[str] = []
+    negation_context: bool = False
+    offsets: list[SourceOffset]
+
+
+class ExtractionMetadataResponse(BaseModel):
+    extraction_method: str
+    fallback_used: bool
+    reduced_recall: bool
+    confidence: float
+    duration_ms: int
+    errors: list[str] = []
+
+
+class ExtractionRequest(BaseModel):
+    consultation_id: int | None = None
+    round_number: int | None = None
+    transcript: str
+
+
+class ExtractionResponse(BaseModel):
+    terms: list[ExtractedTerm]
+    metadata: ExtractionMetadataResponse
+
+
 # --- Email drafting ---
 
 

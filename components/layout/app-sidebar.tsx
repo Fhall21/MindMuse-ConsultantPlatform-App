@@ -9,7 +9,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -39,15 +38,14 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="px-4 py-4">
-        <Link href="/dashboard" className="text-lg font-semibold tracking-tight">
+      <SidebarHeader className="px-4 py-3">
+        <Link href="/dashboard" className="text-base font-semibold tracking-tight">
           ConsultantPlatform
         </Link>
       </SidebarHeader>
       <Separator />
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -137,7 +135,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="px-4 py-3">
+      <SidebarFooter className="px-4 py-2">
         <p className="text-xs text-muted-foreground">v0.1.0</p>
       </SidebarFooter>
     </Sidebar>

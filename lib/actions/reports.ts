@@ -20,7 +20,6 @@ import type {
   Consultation,
   ConsultationRound,
   Insight,
-  Theme,
 } from "@/types/db";
 
 type ConsultationContext = Pick<Consultation, "id" | "title" | "round_id">;
@@ -118,7 +117,7 @@ function buildProvenanceContext(params: {
 }
 
 function buildAcceptedConsultationThemeReference(params: {
-  theme: Theme;
+  theme: Insight;
   consultation: ConsultationContext;
   round: RoundContext | null;
 }): ReportThemeReference {
@@ -141,7 +140,7 @@ function buildAcceptedConsultationThemeReference(params: {
 }
 
 function collateRoundAcceptedThemes(params: {
-  themes: Theme[];
+  themes: Insight[];
   consultationById: Map<string, ConsultationContext>;
   round: RoundContext;
 }): ReportThemeReference[] {

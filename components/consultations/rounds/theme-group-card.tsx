@@ -62,8 +62,8 @@ export function ThemeGroupCard({
   const [editDescription, setEditDescription] = useState(group.description ?? "");
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const hasLockedMembers = group.members.some((member) => member.lockedFromSource);
-  const selectedMembersCount = group.members.filter((member) =>
+  const hasLockedMembers = group.members.some((member: ThemeMemberDetail) => member.lockedFromSource);
+  const selectedMembersCount = group.members.filter((member: ThemeMemberDetail) =>
     selectedThemeIds.has(member.insightId)
   ).length;
 

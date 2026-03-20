@@ -8,7 +8,7 @@ import { useConsultation } from "@/hooks/use-consultations";
 import { useThemes } from "@/hooks/use-themes";
 import { acceptTheme, addUserTheme, rejectTheme, saveThemes } from "@/lib/actions/themes";
 import { cn } from "@/lib/utils";
-import type { Theme } from "@/types/db";
+import type { Insight } from "@/types/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,7 +47,7 @@ interface ThemeDetails {
   confidence?: number;
 }
 
-interface RejectedThemeSnapshot extends Theme {
+interface RejectedThemeSnapshot extends Insight {
   confidence?: number;
   rationale?: string;
 }
@@ -168,7 +168,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
   const [rejectedThemes, setRejectedThemes] = useState<Record<string, RejectedThemeSnapshot>>({});
 
   // Rejection dialog
-  const [rejectionDialogTheme, setRejectionDialogTheme] = useState<Theme | null>(null);
+  const [rejectionDialogTheme, setRejectionDialogTheme] = useState<Insight | null>(null);
 
   // Inline add-theme form
   const [addThemeOpen, setAddThemeOpen] = useState(false);
@@ -343,7 +343,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     }
   }
 
-  function openRejectionDialog(theme: Theme) {
+  function openRejectionDialog(theme: Insight) {
     setRejectionDialogTheme(theme);
   }
 

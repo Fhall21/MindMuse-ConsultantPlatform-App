@@ -2,7 +2,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { themeDecisionLogs, themes } from "@/db/schema";
+import { insightDecisionLogs, insights } from "@/db/schema";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
 import {
   requireOwnedConsultation,
@@ -38,9 +38,9 @@ export async function saveThemes(
   }));
 
   const data = await db
-    .insert(themes)
+    .insert(insights)
     .values(themesWithConsultationId)
-    .returning({ id: themes.id });
+    .returning({ id: insights.id });
 
   await emitAuditEvent({
     consultationId,
@@ -65,15 +65,15 @@ export async function acceptTheme(
   const { theme } = await requireOwnedTheme(id, consultationId, userId);
 
   await db
-    .update(themes)
+    .update(insights)
     .set({ accepted: true })
-    .where(and(eq(themes.id, id), eq(themes.consultationId, consultationId)));
+    .where(and(eq(insights.id, id), eq(insights.consultationId, consultationId)));
 
-  await db.insert(themeDecisionLogs).values({
+  await db.insert(insightDecisionLogs).values({
     userId,
     consultationId,
-    themeId: id,
-    themeLabel: theme.label,
+    insightId: id,
+    insightLabel: theme.label,
     roundId: roundId || null,
     decisionType: "accept",
     rationale: null,
@@ -114,25 +114,25 @@ export async function rejectTheme(
   }
 
   const [logRecord] = await db
-    .insert(themeDecisionLogs)
+    .insert(insightDecisionLogs)
     .values({
       userId,
       consultationId,
-      themeId: id,
-      themeLabel: theme.label,
+      insightId: id,
+      insightLabel: theme.label,
       roundId: roundId || null,
       decisionType: "reject",
       rationale: trimmedRationale,
     })
-    .returning({ id: themeDecisionLogs.id });
+    .returning({ id: insightDecisionLogs.id });
 
   // Delete the theme
   try {
     await db
-      .delete(themes)
-      .where(and(eq(themes.id, id), eq(themes.consultationId, consultationId)));
+      .delete(insights)
+      .where(and(eq(insights.id, id), eq(insights.consultationId, consultationId)));
   } catch (error) {
-    await db.delete(themeDecisionLogs).where(eq(themeDecisionLogs.id, logRecord.id));
+    await db.delete(insightDecisionLogs).where(eq(insightDecisionLogs.id, logRecord.id));
     throw error;
   }
 
@@ -166,7 +166,7 @@ export async function addUserTheme(
 
   // Insert the theme with user_added flag and higher weight
   const [themeData] = await db
-    .insert(themes)
+    .insert(insights)
     .values({
       consultationId,
       label,
@@ -175,16 +175,16 @@ export async function addUserTheme(
       isUserAdded: true,
       weight: "2.0", // Higher weight for user-added themes
     })
-    .returning({ id: themes.id });
+    .returning({ id: insights.id });
 
   const themeId = themeData.id;
 
   // Log the decision for learning signals
-  await db.insert(themeDecisionLogs).values({
+  await db.insert(insightDecisionLogs).values({
       userId,
       consultationId,
-      themeId,
-      themeLabel: label,
+      insightId: themeId,
+      insightLabel: label,
       roundId: roundId || null,
       decisionType: "user_added",
       rationale: null,

@@ -6,8 +6,8 @@ import {
   consultationGroups,
   consultationRounds,
   consultations,
+  insights,
   people,
-  themes,
 } from "@/db/schema";
 
 export async function requireOwnedConsultation(
@@ -37,11 +37,11 @@ export async function requireOwnedTheme(themeId: string, consultationId: string,
 
   const [theme] = await db
     .select()
-    .from(themes)
+    .from(insights)
     .where(
       and(
-        eq(themes.id, themeId),
-        eq(themes.consultationId, consultation.id)
+        eq(insights.id, themeId),
+        eq(insights.consultationId, consultation.id)
       )
     )
     .limit(1);

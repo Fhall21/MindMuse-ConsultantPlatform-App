@@ -2,7 +2,7 @@
 
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { themeDecisionLogs } from "@/db/schema";
+import { insightDecisionLogs } from "@/db/schema";
 import { getCurrentUserId } from "./auth-context";
 
 export interface ThemeLearningSignal {
@@ -24,21 +24,21 @@ export async function loadRecentThemeLearningSignals(limit = 20) {
 
   const rows = await db
     .select({
-      themeLabel: themeDecisionLogs.themeLabel,
-      decisionType: themeDecisionLogs.decisionType,
-      rationale: themeDecisionLogs.rationale,
+      insightLabel: insightDecisionLogs.insightLabel,
+      decisionType: insightDecisionLogs.decisionType,
+      rationale: insightDecisionLogs.rationale,
     })
-    .from(themeDecisionLogs)
-    .where(eq(themeDecisionLogs.userId, userId))
-    .orderBy(desc(themeDecisionLogs.createdAt))
+    .from(insightDecisionLogs)
+    .where(eq(insightDecisionLogs.userId, userId))
+    .orderBy(desc(insightDecisionLogs.createdAt))
     .limit(limit);
 
   return rows
-    .filter((row): row is { themeLabel: string; decisionType: ThemeLearningSignal["decision_type"]; rationale: string | null } =>
-      Boolean(row.themeLabel)
+    .filter((row): row is { insightLabel: string; decisionType: ThemeLearningSignal["decision_type"]; rationale: string | null } =>
+      Boolean(row.insightLabel)
     )
     .map((row) => ({
-      label: row.themeLabel,
+      label: row.insightLabel,
       decision_type: row.decisionType,
       rationale: row.rationale,
       weight: getSignalWeight(row.decisionType),

@@ -10,11 +10,9 @@ export type {
   RoundDetail,
   RoundDetailConsultation,
   RoundSourceTheme,
-  RoundThemeGroupDetail,
-  RoundThemeGroupDetail as ThemeDetail,
-  RoundThemeGroupMemberDetail,
-  RoundThemeGroupMemberDetail as ThemeMemberDetail,
-  RoundThemeGroupDraftState,
+  ThemeDetail,
+  ThemeMemberDetail,
+  ThemeDraftState,
   RoundDecisionHistoryItem,
   RoundOutputSummary,
   RoundOutputCollection,
@@ -23,6 +21,9 @@ export type {
   ConsultationGroupDetail,
   ConsultationGroupMemberDetail,
 } from "@/lib/actions/round-workflow";
+
+// Component-friendly aliases
+export type { ThemeDetail as RoundThemeGroupDetail, ThemeMemberDetail as RoundThemeGroupMemberDetail, ThemeDraftState as RoundThemeGroupDraftState } from "@/lib/actions/round-workflow";
 
 // Component-friendly adapter types that derive from Agent 1 types
 
@@ -55,6 +56,6 @@ export type ThemeStatus = "draft" | "accepted" | "discarded" | "management_rejec
 export type ThemeOrigin = "manual" | "ai_refined";
 
 // Legacy type aliases for backward compat with existing usage
-export type { RoundThemeGroupDetail as RoundThemeGroup, RoundThemeGroupDraftState as RoundThemeGroupDraft } from "@/lib/actions/round-workflow";
+export type { ThemeDetail as RoundThemeGroup, ThemeDraftState as RoundThemeGroupDraft } from "@/lib/actions/round-workflow";
 export type RoundThemeGroupStatus = "draft" | "accepted" | "discarded" | "management_rejected";
 export type RoundThemeGroupOrigin = "manual" | "ai_refined";

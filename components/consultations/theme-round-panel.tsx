@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchJson } from "@/hooks/api";
 import { acceptTheme, rejectTheme } from "@/lib/actions/themes";
 import { cn } from "@/lib/utils";
-import type { Theme } from "@/types/db";
+import type { Insight } from "@/types/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,7 +26,7 @@ interface ConsultationSummary {
   status: string;
 }
 
-interface ThemeWithConsultation extends Theme {
+interface ThemeWithConsultation extends Insight {
   consultationId: string;
   consultationTitle: string;
   consultationStatus: string;
@@ -67,7 +67,7 @@ function useRoundThemes(consultationIds: string[]) {
         params.append("consultationId", consultationId)
       );
 
-      return fetchJson<Theme[]>(`/api/client/rounds/themes?${params.toString()}`);
+      return fetchJson<Insight[]>(`/api/client/rounds/themes?${params.toString()}`);
     },
     enabled: consultationIds.length > 0,
   });

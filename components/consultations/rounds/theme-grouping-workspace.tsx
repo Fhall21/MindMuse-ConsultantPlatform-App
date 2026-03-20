@@ -136,7 +136,7 @@ export function ThemeGroupingWorkspace({
         // Remove from any existing group (use themeId, not member row id)
         const cleaned = prev.map((g) => ({
           ...g,
-          members: g.members.filter((member) => member.insightId !== themeId),
+          members: g.members.filter((member: ThemeMemberDetail) => member.insightId !== themeId),
         }));
 
         // Add to target group
@@ -185,7 +185,7 @@ export function ThemeGroupingWorkspace({
 
       // Only act if the theme was actually in a group
       const wasGrouped = groups.some((g) =>
-        g.members.some((member) => member.insightId === themeId)
+        g.members.some((member: ThemeMemberDetail) => member.insightId === themeId)
       );
       if (!wasGrouped) return;
 
@@ -193,8 +193,8 @@ export function ThemeGroupingWorkspace({
       setGroups((prev) =>
         prev.map((g) => ({
           ...g,
-          members: g.members.filter((member) => member.insightId !== themeId),
-          lastStructuralChangeAt: g.members.some((member) => member.insightId === themeId)
+          members: g.members.filter((member: ThemeMemberDetail) => member.insightId !== themeId),
+          lastStructuralChangeAt: g.members.some((member: ThemeMemberDetail) => member.insightId === themeId)
             ? new Date().toISOString()
             : g.lastStructuralChangeAt,
         }))
@@ -287,8 +287,8 @@ export function ThemeGroupingWorkspace({
     if (!group) return;
 
     const selectedThemeIdsInGroup = group.members
-      .filter((member) => selectedThemeIds.has(member.insightId))
-      .map((member) => member.insightId);
+      .filter((member: ThemeMemberDetail) => selectedThemeIds.has(member.insightId))
+      .map((member: ThemeMemberDetail) => member.insightId);
 
     if (selectedThemeIdsInGroup.length === 0) {
       toast.error("Select themes within the group to split out");
@@ -332,7 +332,7 @@ export function ThemeGroupingWorkspace({
     const group = groups.find((g) => g.id === groupId);
     if (!group) return;
 
-    const hasLocked = group.members.some((member) => member.lockedFromSource);
+    const hasLocked = group.members.some((member: ThemeMemberDetail) => member.lockedFromSource);
     if (hasLocked) {
       setRejectionTarget({
         type: "group",
@@ -364,7 +364,7 @@ export function ThemeGroupingWorkspace({
       type: "group",
       id: groupId,
       label: group.label,
-      isLocked: group.members.some((member) => member.lockedFromSource),
+      isLocked: group.members.some((member: ThemeMemberDetail) => member.lockedFromSource),
     });
   }
 

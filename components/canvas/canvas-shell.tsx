@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { defaultFilterState, type CanvasFilterState } from "@/types/canvas";
 import { CanvasGraph } from "@/components/canvas/canvas-graph";
+import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
+import { useCanvas } from "@/hooks/use-canvas";
 
 interface CanvasShellProps {
   consultationId: string;
@@ -26,8 +28,18 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
   const [filters, setFilters] = useState<CanvasFilterState>(defaultFilterState);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const selectedId = selectedNodeId ?? selectedEdgeId;
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const canvasQuery = useCanvas(consultationId);
+  const nodes = canvasQuery.data?.nodes ?? [];
+  const edges = canvasQuery.data?.edges ?? [];
+
+  function handleClose() {
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+  }
+
+  const hasSidePanel = selectedNodeId !== null || selectedEdgeId !== null || showSuggestions;
 
   return (
     <div className="flex h-full flex-col">
@@ -98,12 +110,19 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
         </div>
 
         {/* Side panel */}
-        {(selectedId || showSuggestions) && (
+        {hasSidePanel && (
           <div className="w-80 shrink-0 border-l bg-background">
             {showSuggestions ? (
               <AiSuggestionsPanelPlaceholder />
             ) : (
-              <NodeDetailPanelPlaceholder nodeId={selectedId} />
+              <NodeDetailPanel
+                selectedNodeId={selectedNodeId}
+                selectedEdgeId={selectedEdgeId}
+                nodes={nodes}
+                edges={edges}
+                consultationId={consultationId}
+                onClose={handleClose}
+              />
             )}
           </div>
         )}
@@ -136,21 +155,6 @@ function ToolbarFilterBadge({
   );
 }
 
-
-function NodeDetailPanelPlaceholder({ nodeId }: { nodeId: string | null }) {
-  return (
-    <div className="flex h-full flex-col gap-2 p-4">
-      <p className="text-sm font-medium">Node detail</p>
-      <p className="text-xs text-muted-foreground">id: {nodeId}</p>
-      <Separator />
-      <p className="text-xs text-muted-foreground">
-        Connection edit form goes here.
-        <br />
-        Fields: connection type, note (max 500 chars), delete.
-      </p>
-    </div>
-  );
-}
 
 function AiSuggestionsPanelPlaceholder() {
   return (

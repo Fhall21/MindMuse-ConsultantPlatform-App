@@ -18,9 +18,9 @@ import {
   consultationRounds,
   consultations,
   evidenceEmails,
+  insights,
   people,
   roundOutputArtifacts,
-  roundThemeGroups,
   themes,
 } from "@/db/schema";
 import type {
@@ -28,9 +28,9 @@ import type {
   Consultation,
   ConsultationRound,
   EvidenceEmail,
+  Insight,
   Person,
   RoundOutputArtifact,
-  RoundThemeGroup,
   Theme,
 } from "@/types/db";
 import {
@@ -38,6 +38,7 @@ import {
   mapConsultationRecord,
   mapConsultationRoundRecord,
   mapEvidenceEmailRecord,
+  mapInsightRecord,
   mapPersonRecord,
   mapRoundOutputArtifactRecord,
   mapThemeRecord,
@@ -210,33 +211,33 @@ export async function getPersonForUser(
   return row ? mapPersonRecord(row) : null;
 }
 
-export async function listThemesForConsultation(
+export async function listInsightsForConsultation(
   consultationId: string,
   userId: string,
   options: { accepted?: boolean } = {}
-): Promise<Theme[]> {
+): Promise<Insight[]> {
   await requireOwnedConsultation(consultationId, userId);
 
-  const conditions = [eq(themes.consultationId, consultationId)];
+  const conditions = [eq(insights.consultationId, consultationId)];
 
   if (options.accepted !== undefined) {
-    conditions.push(eq(themes.accepted, options.accepted));
+    conditions.push(eq(insights.accepted, options.accepted));
   }
 
   const rows = await db
     .select()
-    .from(themes)
+    .from(insights)
     .where(and(...conditions))
-    .orderBy(desc(themes.createdAt));
+    .orderBy(desc(insights.createdAt));
 
-  return rows.map(mapThemeRecord);
+  return rows.map(mapInsightRecord);
 }
 
-export async function listThemesForConsultations(
+export async function listInsightsForConsultations(
   consultationIds: string[],
   userId: string,
   options: { accepted?: boolean } = {}
-): Promise<Theme[]> {
+): Promise<Insight[]> {
   const ids = uniqueIds(consultationIds);
   if (ids.length === 0) {
     return [];
@@ -244,30 +245,30 @@ export async function listThemesForConsultations(
 
   const conditions = [
     eq(consultations.userId, userId),
-    inArray(themes.consultationId, ids),
+    inArray(insights.consultationId, ids),
   ];
 
   if (options.accepted !== undefined) {
-    conditions.push(eq(themes.accepted, options.accepted));
+    conditions.push(eq(insights.accepted, options.accepted));
   }
 
   const rows = await db
-    .select({ theme: themes })
-    .from(themes)
-    .innerJoin(consultations, eq(themes.consultationId, consultations.id))
+    .select({ insight: insights })
+    .from(insights)
+    .innerJoin(consultations, eq(insights.consultationId, consultations.id))
     .where(and(...conditions))
-    .orderBy(desc(themes.createdAt));
+    .orderBy(desc(insights.createdAt));
 
-  return rows.map(({ theme }) => mapThemeRecord(theme));
+  return rows.map(({ insight }) => mapInsightRecord(insight));
 }
 
-export async function deleteThemesForConsultation(
+export async function deleteInsightsForConsultation(
   consultationId: string,
   userId: string
 ) {
   await requireOwnedConsultation(consultationId, userId);
 
-  await db.delete(themes).where(eq(themes.consultationId, consultationId));
+  await db.delete(insights).where(eq(insights.consultationId, consultationId));
 }
 
 export async function listPeopleForConsultation(
@@ -651,41 +652,23 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
   };
 }
 
-export async function listDraftRoundThemeGroupsForRound(
+export async function listDraftThemesForRound(
   roundId: string,
   userId: string
-): Promise<RoundThemeGroup[]> {
+): Promise<Theme[]> {
   await requireOwnedRound(roundId, userId);
 
   const rows = await db
     .select()
-    .from(roundThemeGroups)
+    .from(themes)
     .where(
       and(
-        eq(roundThemeGroups.roundId, roundId),
-        eq(roundThemeGroups.userId, userId),
-        eq(roundThemeGroups.status, "draft")
+        eq(themes.roundId, roundId),
+        eq(themes.userId, userId),
+        eq(themes.status, "draft")
       )
     )
-    .orderBy(asc(roundThemeGroups.createdAt));
+    .orderBy(asc(themes.createdAt));
 
-  return rows.map((row) => ({
-    id: row.id,
-    round_id: row.roundId,
-    user_id: row.userId,
-    label: row.label,
-    description: row.description,
-    status: row.status as RoundThemeGroup["status"],
-    origin: row.origin as RoundThemeGroup["origin"],
-    ai_draft_label: row.aiDraftLabel,
-    ai_draft_description: row.aiDraftDescription,
-    ai_draft_explanation: row.aiDraftExplanation,
-    ai_draft_created_at: row.aiDraftCreatedAt?.toISOString() ?? null,
-    ai_draft_created_by: row.aiDraftCreatedBy,
-    last_structural_change_at: row.lastStructuralChangeAt.toISOString(),
-    last_structural_change_by: row.lastStructuralChangeBy,
-    created_by: row.createdBy,
-    created_at: row.createdAt.toISOString(),
-    updated_at: row.updatedAt.toISOString(),
-  }));
+  return rows.map(mapThemeRecord);
 }

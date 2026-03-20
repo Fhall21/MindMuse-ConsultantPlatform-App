@@ -3,6 +3,7 @@ import {
   consultationRounds,
   consultations,
   evidenceEmails,
+  insights,
   people,
   roundOutputArtifacts,
   themes,
@@ -12,6 +13,7 @@ import type {
   Consultation,
   ConsultationRound,
   EvidenceEmail,
+  Insight,
   Person,
   RoundOutputArtifact,
   Theme,
@@ -19,6 +21,7 @@ import type {
 
 type ConsultationRow = typeof consultations.$inferSelect;
 type ConsultationRoundRow = typeof consultationRounds.$inferSelect;
+type InsightRow = typeof insights.$inferSelect;
 type ThemeRow = typeof themes.$inferSelect;
 type PersonRow = typeof people.$inferSelect;
 type EvidenceEmailRow = typeof evidenceEmails.$inferSelect;
@@ -68,7 +71,7 @@ export function mapConsultationRoundRecord(
   };
 }
 
-export function mapThemeRecord(row: ThemeRow): Theme {
+export function mapInsightRecord(row: InsightRow): Insight {
   return {
     id: row.id,
     consultation_id: row.consultationId,
@@ -78,6 +81,28 @@ export function mapThemeRecord(row: ThemeRow): Theme {
     is_user_added: row.isUserAdded,
     weight: toNumber(row.weight),
     created_at: row.createdAt.toISOString(),
+  };
+}
+
+export function mapThemeRecord(row: ThemeRow): Theme {
+  return {
+    id: row.id,
+    round_id: row.roundId,
+    user_id: row.userId,
+    label: row.label,
+    description: row.description,
+    status: row.status as Theme["status"],
+    origin: row.origin as Theme["origin"],
+    ai_draft_label: row.aiDraftLabel,
+    ai_draft_description: row.aiDraftDescription,
+    ai_draft_explanation: row.aiDraftExplanation,
+    ai_draft_created_at: row.aiDraftCreatedAt?.toISOString() ?? null,
+    ai_draft_created_by: row.aiDraftCreatedBy,
+    last_structural_change_at: row.lastStructuralChangeAt.toISOString(),
+    last_structural_change_by: row.lastStructuralChangeBy,
+    created_by: row.createdBy,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
   };
 }
 

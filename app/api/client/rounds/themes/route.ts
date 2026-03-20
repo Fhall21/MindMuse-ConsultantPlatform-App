@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listThemesForConsultations } from "@/lib/data/domain-read";
+import { listInsightsForConsultations } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../_helpers";
 
 export async function GET(request: Request) {
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const themes = await listThemesForConsultations(
+    const themes = await listInsightsForConsultations(
       consultationIds,
       client.userId
     );

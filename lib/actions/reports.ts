@@ -7,18 +7,19 @@ import {
   getRoundOutputArtifactForUser,
   listAuditEventsForUser,
   listConsultationsForRound,
-  listDraftRoundThemeGroupsForRound,
+  listDraftThemesForRound,
   listPeopleForConsultation,
   listRoundOutputArtifactsForRound,
   listRoundOutputArtifactsForUser,
   listRoundsByIdsForUser,
-  listThemesForConsultation,
-  listThemesForConsultations,
+  listInsightsForConsultation,
+  listInsightsForConsultations,
 } from "@/lib/data/domain-read";
 import type {
   AuditLogEntry,
   Consultation,
   ConsultationRound,
+  Insight,
   Theme,
 } from "@/types/db";
 
@@ -312,7 +313,7 @@ async function loadRoundSummaryInternal(params: {
 
   const acceptedThemes =
     consultationIds.length > 0
-      ? await listThemesForConsultations(consultationIds, userId, {
+      ? await listInsightsForConsultations(consultationIds, userId, {
           accepted: true,
         })
       : [];
@@ -519,7 +520,7 @@ export async function getReportArtifact(
 
   // Load draft (unapproved) theme groups for the round
   const draftThemeGroups = (
-    await listDraftRoundThemeGroupsForRound(artifact.round_id, userId)
+    await listDraftThemesForRound(artifact.round_id, userId)
   ).map((group) => ({
     id: group.id,
     label: group.label,
@@ -600,7 +601,7 @@ export async function getConsultationReportData(
     round_id: consultation.round_id,
   };
 
-  const localAcceptedThemes = await listThemesForConsultation(
+  const localAcceptedThemes = await listInsightsForConsultation(
     consultationId,
     userId,
     { accepted: true }

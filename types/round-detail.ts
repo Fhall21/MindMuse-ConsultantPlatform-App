@@ -11,7 +11,9 @@ export type {
   RoundDetailConsultation,
   RoundSourceTheme,
   RoundThemeGroupDetail,
+  RoundThemeGroupDetail as ThemeDetail,
   RoundThemeGroupMemberDetail,
+  RoundThemeGroupMemberDetail as ThemeMemberDetail,
   RoundThemeGroupDraftState,
   RoundDecisionHistoryItem,
   RoundOutputSummary,
@@ -47,6 +49,10 @@ export interface RoundConsultationSummary {
   themeCount: number;
   groupId: string | null;
 }
+
+// New type aliases for insights/themes terminology
+export type ThemeStatus = "draft" | "accepted" | "discarded" | "management_rejected";
+export type ThemeOrigin = "manual" | "ai_refined";
 
 // Legacy type aliases for backward compat with existing usage
 export type { RoundThemeGroupDetail as RoundThemeGroup, RoundThemeGroupDraftState as RoundThemeGroupDraft } from "@/lib/actions/round-workflow";

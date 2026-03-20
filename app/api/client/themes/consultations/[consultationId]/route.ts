@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
-  deleteThemesForConsultation,
-  listThemesForConsultation,
+  deleteInsightsForConsultation,
+  listInsightsForConsultation,
 } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../../_helpers";
 
@@ -16,7 +16,7 @@ export async function GET(
   }
 
   try {
-    const themes = await listThemesForConsultation(
+    const themes = await listInsightsForConsultation(
       consultationId,
       client.userId
     );
@@ -37,7 +37,7 @@ export async function DELETE(
   }
 
   try {
-    await deleteThemesForConsultation(consultationId, client.userId);
+    await deleteInsightsForConsultation(consultationId, client.userId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Failed to delete themes");

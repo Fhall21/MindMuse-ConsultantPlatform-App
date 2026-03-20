@@ -3,7 +3,7 @@ import {
   getConsultationForUser,
   getLatestEvidenceEmailForConsultation,
   listConsultationPersonLinks,
-  listThemesForConsultation,
+  listInsightsForConsultation,
 } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../_helpers";
 
@@ -20,7 +20,7 @@ export async function GET(
   try {
     const [consultation, themes, people, latestEvidenceEmail] = await Promise.all([
       getConsultationForUser(id, client.userId),
-      listThemesForConsultation(id, client.userId),
+      listInsightsForConsultation(id, client.userId),
       listConsultationPersonLinks(id, client.userId),
       getLatestEvidenceEmailForConsultation(id, client.userId),
     ]);

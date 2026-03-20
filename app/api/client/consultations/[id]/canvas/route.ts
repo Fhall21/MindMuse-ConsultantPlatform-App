@@ -50,8 +50,8 @@ export async function GET(
       label: theme.label,
       description: theme.description,
       accepted: theme.status === "accepted",
-      subgroup: null, // TODO: add to themes table if needed
-      position: { x: 0, y: 0 }, // Will be loaded from layout state
+      subgroup: null,
+      position: { x: 0, y: 0 },
     }));
 
     // Load insights (for canvas nodes)
@@ -66,8 +66,8 @@ export async function GET(
       label: insight.label,
       description: insight.description,
       accepted: insight.accepted,
-      subgroup: null, // TODO: add to insights table if needed
-      position: { x: 0, y: 0 }, // Will be loaded from layout state
+      subgroup: null,
+      position: { x: 0, y: 0 },
     }));
 
     // Load connections and layout

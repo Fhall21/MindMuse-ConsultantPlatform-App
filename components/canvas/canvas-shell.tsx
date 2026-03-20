@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { defaultFilterState, type CanvasFilterState } from "@/types/canvas";
+import { CanvasGraph } from "@/components/canvas/canvas-graph";
+import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
+import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
+import { useCanvas } from "@/hooks/use-canvas";
 
 interface CanvasShellProps {
   consultationId: string;
@@ -23,8 +27,20 @@ interface CanvasShellProps {
  */
 export function CanvasShell({ consultationId, consultationTitle }: CanvasShellProps) {
   const [filters, setFilters] = useState<CanvasFilterState>(defaultFilterState);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const canvasQuery = useCanvas(consultationId);
+  const nodes = canvasQuery.data?.nodes ?? [];
+  const edges = canvasQuery.data?.edges ?? [];
+
+  function handleClose() {
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+  }
+
+  const hasSidePanel = selectedNodeId !== null || selectedEdgeId !== null || showSuggestions;
 
   return (
     <div className="flex h-full flex-col">
@@ -84,18 +100,34 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
 
       {/* Main split */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Graph area placeholder */}
+        {/* Graph area */}
         <div className="relative flex-1 bg-muted/30">
-          <GraphAreaPlaceholder consultationId={consultationId} />
+          <CanvasGraph
+            consultationId={consultationId}
+            filters={filters}
+            onNodeSelect={setSelectedNodeId}
+            onEdgeSelect={setSelectedEdgeId}
+          />
         </div>
 
         {/* Side panel */}
-        {(selectedId || showSuggestions) && (
+        {hasSidePanel && (
           <div className="w-80 shrink-0 border-l bg-background">
             {showSuggestions ? (
-              <AiSuggestionsPanelPlaceholder />
+              <AiSuggestionsPanel
+                consultationId={consultationId}
+                nodes={nodes}
+                onClose={() => setShowSuggestions(false)}
+              />
             ) : (
-              <NodeDetailPanelPlaceholder nodeId={selectedId} />
+              <NodeDetailPanel
+                selectedNodeId={selectedNodeId}
+                selectedEdgeId={selectedEdgeId}
+                nodes={nodes}
+                edges={edges}
+                consultationId={consultationId}
+                onClose={handleClose}
+              />
             )}
           </div>
         )}
@@ -128,48 +160,4 @@ function ToolbarFilterBadge({
   );
 }
 
-function GraphAreaPlaceholder({ consultationId }: { consultationId: string }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-      <p className="text-sm">Evidence network canvas</p>
-      <p className="text-xs">
-        React Flow graph — consultation {consultationId}
-      </p>
-      <p className="text-xs">
-        Drag to pan · scroll to zoom · click node to select · drag between nodes
-        to connect
-      </p>
-    </div>
-  );
-}
 
-function NodeDetailPanelPlaceholder({ nodeId }: { nodeId: string | null }) {
-  return (
-    <div className="flex h-full flex-col gap-2 p-4">
-      <p className="text-sm font-medium">Node detail</p>
-      <p className="text-xs text-muted-foreground">id: {nodeId}</p>
-      <Separator />
-      <p className="text-xs text-muted-foreground">
-        Connection edit form goes here.
-        <br />
-        Fields: connection type, note (max 500 chars), delete.
-      </p>
-    </div>
-  );
-}
-
-function AiSuggestionsPanelPlaceholder() {
-  return (
-    <div className="flex h-full flex-col gap-2 p-4">
-      <p className="text-sm font-medium">AI suggestions</p>
-      <Separator />
-      <p className="text-xs text-muted-foreground">
-        Suggestions are generated on request.
-        <br />
-        Each card shows: source → target, suggested connection type, rationale.
-        <br />
-        Accept adds the edge. Reject dismisses. Both are audited.
-      </p>
-    </div>
-  );
-}

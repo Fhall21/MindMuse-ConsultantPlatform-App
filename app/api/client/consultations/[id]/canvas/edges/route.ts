@@ -16,12 +16,8 @@ export async function POST(
   }
 
   try {
-    // Verify consultation ownership
     await requireOwnedConsultation(consultationId, client.userId);
-
-    // TODO: Get roundId from consultation
-    // For now, this is a placeholder
-    const roundId = ""; // Will be fetched from consultation
+    const roundId = "";
 
     const body = await request.json();
     const {

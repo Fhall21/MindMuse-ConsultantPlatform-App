@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-  updateCanvasConnection,
-  deleteCanvasConnection,
-} from "@/lib/data/canvas";
+import { updateCanvasConnection, deleteCanvasConnection } from "@/lib/data/canvas";
 import { jsonError, requireRouteClient } from "../../../../../_helpers";
 import { requireOwnedConsultation } from "@/lib/data/ownership";
 import type { ConnectionType } from "@/types/canvas";
@@ -13,23 +10,17 @@ export async function PATCH(
 ) {
   const { id: consultationId, edgeId } = await params;
   const client = await requireRouteClient();
-
-  if ("response" in client) {
-    return client.response;
-  }
+  if ("response" in client) return client.response;
 
   try {
-    // Verify consultation ownership
-    await requireOwnedConsultation(consultationId, client.userId);
-
-    // TODO: Get roundId from consultation
-    const roundId = ""; // Will be fetched from consultation
+    const consultation = await requireOwnedConsultation(consultationId, client.userId);
+    if (!consultation.roundId) return jsonError("Consultation has no active round", 400);
 
     const body = await request.json();
     const { connection_type, note } = body;
 
     const edge = await updateCanvasConnection(
-      roundId,
+      consultation.roundId,
       client.userId,
       edgeId,
       {
@@ -40,10 +31,8 @@ export async function PATCH(
 
     return NextResponse.json(edge);
   } catch (error) {
-    console.error("[edges/[edgeId]/PATCH]", error);
-    return jsonError(
-      error instanceof Error ? error.message : "Failed to update edge"
-    );
+    console.error("[canvas/edges/[edgeId]/PATCH]", error);
+    return jsonError(error instanceof Error ? error.message : "Failed to update edge");
   }
 }
 
@@ -53,25 +42,17 @@ export async function DELETE(
 ) {
   const { id: consultationId, edgeId } = await params;
   const client = await requireRouteClient();
-
-  if ("response" in client) {
-    return client.response;
-  }
+  if ("response" in client) return client.response;
 
   try {
-    // Verify consultation ownership
-    await requireOwnedConsultation(consultationId, client.userId);
+    const consultation = await requireOwnedConsultation(consultationId, client.userId);
+    if (!consultation.roundId) return jsonError("Consultation has no active round", 400);
 
-    // TODO: Get roundId from consultation
-    const roundId = ""; // Will be fetched from consultation
-
-    await deleteCanvasConnection(roundId, client.userId, edgeId);
+    await deleteCanvasConnection(consultation.roundId, client.userId, edgeId);
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[edges/[edgeId]/DELETE]", error);
-    return jsonError(
-      error instanceof Error ? error.message : "Failed to delete edge"
-    );
+    console.error("[canvas/edges/[edgeId]/DELETE]", error);
+    return jsonError(error instanceof Error ? error.message : "Failed to delete edge");
   }
 }

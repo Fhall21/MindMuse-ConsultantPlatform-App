@@ -8,6 +8,13 @@
       "when": 1773892164681,
       "tag": "0000_curvy_butterfly",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774110780000,
+      "tag": "0001_rename_tables_insights_themes",
+      "breakpoints": true
     }
   ]
 }

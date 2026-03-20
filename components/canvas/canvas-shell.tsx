@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { defaultFilterState, type CanvasFilterState } from "@/types/canvas";
+import { CanvasGraph } from "@/components/canvas/canvas-graph";
 
 interface CanvasShellProps {
   consultationId: string;
@@ -23,7 +24,9 @@ interface CanvasShellProps {
  */
 export function CanvasShell({ consultationId, consultationTitle }: CanvasShellProps) {
   const [filters, setFilters] = useState<CanvasFilterState>(defaultFilterState);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const selectedId = selectedNodeId ?? selectedEdgeId;
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   return (
@@ -84,9 +87,14 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
 
       {/* Main split */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Graph area placeholder */}
+        {/* Graph area */}
         <div className="relative flex-1 bg-muted/30">
-          <GraphAreaPlaceholder consultationId={consultationId} />
+          <CanvasGraph
+            consultationId={consultationId}
+            filters={filters}
+            onNodeSelect={setSelectedNodeId}
+            onEdgeSelect={setSelectedEdgeId}
+          />
         </div>
 
         {/* Side panel */}
@@ -128,20 +136,6 @@ function ToolbarFilterBadge({
   );
 }
 
-function GraphAreaPlaceholder({ consultationId }: { consultationId: string }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-      <p className="text-sm">Evidence network canvas</p>
-      <p className="text-xs">
-        React Flow graph — consultation {consultationId}
-      </p>
-      <p className="text-xs">
-        Drag to pan · scroll to zoom · click node to select · drag between nodes
-        to connect
-      </p>
-    </div>
-  );
-}
 
 function NodeDetailPanelPlaceholder({ nodeId }: { nodeId: string | null }) {
   return (

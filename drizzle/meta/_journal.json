@@ -15,6 +15,20 @@
       "when": 1774110780000,
       "tag": "0001_rename_tables_insights_themes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774183200000,
+      "tag": "0002_add_canvas_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774188000000,
+      "tag": "0003_stage7_analytics",
+      "breakpoints": true
     }
   ]
 }

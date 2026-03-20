@@ -21,6 +21,16 @@ const settingsSections = [
     href: "/settings/billing",
   },
   {
+    title: "AI Personalisation",
+    description: "Tailor how the AI generates insights from your consultations.",
+    href: "/settings/ai-personalisation",
+  },
+  {
+    title: "Report Template",
+    description: "Customise the structure and style of generated reports.",
+    href: "/settings/report-template",
+  },
+  {
     title: "Integrations",
     description: "Connections to your external tools and workflows.",
     href: "/settings/integrations",

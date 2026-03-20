@@ -9,13 +9,14 @@ import {
   consultationRounds,
   consultations,
   evidenceEmails,
+  insights,
   roundDecisions,
   roundOutputArtifacts,
-  roundThemeGroupMembers,
-  roundThemeGroups,
+  themeMembers,
   themes,
 } from "@/db/schema";
 import { callAIService } from "@/lib/openai/client";
+import { getActiveReportTemplate } from "@/lib/actions/report-templates";
 import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";
 import { emitAuditEvent } from "@/lib/actions/audit";
 import { getServerSession } from "@/lib/auth/session";
@@ -24,25 +25,25 @@ import {
   mapConsultationRecord,
   mapConsultationRoundRecord,
   mapEvidenceEmailRecord,
+  mapInsightRecord,
   mapRoundOutputArtifactRecord,
-  mapThemeRecord,
 } from "@/lib/data/mappers";
 import type {
   Consultation,
   ConsultationRound,
   EvidenceEmail,
+  Insight,
   RoundDecision,
   RoundDecisionTargetType,
   RoundDecisionType,
   RoundOutputArtifact,
   RoundOutputArtifactType,
-  RoundThemeGroup,
-  RoundThemeGroupMember,
   Theme,
+  ThemeMember,
 } from "@/types/db";
 
-type RoundThemeGroupRow = typeof roundThemeGroups.$inferSelect;
-type RoundThemeGroupMemberRow = typeof roundThemeGroupMembers.$inferSelect;
+type ThemeRow = typeof themes.$inferSelect;
+type ThemeMemberRow = typeof themeMembers.$inferSelect;
 type RoundDecisionRow = typeof roundDecisions.$inferSelect;
 
 type RoundTargetStatus =
@@ -90,9 +91,9 @@ export interface RoundSourceTheme {
   createdAt: string;
 }
 
-export interface RoundThemeGroupMemberDetail {
+export interface ThemeMemberDetail {
   id: string;
-  themeId: string;
+  insightId: string;
   sourceConsultationId: string;
   sourceConsultationTitle: string;
   label: string;
@@ -102,7 +103,7 @@ export interface RoundThemeGroupMemberDetail {
   position: number;
 }
 
-export interface RoundThemeGroupDraftState {
+export interface ThemeDraftState {
   draftLabel: string;
   draftDescription: string;
   draftExplanation: string | null;
@@ -110,20 +111,20 @@ export interface RoundThemeGroupDraftState {
   createdBy: string | null;
 }
 
-export interface RoundThemeGroupDetail {
+export interface ThemeDetail {
   id: string;
   label: string;
   description: string | null;
-  status: RoundThemeGroup["status"];
-  origin: RoundThemeGroup["origin"];
+  status: Theme["status"];
+  origin: Theme["origin"];
   currentGroup: {
     label: string;
     description: string | null;
-    origin: RoundThemeGroup["origin"];
-    status: RoundThemeGroup["status"];
+    origin: Theme["origin"];
+    status: Theme["status"];
   };
-  pendingDraft: RoundThemeGroupDraftState | null;
-  members: RoundThemeGroupMemberDetail[];
+  pendingDraft: ThemeDraftState | null;
+  members: ThemeMemberDetail[];
   memberCount: number;
   lastStructuralChangeAt: string;
   lastStructuralChangeBy: string | null;
@@ -214,7 +215,7 @@ export interface RoundDetail {
   analytics: RoundAnalyticsSummary;
 }
 
-interface ThemeWithConsultation extends Theme {
+interface InsightWithConsultation extends Insight {
   consultation: Consultation;
 }
 
@@ -393,15 +394,15 @@ async function requireAuthenticatedContext() {
   return { userId: session.user.id };
 }
 
-function mapRoundThemeGroupRecord(row: RoundThemeGroupRow): RoundThemeGroup {
+function mapThemeRecord(row: ThemeRow): Theme {
   return {
     id: row.id,
     round_id: row.roundId,
     user_id: row.userId,
     label: row.label,
     description: row.description,
-    status: row.status as RoundThemeGroup["status"],
-    origin: row.origin as RoundThemeGroup["origin"],
+    status: row.status as Theme["status"],
+    origin: row.origin as Theme["origin"],
     ai_draft_label: row.aiDraftLabel,
     ai_draft_description: row.aiDraftDescription,
     ai_draft_explanation: row.aiDraftExplanation,
@@ -415,14 +416,14 @@ function mapRoundThemeGroupRecord(row: RoundThemeGroupRow): RoundThemeGroup {
   };
 }
 
-function mapRoundThemeGroupMemberRecord(
-  row: RoundThemeGroupMemberRow
-): RoundThemeGroupMember {
+function mapThemeMemberRecord(
+  row: ThemeMemberRow
+): ThemeMember {
   return {
     id: row.id,
-    group_id: row.groupId,
-    round_id: row.roundId,
     theme_id: row.themeId,
+    round_id: row.roundId,
+    insight_id: row.insightId,
     source_consultation_id: row.sourceConsultationId,
     user_id: row.userId,
     position: row.position,
@@ -481,50 +482,50 @@ async function loadRoundConsultations(params: { userId: string; roundId: string 
   return rows.map(mapConsultationRecord);
 }
 
-async function loadAcceptedThemes(params: { consultationIds: string[] }) {
+async function loadAcceptedInsights(params: { consultationIds: string[] }) {
   const { consultationIds } = params;
 
   if (consultationIds.length === 0) {
-    return [] as Theme[];
+    return [] as Insight[];
   }
 
   const rows = await db
     .select()
-    .from(themes)
+    .from(insights)
     .where(
       and(
-        eq(themes.accepted, true),
-        inArray(themes.consultationId, consultationIds)
+        eq(insights.accepted, true),
+        inArray(insights.consultationId, consultationIds)
       )
     )
-    .orderBy(asc(themes.createdAt));
+    .orderBy(asc(insights.createdAt));
 
-  return rows.map(mapThemeRecord);
+  return rows.map(mapInsightRecord);
 }
 
 async function loadRoundGroups(params: { roundId: string }) {
   const { roundId } = params;
   const rows = await db
     .select()
-    .from(roundThemeGroups)
-    .where(eq(roundThemeGroups.roundId, roundId))
-    .orderBy(asc(roundThemeGroups.createdAt));
+    .from(themes)
+    .where(eq(themes.roundId, roundId))
+    .orderBy(asc(themes.createdAt));
 
-  return rows.map(mapRoundThemeGroupRecord);
+  return rows.map(mapThemeRecord);
 }
 
 async function loadRoundGroupMembers(params: { roundId: string }) {
   const { roundId } = params;
   const rows = await db
     .select()
-    .from(roundThemeGroupMembers)
-    .where(eq(roundThemeGroupMembers.roundId, roundId))
+    .from(themeMembers)
+    .where(eq(themeMembers.roundId, roundId))
     .orderBy(
-      asc(roundThemeGroupMembers.position),
-      asc(roundThemeGroupMembers.createdAt)
+      asc(themeMembers.position),
+      asc(themeMembers.createdAt)
     );
 
-  return rows.map(mapRoundThemeGroupMemberRecord);
+  return rows.map(mapThemeMemberRecord);
 }
 
 async function loadConsultationGroups(params: { roundId: string }) {
@@ -749,12 +750,12 @@ async function loadGroupForRound(params: {
   const { userId, roundId, groupId } = params;
   const [row] = await db
     .select()
-    .from(roundThemeGroups)
+    .from(themes)
     .where(
       and(
-        eq(roundThemeGroups.id, groupId),
-        eq(roundThemeGroups.roundId, roundId),
-        eq(roundThemeGroups.userId, userId)
+        eq(themes.id, groupId),
+        eq(themes.roundId, roundId),
+        eq(themes.userId, userId)
       )
     )
     .limit(1);
@@ -763,21 +764,21 @@ async function loadGroupForRound(params: {
     throw new Error("Round theme group not found");
   }
 
-  return mapRoundThemeGroupRecord(row);
+  return mapThemeRecord(row);
 }
 
 async function loadGroupMembers(params: { groupId: string }) {
   const { groupId } = params;
   const rows = await db
     .select()
-    .from(roundThemeGroupMembers)
-    .where(eq(roundThemeGroupMembers.groupId, groupId))
+    .from(themeMembers)
+    .where(eq(themeMembers.groupId, groupId))
     .orderBy(
-      asc(roundThemeGroupMembers.position),
-      asc(roundThemeGroupMembers.createdAt)
+      asc(themeMembers.position),
+      asc(themeMembers.createdAt)
     );
 
-  return rows.map(mapRoundThemeGroupMemberRecord);
+  return rows.map(mapThemeMemberRecord);
 }
 
 async function writeGroupDraftSuggestion(params: {
@@ -792,7 +793,7 @@ async function writeGroupDraftSuggestion(params: {
 
   if (memberThemes.length === 0) {
     await db
-      .update(roundThemeGroups)
+      .update(themes)
       .set({
         aiDraftLabel: null,
         aiDraftDescription: null,
@@ -803,7 +804,7 @@ async function writeGroupDraftSuggestion(params: {
         lastStructuralChangeBy: userId,
         updatedAt: timestamp,
       })
-      .where(eq(roundThemeGroups.id, group.id));
+      .where(eq(themes.id, group.id));
 
     return null;
   }
@@ -841,7 +842,7 @@ async function writeGroupDraftSuggestion(params: {
   }
 
   await db
-    .update(roundThemeGroups)
+    .update(themes)
     .set({
       aiDraftLabel: draft.draftLabel,
       aiDraftDescription: draft.draftDescription,
@@ -852,7 +853,7 @@ async function writeGroupDraftSuggestion(params: {
       lastStructuralChangeBy: userId,
       updatedAt: timestamp,
     })
-    .where(eq(roundThemeGroups.id, group.id));
+    .where(eq(themes.id, group.id));
 
   await emitAuditEvent({
     action: AUDIT_ACTIONS.ROUND_THEME_GROUP_DRAFT_CREATED,
@@ -878,7 +879,7 @@ async function maybeDiscardEmptyGroup(params: { group: RoundThemeGroup }) {
   }
 
   await db
-    .update(roundThemeGroups)
+    .update(themes)
     .set({
       status: "discarded",
       aiDraftLabel: null,
@@ -888,7 +889,7 @@ async function maybeDiscardEmptyGroup(params: { group: RoundThemeGroup }) {
       aiDraftCreatedBy: null,
       updatedAt: new Date(),
     })
-    .where(eq(roundThemeGroups.id, group.id));
+    .where(eq(themes.id, group.id));
 
   return true;
 }
@@ -1134,7 +1135,7 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
   };
 }
 
-export async function createRoundThemeGroup(
+export async function createTheme(
   roundId: string,
   seedThemeIds: string[] = []
 ) {
@@ -1156,7 +1157,7 @@ export async function createRoundThemeGroup(
   const defaultLabel =
     seedThemes.length === 1 ? seedThemes[0].label : "Round theme group";
   const [created] = await db
-    .insert(roundThemeGroups)
+    .insert(themes)
     .values({
       roundId,
       userId,
@@ -1170,22 +1171,22 @@ export async function createRoundThemeGroup(
     })
     .returning();
 
-  const group = mapRoundThemeGroupRecord(created);
+  const group = mapThemeRecord(created);
 
   if (seedThemes.length > 0) {
     await db
-      .delete(roundThemeGroupMembers)
+      .delete(themeMembers)
       .where(
         and(
-          eq(roundThemeGroupMembers.roundId, roundId),
+          eq(themeMembers.roundId, roundId),
           inArray(
-            roundThemeGroupMembers.themeId,
+            themeMembers.themeId,
             seedThemes.map((theme) => theme.id)
           )
         )
       );
 
-    await db.insert(roundThemeGroupMembers).values(
+    await db.insert(themeMembers).values(
       seedThemes.map((theme, index) => ({
         groupId: group.id,
         roundId,
@@ -1272,9 +1273,9 @@ export async function moveThemeToGroup(
   if (currentMembership && currentMembership.group_id === targetGroupId) {
     if (typeof position === "number") {
       await db
-        .update(roundThemeGroupMembers)
+        .update(themeMembers)
         .set({ position })
-        .where(eq(roundThemeGroupMembers.id, currentMembership.id));
+        .where(eq(themeMembers.id, currentMembership.id));
     }
 
     return { groupId: targetGroupId };
@@ -1282,15 +1283,15 @@ export async function moveThemeToGroup(
 
   if (currentMembership) {
     await db
-      .delete(roundThemeGroupMembers)
-      .where(eq(roundThemeGroupMembers.id, currentMembership.id));
+      .delete(themeMembers)
+      .where(eq(themeMembers.id, currentMembership.id));
   }
 
   if (targetGroup) {
     const targetMembers = await loadGroupMembers({ groupId: targetGroup.id });
     const nextPosition =
       typeof position === "number" ? position : targetMembers.length;
-    await db.insert(roundThemeGroupMembers).values({
+    await db.insert(themeMembers).values({
       groupId: targetGroup.id,
       roundId,
       themeId: theme.id,
@@ -1347,7 +1348,7 @@ export async function moveThemeToGroup(
   return { groupId: targetGroupId };
 }
 
-export async function mergeRoundThemeGroups(
+export async function mergeThemes(
   roundId: string,
   groupIds: string[]
 ) {
@@ -1373,26 +1374,26 @@ export async function mergeRoundThemeGroups(
     for (const member of sourceMembers) {
       if (existingThemeIds.has(member.theme_id)) {
         await db
-          .delete(roundThemeGroupMembers)
-          .where(eq(roundThemeGroupMembers.id, member.id));
+          .delete(themeMembers)
+          .where(eq(themeMembers.id, member.id));
 
         continue;
       }
 
       await db
-        .update(roundThemeGroupMembers)
+        .update(themeMembers)
         .set({
           groupId: primaryGroup.id,
           position,
         })
-        .where(eq(roundThemeGroupMembers.id, member.id));
+        .where(eq(themeMembers.id, member.id));
 
       existingThemeIds.add(member.theme_id);
       position += 1;
     }
 
     await db
-      .update(roundThemeGroups)
+      .update(themes)
       .set({
         status: "discarded",
         aiDraftLabel: null,
@@ -1402,7 +1403,7 @@ export async function mergeRoundThemeGroups(
         aiDraftCreatedBy: null,
         updatedAt: new Date(),
       })
-      .where(eq(roundThemeGroups.id, group.id));
+      .where(eq(themes.id, group.id));
   }
 
   await refreshGroupDraftForCurrentMembers({
@@ -1426,7 +1427,7 @@ export async function mergeRoundThemeGroups(
   return { groupId: primaryGroup.id };
 }
 
-export async function splitRoundThemeGroup(
+export async function splitTheme(
   groupId: string,
   themeIds: string[]
 ) {
@@ -1452,7 +1453,7 @@ export async function splitRoundThemeGroup(
   const defaultLabel =
     selectedThemes.length === 1 ? selectedThemes[0].label : "Split theme group";
   const [created] = await db
-    .insert(roundThemeGroups)
+    .insert(themes)
     .values({
       roundId: round.id,
       userId,
@@ -1466,16 +1467,16 @@ export async function splitRoundThemeGroup(
     })
     .returning();
 
-  const newGroup = mapRoundThemeGroupRecord(created);
+  const newGroup = mapThemeRecord(created);
 
   for (const [index, member] of selectedMembers.entries()) {
     await db
-      .update(roundThemeGroupMembers)
+      .update(themeMembers)
       .set({
         groupId: newGroup.id,
         position: index,
       })
-      .where(eq(roundThemeGroupMembers.id, member.id));
+      .where(eq(themeMembers.id, member.id));
   }
 
   await refreshGroupDraftForCurrentMembers({
@@ -1512,7 +1513,7 @@ export async function splitRoundThemeGroup(
   return { groupId: newGroup.id };
 }
 
-export async function updateRoundThemeGroup(
+export async function updateTheme(
   groupId: string,
   patch: { label?: string; description?: string | null }
 ) {
@@ -1525,13 +1526,13 @@ export async function updateRoundThemeGroup(
       : trimToNull(patch.description);
 
   await db
-    .update(roundThemeGroups)
+    .update(themes)
     .set({
       label: nextLabel,
       description: nextDescription,
       updatedAt: new Date(),
     })
-    .where(eq(roundThemeGroups.id, groupId));
+    .where(eq(themes.id, groupId));
 
   await emitAuditEvent({
     action: AUDIT_ACTIONS.ROUND_THEME_GROUP_UPDATED,
@@ -1560,9 +1561,9 @@ export async function acceptRoundTarget(
       groupId: targetId,
     });
     await db
-      .update(roundThemeGroups)
+      .update(themes)
       .set({ status: "accepted", updatedAt: new Date() })
-      .where(eq(roundThemeGroups.id, group.id));
+      .where(eq(themes.id, group.id));
 
     await insertRoundDecision({
       roundId: round.id,
@@ -1657,7 +1658,7 @@ export async function discardRoundTarget(
   }
 
   await db
-    .update(roundThemeGroups)
+    .update(themes)
     .set({
       status: "discarded",
       aiDraftLabel: null,
@@ -1667,7 +1668,7 @@ export async function discardRoundTarget(
       aiDraftCreatedBy: null,
       updatedAt: new Date(),
     })
-    .where(eq(roundThemeGroups.id, targetId));
+    .where(eq(themes.id, targetId));
 
   await insertRoundDecision({
     roundId: round.id,
@@ -1715,9 +1716,9 @@ export async function managementRejectRoundTarget(
     }
 
     await db
-      .update(roundThemeGroups)
+      .update(themes)
       .set({ status: "management_rejected", updatedAt: new Date() })
-      .where(eq(roundThemeGroups.id, targetId));
+      .where(eq(themes.id, targetId));
 
     await insertRoundDecision({
       roundId: round.id,
@@ -1812,7 +1813,7 @@ export async function managementRejectRoundTarget(
   return { targetId };
 }
 
-export async function acceptRoundThemeGroupDraft(groupId: string) {
+export async function acceptThemeDraft(groupId: string) {
   const { userId } = await requireAuthenticatedContext();
   const { group, round } = await loadGroupWithRoundContext({
     userId,
@@ -1826,7 +1827,7 @@ export async function acceptRoundThemeGroupDraft(groupId: string) {
   }
 
   await db
-    .update(roundThemeGroups)
+    .update(themes)
     .set({
       label: draftLabel ?? group.label,
       description:
@@ -1839,7 +1840,7 @@ export async function acceptRoundThemeGroupDraft(groupId: string) {
       aiDraftCreatedBy: null,
       updatedAt: new Date(),
     })
-    .where(eq(roundThemeGroups.id, groupId));
+    .where(eq(themes.id, groupId));
 
   await emitAuditEvent({
     action: AUDIT_ACTIONS.ROUND_THEME_GROUP_DRAFT_ACCEPTED,
@@ -1854,7 +1855,7 @@ export async function acceptRoundThemeGroupDraft(groupId: string) {
   return { groupId };
 }
 
-export async function discardRoundThemeGroupDraft(groupId: string) {
+export async function discardThemeDraft(groupId: string) {
   const { userId } = await requireAuthenticatedContext();
   const { round } = await loadGroupWithRoundContext({
     userId,
@@ -1862,7 +1863,7 @@ export async function discardRoundThemeGroupDraft(groupId: string) {
   });
 
   await db
-    .update(roundThemeGroups)
+    .update(themes)
     .set({
       aiDraftLabel: null,
       aiDraftDescription: null,
@@ -1871,7 +1872,7 @@ export async function discardRoundThemeGroupDraft(groupId: string) {
       aiDraftCreatedBy: null,
       updatedAt: new Date(),
     })
-    .where(eq(roundThemeGroups.id, groupId));
+    .where(eq(themes.id, groupId));
 
   await emitAuditEvent({
     action: AUDIT_ACTIONS.ROUND_THEME_GROUP_DRAFT_DISCARDED,
@@ -1964,9 +1965,9 @@ async function loadGroupWithRoundContext(params: {
   const { userId, groupId } = params;
   const [row] = await db
     .select()
-    .from(roundThemeGroups)
+    .from(themes)
     .where(
-      and(eq(roundThemeGroups.id, groupId), eq(roundThemeGroups.userId, userId))
+      and(eq(themes.id, groupId), eq(themes.userId, userId))
     )
     .limit(1);
 
@@ -1974,7 +1975,7 @@ async function loadGroupWithRoundContext(params: {
     throw new Error("Round theme group not found");
   }
 
-  const group = mapRoundThemeGroupRecord(row);
+  const group = mapThemeRecord(row);
   const round = await loadOwnedRound({
     userId,
     roundId: group.round_id,
@@ -1990,16 +1991,16 @@ async function loadThemeMembershipForRound(params: {
   const { roundId, themeId } = params;
   const [row] = await db
     .select()
-    .from(roundThemeGroupMembers)
+    .from(themeMembers)
     .where(
       and(
-        eq(roundThemeGroupMembers.roundId, roundId),
-        eq(roundThemeGroupMembers.themeId, themeId)
+        eq(themeMembers.roundId, roundId),
+        eq(themeMembers.themeId, themeId)
       )
     )
     .limit(1);
 
-  return row ? mapRoundThemeGroupMemberRecord(row) : null;
+  return row ? mapThemeMemberRecord(row) : null;
 }
 
 async function loadThemeMembershipsForRound(params: {
@@ -2014,15 +2015,15 @@ async function loadThemeMembershipsForRound(params: {
 
   const rows = await db
     .select()
-    .from(roundThemeGroupMembers)
+    .from(themeMembers)
     .where(
       and(
-        eq(roundThemeGroupMembers.roundId, roundId),
-        inArray(roundThemeGroupMembers.themeId, themeIds)
+        eq(themeMembers.roundId, roundId),
+        inArray(themeMembers.themeId, themeIds)
       )
     );
 
-  return rows.map(mapRoundThemeGroupMemberRecord);
+  return rows.map(mapThemeMemberRecord);
 }
 
 async function refreshGroupDraftForCurrentMembers(params: {
@@ -2148,12 +2149,24 @@ async function generateRoundOutput(
     throw new Error("Accept at least one round or consultation theme before generating a round output.");
   }
 
+  // Load user's active report template (if any) to inject into the AI prompt
+  const activeTemplate = await getActiveReportTemplate();
+
   const requestPayload = {
     round_label: detail.round.label,
     round_description: detail.round.description,
     consultations: detail.consultations.map((consultation) => consultation.title),
     accepted_round_themes: acceptedRoundThemes,
     supporting_consultation_themes: supportingConsultationThemes,
+    ...(activeTemplate
+      ? {
+          report_template: {
+            sections: activeTemplate.sections,
+            style_notes: activeTemplate.style_notes,
+            prescriptiveness: activeTemplate.prescriptiveness,
+          },
+        }
+      : {}),
   };
 
   let generated = buildFallbackOutput({

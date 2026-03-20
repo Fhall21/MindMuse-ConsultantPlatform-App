@@ -105,9 +105,66 @@ async def refine_group_draft(request: RoundThemeGroupDraftRequest):
         ) from exc
 
 
-def _round_output_prompt(artifact_type: str):
-    if artifact_type == "summary":
-        return (
+def _format_template_instructions(template) -> str:
+    """Build prompt instructions from a user-defined report template."""
+    lines = []
+
+    style = template.style_notes or {}
+    tone = style.get("tone")
+    person = style.get("person")
+    formatting = style.get("formatting_notes")
+
+    if tone or person or formatting:
+        lines.append("STYLE REQUIREMENTS (from the user's template):")
+        if tone:
+            lines.append(f"- Tone: {tone}")
+        if person:
+            lines.append(f"- Person: {person}")
+        if formatting:
+            lines.append(f"- Formatting: {formatting}")
+        lines.append("")
+
+    prescriptiveness = template.prescriptiveness or "moderate"
+    if prescriptiveness == "strict":
+        lines.append(
+            "The user has set STRICT prescriptiveness. Follow the section structure below "
+            "precisely — match the order, headings, and guidance closely."
+        )
+    elif prescriptiveness == "flexible":
+        lines.append(
+            "The user has set FLEXIBLE prescriptiveness. Use the sections below as a guide, "
+            "but adapt freely to the consultation data."
+        )
+    else:
+        lines.append(
+            "The user has set MODERATE prescriptiveness. Follow the section structure below "
+            "but adapt wording and emphasis to the consultation data."
+        )
+
+    sections = template.sections or []
+    if sections:
+        lines.append("")
+        lines.append("REQUIRED SECTIONS:")
+        for i, section in enumerate(sections, 1):
+            heading = section.get("heading", f"Section {i}")
+            purpose = section.get("purpose", "")
+            guidance = section.get("prose_guidance", "")
+            excerpt = section.get("example_excerpt")
+
+            lines.append(f"\n{i}. {heading}")
+            if purpose:
+                lines.append(f"   Purpose: {purpose}")
+            if guidance:
+                lines.append(f"   Guidance: {guidance}")
+            if excerpt and prescriptiveness != "flexible":
+                lines.append(f"   Example style: \"{excerpt}\"")
+
+    return "\n".join(lines)
+
+
+def _round_output_prompt(artifact_type: str, template=None):
+    base_prompts = {
+        "summary": (
             "You are writing a round-level consultation summary for internal use.\n\n"
             "Write a concise synthesis that:\n"
             "- starts with a one-line overview\n"
@@ -115,10 +172,8 @@ def _round_output_prompt(artifact_type: str):
             "- cites supporting consultation-level nuance without reproducing raw transcripts\n"
             "- avoids claims not grounded in the provided themes\n\n"
             "Return JSON with 'title' and 'content'. The content should be plain text."
-        )
-
-    if artifact_type == "report":
-        return (
+        ),
+        "report": (
             "You are drafting a round-level consultation report for internal evidence and reporting.\n\n"
             "Write a structured report with:\n"
             "- Executive summary\n"
@@ -127,17 +182,32 @@ def _round_output_prompt(artifact_type: str):
             "- Key follow-up or monitoring considerations if they are implied by the themes\n\n"
             "Do not invent recommendations that are not grounded in the inputs.\n"
             "Return JSON with 'title' and 'content'. The content should be plain text."
+        ),
+        "email": (
+            "You are drafting a round-level evidence email for internal coordination.\n\n"
+            "Write a concise but substantive email-style artifact that:\n"
+            "- references the round name\n"
+            "- summarizes the accepted round themes first\n"
+            "- briefly notes supporting consultation-level evidence\n"
+            "- keeps a professional, auditable tone\n\n"
+            "Return JSON with 'title' and 'content'. The 'title' should be the email subject."
+        ),
+    }
+
+    prompt = base_prompts.get(artifact_type, base_prompts["email"])
+
+    if template and template.sections:
+        template_block = _format_template_instructions(template)
+        prompt = (
+            f"{prompt}\n\n"
+            "─── USER REPORT TEMPLATE ───\n"
+            "The user has configured a custom report template. Override the default section "
+            "structure above with the template instructions below.\n\n"
+            f"{template_block}\n"
+            "─── END TEMPLATE ───"
         )
 
-    return (
-        "You are drafting a round-level evidence email for internal coordination.\n\n"
-        "Write a concise but substantive email-style artifact that:\n"
-        "- references the round name\n"
-        "- summarizes the accepted round themes first\n"
-        "- briefly notes supporting consultation-level evidence\n"
-        "- keeps a professional, auditable tone\n\n"
-        "Return JSON with 'title' and 'content'. The 'title' should be the email subject."
-    )
+    return prompt
 
 
 def _round_output_user_content(request: RoundOutputRequest):
@@ -180,7 +250,7 @@ async def _generate_round_output(artifact_type: str, request: RoundOutputRequest
     completion = client.chat.completions.create(
         model=settings.openai_model,
         messages=[
-            {"role": "system", "content": _round_output_prompt(artifact_type)},
+            {"role": "system", "content": _round_output_prompt(artifact_type, request.report_template)},
             {"role": "user", "content": _round_output_user_content(request)},
         ],
         response_format={"type": "json_object"},

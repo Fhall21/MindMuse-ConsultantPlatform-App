@@ -6,12 +6,12 @@
 
 export type ConsultationStatus = "draft" | "complete";
 export type EvidenceEmailStatus = "draft" | "accepted" | "sent";
-export type RoundThemeGroupStatus =
+export type ThemeStatus =
   | "draft"
   | "accepted"
   | "discarded"
   | "management_rejected";
-export type RoundThemeGroupOrigin = "manual" | "ai_refined";
+export type ThemeOrigin = "manual" | "ai_refined";
 export type RoundDecisionTargetType =
   | "source_theme"
   | "theme_group"
@@ -22,26 +22,31 @@ export type RoundDecisionType =
   | "management_rejected";
 export type RoundOutputArtifactType = "summary" | "report" | "email";
 export type RoundOutputArtifactStatus = "generated";
+export type ReportTemplatePrescriptiveness = "flexible" | "moderate" | "strict";
 
 export type {
   Consultation,
   ConsultationRound,
-  RoundThemeGroup,
-  RoundThemeGroupMember,
+  Theme,
+  ThemeMember,
   RoundDecision,
   RoundOutputArtifact,
-  Theme,
-  ThemeDecisionLog,
-  ThemeDecisionType,
+  Insight,
+  InsightDecisionLog,
+  InsightDecisionType,
   Person,
   ConsultationPerson,
   EvidenceEmail,
   AuditLogEntry,
+  ReportTemplate,
+  ReportTemplateSection,
+  ReportTemplateStyleNotes,
   TranscriptionJob,
   OcrJob,
   IngestionArtifact,
   IngestionStatus,
   IngestionArtifactType,
+  UserAIPreferences,
 } from "./database";
 export type {
   AuditExportArtifactSummary,

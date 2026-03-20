@@ -21,22 +21,22 @@ export interface ConsultationRound {
   created_at: string;
 }
 
-export type RoundThemeGroupStatus =
+export type ThemeStatus =
   | "draft"
   | "accepted"
   | "discarded"
   | "management_rejected";
 
-export type RoundThemeGroupOrigin = "manual" | "ai_refined";
+export type ThemeOrigin = "manual" | "ai_refined";
 
-export interface RoundThemeGroup {
+export interface Theme {
   id: string;
   round_id: string;
   user_id: string;
   label: string;
   description: string | null;
-  status: RoundThemeGroupStatus;
-  origin: RoundThemeGroupOrigin;
+  status: ThemeStatus;
+  origin: ThemeOrigin;
   ai_draft_label: string | null;
   ai_draft_description: string | null;
   ai_draft_explanation: string | null;
@@ -49,11 +49,11 @@ export interface RoundThemeGroup {
   updated_at: string;
 }
 
-export interface RoundThemeGroupMember {
+export interface ThemeMember {
   id: string;
-  group_id: string;
-  round_id: string;
   theme_id: string;
+  round_id: string;
+  insight_id: string;
   source_consultation_id: string;
   user_id: string;
   position: number;
@@ -101,7 +101,7 @@ export interface RoundOutputArtifact {
   created_by: string;
 }
 
-export interface Theme {
+export interface Insight {
   id: string;
   consultation_id: string;
   label: string;
@@ -112,16 +112,16 @@ export interface Theme {
   created_at: string;
 }
 
-export type ThemeDecisionType = "accept" | "reject" | "user_added";
+export type InsightDecisionType = "accept" | "reject" | "user_added";
 
-export interface ThemeDecisionLog {
+export interface InsightDecisionLog {
   id: string;
   user_id: string;
   consultation_id: string;
-  theme_id: string | null;
-  theme_label: string;
+  insight_id: string | null;
+  insight_label: string;
   round_id: string | null;
-  decision_type: ThemeDecisionType;
+  decision_type: InsightDecisionType;
   rationale: string | null;
   created_at: string;
 }
@@ -203,6 +203,36 @@ export interface OcrJob {
   updated_at: string;
 }
 
+export type ReportTemplatePrescriptiveness = "flexible" | "moderate" | "strict";
+
+export interface ReportTemplateSection {
+  heading: string;
+  purpose: string;
+  prose_guidance: string;
+  example_excerpt: string | null;
+}
+
+export interface ReportTemplateStyleNotes {
+  tone: string | null;
+  person: string | null;
+  formatting_notes: string | null;
+}
+
+export interface ReportTemplate {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  sections: ReportTemplateSection[];
+  style_notes: ReportTemplateStyleNotes;
+  prescriptiveness: ReportTemplatePrescriptiveness;
+  source_file_names: string[];
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface IngestionArtifact {
   id: string;
   consultation_id: string;
@@ -211,6 +241,16 @@ export interface IngestionArtifact {
   metadata: Record<string, unknown> | null;
   accepted: boolean | null;
   notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserAIPreferences {
+  id: string;
+  user_id: string;
+  consultation_types: string[];
+  focus_areas: string[];
+  excluded_topics: string[];
   created_at: string;
   updated_at: string;
 }

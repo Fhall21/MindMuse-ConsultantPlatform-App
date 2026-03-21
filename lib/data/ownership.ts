@@ -47,8 +47,8 @@ export async function requireOwnedMeeting(meetingId: string, userId: string) {
   return meeting;
 }
 
-export async function requireOwnedTheme(themeId: string, consultationId: string, userId: string) {
-  const consultation = await requireOwnedConsultation(consultationId, userId);
+export async function requireOwnedTheme(themeId: string, meetingId: string, userId: string) {
+  const meeting = await requireOwnedMeeting(meetingId, userId);
 
   const [theme] = await db
     .select()
@@ -56,7 +56,7 @@ export async function requireOwnedTheme(themeId: string, consultationId: string,
     .where(
       and(
         eq(insights.id, themeId),
-        eq(insights.consultationId, consultation.id)
+        eq(insights.meetingId, meeting.id)
       )
     )
     .limit(1);
@@ -65,7 +65,7 @@ export async function requireOwnedTheme(themeId: string, consultationId: string,
     throw new Error("Theme not found");
   }
 
-  return { consultation, theme };
+  return { meeting, theme };
 }
 
 export async function requireOwnedRound(roundId: string, userId: string) {

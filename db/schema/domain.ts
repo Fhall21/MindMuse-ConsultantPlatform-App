@@ -1056,3 +1056,8 @@ export const phases = pgTable(
     typeIdx: index("idx_phases_type").on(table.type),
   })
 );
+
+export const consultationRounds = consultations;
+export const consultationPeople = meetingPeople;
+export const roundOutputArtifacts = consultationOutputArtifacts;
+export const roundCrossInsights = consultationCrossInsights;

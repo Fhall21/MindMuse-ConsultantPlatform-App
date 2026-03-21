@@ -25,7 +25,7 @@ import { OcrReviewPanel } from "@/components/consultations/ocr-review-panel";
 import { NotesEditor } from "@/components/consultations/notes-editor";
 import { PeoplePanel } from "@/components/consultations/people-panel";
 import { RoundsPanel } from "@/components/consultations/rounds-panel";
-import { useConsultation } from "@/hooks/use-meetings";
+import { useMeeting } from "@/hooks/use-meetings";
 import { useConsultations } from "@/hooks/use-consultations";
 import {
   markConsultationComplete,
@@ -47,7 +47,7 @@ export default function ConsultationDetailPage({
 }) {
   const { id } = use(params);
   const queryClient = useQueryClient();
-  const { data, isLoading, error } = useConsultation(id);
+  const { data, isLoading, error } = useMeeting(id);
   const { data: rounds } = useConsultations();
 
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);

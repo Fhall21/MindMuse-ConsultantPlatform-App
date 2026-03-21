@@ -3,8 +3,8 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
-  consultationGroups,
-  consultationRounds,
+  meetingGroups as consultationGroups,
+  consultations as consultationRounds,
   consultations,
   insights,
   people,

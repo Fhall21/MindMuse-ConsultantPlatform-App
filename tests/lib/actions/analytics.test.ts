@@ -14,7 +14,7 @@ const ownershipMock = vi.hoisted(() => ({
   requireOwnedRound: vi.fn(),
 }));
 
-type FakeTable = typeof analyticsJobs | typeof auditLog | typeof roundDecisions;
+type FakeTable = typeof analyticsJobs | typeof auditLog | typeof consultationDecisions;
 
 type FakeTx = {
   insert(table: FakeTable): {
@@ -55,7 +55,7 @@ const fakeDb = vi.hoisted(() => {
                 return [{ id: "job-1" }];
               }
 
-              if (table === roundDecisions) {
+              if (table === consultationDecisions) {
                 return [{ id: "decision-1" }];
               }
 
@@ -86,7 +86,7 @@ vi.mock("@/db/client", () => ({
 vi.mock("@/lib/data/auth-context", () => authContextMock);
 vi.mock("@/lib/data/ownership", () => ownershipMock);
 
-import { analyticsJobs, auditLog, roundDecisions } from "@/db/schema";
+import { analyticsJobs, auditLog, consultationDecisions } from "@/db/schema";
 import {
   recordAnalyticsClusterDecision,
   triggerConsultationAnalyticsJob,
@@ -157,7 +157,7 @@ describe("lib/actions/analytics", () => {
     expect(fakeDb.transaction).toHaveBeenCalledTimes(1);
     expect(testState.insertCalls).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ table: roundDecisions }),
+        expect.objectContaining({ table: consultationDecisions }),
         expect.objectContaining({ table: auditLog }),
       ])
     );

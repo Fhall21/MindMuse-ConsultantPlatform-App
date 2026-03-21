@@ -1,11 +1,11 @@
 import {
   auditLog,
-  consultationRounds,
   consultations,
+  consultations as consultationRounds,
   evidenceEmails,
   insights,
   people,
-  roundOutputArtifacts,
+  consultationOutputArtifacts as roundOutputArtifacts,
   themes,
 } from "@/db/schema";
 import type {

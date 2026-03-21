@@ -220,6 +220,11 @@ export default function ConsultationDetailPage({
                     Open round workspace &rarr;
                   </Link>
                 </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/canvas/${id}`}>
+                    Evidence canvas &rarr;
+                  </Link>
+                </Button>
                 <span className="text-xs text-muted-foreground">
                   View theme grouping, synthesis, and round outputs
                 </span>

@@ -95,7 +95,7 @@ function EmptyState() {
     <div className="border border-dashed px-6 py-10 text-center">
       <p className="text-sm text-muted-foreground">No consultations yet.</p>
       <Button asChild size="sm" className="mt-4">
-        <Link href="/consultations/new">New Consultation</Link>
+        <Link href="/meetings/new">New Consultation</Link>
       </Button>
     </div>
   );

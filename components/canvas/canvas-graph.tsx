@@ -82,17 +82,22 @@ function applyFilters(nodes: CanvasNode[], edges: CanvasEdge[], filters: CanvasF
 
 function buildFlowNodes(nodes: CanvasNode[], selectedNodeIds: string[]): Node[] {
   const selectedSet = new Set(selectedNodeIds);
+  const labelsById = new Map(nodes.map((node) => [node.id, node.label] as const));
+
   return nodes.map((node) => ({
     id: node.id,
     type: "canvasNode",
     position: node.position,
     selected: selectedSet.has(node.id),
     draggable: true,
-      data: {
-        node,
-        selectionCount: selectedSet.size,
-      } satisfies CanvasNodeCardData,
-    }));
+    data: {
+      node,
+      memberPreviewLabels: node.memberIds
+        .slice(0, 3)
+        .map((memberId) => labelsById.get(memberId))
+        .filter((label): label is string => Boolean(label)),
+    } satisfies CanvasNodeCardData,
+  }));
 }
 
 function buildFlowEdges(
@@ -141,6 +146,7 @@ function CanvasGraphInner({
   const { getViewport, getIntersectingNodes } = useReactFlow();
   const dragRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragSelectionRef = useRef(false);
 
   const nodesById = useMemo(
     () => new Map((data?.nodes ?? []).map((node) => [node.id, node] as const)),
@@ -185,6 +191,9 @@ function CanvasGraphInner({
 
   const handleSelectionChange = useCallback<OnSelectionChangeFunc>(
     ({ nodes }) => {
+      if (dragSelectionRef.current) {
+        return;
+      }
       if (nodes.length === 0) {
         return;
       }
@@ -266,7 +275,7 @@ function CanvasGraphInner({
           positions,
           viewport: getViewport(),
         });
-      }, 120);
+      }, 260);
     },
     [getViewport, nodesById, saveLayout]
   );
@@ -274,6 +283,7 @@ function CanvasGraphInner({
   const handleNodeDragStart: OnNodeDrag = useCallback(
     (_event, node) => {
       dragRef.current = node.id;
+      dragSelectionRef.current = true;
     },
     []
   );
@@ -281,27 +291,24 @@ function CanvasGraphInner({
   const handleNodeDragStop: OnNodeDrag = useCallback(
     async (_event, node, allNodes) => {
       const draggedNodeId = dragRef.current ?? node.id;
+      const intersectingNodeIds = getIntersectingNodes(node)
+        .map((candidate) => candidate.id)
+        .filter((candidateId) => candidateId !== draggedNodeId);
+      const targetNodeId = intersectingNodeIds[0] ?? null;
+
       const plan = resolveCanvasGroupingPlan({
         activeNodeId: draggedNodeId,
-        targetNodeId:
-          getIntersectingNodes(node)
-            .map((candidate) => candidate.id)
-            .find((candidateId) => candidateId !== draggedNodeId) ?? null,
+        targetNodeId,
         selectedNodeIds,
         nodes: data?.nodes ?? [],
       });
 
       persistLayout(allNodes);
       dragRef.current = null;
+      dragSelectionRef.current = false;
 
-      if (plan.type !== "noop") {
-        const targetNodeId =
-          getIntersectingNodes(node)
-            .map((candidate) => candidate.id)
-            .find((candidateId) => candidateId !== draggedNodeId) ?? null;
-        if (targetNodeId) {
-          await onGroupDrop({ activeNodeId: draggedNodeId, targetNodeId });
-        }
+      if (plan.type !== "noop" && targetNodeId) {
+        void onGroupDrop({ activeNodeId: draggedNodeId, targetNodeId });
       }
     },
     [data?.nodes, getIntersectingNodes, onGroupDrop, persistLayout, selectedNodeIds]
@@ -329,7 +336,7 @@ function CanvasGraphInner({
       onNodeDragStop={handleNodeDragStop}
       onConnect={handleConnect}
       multiSelectionKeyCode={["Meta", "Control", "Shift"]}
-      selectionOnDrag
+      selectionOnDrag={false}
       panOnScroll
       fitView={false}
       minZoom={0.15}

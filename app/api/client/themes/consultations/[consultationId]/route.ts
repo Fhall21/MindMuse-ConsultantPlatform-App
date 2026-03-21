@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  getConsultationForUser,
+  getMeetingForUser,
   deleteInsightsForConsultation,
   listInsightsForConsultation,
 } from "@/lib/data/domain-read";
@@ -17,7 +17,7 @@ export async function GET(
   }
 
   try {
-    const consultation = await getConsultationForUser(consultationId, client.userId);
+    const consultation = await getMeetingForUser(consultationId, client.userId);
 
     if (!consultation) {
       return jsonError("Consultation not found", 404);

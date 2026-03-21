@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  getConsultationForUser,
+  getMeetingForUser,
   getLatestEvidenceEmailForConsultation,
   listConsultationPersonLinks,
   listInsightsForConsultation,
@@ -27,7 +27,7 @@ export async function GET(
   }
 
   try {
-    const meeting = await getConsultationForUser(id, client.userId);
+    const meeting = await getMeetingForUser(id, client.userId);
 
     if (!meeting) {
       return jsonError("Meeting not found", 404);

@@ -30,6 +30,7 @@ import type {
   ConsultationRound,
   EvidenceEmail,
   Insight,
+  Meeting,
   Person,
   RoundOutputArtifact,
   Theme,
@@ -40,6 +41,7 @@ import {
   mapConsultationRoundRecord,
   mapEvidenceEmailRecord,
   mapInsightRecord,
+  mapMeetingRecord,
   mapPersonRecord,
   mapRoundOutputArtifactRecord,
   mapThemeRecord,
@@ -117,6 +119,29 @@ export async function getConsultationForUser(
     .limit(1);
 
   return row ? mapConsultationRecord(row) : null;
+}
+
+export async function listMeetingsForUser(userId: string): Promise<Meeting[]> {
+  const rows = await db
+    .select()
+    .from(meetings)
+    .where(eq(meetings.userId, userId))
+    .orderBy(desc(meetings.createdAt));
+
+  return rows.map(mapMeetingRecord);
+}
+
+export async function getMeetingForUser(
+  meetingId: string,
+  userId: string
+): Promise<Meeting | null> {
+  const [row] = await db
+    .select()
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.userId, userId)))
+    .limit(1);
+
+  return row ? mapMeetingRecord(row) : null;
 }
 
 export async function listConsultationsForRound(

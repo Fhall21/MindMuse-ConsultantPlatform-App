@@ -9,9 +9,14 @@ interface ErrorPageProps {
 
 export default function ErrorPage({ error, reset }: ErrorPageProps) {
   useEffect(() => {
+    const message = error instanceof Error ? error.message : String(error);
+    const name = error instanceof Error ? error.name : "UnknownError";
+
     console.error("Unhandled app route error", {
-      message: error.message,
-      digest: error.digest,
+      name,
+      message,
+      digest: typeof error?.digest === "string" ? error.digest : undefined,
+      error,
     });
   }, [error]);
 

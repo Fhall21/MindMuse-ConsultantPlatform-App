@@ -59,7 +59,7 @@ export default function ConsultationDetailPage({
   const isDraft = consultation?.status === "draft";
 
   const currentRound = rounds?.find((r) => r.id === consultation?.consultation_id) ?? null;
-  const normalizedSavedTitle = consultation?.title.trim() ?? "";
+  const normalizedSavedTitle = consultation?.title?.trim() ?? "";
   const normalizedDraftTitle = titleDraft.trim();
   const titleChanged = normalizedDraftTitle !== normalizedSavedTitle;
   const titleInvalid = normalizedDraftTitle.length === 0 || normalizedDraftTitle.length > 255;
@@ -171,7 +171,7 @@ export default function ConsultationDetailPage({
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => setTitleDraft(consultation.title)}
+                  onClick={() => setTitleDraft(consultation.title ?? "")}
                   disabled={!titleChanged || savingTitle}
                 >
                   Reset

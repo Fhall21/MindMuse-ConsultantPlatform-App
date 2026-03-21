@@ -51,7 +51,7 @@ export function RoundsManager() {
   const createMutation = useMutation({
     mutationFn: (payload: { label: string; description?: string }) => createRound(payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["consultation_rounds"] });
+      await queryClient.invalidateQueries({ queryKey: ["consultations"] });
       setNewLabel("");
       setNewDescription("");
       setCreateError(null);
@@ -63,7 +63,7 @@ export function RoundsManager() {
     mutationFn: (payload: { id: string; label: string; description?: string }) =>
       updateRound(payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["consultation_rounds"] });
+      await queryClient.invalidateQueries({ queryKey: ["consultations"] });
       setEditingRoundId(null);
       setEditingLabel("");
       setEditingDescription("");
@@ -74,7 +74,7 @@ export function RoundsManager() {
   const deleteMutation = useMutation({
     mutationFn: (roundId: string) => deleteRound(roundId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["consultation_rounds"] });
+      await queryClient.invalidateQueries({ queryKey: ["consultations"] });
     },
   });
 
@@ -258,7 +258,7 @@ export function RoundsManager() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-0.5">
                           <Link
-                            href={`/consultations/${round.id}`}
+                            href={`/consultations/rounds/${round.id}`}
                             className="text-sm font-medium hover:text-primary hover:underline transition-colors"
                           >
                             {round.label}
@@ -276,7 +276,7 @@ export function RoundsManager() {
                             size="sm"
                             asChild
                           >
-                            <Link href={`/consultations/${round.id}`}>
+                            <Link href={`/consultations/rounds/${round.id}`}>
                               View
                             </Link>
                           </Button>

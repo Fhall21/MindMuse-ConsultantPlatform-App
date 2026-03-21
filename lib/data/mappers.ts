@@ -14,6 +14,7 @@ import type {
   ConsultationRound,
   EvidenceEmail,
   Insight,
+  Meeting,
   Person,
   RoundOutputArtifact,
   Theme,
@@ -21,6 +22,7 @@ import type {
 
 type ConsultationRow = typeof consultations.$inferSelect;
 type ConsultationRoundRow = typeof meetings.$inferSelect;
+type MeetingRow = typeof meetings.$inferSelect;
 type InsightRow = typeof insights.$inferSelect;
 type ThemeRow = typeof themes.$inferSelect;
 type PersonRow = typeof people.$inferSelect;
@@ -66,6 +68,19 @@ export function mapConsultationRoundRecord(
     updated_at: row.updatedAt.toISOString(),
     user_id: row.userId,
     status: row.status as ConsultationRound["status"],
+    consultation_id: row.consultationId,
+  };
+}
+
+export function mapMeetingRecord(row: MeetingRow): Meeting {
+  return {
+    id: row.id,
+    title: row.title,
+    transcript_raw: row.transcriptRaw ?? null,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+    user_id: row.userId,
+    status: row.status as Meeting["status"],
     consultation_id: row.consultationId,
   };
 }

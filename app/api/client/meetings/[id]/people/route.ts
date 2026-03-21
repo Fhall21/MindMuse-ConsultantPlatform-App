@@ -16,6 +16,6 @@ export async function GET(
     const people = await listPeopleForConsultation(id, client.userId);
     return NextResponse.json(people);
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Failed to load consultation people");
+    return jsonError(error instanceof Error ? error.message : "Failed to load meeting people");
   }
 }

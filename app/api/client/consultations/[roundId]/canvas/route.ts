@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { consultations, insights, themeMembers, themes } from "@/db/schema";
 import { loadCanvasConnections, loadCanvasLayout } from "@/lib/data/canvas";
 import { jsonError, requireRouteClient } from "../../../_helpers";
-import { requireOwnedRound } from "@/lib/data/ownership";
+import { requireOwnedConsultation } from "@/lib/data/ownership";
 import type { CanvasNode } from "@/types/canvas";
 
 function buildFallbackPositions(nodes: CanvasNode[]) {
@@ -57,8 +57,8 @@ export async function GET(
   }
 
   try {
-    // Verify round ownership
-    await requireOwnedRound(roundId, client.userId);
+    // Verify consultation ownership
+    await requireOwnedConsultation(roundId, client.userId);
 
     const themeRows = await db
       .select()

@@ -340,7 +340,7 @@ const s = StyleSheet.create({
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const artifactTypeLabels: Record<string, string> = {
-  summary: "Round Summary",
+  summary: "Consultation Summary",
   report: "Board-Pack Report",
   email: "Evidence Email",
 };
@@ -672,7 +672,7 @@ export function ReportPrintLayout({
         {/* ─── Quick Stats ─── */}
         <View style={s.statsRow}>
           <View style={s.statBox}>
-            <Text style={s.statLabel}>Consultations</Text>
+            <Text style={s.statLabel}>Meetings</Text>
             <Text style={s.statValue}>
               {report.consultationTitles.length}
             </Text>

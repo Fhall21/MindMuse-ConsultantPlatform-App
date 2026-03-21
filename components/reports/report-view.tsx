@@ -36,7 +36,7 @@ import { toast } from "sonner";
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const artifactTypeLabels: Record<string, string> = {
-  summary: "Round Summary",
+  summary: "Consultation Summary",
   report: "Board-Pack Report",
   email: "Evidence Email",
 };
@@ -88,7 +88,7 @@ function QuickStats({ report }: { report: ReportArtifactDetail }) {
 
   const stats = [
     {
-      label: "Consultations",
+      label: "Meetings",
       value: consultationCount,
     },
     {
@@ -974,7 +974,7 @@ export function ReportView({ artifactId }: ReportViewProps) {
           <span>Generated {formatDate(report.generatedAt)}</span>
           {report.consultationTitles.length > 0 && (
             <span>
-              {report.consultationTitles.length} consultation
+              {report.consultationTitles.length} meeting
               {report.consultationTitles.length === 1 ? "" : "s"}
             </span>
           )}

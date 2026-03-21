@@ -65,7 +65,7 @@ export function ReportList() {
         <div className="space-y-1">
           <h2 className="text-lg font-semibold tracking-tight">Generated outputs</h2>
           <p className="text-sm text-muted-foreground">
-            Generate a round summary, report, or email to see it here.
+            Generate a consultation summary, report, or email to see it here.
           </p>
         </div>
         <p className="text-sm text-muted-foreground">No outputs yet.</p>

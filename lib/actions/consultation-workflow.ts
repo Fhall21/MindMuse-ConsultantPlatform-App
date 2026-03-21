@@ -343,38 +343,38 @@ function buildFallbackOutput(params: {
 
   const header =
     artifactType === "email"
-      ? `Round evidence update: ${roundLabel}`
+      ? `Consultation evidence update: ${roundLabel}`
       : artifactType === "report"
-        ? `${roundLabel} round report`
-        : `${roundLabel} round summary`;
+        ? `${roundLabel} consultation report`
+        : `${roundLabel} consultation summary`;
 
   const roundThemeLines =
     acceptedRoundThemes.length > 0
-      ? acceptedRoundThemes.map((theme) => `- ${theme.label}: ${theme.description ?? "Accepted round theme."}`)
-      : ["- No accepted round themes are available yet."];
+      ? acceptedRoundThemes.map((theme) => `- ${theme.label}: ${theme.description ?? "Accepted consultation theme."}`)
+      : ["- No accepted consultation themes are available yet."];
 
   const supportingLines =
     supportingThemes.length > 0
       ? supportingThemes.map(
           (theme) =>
-            `- ${theme.label}${theme.consultationTitle ? ` (${theme.consultationTitle})` : ""}: ${theme.description ?? "Supporting consultation theme."}`
+            `- ${theme.label}${theme.consultationTitle ? ` (${theme.consultationTitle})` : ""}: ${theme.description ?? "Supporting meeting theme."}`
         )
-      : ["- No supporting consultation themes are available yet."];
+      : ["- No supporting meeting themes are available yet."];
 
   const content = [
     artifactType === "email"
       ? `Subject: ${header}`
       : header,
     "",
-    roundDescription ? `Round description: ${roundDescription}` : null,
+    roundDescription ? `Consultation description: ${roundDescription}` : null,
     consultationTitles.length > 0
-      ? `Linked consultations: ${consultationTitles.join(", ")}`
-      : "Linked consultations: none recorded",
+      ? `Linked meetings: ${consultationTitles.join(", ")}`
+      : "Linked meetings: none recorded",
     "",
-    "Accepted round themes:",
+    "Accepted consultation themes:",
     ...roundThemeLines,
     "",
-    "Supporting consultation themes:",
+    "Supporting meeting themes:",
     ...supportingLines,
   ]
     .filter((line): line is string => line !== null)

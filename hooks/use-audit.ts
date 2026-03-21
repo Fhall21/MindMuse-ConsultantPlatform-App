@@ -13,11 +13,13 @@ export function useMeetingAuditEvents(meetingId: string) {
 
 export const useAuditEvents = useMeetingAuditEvents;
 
-export function useRoundAuditEvents(roundId: string) {
+export function useConsultationAuditEvents(consultationId: string) {
   return useQuery({
-    queryKey: ["audit_log", "round", roundId],
+    queryKey: ["audit_log", "consultation", consultationId],
     queryFn: () =>
-      fetchJson<AuditLogEntry[]>(`/api/client/audit/rounds/${roundId}`),
-    enabled: !!roundId,
+      fetchJson<AuditLogEntry[]>(`/api/client/audit/rounds/${consultationId}`),
+    enabled: !!consultationId,
   });
 }
+
+export const useRoundAuditEvents = useConsultationAuditEvents;

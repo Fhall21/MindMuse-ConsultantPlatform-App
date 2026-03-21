@@ -16,7 +16,7 @@ interface RoundSummaryCardProps {
 }
 
 function formatConsultationCount(count: number) {
-  return `${count} consultation${count === 1 ? "" : "s"}`;
+  return `${count} meeting${count === 1 ? "" : "s"}`;
 }
 
 export function RoundSummaryCard({ summary }: RoundSummaryCardProps) {
@@ -24,9 +24,9 @@ export function RoundSummaryCard({ summary }: RoundSummaryCardProps) {
     <Card className="border-border/70 bg-muted/10">
       <CardHeader>
         <div>
-          <CardTitle>Round Summary</CardTitle>
+          <CardTitle>Consultation Summary</CardTitle>
           <CardDescription>
-            Accepted round-level themes that can feed summaries, evidence emails,
+            Accepted consultation-level themes that can feed summaries, evidence emails,
             and consultation reports.
           </CardDescription>
         </div>
@@ -72,7 +72,7 @@ export function RoundSummaryCard({ summary }: RoundSummaryCardProps) {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {theme.provenance
-                    .map((entry) => entry.consultationTitle ?? "Untitled consultation")
+                    .map((entry) => entry.consultationTitle ?? "Untitled meeting")
                     .join(", ")}
                 </p>
               </div>
@@ -80,7 +80,7 @@ export function RoundSummaryCard({ summary }: RoundSummaryCardProps) {
           </div>
         ) : (
           <p className="rounded-md border border-dashed border-border/70 bg-background/60 p-3 text-sm text-muted-foreground">
-            No accepted round themes are available yet.
+            No accepted consultation themes are available yet.
           </p>
         )}
       </CardContent>

@@ -195,9 +195,9 @@ export function ThemeRoundPanel({ roundId, roundLabel }: ThemeRoundPanelProps) {
       <Card className="border-border/70">
         <CardHeader>
           <div>
-            <CardTitle>Round Themes — {roundLabel}</CardTitle>
+            <CardTitle>Consultation Themes — {roundLabel}</CardTitle>
             <CardDescription>
-              All themes across consultations in this round. Review and triage per consultation.
+              All themes across meetings in this consultation. Review and triage per meeting.
             </CardDescription>
           </div>
           {totalThemes > 0 ? (
@@ -217,7 +217,7 @@ export function ThemeRoundPanel({ roundId, roundLabel }: ThemeRoundPanelProps) {
 
         <CardContent className="space-y-6">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading round themes…</p>
+            <p className="text-sm text-muted-foreground">Loading consultation themes…</p>
           ) : null}
 
           {hasError ? (
@@ -227,7 +227,7 @@ export function ThemeRoundPanel({ roundId, roundLabel }: ThemeRoundPanelProps) {
           ) : null}
 
           {!isLoading && !hasError && consultationsQuery.data?.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No consultations are assigned to this round yet.</p>
+            <p className="text-sm text-muted-foreground">No meetings are linked to this consultation yet.</p>
           ) : null}
 
           {!isLoading && !hasError && groupedThemes.map(({ consultation, themes }) => (

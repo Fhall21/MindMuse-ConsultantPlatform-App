@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { useMeetingAuditEvents, useRoundAuditEvents } from "@/hooks/use-audit";
+import { useConsultationAuditEvents, useMeetingAuditEvents } from "@/hooks/use-audit";
 import type { AuditLogEntry } from "@/types/db";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -133,11 +133,11 @@ function buildEventLabel(event: AuditLogEntry) {
 
     // Round lifecycle
     case "round.created":
-      return "Round created";
+      return "Consultation created";
     case "round.updated":
-      return "Round updated";
+      return "Consultation updated";
     case "round.deleted":
-      return "Round deleted";
+      return "Consultation deleted";
 
     // Round theme group events
     case "round.theme_group_created":
@@ -175,7 +175,7 @@ function buildEventLabel(event: AuditLogEntry) {
 
     // Round output
     case "round.output_generated":
-      return "Round output generated";
+      return "Consultation output generated";
 
     default:
       return humanizeAction(event.action);
@@ -278,7 +278,7 @@ function TimelineEvents({ events }: { events: AuditLogEntry[] }) {
 function AuditTrailCard({
   auditQuery,
 }: {
-  auditQuery: ReturnType<typeof useMeetingAuditEvents> | ReturnType<typeof useRoundAuditEvents>;
+  auditQuery: ReturnType<typeof useMeetingAuditEvents> | ReturnType<typeof useConsultationAuditEvents>;
 }) {
   const [showEarlier, setShowEarlier] = useState(false);
 
@@ -347,7 +347,7 @@ interface RoundAuditTrailProps {
 }
 
 export function RoundAuditTrail({ roundId }: RoundAuditTrailProps) {
-  const auditQuery = useRoundAuditEvents(roundId);
+  const auditQuery = useConsultationAuditEvents(roundId);
   return (
     <AuditTrailCard
       auditQuery={auditQuery}

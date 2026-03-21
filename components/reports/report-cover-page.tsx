@@ -21,8 +21,8 @@ interface ReportCoverPageProps {
  *   ┌─────────────────────────────────────────┐
  *   │  [header band]                          │
  *   │  Title                                  │
- *   │  Round · Ref                            │
- *   │  Generated date · N consultations       │
+ *   │  Consultation · Ref                     │
+ *   │  Generated date · N meetings            │
  *   │  CONFIDENTIAL notice                    │
  *   └─────────────────────────────────────────┘
  */
@@ -61,7 +61,7 @@ export function ReportCoverPage({
             {formatDate(generatedAt)}
           </span>
           <span>
-            <span className="font-medium text-foreground">Consultations</span>{" "}
+            <span className="font-medium text-foreground">Meetings</span>{" "}
             {consultationCount}
           </span>
           <span>

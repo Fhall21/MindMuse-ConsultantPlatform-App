@@ -229,7 +229,7 @@ export default function MeetingDetailPage({
                   </Link>
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  View theme grouping, synthesis, and round outputs
+                  View theme grouping, synthesis, and consultation outputs
                 </span>
               </div>
             ) : null}

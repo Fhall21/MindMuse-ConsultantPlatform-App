@@ -34,7 +34,7 @@ interface CanvasGraphProps {
   onEdgeSelect: (id: string | null) => void;
   onCreateEdge: (payload: CreateEdgePayload) => Promise<CanvasEdge>;
   onQuickEditEdge: (edgeId: string) => void;
-  onGroupDrop: (params: { activeNodeId: string; targetNodeId: string }) => Promise<void>;
+  onGroupDrop: (params: { activeNodeId: string; targetNodeId: string | null }) => Promise<void>;
 }
 
 const CONNECTION_COLORS: Record<ConnectionType, string> = {
@@ -83,21 +83,64 @@ function applyFilters(nodes: CanvasNode[], edges: CanvasEdge[], filters: CanvasF
 function buildFlowNodes(nodes: CanvasNode[], selectedNodeIds: string[]): Node[] {
   const selectedSet = new Set(selectedNodeIds);
   const labelsById = new Map(nodes.map((node) => [node.id, node.label] as const));
+  const themeById = new Map(
+    nodes.filter((node) => node.type === "theme").map((node) => [node.id, node] as const)
+  );
 
-  return nodes.map((node) => ({
-    id: node.id,
-    type: "canvasNode",
-    position: node.position,
-    selected: selectedSet.has(node.id),
-    draggable: true,
-    data: {
-      node,
-      memberPreviewLabels: node.memberIds
+  const themeNodes = nodes
+    .filter((node) => node.type === "theme")
+    .map((node) => {
+      const previewLabels = node.memberIds
         .slice(0, 3)
         .map((memberId) => labelsById.get(memberId))
-        .filter((label): label is string => Boolean(label)),
-    } satisfies CanvasNodeCardData,
-  }));
+        .filter((label): label is string => Boolean(label));
+
+      return {
+        id: node.id,
+        type: "canvasNode",
+        position: node.position,
+        selected: selectedSet.has(node.id),
+        draggable: true,
+        style: {
+          width: 300,
+          minHeight: Math.max(180, 132 + node.memberIds.length * 44),
+        },
+        data: {
+          node,
+          isNestedInGroup: false,
+          memberPreviewLabels: previewLabels,
+        } satisfies CanvasNodeCardData,
+      } satisfies Node;
+    });
+
+  const insightNodes = nodes
+    .filter((node) => node.type === "insight")
+    .map((node) => {
+      const parentTheme = node.groupId ? themeById.get(node.groupId) : undefined;
+      const isNestedInGroup = Boolean(parentTheme);
+      const nestedPosition = isNestedInGroup && parentTheme
+        ? {
+            x: Math.max(12, node.position.x - parentTheme.position.x),
+            y: Math.max(52, node.position.y - parentTheme.position.y),
+          }
+        : node.position;
+
+      return {
+        id: node.id,
+        type: "canvasNode",
+        position: nestedPosition,
+        parentId: isNestedInGroup ? parentTheme?.id : undefined,
+        selected: selectedSet.has(node.id),
+        draggable: true,
+        data: {
+          node,
+          isNestedInGroup,
+          memberPreviewLabels: [],
+        } satisfies CanvasNodeCardData,
+      } satisfies Node;
+    });
+
+  return [...themeNodes, ...insightNodes];
 }
 
 function buildFlowEdges(
@@ -253,17 +296,29 @@ function CanvasGraphInner({
       }
 
       saveTimerRef.current = setTimeout(() => {
+        const allNodesById = new Map(allNodes.map((currentNode) => [currentNode.id, currentNode] as const));
         const positions = Object.fromEntries(
           allNodes
             .map((node) => {
               const original = nodesById.get(node.id);
+              const parentNode = node.parentId ? allNodesById.get(node.parentId) : undefined;
+              const position = parentNode
+                ? {
+                    x: parentNode.position.x + node.position.x,
+                    y: parentNode.position.y + node.position.y,
+                  }
+                : {
+                    x: node.position.x,
+                    y: node.position.y,
+                  };
+
               return original
                 ? [
                     node.id,
                     {
                       nodeType: original.type,
-                      x: node.position.x,
-                      y: node.position.y,
+                      x: position.x,
+                      y: position.y,
                     },
                   ]
                 : null;
@@ -303,12 +358,16 @@ function CanvasGraphInner({
         nodes: data?.nodes ?? [],
       });
 
+      const draggedNode = (data?.nodes ?? []).find((candidate) => candidate.id === draggedNodeId);
+
       persistLayout(allNodes);
       dragRef.current = null;
       dragSelectionRef.current = false;
 
       if (plan.type !== "noop" && targetNodeId) {
         void onGroupDrop({ activeNodeId: draggedNodeId, targetNodeId });
+      } else if (draggedNode?.type === "insight" && draggedNode.groupId && !targetNodeId) {
+        void onGroupDrop({ activeNodeId: draggedNodeId, targetNodeId: null });
       }
     },
     [data?.nodes, getIntersectingNodes, onGroupDrop, persistLayout, selectedNodeIds]

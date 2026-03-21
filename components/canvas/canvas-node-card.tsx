@@ -9,6 +9,7 @@ import type { CanvasNode } from "@/types/canvas";
 
 export interface CanvasNodeCardData {
   node: CanvasNode;
+  isNestedInGroup: boolean;
   memberPreviewLabels: string[];
 }
 
@@ -19,12 +20,16 @@ function CanvasNodeCardComponent({
   const typedData = data as unknown as CanvasNodeCardData;
   const node = typedData.node;
   const isInsight = node.type === "insight";
+  const isNestedInGroup = typedData.isNestedInGroup;
   const memberCount = node.memberIds.length;
 
   return (
     <div
       className={cn(
-        "group relative min-h-[132px] min-w-[220px] max-w-[260px] rounded-md border bg-background px-3 py-2.5 transition-shadow",
+        "group relative rounded-md border bg-background px-3 py-2.5 transition-shadow",
+        isInsight && !isNestedInGroup && "min-h-[132px] min-w-[220px] max-w-[260px]",
+        isInsight && isNestedInGroup && "min-h-[94px] min-w-[188px] max-w-[220px]",
+        !isInsight && "min-h-[180px] min-w-[280px] max-w-[320px] border-dashed",
         selected && "border-primary ring-1 ring-primary/30"
       )}
       data-testid={isInsight ? "canvas-insight-card" : "canvas-group-card"}
@@ -106,7 +111,7 @@ function CanvasNodeCardComponent({
       <div className="pointer-events-none mt-2 flex items-center justify-between border-t pt-2 text-[10px] font-medium text-muted-foreground">
         <span className="inline-flex items-center gap-1">
           <Layers3 className="h-3 w-3" />
-          Drag onto another card to group
+          {isInsight ? "Drag into another group" : "Drop insights here to group"}
         </span>
         <span className="inline-flex items-center gap-1">
           <Link2 className="h-3 w-3" />

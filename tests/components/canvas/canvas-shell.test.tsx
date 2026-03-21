@@ -8,6 +8,10 @@ import type { CanvasData } from "@/hooks/use-canvas";
 
 const createEdgeMock = vi.fn();
 const updateEdgeMock = vi.fn();
+const { createThemeMock, moveThemeToGroupMock } = vi.hoisted(() => ({
+  createThemeMock: vi.fn(),
+  moveThemeToGroupMock: vi.fn(),
+}));
 
 const canvasData: CanvasData = {
   consultation_id: "consultation-1",
@@ -23,7 +27,7 @@ const canvasData: CanvasData = {
       subgroup: null,
       sourceConsultationId: "consultation-1",
       sourceConsultationTitle: "North depot interview",
-      groupId: null,
+      groupId: "theme-1",
       memberIds: [],
       isUserAdded: false,
       lockedFromSource: false,
@@ -63,9 +67,11 @@ vi.mock("@/components/canvas/canvas-graph", () => ({
   CanvasGraph: ({
     onCreateEdge,
     onQuickEditEdge,
+    onGroupDrop,
   }: {
     onCreateEdge: (payload: Record<string, unknown>) => Promise<unknown>;
     onQuickEditEdge: (edgeId: string) => void;
+    onGroupDrop: (payload: { activeNodeId: string; targetNodeId: string | null }) => Promise<void>;
   }) => (
     <div>
       <button
@@ -84,6 +90,12 @@ vi.mock("@/components/canvas/canvas-graph", () => ({
       </button>
       <button type="button" onClick={() => onQuickEditEdge("edge-1")}>
         Edit connection
+      </button>
+      <button
+        type="button"
+        onClick={() => void onGroupDrop({ activeNodeId: "insight-1", targetNodeId: null })}
+      >
+        Ungroup insight
       </button>
     </div>
   ),
@@ -108,13 +120,15 @@ vi.mock("@/hooks/use-canvas", () => ({
 }));
 
 vi.mock("@/lib/actions/round-workflow", () => ({
-  createTheme: vi.fn(),
-  moveThemeToGroup: vi.fn(),
+  createTheme: createThemeMock,
+  moveThemeToGroup: moveThemeToGroupMock,
 }));
 
 afterEach(() => {
   createEdgeMock.mockReset();
   updateEdgeMock.mockReset();
+  createThemeMock.mockReset();
+  moveThemeToGroupMock.mockReset();
 });
 
 function renderShell() {
@@ -165,5 +179,15 @@ describe("CanvasShell", () => {
       connection_type: "causes",
       note: "This escalates the outcome.",
     });
+  });
+
+  it("ungroups a grouped insight when dropped on empty canvas", async () => {
+    renderShell();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Ungroup insight"));
+    });
+
+    expect(moveThemeToGroupMock).toHaveBeenCalledWith("insight-1", null);
   });
 });

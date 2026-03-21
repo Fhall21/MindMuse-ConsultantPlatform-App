@@ -606,6 +606,15 @@ export async function listAuditEventsForConsultation(
   return listAuditEventsForUser(userId, { consultationId });
 }
 
+export async function listAuditEventsForMeeting(
+  meetingId: string,
+  userId: string
+): Promise<AuditLogEntry[]> {
+  await requireOwnedMeeting(meetingId, userId);
+
+  return listAuditEventsForUser(userId, { consultationId: meetingId });
+}
+
 export async function listAuditEventsForRound(
   roundId: string,
   userId: string

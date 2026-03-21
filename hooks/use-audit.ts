@@ -6,9 +6,7 @@ export function useMeetingAuditEvents(meetingId: string) {
   return useQuery({
     queryKey: ["audit_log", "meeting", meetingId],
     queryFn: () =>
-      fetchJson<AuditLogEntry[]>(
-        `/api/client/audit/consultations/${meetingId}`
-      ),
+      fetchJson<AuditLogEntry[]>(`/api/client/audit/meetings/${meetingId}`),
     enabled: !!meetingId,
   });
 }

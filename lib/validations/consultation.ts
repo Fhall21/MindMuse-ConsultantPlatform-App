@@ -1,12 +1,12 @@
 import { z } from "zod/v4";
 
-export const consultationSchema = z.object({
+export const meetingSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
   transcript_raw: z.string().optional(),
   status: z.enum(["draft", "complete"]).default("draft"),
 });
 
-export type ConsultationFormData = z.infer<typeof consultationSchema>;
+export type MeetingFormData = z.infer<typeof meetingSchema>;
 
 export const themeSchema = z.object({
   label: z.string().min(1, "Theme label is required").max(255),
@@ -31,12 +31,19 @@ export const evidenceEmailSchema = z.object({
 
 export type EvidenceEmailFormData = z.infer<typeof evidenceEmailSchema>;
 
-export const consultationRoundSchema = z.object({
+export const consultationSchema = z.object({
   label: z.string().min(1, "Label is required").max(255),
   description: z.string().max(500).optional(),
 });
 
-export type ConsultationRoundFormData = z.infer<typeof consultationRoundSchema>;
+export type ConsultationFormData = z.infer<typeof consultationSchema>;
+
+export const phaseSchema = z.object({
+  type: z.enum(["discovery", "discussion", "review_feedback"]),
+  label: z.string().max(255).optional(),
+});
+
+export type PhaseFormData = z.infer<typeof phaseSchema>;
 
 export const uuidArraySchema = (maxLength = 100) =>
   z.array(z.uuid()).max(maxLength, `No more than ${maxLength} IDs allowed`);

@@ -1,5 +1,5 @@
 /**
- * Round Detail type adapters.
+ * Consultation Detail type adapters.
  *
  * These types adapt Agent 1's server types into the UI-friendly shapes
  * that components expect. This provides a stable API even as the server
@@ -7,30 +7,30 @@
  */
 
 export type {
-  RoundDetail,
-  RoundDetailConsultation,
+  ConsultationDetail,
+  ConsultationDetailMeeting,
   RoundSourceTheme,
   ThemeDetail,
   ThemeMemberDetail,
   ThemeDraftState,
-  RoundDecisionHistoryItem,
-  RoundOutputSummary,
-  RoundOutputCollection,
-  RoundHistoryEvent,
-  RoundAnalyticsSummary,
-  ConsultationGroupDetail,
-  ConsultationGroupMemberDetail,
-} from "@/lib/actions/round-workflow";
+  ConsultationDecisionHistoryItem,
+  ConsultationOutputSummary,
+  ConsultationOutputCollection,
+  ConsultationHistoryEvent,
+  ConsultationAnalyticsSummary,
+  MeetingGroupDetail,
+  MeetingGroupMemberDetail,
+} from "@/lib/actions/consultation-workflow";
 
 // Component-friendly aliases
-export type { ThemeDetail as RoundThemeGroupDetail, ThemeMemberDetail as RoundThemeGroupMemberDetail, ThemeDraftState as RoundThemeGroupDraftState } from "@/lib/actions/round-workflow";
+export type { ThemeDetail as ConsultationThemeGroupDetail, ThemeMemberDetail as ConsultationThemeGroupMemberDetail, ThemeDraftState as ConsultationThemeGroupDraftState } from "@/lib/actions/consultation-workflow";
 
 // Component-friendly adapter types that derive from Agent 1 types
 
 export interface SourceTheme {
   id: string; // = sourceThemeId
-  sourceConsultationId: string; // = consultationId
-  sourceConsultationTitle: string; // = consultationTitle
+  sourceMeetingId: string; // = meetingId
+  sourceMeetingTitle: string; // = meetingTitle
   label: string;
   description: string | null;
   editableLabel: string;
@@ -41,7 +41,7 @@ export interface SourceTheme {
   groupId: string | null;
 }
 
-export interface RoundConsultationSummary {
+export interface ConsultationMeetingSummary {
   id: string;
   title: string;
   status: string;
@@ -56,6 +56,6 @@ export type ThemeStatus = "draft" | "accepted" | "discarded" | "management_rejec
 export type ThemeOrigin = "manual" | "ai_refined";
 
 // Legacy type aliases for backward compat with existing usage
-export type { ThemeDetail as RoundThemeGroup, ThemeDraftState as RoundThemeGroupDraft } from "@/lib/actions/round-workflow";
-export type RoundThemeGroupStatus = "draft" | "accepted" | "discarded" | "management_rejected";
-export type RoundThemeGroupOrigin = "manual" | "ai_refined";
+export type { ThemeDetail as ConsultationThemeGroup, ThemeDraftState as ConsultationThemeGroupDraft } from "@/lib/actions/consultation-workflow";
+export type ConsultationThemeGroupStatus = "draft" | "accepted" | "discarded" | "management_rejected";
+export type ConsultationThemeGroupOrigin = "manual" | "ai_refined";

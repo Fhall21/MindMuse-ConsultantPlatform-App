@@ -1,19 +1,19 @@
 export type ConsultationStatus = "draft" | "complete";
 
-export interface Consultation {
+export interface Meeting {
   id: string;
   title: string;
   transcript_raw: string | null;
-  // TODO: Agent 1 — add `notes text` column to consultations migration
+  // TODO: Agent 1 — add `notes text` column to meetings migration
   notes?: string | null;
   created_at: string;
   updated_at: string;
   user_id: string;
   status: ConsultationStatus;
-  round_id: string | null;
+  consultation_id: string | null;
 }
 
-export interface ConsultationRound {
+export interface Consultation {
   id: string;
   user_id: string;
   label: string;
@@ -31,7 +31,7 @@ export type ThemeOrigin = "manual" | "ai_refined";
 
 export interface Theme {
   id: string;
-  round_id: string;
+  consultation_id: string;
   user_id: string;
   label: string;
   description: string | null;
@@ -52,9 +52,9 @@ export interface Theme {
 export interface ThemeMember {
   id: string;
   theme_id: string;
-  round_id: string;
+  consultation_id: string;
   insight_id: string;
-  source_consultation_id: string;
+  source_meeting_id: string;
   user_id: string;
   position: number;
   created_by: string;
@@ -71,9 +71,9 @@ export type RoundDecisionType =
   | "discarded"
   | "management_rejected";
 
-export interface RoundDecision {
+export interface ConsultationDecision {
   id: string;
-  round_id: string;
+  consultation_id: string;
   user_id: string;
   target_type: RoundDecisionTargetType;
   target_id: string;
@@ -86,9 +86,9 @@ export interface RoundDecision {
 export type RoundOutputArtifactType = "summary" | "report" | "email";
 export type RoundOutputArtifactStatus = "generated";
 
-export interface RoundOutputArtifact {
+export interface ConsultationOutputArtifact {
   id: string;
-  round_id: string;
+  consultation_id: string;
   user_id: string;
   artifact_type: RoundOutputArtifactType;
   status: RoundOutputArtifactStatus;
@@ -103,7 +103,7 @@ export interface RoundOutputArtifact {
 
 export interface Insight {
   id: string;
-  consultation_id: string;
+  meeting_id: string;
   label: string;
   description: string | null;
   accepted: boolean;
@@ -117,10 +117,10 @@ export type InsightDecisionType = "accept" | "reject" | "user_added";
 export interface InsightDecisionLog {
   id: string;
   user_id: string;
-  consultation_id: string;
+  meeting_id: string;
   insight_id: string | null;
   insight_label: string;
-  round_id: string | null;
+  consultation_id: string | null;
   decision_type: InsightDecisionType;
   rationale: string | null;
   created_at: string;
@@ -137,14 +137,14 @@ export interface Person {
   user_id: string;
 }
 
-export interface ConsultationPerson {
-  consultation_id: string;
+export interface MeetingPerson {
+  meeting_id: string;
   person_id: string;
 }
 
 export interface EvidenceEmail {
   id: string;
-  consultation_id: string;
+  meeting_id: string;
   subject: string | null;
   body_draft: string | null;
   body_final: string | null;
@@ -157,7 +157,7 @@ export interface EvidenceEmail {
 
 export interface AuditLogEntry {
   id: string;
-  consultation_id: string | null;
+  meeting_id: string | null;
   action: string;
   entity_type: string | null;
   entity_id: string | null;
@@ -176,7 +176,7 @@ export type IngestionArtifactType =
 
 export interface TranscriptionJob {
   id: string;
-  consultation_id: string;
+  meeting_id: string;
   audio_file_key: string;
   status: IngestionStatus;
   transcript_text: string | null;
@@ -190,7 +190,7 @@ export interface TranscriptionJob {
 
 export interface OcrJob {
   id: string;
-  consultation_id: string;
+  meeting_id: string;
   image_file_key: string;
   status: IngestionStatus;
   extracted_text: string | null;
@@ -235,7 +235,7 @@ export interface ReportTemplate {
 
 export interface IngestionArtifact {
   id: string;
-  consultation_id: string;
+  meeting_id: string;
   artifact_type: IngestionArtifactType;
   source_file_key: string;
   metadata: Record<string, unknown> | null;
@@ -251,6 +251,18 @@ export interface UserAIPreferences {
   consultation_types: string[];
   focus_areas: string[];
   excluded_topics: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export type PhaseType = "discovery" | "discussion" | "review_feedback";
+
+export interface Phase {
+  id: string;
+  meeting_id: string;
+  type: PhaseType;
+  label: string | null;
+  position: number;
   created_at: string;
   updated_at: string;
 }

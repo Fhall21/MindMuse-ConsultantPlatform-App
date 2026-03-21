@@ -182,6 +182,20 @@ export default function RoundDetailPage({
 
       <Separator />
 
+      {/* Round Outputs */}
+      <section className="space-y-3">
+        <SectionHeading>Outputs</SectionHeading>
+        <RoundOutputsSection
+          roundId={id}
+          outputs={data.outputs}
+          onGenerateSummary={handleGenerateSummary}
+          onGenerateReport={handleGenerateReport}
+          onGenerateEmail={handleGenerateEmail}
+        />
+      </section>
+
+      <Separator />
+
       {/* Linked Consultations */}
       <section className="space-y-3">
         <SectionHeading>Linked Consultations</SectionHeading>
@@ -213,20 +227,6 @@ export default function RoundDetailPage({
           sourceThemes={adaptedSourceThemes}
           initialGroups={adaptedThemeGroups}
           onStructuralChange={handleStructuralChange}
-        />
-      </section>
-
-      <Separator />
-
-      {/* Round Outputs */}
-      <section className="space-y-3">
-        <SectionHeading>Outputs</SectionHeading>
-        <RoundOutputsSection
-          roundId={id}
-          outputs={data.outputs}
-          onGenerateSummary={handleGenerateSummary}
-          onGenerateReport={handleGenerateReport}
-          onGenerateEmail={handleGenerateEmail}
         />
       </section>
 

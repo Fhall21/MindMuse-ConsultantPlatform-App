@@ -92,7 +92,7 @@ export async function addAnalyticsClusterAsInsight(roundId: string, clusterId: n
       consultationId: uniqueConsultationIds[0],
       label: cluster.label,
       description: description,
-      accepted: false,
+      accepted: true,
       isUserAdded: true,
     })
     .returning();

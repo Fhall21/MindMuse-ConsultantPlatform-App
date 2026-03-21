@@ -32,6 +32,10 @@ import {
   buildLegacyReportGraphSnapshot,
   type ReportInputSnapshot,
 } from "@/lib/report-graph";
+import {
+  loadRoundAnalyticsSummary,
+  type RoundAnalyticsSummary,
+} from "@/lib/data/analytics-read";
 import type {
   Consultation,
   ConsultationRound,
@@ -45,6 +49,8 @@ import type {
   Theme,
   ThemeMember,
 } from "@/types/db";
+
+export type { RoundAnalyticsSummary } from "@/lib/data/analytics-read";
 
 type ThemeRow = typeof themes.$inferSelect;
 type ThemeMemberRow = typeof themeMembers.$inferSelect;
@@ -176,14 +182,6 @@ export interface RoundOutputCollection {
   summary: RoundOutputSummary | null;
   report: RoundOutputSummary | null;
   email: RoundOutputSummary | null;
-}
-
-export interface RoundAnalyticsSummary {
-  linkedConsultationCount: number;
-  sourceThemeCount: number;
-  groupedSourceThemeCount: number;
-  acceptedGroupCount: number;
-  lockedSourceThemeCount: number;
 }
 
 export interface ConsultationGroupMemberDetail {
@@ -941,6 +939,7 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
   const round = await loadOwnedRound({ userId, roundId });
   const consultations = await loadRoundConsultations({ userId, roundId });
   const consultationIds = consultations.map((consultation) => consultation.id);
+  const analytics = await loadRoundAnalyticsSummary({ roundId, consultationIds });
   const [acceptedInsights, groups, members, decisions, outputs, emailMap, history, consultationGroups, consultationGroupMembers] =
     await Promise.all([
       loadAcceptedInsights({ consultationIds }),
@@ -1129,13 +1128,7 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
     })(),
     outputs: buildOutputCollection(outputs),
     history,
-    analytics: {
-      linkedConsultationCount: consultations.length,
-      sourceThemeCount: sourceThemes.length,
-      groupedSourceThemeCount: sourceThemes.filter((theme) => theme.isGrouped).length,
-      acceptedGroupCount: groupDetails.filter((group) => group.status === "accepted").length,
-      lockedSourceThemeCount: sourceThemes.filter((theme) => theme.lockedFromSource).length,
-    },
+    analytics,
   };
 }
 
@@ -2209,7 +2202,13 @@ async function generateRoundOutput(
         content,
       };
     }
-  } catch {
+  } catch (error) {
+    console.error("[round-workflow.generateRoundOutput] AI generation failed; using fallback", {
+      roundId,
+      artifactType,
+      requestPayload,
+      error,
+    });
     generated = generated;
   }
 
@@ -2264,7 +2263,18 @@ async function generateRoundOutput(
       inputSnapshot,
       createdBy: userId,
     })
-    .returning();
+    .returning()
+    .catch((error) => {
+      console.error("[round-workflow.generateRoundOutput] failed to insert round output artifact", {
+        roundId,
+        userId,
+        artifactType,
+        generatedTitle: generated.title,
+        generatedContentLength: generated.content.length,
+        error,
+      });
+      throw error;
+    });
 
   const output = mapRoundOutputArtifactRecord(created);
 

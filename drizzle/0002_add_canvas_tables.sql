@@ -10,7 +10,7 @@
 CREATE TABLE IF NOT EXISTS canvas_connections (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   round_id uuid NOT NULL REFERENCES consultation_rounds(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
 
   from_node_type text NOT NULL CHECK (from_node_type IN ('theme', 'insight', 'person', 'group')),
   from_node_id uuid NOT NULL,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS canvas_connections (
   ai_suggestion_accepted_at timestamptz,
   ai_suggestion_rationale text,
 
-  created_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_by uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
 
@@ -55,7 +55,7 @@ CREATE INDEX idx_canvas_connections_origin_pending ON canvas_connections(round_i
 CREATE TABLE IF NOT EXISTS canvas_layout_state (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   round_id uuid NOT NULL REFERENCES consultation_rounds(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
 
   node_type text NOT NULL CHECK (node_type IN ('theme', 'insight', 'person', 'group', 'viewport')),
   node_id uuid NOT NULL,

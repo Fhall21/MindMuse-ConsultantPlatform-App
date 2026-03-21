@@ -29,6 +29,15 @@ interface ConnectionPromptState {
   position: { x: number; y: number } | null;
 }
 
+function equalStringSets(a: string[], b: string[]) {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  const bSet = new Set(b);
+  return a.every((item) => bSet.has(item));
+}
+
 export function CanvasShell({ consultationId, consultationTitle }: CanvasShellProps) {
   const queryClient = useQueryClient();
   const canvasQuery = useCanvas(consultationId);
@@ -125,8 +134,29 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
     setConnectionPrompt(null);
   }
 
-  async function handleGroupDrop(params: { activeNodeId: string; targetNodeId: string }) {
+  async function handleGroupDrop(params: { activeNodeId: string; targetNodeId: string | null }) {
     if (!canvasQuery.data) {
+      return;
+    }
+
+    if (!params.targetNodeId) {
+      const activeNode = canvasQuery.data.nodes.find((node) => node.id === params.activeNodeId);
+      if (!activeNode || activeNode.type !== "insight" || !activeNode.groupId) {
+        return;
+      }
+
+      const selectedInsightIds = selectedNodeIds.filter((id) =>
+        canvasQuery.data?.nodes.some((node) => node.id === id && node.type === "insight")
+      );
+
+      const insightIds = selectedInsightIds.includes(params.activeNodeId)
+        ? selectedInsightIds
+        : [params.activeNodeId];
+
+      await Promise.all(insightIds.map((insightId) => moveThemeToGroup(insightId, null)));
+      void invalidateCanvas();
+      setSelectedNodeIds([]);
+      setFocusedNodeId(null);
       return;
     }
 
@@ -218,7 +248,11 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
             filters={filters}
             selectedNodeIds={selectedNodeIds}
             selectedEdgeId={selectedEdgeId}
-            onSelectionChange={setSelectedNodeIds}
+            onSelectionChange={(nextSelection) =>
+              setSelectedNodeIds((current) =>
+                equalStringSets(current, nextSelection) ? current : nextSelection
+              )
+            }
             onNodeFocus={setFocusedNodeId}
             onEdgeSelect={setSelectedEdgeId}
             onCreateEdge={handleCreateEdge}

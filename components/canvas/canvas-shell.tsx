@@ -26,6 +26,7 @@ interface ConnectionPromptState {
   targetLabel: string;
   currentType: ConnectionType;
   note: string;
+  position: { x: number; y: number } | null;
 }
 
 export function CanvasShell({ consultationId, consultationTitle }: CanvasShellProps) {
@@ -61,6 +62,11 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
     [nodes]
   );
 
+  const nodePositionsById = useMemo(
+    () => new Map(nodes.map((node) => [node.id, node.position] as const)),
+    [nodes]
+  );
+
   const invalidateCanvas = () =>
     queryClient.invalidateQueries({ queryKey: ["canvas", consultationId] });
 
@@ -86,6 +92,18 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
       targetLabel: nodeLabelsById.get(createdEdge.target_node_id) ?? "Target",
       currentType: createdEdge.connection_type,
       note: createdEdge.note ?? "",
+      position: (() => {
+        const source = nodePositionsById.get(createdEdge.source_node_id);
+        const target = nodePositionsById.get(createdEdge.target_node_id);
+        if (!source || !target) {
+          return null;
+        }
+
+        return {
+          x: (source.x + target.x) / 2,
+          y: (source.y + target.y) / 2,
+        };
+      })(),
     });
 
     return createdEdge;
@@ -133,7 +151,7 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
       );
     }
 
-    await invalidateCanvas();
+    void invalidateCanvas();
     setSelectedNodeIds([]);
     setFocusedNodeId(null);
   }
@@ -216,6 +234,7 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
                 targetLabel: nodeLabelsById.get(edge.target_node_id) ?? "Target",
                 currentType: edge.connection_type,
                 note: edge.note ?? "",
+                position: null,
               });
             }}
             onGroupDrop={handleGroupDrop}
@@ -227,6 +246,7 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
               targetLabel={connectionPrompt.targetLabel}
               initialType={connectionPrompt.currentType}
               initialNote={connectionPrompt.note}
+              position={connectionPrompt.position}
               onSave={handleSelectConnectionType}
               onDismiss={() => setConnectionPrompt(null)}
             />
@@ -255,6 +275,7 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
                     targetLabel: nodeLabelsById.get(edge.target_node_id) ?? "Target",
                     currentType: edge.connection_type,
                     note: edge.note ?? "",
+                    position: null,
                   })
                 }
                 onUngroupInsight={async (nodeId) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ interface ConnectionTypePromptProps {
   targetLabel: string;
   initialType?: ConnectionType;
   initialNote?: string;
+  position?: { x: number; y: number } | null;
   onSave: (payload: { type: ConnectionType; note: string }) => void;
   onDismiss: () => void;
 }
@@ -33,14 +34,57 @@ export function ConnectionTypePrompt({
   targetLabel,
   initialType = "related_to",
   initialNote = "",
+  position = null,
   onSave,
   onDismiss,
 }: ConnectionTypePromptProps) {
   const [selectedType, setSelectedType] = useState<ConnectionType>(initialType);
   const [note, setNote] = useState(initialNote);
 
+  useEffect(() => {
+    const keyToType: Record<string, ConnectionType> = {
+      "1": "causes",
+      "2": "influences",
+      "3": "supports",
+      "4": "contradicts",
+      "5": "related_to",
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key in keyToType) {
+        event.preventDefault();
+        setSelectedType(keyToType[event.key]);
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        onSave({ type: selectedType, note });
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onDismiss();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [note, onDismiss, onSave, selectedType]);
+
+  const promptStyle =
+    position && Number.isFinite(position.x) && Number.isFinite(position.y)
+      ? {
+          left: `${Math.max(12, position.x - 150)}px`,
+          top: `${Math.max(12, position.y + 12)}px`,
+        }
+      : undefined;
+
   return (
-    <div className="absolute bottom-4 left-4 z-20 w-[320px] rounded-2xl border bg-background/98 p-4 shadow-xl">
+    <div
+      className="absolute bottom-4 left-4 z-20 w-[320px] rounded-md border bg-background p-4 shadow-xl"
+      style={promptStyle}
+    >
       <div className="mb-3 flex items-center gap-2">
         <div className="rounded-full border p-2 text-muted-foreground">
           <Link2 className="h-4 w-4" />
@@ -48,7 +92,7 @@ export function ConnectionTypePrompt({
         <div>
           <p className="text-sm font-semibold">Set connection type</p>
           <p className="text-xs text-muted-foreground">
-            Keep the edge, then choose the clearest relationship.
+            Pick relationship 1-5, then press Enter to save.
           </p>
         </div>
       </div>
@@ -90,7 +134,7 @@ export function ConnectionTypePrompt({
 
       <div className="mt-3 flex items-center justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
-          Keep default
+          Cancel
         </Button>
         <Button
           type="button"

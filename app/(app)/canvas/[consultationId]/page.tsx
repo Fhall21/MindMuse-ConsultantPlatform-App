@@ -24,7 +24,7 @@ export default async function CanvasPage({ params }: CanvasPageProps) {
   if (!consultation) notFound();
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="-mx-4 -my-5 flex h-[calc(100vh-3rem)] flex-col overflow-hidden sm:-mx-6">
       {/* Breadcrumb header */}
       <header className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
         <Link

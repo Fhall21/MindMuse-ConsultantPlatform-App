@@ -23,7 +23,7 @@ export async function GET(
     );
   } catch (error) {
     return jsonError(
-      error instanceof Error ? error.message : "Failed to load round consultations"
+      error instanceof Error ? error.message : "Failed to load consultation meetings"
     );
   }
 }

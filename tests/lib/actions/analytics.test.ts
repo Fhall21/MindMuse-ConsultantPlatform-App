@@ -14,6 +14,21 @@ const ownershipMock = vi.hoisted(() => ({
   requireOwnedRound: vi.fn(),
 }));
 
+type FakeTable = typeof analyticsJobs | typeof auditLog | typeof roundDecisions;
+
+type FakeTx = {
+  insert(table: FakeTable): {
+    values(payload: unknown): {
+      returning: () => Promise<Array<{ id: string }>>;
+    };
+  };
+  update(): {
+    set: (values: Record<string, unknown>) => {
+      where: () => Promise<void>;
+    };
+  };
+};
+
 function makeSelectBuilder(result: unknown[]) {
   const builder: Record<string, unknown> = {
     from: () => builder,
@@ -28,8 +43,8 @@ function makeSelectBuilder(result: unknown[]) {
 }
 
 const fakeDb = vi.hoisted(() => {
-  const tx = {
-    insert(table: { [key: string]: unknown }) {
+  const tx: FakeTx = {
+    insert(table: FakeTable) {
       return {
         values(payload: unknown) {
           testState.insertCalls.push({ table, payload });
@@ -61,7 +76,7 @@ const fakeDb = vi.hoisted(() => {
 
   return {
     select: vi.fn(() => makeSelectBuilder(testState.selectQueue.shift() ?? [])),
-    transaction: vi.fn(async (callback: (tx: typeof tx) => Promise<unknown>) => callback(tx)),
+    transaction: vi.fn(async (callback: (tx: FakeTx) => Promise<unknown>) => callback(tx)),
   };
 });
 

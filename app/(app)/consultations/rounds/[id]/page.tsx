@@ -13,7 +13,7 @@ import { LinkedConsultationsSection } from "@/components/consultations/rounds/li
 import { ThemeGroupingWorkspace } from "@/components/consultations/rounds/theme-grouping-workspace";
 import { RoundOutputsSection } from "@/components/consultations/rounds/round-outputs-section";
 import { DecisionHistorySection } from "@/components/consultations/rounds/decision-history-section";
-import { AnalyticsPlaceholder } from "@/components/consultations/rounds/analytics-placeholder";
+import { AnalyticsPanel } from "@/components/consultations/rounds/analytics-panel";
 import { RoundAuditTrail } from "@/components/audit/audit-trail";
 import type { SourceTheme, RoundThemeGroup, RoundConsultationSummary } from "@/types/round-detail";
 import {
@@ -21,6 +21,12 @@ import {
   generateRoundReport,
   generateRoundEmail,
 } from "@/lib/actions/round-workflow";
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error) return error;
+  return fallback;
+}
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
@@ -89,8 +95,12 @@ export default function RoundDetailPage({
         await generateRoundSummary(roundId);
         await queryClient.invalidateQueries({ queryKey: ["consultation_rounds", roundId, "detail"] });
         toast.success("Summary generated");
-      } catch {
-        toast.error("Failed to generate summary");
+      } catch (error) {
+        console.error("[rounds.page] failed to generate summary", {
+          roundId,
+          error,
+        });
+        toast.error(getErrorMessage(error, "Failed to generate summary"));
       }
     },
     [queryClient]
@@ -102,8 +112,12 @@ export default function RoundDetailPage({
         await generateRoundReport(roundId);
         await queryClient.invalidateQueries({ queryKey: ["consultation_rounds", roundId, "detail"] });
         toast.success("Report generated");
-      } catch {
-        toast.error("Failed to generate report");
+      } catch (error) {
+        console.error("[rounds.page] failed to generate report", {
+          roundId,
+          error,
+        });
+        toast.error(getErrorMessage(error, "Failed to generate report"));
       }
     },
     [queryClient]
@@ -115,8 +129,12 @@ export default function RoundDetailPage({
         await generateRoundEmail(roundId);
         await queryClient.invalidateQueries({ queryKey: ["consultation_rounds", roundId, "detail"] });
         toast.success("Email generated");
-      } catch {
-        toast.error("Failed to generate email");
+      } catch (error) {
+        console.error("[rounds.page] failed to generate email", {
+          roundId,
+          error,
+        });
+        toast.error(getErrorMessage(error, "Failed to generate email"));
       }
     },
     [queryClient]
@@ -214,7 +232,13 @@ export default function RoundDetailPage({
       {/* Analytics Placeholder */}
       <section className="space-y-3">
         <SectionHeading>Analytics</SectionHeading>
-        <AnalyticsPlaceholder />
+        <AnalyticsPanel
+          roundId={id}
+          roundLabel={data.round.label}
+          consultations={data.consultations}
+          analytics={data.analytics}
+          decisionHistory={data.decisionHistory}
+        />
       </section>
     </div>
   );

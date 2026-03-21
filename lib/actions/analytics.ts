@@ -40,7 +40,6 @@ const ACTIVE_JOB_PHASES = [
 ] as const;
 
 type AnalyticsJobRow = typeof analyticsJobs.$inferSelect;
-type RoundDecisionRow = typeof roundDecisions.$inferSelect;
 
 type AnalyticsDbWriter = Pick<typeof db, "insert">;
 
@@ -327,8 +326,12 @@ export async function recordAnalyticsClusterDecision(params: {
     throw new Error("An edited label is required when editing a cluster suggestion");
   }
 
-  let decisionType: RoundDecisionRow["decisionType"] = "accepted";
-  let auditAction = AUDIT_ACTIONS.ANALYTICS_CLUSTER_DECISION_ACCEPTED;
+  let decisionType: "accepted" | "discarded" | "management_rejected" = "accepted";
+  let auditAction:
+    | typeof AUDIT_ACTIONS.ANALYTICS_CLUSTER_DECISION_ACCEPTED
+    | typeof AUDIT_ACTIONS.ANALYTICS_CLUSTER_DECISION_REJECTED
+    | typeof AUDIT_ACTIONS.ANALYTICS_CLUSTER_DECISION_EDITED =
+    AUDIT_ACTIONS.ANALYTICS_CLUSTER_DECISION_ACCEPTED;
 
   if (params.action === "reject") {
     decisionType = "management_rejected";

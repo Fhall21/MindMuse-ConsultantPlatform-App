@@ -56,9 +56,9 @@ describe("analytics routes", () => {
       hasBeenProcessed: false,
     });
 
-    const response = await GETConsultationAnalytics(jsonRequest("http://test"), {
+    const response = (await GETConsultationAnalytics(jsonRequest("http://test"), {
       params: Promise.resolve({ id: "consultation-1" }),
-    });
+    })) as Response;
 
     expect(response.status).toBe(200);
     await expect(readJson(response)).resolves.toEqual({
@@ -75,22 +75,22 @@ describe("analytics routes", () => {
   it("blocks consultation analytics job reads when unauthenticated", async () => {
     authContextMock.getCurrentUserId.mockResolvedValue(null);
 
-    const response = await GETConsultationAnalyticsJobStatus(jsonRequest("http://test"), {
+    const response = (await GETConsultationAnalyticsJobStatus(jsonRequest("http://test"), {
       params: Promise.resolve({ id: "consultation-1" }),
-    });
+    })) as Response;
 
     expect(response.status).toBe(401);
   });
 
   it("rejects malformed consultation analytics job payloads", async () => {
-    const response = await POSTConsultationAnalyticsJob(
+    const response = (await POSTConsultationAnalyticsJob(
       new Request("http://test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{",
       }),
       { params: Promise.resolve({ id: "consultation-1" }) }
-    );
+    )) as Response;
 
     expect(response.status).toBe(422);
     await expect(readJson(response)).resolves.toMatchObject({ detail: "Invalid JSON payload" });
@@ -102,10 +102,10 @@ describe("analytics routes", () => {
       status: "queued",
     });
 
-    const response = await POSTConsultationAnalyticsJob(
+    const response = (await POSTConsultationAnalyticsJob(
       jsonRequest("http://test", { roundId: "round-1" }),
       { params: Promise.resolve({ id: "consultation-1" }) }
-    );
+    )) as Response;
 
     expect(response.status).toBe(201);
     expect(analyticsActionMocks.triggerConsultationAnalyticsJob).toHaveBeenCalledWith(
@@ -124,9 +124,9 @@ describe("analytics routes", () => {
       lastClusteredAt: null,
     });
 
-    const response = await GETRoundAnalytics(jsonRequest("http://test"), {
+    const response = (await GETRoundAnalytics(jsonRequest("http://test"), {
       params: Promise.resolve({ roundId: "round-1" }),
-    });
+    })) as Response;
 
     expect(response.status).toBe(200);
     await expect(readJson(response)).resolves.toEqual({
@@ -144,9 +144,9 @@ describe("analytics routes", () => {
   it("queues round analytics jobs", async () => {
     analyticsActionMocks.triggerRoundAnalyticsJobs.mockResolvedValue({ jobCount: 2 });
 
-    const response = await POSTRoundAnalyticsJobs(jsonRequest("http://test"), {
+    const response = (await POSTRoundAnalyticsJobs(jsonRequest("http://test"), {
       params: Promise.resolve({ roundId: "round-1" }),
-    });
+    })) as Response;
 
     expect(response.status).toBe(201);
     await expect(readJson(response)).resolves.toEqual({ jobCount: 2 });
@@ -162,9 +162,9 @@ describe("analytics routes", () => {
       ],
     });
 
-    const response = await GETRoundAnalyticsJobs(jsonRequest("http://test"), {
+    const response = (await GETRoundAnalyticsJobs(jsonRequest("http://test"), {
       params: Promise.resolve({ roundId: "round-1" }),
-    });
+    })) as Response;
 
     expect(response.status).toBe(200);
     await expect(readJson(response)).resolves.toEqual({
@@ -191,10 +191,10 @@ describe("analytics routes", () => {
       },
     });
 
-    const response = await POSTClusterDecision(
+    const response = (await POSTClusterDecision(
       jsonRequest("http://test", { action: "accept" }),
       { params: Promise.resolve({ roundId: "round-1", clusterId: "7" }) }
-    );
+    )) as Response;
 
     expect(response.status).toBe(201);
     expect(analyticsActionMocks.recordAnalyticsClusterDecision).toHaveBeenCalledWith({
@@ -207,10 +207,10 @@ describe("analytics routes", () => {
   });
 
   it("rejects invalid analytics cluster identifiers", async () => {
-    const response = await POSTClusterDecision(
+    const response = (await POSTClusterDecision(
       jsonRequest("http://test", { action: "reject", rationale: "Not relevant" }),
       { params: Promise.resolve({ roundId: "round-1", clusterId: "abc" }) }
-    );
+    )) as Response;
 
     expect(response.status).toBe(422);
     await expect(readJson(response)).resolves.toMatchObject({
@@ -223,10 +223,10 @@ describe("analytics routes", () => {
       new Error("Cluster not found")
     );
 
-    const response = await POSTClusterDecision(
+    const response = (await POSTClusterDecision(
       jsonRequest("http://test", { action: "reject", rationale: "Not relevant" }),
       { params: Promise.resolve({ roundId: "round-1", clusterId: "7" }) }
-    );
+    )) as Response;
 
     expect(response.status).toBe(404);
   });

@@ -5,9 +5,9 @@ import Link from "next/link";
 import {
   type ColumnDef,
   type SortingState,
-  import { redirect } from "next/navigation";
+  import { RoundsManager } from "@/components/consultations/rounds/rounds-manager";
 
   export default function ConsultationsPage() {
-    redirect("/meetings");
+    return <RoundsManager />;
   }
 import { useQuery } from "@tanstack/react-query";

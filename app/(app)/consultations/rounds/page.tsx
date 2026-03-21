@@ -1,5 +1,5 @@
-import { RoundsManager } from "@/components/consultations/rounds/rounds-manager";
+import { redirect } from "next/navigation";
 
 export default function ConsultationRoundsPage() {
-  return <RoundsManager />;
+  redirect("/consultations");
 }

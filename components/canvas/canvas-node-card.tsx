@@ -171,9 +171,9 @@ function ThemeCard({
       {memberPreviewLabels.length > 0 ? (
         <div className="px-5 pb-3">
           <div className="flex flex-wrap gap-1">
-            {memberPreviewLabels.map((label) => (
+            {memberPreviewLabels.map((label, i) => (
               <span
-                key={label}
+                key={i}
                 className="inline-block max-w-[200px] truncate rounded-full border border-violet-200 bg-background/80 px-2 py-0.5 text-[10px] text-foreground dark:border-violet-700"
                 title={label}
               >

@@ -64,15 +64,14 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     ? edges.find((edge) => edge.id === selectedEdgeId) ?? null
     : null;
 
-  // Multi-selection panel shows when 2+ nodes are selected and nothing is focused
+  // Multi-selection panel: 2+ nodes selected takes priority over single-node detail
   const selectedInsightNodes = useMemo(
     () => nodes.filter((n) => selectedNodeIds.includes(n.id) && n.type === "insight"),
     [nodes, selectedNodeIds]
   );
-  const showMultiSelect =
-    selectedNodeIds.length >= 2 && !focusedNodeId && !selectedEdgeId && !showSuggestions;
+  const showMultiSelect = selectedNodeIds.length >= 2 && !showSuggestions;
   const hasSidePanel = Boolean(
-    selectedNode || selectedEdge || showSuggestions || showMultiSelect
+    showSuggestions || showMultiSelect || selectedNode || selectedEdge
   );
 
   const nodeLabelsById = useMemo(
@@ -309,13 +308,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
             selectedEdgeId={selectedEdgeId}
             aiGeneratedGroupIds={aiGeneratedGroupIds}
             onSelectionChange={handleCanvasSelectionChange}
-            onNodeFocus={(id) => {
-              setFocusedNodeId(id);
-              // A single-node focus clears multi-select panel
-              if (id && selectedNodeIds.length > 1 && !selectedNodeIds.includes(id)) {
-                setSelectedNodeIds([id]);
-              }
-            }}
+            onNodeFocus={setFocusedNodeId}
             onEdgeSelect={setSelectedEdgeId}
             onCreateEdge={handleCreateEdge}
             onQuickEditEdge={(edgeId) => {

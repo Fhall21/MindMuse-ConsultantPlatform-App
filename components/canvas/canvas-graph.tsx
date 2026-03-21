@@ -228,6 +228,8 @@ function CanvasGraphInner({
       clickHandlingRef.current = true;
       const isMultiToggle = event.metaKey || event.ctrlKey || event.shiftKey;
       if (isMultiToggle) {
+        // Multi-select: toggle this node in the selection set but don't focus
+        // (focusing would hide the multi-select action panel).
         const next = new Set(selectedNodeIds);
         if (next.has(node.id)) {
           next.delete(node.id);
@@ -235,10 +237,11 @@ function CanvasGraphInner({
           next.add(node.id);
         }
         onSelectionChange(Array.from(next));
+        onNodeFocus(null);
       } else {
         onSelectionChange([node.id]);
+        onNodeFocus(node.id);
       }
-      onNodeFocus(node.id);
       onEdgeSelect(null);
       // Reset after React has flushed this update so handleSelectionChange
       // (fired by ReactFlow in the same tick) is suppressed.

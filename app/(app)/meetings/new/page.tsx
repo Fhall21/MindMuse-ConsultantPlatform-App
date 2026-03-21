@@ -40,7 +40,7 @@ export default function NewConsultationPage() {
         title: data.title,
         consultationId: data.roundId || undefined,
       });
-      router.push(`/consultations/${id}`);
+      router.push(`/meetings/${id}`);
     } catch (err) {
       console.error(err);
       toast.error("Failed to create consultation. Please try again.");
@@ -93,7 +93,7 @@ export default function NewConsultationPage() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.push("/consultations")}
+            onClick={() => router.push("/meetings")}
           >
             Cancel
           </Button>

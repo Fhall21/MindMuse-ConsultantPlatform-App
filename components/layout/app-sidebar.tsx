@@ -20,7 +20,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 const consultationsSubItems = [
-  { title: "All Meetings", href: "/consultations" },
+  { title: "All Meetings", href: "/meetings" },
   { title: "Consultations", href: "/consultations/rounds" },
 ];
 
@@ -33,7 +33,8 @@ const settingsSubItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const isInConsultations = pathname.startsWith("/consultations");
+  const isInConsultations =
+    pathname.startsWith("/meetings") || pathname.startsWith("/consultations");
   const isInSettings = pathname.startsWith("/settings");
 
   return (
@@ -71,8 +72,10 @@ export function AppSidebar() {
                           <SidebarMenuSubButton
                             asChild
                             isActive={
-                              item.href === "/consultations"
-                                ? pathname === "/consultations" ||
+                              item.href === "/meetings"
+                                ? pathname === "/meetings" ||
+                                  pathname.startsWith("/meetings/") ||
+                                  pathname === "/consultations" ||
                                   (pathname.startsWith("/consultations/") &&
                                     !pathname.startsWith("/consultations/rounds"))
                                 : pathname.startsWith(item.href)

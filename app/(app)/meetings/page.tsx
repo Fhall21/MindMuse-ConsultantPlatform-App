@@ -61,7 +61,7 @@ export default function MeetingsPage() {
   const peopleCountsQuery = useQuery({
     queryKey: ["consultation_people_counts", meetingIds],
     queryFn: () =>
-      fetchJson<Record<string, number>>("/api/client/consultations/people-counts", {
+      fetchJson<Record<string, number>>("/api/client/meetings/people-counts", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

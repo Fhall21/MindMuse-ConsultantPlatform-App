@@ -13,7 +13,7 @@ export function useMeetingPeople(meetingId: string) {
   return useQuery({
     queryKey: ["meeting_people", meetingId],
     queryFn: () =>
-      fetchJson<Person[]>(`/api/client/consultations/${meetingId}/people`),
+      fetchJson<Person[]>(`/api/client/meetings/${meetingId}/people`),
     enabled: !!meetingId,
   });
 }

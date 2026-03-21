@@ -1,6 +1,6 @@
 "use client";
 
-import type { RoundOutputSummary } from "@/lib/actions/round-workflow";
+import type { RoundOutputSummary } from "@/lib/actions/consultation-workflow";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,

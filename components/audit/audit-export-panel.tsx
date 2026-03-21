@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useConsultations } from "@/hooks/use-consultations";
+import { useConsultations } from "@/hooks/use-meetings";
 import { useAuditExport, useAuditExportUsers } from "@/hooks/use-audit-export";
 import type { AuditExportFormat, AuditExportFilters } from "@/types/db";
 import { Button } from "@/components/ui/button";

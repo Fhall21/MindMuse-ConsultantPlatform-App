@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   getRoundDetail,
   type RoundDetail,
-} from "@/lib/actions/round-workflow";
+} from "@/lib/actions/consultation-workflow";
 import type { ConsultationRound } from "@/types/db";
 import { fetchJson } from "@/hooks/api";
 

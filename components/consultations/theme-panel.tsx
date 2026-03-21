@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { fetchJson } from "@/hooks/api";
-import { useConsultation } from "@/hooks/use-consultations";
+import { useConsultation } from "@/hooks/use-meetings";
 import { useThemes } from "@/hooks/use-themes";
 import { acceptTheme, addUserTheme, rejectTheme, saveThemes } from "@/lib/actions/themes";
 import { cn } from "@/lib/utils";

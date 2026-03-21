@@ -35,7 +35,7 @@ import {
   acceptThemeDraft,
   discardThemeDraft,
   type SuggestedThemeGroup,
-} from "@/lib/actions/round-workflow";
+} from "@/lib/actions/consultation-workflow";
 
 const THEME_DRAG_MIME = "application/x-consultant-theme-ids";
 

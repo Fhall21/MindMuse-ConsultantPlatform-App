@@ -13,7 +13,7 @@ import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
 import { MultiSelectionPanel } from "@/components/canvas/multi-selection-panel";
 import { useCanvas, useCreateEdge, useUpdateEdge } from "@/hooks/use-canvas";
 import { resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
-import { createTheme, moveThemeToGroup, updateTheme } from "@/lib/actions/round-workflow";
+import { createTheme, moveThemeToGroup, updateTheme } from "@/lib/actions/consultation-workflow";
 import { suggestGroupLabel } from "@/lib/actions/canvas-ai";
 import { defaultFilterState, type CanvasFilterState, type ConnectionType } from "@/types/canvas";
 
@@ -301,6 +301,8 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
       {/* Canvas + side panel */}
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1 bg-muted/30">
+          {/* Edge editing via onEdgeSelect → NodeDetailPanel (panel-based flow).
+              Removed onQuickEditEdge prop for performance. */}
           <CanvasGraph
             roundId={roundId}
             filters={filters}
@@ -311,19 +313,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
             onNodeFocus={setFocusedNodeId}
             onEdgeSelect={setSelectedEdgeId}
             onCreateEdge={handleCreateEdge}
-            onQuickEditEdge={(edgeId) => {
-              const edge = edges.find((item) => item.id === edgeId);
-              if (!edge) return;
-              setSelectedEdgeId(edgeId);
-              setConnectionPrompt({
-                edgeId,
-                sourceLabel: nodeLabelsById.get(edge.source_node_id) ?? "Source",
-                targetLabel: nodeLabelsById.get(edge.target_node_id) ?? "Target",
-                currentType: edge.connection_type,
-                note: edge.note ?? "",
-                position: null,
-              });
-            }}
             onGroupDrop={handleGroupDrop}
           />
 

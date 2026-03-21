@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { GripVertical, Link2, Layers3, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { CanvasNode } from "@/types/canvas";
@@ -15,6 +15,9 @@ export interface CanvasNodeCardData {
 }
 
 // ─── Insight card ──────────────────────────────────────────────────────────────
+// Compact design: ~40px height, 180-200px width. Single row with label, accepted dot,
+// source badge. Grouped insights show violet left border for visual indication.
+// Removed: description, footer hints, grip icon, isUserAdded badge.
 
 function InsightCard({
   node,
@@ -28,9 +31,9 @@ function InsightCard({
   return (
     <div
       className={cn(
-        "group relative rounded-lg border bg-background px-3 py-2.5 shadow-sm transition-shadow",
-        !isNestedInGroup && "min-h-[120px] min-w-[200px] max-w-[248px]",
-        isNestedInGroup && "min-h-[88px] min-w-[172px] max-w-[208px]",
+        "group relative rounded-md border bg-background px-3 py-2 transition-shadow",
+        "min-w-[180px] max-w-[200px]",
+        isNestedInGroup && "border-l-2 border-l-violet-400 pl-2.5",
         selected && "border-primary ring-2 ring-primary/20"
       )}
       data-testid="canvas-insight-card"
@@ -39,68 +42,46 @@ function InsightCard({
         id="target"
         type="target"
         position={Position.Left}
-        className="!h-3 !w-3 !border-2 !border-background !bg-primary"
+        className="!h-2.5 !w-2.5 !border-2 !border-background !bg-primary"
       />
 
-      <div className="mb-2 flex items-start gap-2">
-        <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-sm font-medium leading-snug text-foreground">{node.label}</p>
-          {node.description ? (
-            <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-              {node.description}
-            </p>
+      <div className="flex items-center gap-1.5">
+        <p className="min-w-0 flex-1 text-xs font-medium leading-tight line-clamp-1">
+          {node.label}
+        </p>
+        <div className="flex shrink-0 items-center gap-1">
+          {node.accepted ? (
+            <span
+              className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+              title="Accepted"
+            />
+          ) : null}
+          {node.sourceConsultationTitle ? (
+            <Badge
+              variant="outline"
+              className="h-4 max-w-[80px] truncate border-amber-200 bg-amber-50 px-1 text-[10px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
+              title={node.sourceConsultationTitle}
+            >
+              {node.sourceConsultationTitle}
+            </Badge>
           ) : null}
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1">
-        <Badge variant="outline" className="h-4.5 rounded-full px-2 text-[10px] font-normal text-muted-foreground">
-          Insight
-        </Badge>
-        {node.sourceConsultationTitle ? (
-          <Badge
-            variant="secondary"
-            className="h-4.5 max-w-[130px] truncate rounded-full px-2 text-[10px]"
-            title={node.sourceConsultationTitle}
-          >
-            {node.sourceConsultationTitle}
-          </Badge>
-        ) : null}
-        {node.accepted ? (
-          <Badge variant="secondary" className="h-4.5 rounded-full bg-emerald-50 px-2 text-[10px] text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-            Accepted
-          </Badge>
-        ) : null}
-        {node.isUserAdded ? (
-          <Badge variant="outline" className="h-4.5 rounded-full px-2 text-[10px]">
-            Added
-          </Badge>
-        ) : null}
-      </div>
-
-      <div className="pointer-events-none mt-2 flex items-center justify-between border-t pt-1.5 text-[10px] text-muted-foreground/60">
-        <span className="inline-flex items-center gap-1">
-          <Layers3 className="h-3 w-3" />
-          Drag to group
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Link2 className="h-3 w-3" />
-          Connect
-        </span>
       </div>
 
       <Handle
         id="source"
         type="source"
         position={Position.Right}
-        className="!h-3 !w-3 !border-2 !border-background !bg-primary"
+        className="!h-2.5 !w-2.5 !border-2 !border-background !bg-primary"
       />
     </div>
   );
 }
 
 // ─── Theme / group card ────────────────────────────────────────────────────────
+// Compact group container: 240-280px width. Header row with label, AI sparkle, member count.
+// Member preview as stacked text list (max 3 items). Removed: grip icon, footer, empty state text.
+// Uses ReactFlow flat layout (no parentId) — visual group membership via styling only.
 
 function ThemeCard({
   node,
@@ -114,13 +95,14 @@ function ThemeCard({
   aiGenerated?: boolean;
 }) {
   const memberCount = node.memberIds.length;
-  const extraCount = Math.max(0, memberCount - memberPreviewLabels.length);
+  const displayLabels = memberPreviewLabels.slice(0, 3);
+  const extraCount = Math.max(0, memberCount - displayLabels.length);
 
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-xl border-2 bg-violet-50/60 dark:bg-violet-950/30",
-        "min-h-[160px] min-w-[280px] max-w-[320px]",
+        "group relative overflow-hidden rounded-lg border-2 bg-violet-50/60 dark:bg-violet-950/30",
+        "min-w-[240px] max-w-[280px]",
         "border-violet-200 dark:border-violet-800",
         selected && "border-violet-500 ring-2 ring-violet-400/30 dark:border-violet-400"
       )}
@@ -133,84 +115,53 @@ function ThemeCard({
         id="target"
         type="target"
         position={Position.Left}
-        className="!left-3 !h-3 !w-3 !border-2 !border-background !bg-violet-500"
+        className="!left-3 !h-2.5 !w-2.5 !border-2 !border-background !bg-violet-500"
       />
 
       {/* Header */}
-      <div className="px-4 pb-2 pt-3 pl-5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <GripVertical className="h-3.5 w-3.5 shrink-0 text-violet-400" />
-              <p className="text-sm font-semibold leading-snug text-violet-900 dark:text-violet-100">
-                {node.label}
-              </p>
-            </div>
-            {node.description ? (
-              <p className="mt-0.5 line-clamp-2 pl-5 text-xs leading-relaxed text-violet-700/70 dark:text-violet-300/70">
-                {node.description}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            <Badge className="h-5 rounded-full bg-violet-200 px-2 text-[10px] font-medium text-violet-800 hover:bg-violet-200 dark:bg-violet-800 dark:text-violet-200">
-              Theme
-            </Badge>
+      <div className="px-3 py-2 pl-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 flex-1 text-xs font-semibold leading-tight text-violet-900 line-clamp-1 dark:text-violet-100">
+            {node.label}
+          </p>
+          <div className="flex shrink-0 items-center gap-1">
             {aiGenerated ? (
               <span className="inline-flex items-center gap-0.5 text-[9px] text-violet-500">
                 <Sparkles className="h-2.5 w-2.5" />
-                AI titled
               </span>
             ) : null}
+            <Badge className="h-4 rounded-full bg-violet-200 px-1.5 text-[10px] font-medium text-violet-800 hover:bg-violet-200 dark:bg-violet-800 dark:text-violet-200">
+              {memberCount}
+            </Badge>
           </div>
         </div>
       </div>
 
-      {/* Member chips */}
-      {memberPreviewLabels.length > 0 ? (
-        <div className="px-5 pb-3">
-          <div className="flex flex-wrap gap-1">
-            {memberPreviewLabels.map((label, i) => (
-              <span
-                key={i}
-                className="inline-block max-w-[200px] truncate rounded-full border border-violet-200 bg-background/80 px-2 py-0.5 text-[10px] text-foreground dark:border-violet-700"
-                title={label}
-              >
-                {label}
-              </span>
-            ))}
-            {extraCount > 0 ? (
-              <span className="inline-block rounded-full border border-violet-200 bg-background/80 px-2 py-0.5 text-[10px] text-muted-foreground dark:border-violet-700">
-                +{extraCount} more
-              </span>
-            ) : null}
-          </div>
+      {/* Member preview list */}
+      {displayLabels.length > 0 ? (
+        <div className="border-t border-violet-200/60 px-4 py-1.5 dark:border-violet-800/60">
+          {displayLabels.map((label, i) => (
+            <p
+              key={i}
+              className="truncate text-[10px] leading-[16px] text-violet-700/80 dark:text-violet-300/80"
+              title={label}
+            >
+              {label}
+            </p>
+          ))}
+          {extraCount > 0 ? (
+            <p className="text-[10px] leading-[16px] text-violet-400 dark:text-violet-500">
+              +{extraCount} more
+            </p>
+          ) : null}
         </div>
-      ) : (
-        <div className="px-5 pb-3">
-          <p className="text-xs text-violet-400 dark:text-violet-500">
-            Drop insights here to group
-          </p>
-        </div>
-      )}
-
-      {/* Footer */}
-      <div className="flex items-center justify-between border-t border-violet-200/60 px-5 py-1.5 dark:border-violet-800/60">
-        <span className="text-[10px] font-medium text-violet-600 dark:text-violet-400">
-          {memberCount} insight{memberCount === 1 ? "" : "s"}
-        </span>
-        <span className="inline-flex items-center gap-1 text-[10px] text-violet-400 dark:text-violet-500">
-          <Link2 className="h-3 w-3" />
-          Connect
-        </span>
-      </div>
+      ) : null}
 
       <Handle
         id="source"
         type="source"
         position={Position.Right}
-        className="!h-3 !w-3 !border-2 !border-background !bg-violet-500"
+        className="!h-2.5 !w-2.5 !border-2 !border-background !bg-violet-500"
       />
     </div>
   );

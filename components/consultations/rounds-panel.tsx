@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useConsultationRounds } from "@/hooks/use-consultations";
+import { useConsultationRounds } from "@/hooks/use-meetings";
 import { setConsultationRound } from "@/lib/actions/consultations";
 
 interface RoundsPanelProps {

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createConsultation } from "@/lib/actions/consultations";
-import { useConsultationRounds } from "@/hooks/use-consultations";
+import { useConsultationRounds } from "@/hooks/use-meetings";
 
 const newConsultationSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),

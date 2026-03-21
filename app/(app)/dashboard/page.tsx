@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useConsultations } from "@/hooks/use-consultations";
+import { useConsultations } from "@/hooks/use-meetings";
 import { useDashboardStats } from "@/hooks/use-dashboard-stats";
 import type { Consultation } from "@/types/db";
 

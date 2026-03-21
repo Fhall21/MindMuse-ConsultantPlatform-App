@@ -174,8 +174,9 @@ export function useDeleteEdge(roundId: string) {
 }
 
 export function useSaveLayout(roundId: string) {
-  const queryClient = useQueryClient();
-  return useMutation<void, Error, SaveLayoutPayload, { previous?: CanvasData }>({
+  // Fire-and-forget layout save. No onMutate/onError cache updates — these caused
+  // TanStack Query to re-render on every drag frame, creating drag lag.
+  return useMutation<void, Error, SaveLayoutPayload>({
     mutationFn: (payload) =>
       fetchJson<void>(
         `/api/client/rounds/${roundId}/canvas/layout`,
@@ -185,23 +186,6 @@ export function useSaveLayout(roundId: string) {
           body: JSON.stringify(payload),
         }
       ),
-    onMutate: async (payload) => {
-      const previous = queryClient.getQueryData<CanvasData>(canvasKey(roundId));
-      updateCanvasCache(queryClient, roundId, (current) => ({
-        ...current,
-        viewport: payload.viewport,
-        nodes: current.nodes.map((node) => ({
-          ...node,
-          position: payload.positions[node.id] ?? node.position,
-        })),
-      }));
-      return { previous };
-    },
-    onError: (_error, _payload, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(canvasKey(roundId), context.previous);
-      }
-    },
   });
 }
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listConsultationsForUser } from "@/lib/data/domain-read";
+import { listRoundsForUser } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../_helpers";
 
 export async function GET() {
@@ -9,9 +9,9 @@ export async function GET() {
   }
 
   try {
-    const consultations = await listConsultationsForUser(client.userId);
-    return NextResponse.json(consultations);
+    const rounds = await listRoundsForUser(client.userId);
+    return NextResponse.json(rounds);
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Failed to load consultations");
+    return jsonError(error instanceof Error ? error.message : "Failed to load rounds");
   }
 }

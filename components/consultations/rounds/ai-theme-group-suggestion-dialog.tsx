@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import {
   suggestThemeGroups,
   type SuggestedThemeGroup,
-} from "@/lib/actions/round-workflow";
+} from "@/lib/actions/consultation-workflow";
 import type { SourceTheme } from "@/types/round-detail";
 
 interface AiThemeGroupSuggestionDialogProps {

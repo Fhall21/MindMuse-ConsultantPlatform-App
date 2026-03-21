@@ -24,7 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fetchJson } from "@/hooks/api";
-import { useConsultationRounds, useConsultations } from "@/hooks/use-consultations";
+import { useConsultationRounds, useConsultations } from "@/hooks/use-meetings";
 import type { Consultation } from "@/types/db";
 
 type StatusFilter = "all" | "draft" | "complete";

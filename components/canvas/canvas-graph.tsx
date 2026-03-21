@@ -34,7 +34,6 @@ interface CanvasGraphProps {
   onNodeFocus: (id: string | null) => void;
   onEdgeSelect: (id: string | null) => void;
   onCreateEdge: (payload: CreateEdgePayload) => Promise<CanvasEdge>;
-  onQuickEditEdge: (edgeId: string) => void;
   onGroupDrop: (params: { activeNodeId: string; targetNodeId: string | null }) => Promise<void>;
 }
 
@@ -88,9 +87,6 @@ function buildFlowNodes(
 ): Node[] {
   const selectedSet = new Set(selectedNodeIds);
   const labelsById = new Map(nodes.map((node) => [node.id, node.label] as const));
-  const themeById = new Map(
-    nodes.filter((node) => node.type === "theme").map((node) => [node.id, node] as const)
-  );
 
   const themeNodes = nodes
     .filter((node) => node.type === "theme")
@@ -106,10 +102,6 @@ function buildFlowNodes(
         position: node.position,
         selected: selectedSet.has(node.id),
         draggable: true,
-        style: {
-          width: 320,
-          minHeight: Math.max(160, 120 + node.memberIds.length * 32),
-        },
         data: {
           node,
           isNestedInGroup: false,
@@ -119,57 +111,38 @@ function buildFlowNodes(
       } satisfies Node;
     });
 
+  // All nodes are flat (no parentId nesting). ReactFlow's parent-child position
+  // recalculation during drag was expensive. Grouped insights use absolute positions
+  // and rely on visual styling (left border accent) to show group membership.
   const insightNodes = nodes
     .filter((node) => node.type === "insight")
-    .map((node) => {
-      const parentTheme = node.groupId ? themeById.get(node.groupId) : undefined;
-      const isNestedInGroup = Boolean(parentTheme);
-      const nestedPosition = isNestedInGroup && parentTheme
-        ? {
-            x: Math.max(12, node.position.x - parentTheme.position.x),
-            y: Math.max(52, node.position.y - parentTheme.position.y),
-          }
-        : node.position;
-
-      return {
-        id: node.id,
-        type: "canvasNode",
-        position: nestedPosition,
-        parentId: isNestedInGroup ? parentTheme?.id : undefined,
-        selected: selectedSet.has(node.id),
-        draggable: true,
-        data: {
-          node,
-          isNestedInGroup,
-          memberPreviewLabels: [],
-        } satisfies CanvasNodeCardData,
-      } satisfies Node;
-    });
+    .map((node) => ({
+      id: node.id,
+      type: "canvasNode",
+      position: node.position,
+      selected: selectedSet.has(node.id),
+      draggable: true,
+      data: {
+        node,
+        isNestedInGroup: Boolean(node.groupId),
+        memberPreviewLabels: [],
+      } satisfies CanvasNodeCardData,
+    } satisfies Node));
 
   return [...themeNodes, ...insightNodes];
 }
 
 function buildFlowEdges(
   edges: CanvasEdge[],
-  selectedEdgeId: string | null,
-  onQuickEditEdge: (edgeId: string) => void
+  selectedEdgeId: string | null
 ): Edge[] {
+  // Edge labels are now plain strings, not JSX buttons. This eliminates React
+  // reconciliation overhead per edge and allows edge selection via handleEdgeClick.
   return edges.map((edge) => ({
     id: edge.id,
     source: edge.source_node_id,
     target: edge.target_node_id,
-    label: (
-      <button
-        type="button"
-        className="rounded-full border bg-background px-2 py-1 text-[10px] font-medium shadow-sm"
-        onClick={(event) => {
-          event.stopPropagation();
-          onQuickEditEdge(edge.id);
-        }}
-      >
-        {CONNECTION_TYPE_LABELS[edge.connection_type]}
-      </button>
-    ),
+    label: CONNECTION_TYPE_LABELS[edge.connection_type],
     animated: selectedEdgeId === edge.id,
     style: edgeStyle(edge.connection_type),
     labelStyle: {
@@ -188,7 +161,6 @@ function CanvasGraphInner({
   onNodeFocus,
   onEdgeSelect,
   onCreateEdge,
-  onQuickEditEdge,
   onGroupDrop,
 }: CanvasGraphProps) {
   const { data, isLoading } = useCanvas(roundId);
@@ -201,6 +173,14 @@ function CanvasGraphInner({
   // so we don't get a double-update cycle (click handler + ReactFlow's own
   // onSelectionChange both calling the same parent state setters).
   const clickHandlingRef = useRef(false);
+
+  // Refs for stable callbacks during drag/click — avoid recreating handlers
+  // on every selection change, which caused dependency array bloat and performance issues
+  const selectedNodeIdsRef = useRef(selectedNodeIds);
+  selectedNodeIdsRef.current = selectedNodeIds;
+
+  const nodesDataRef = useRef(data?.nodes ?? []);
+  nodesDataRef.current = data?.nodes ?? [];
 
   const nodesById = useMemo(
     () => new Map((data?.nodes ?? []).map((node) => [node.id, node] as const)),
@@ -218,8 +198,8 @@ function CanvasGraphInner({
   );
 
   const flowEdges = useMemo(
-    () => buildFlowEdges(filteredEdges, selectedEdgeId, onQuickEditEdge),
-    [filteredEdges, onQuickEditEdge, selectedEdgeId]
+    () => buildFlowEdges(filteredEdges, selectedEdgeId),
+    [filteredEdges, selectedEdgeId]
   );
 
   const handleNodeClick: NodeMouseHandler = useCallback(
@@ -230,7 +210,7 @@ function CanvasGraphInner({
       if (isMultiToggle) {
         // Multi-select: toggle this node in the selection set but don't focus
         // (focusing would hide the multi-select action panel).
-        const next = new Set(selectedNodeIds);
+        const next = new Set(selectedNodeIdsRef.current);
         if (next.has(node.id)) {
           next.delete(node.id);
         } else {
@@ -247,7 +227,7 @@ function CanvasGraphInner({
       // (fired by ReactFlow in the same tick) is suppressed.
       Promise.resolve().then(() => { clickHandlingRef.current = false; });
     },
-    [onEdgeSelect, onNodeFocus, onSelectionChange, selectedNodeIds]
+    [onEdgeSelect, onNodeFocus, onSelectionChange]
   );
 
   const handleSelectionChange = useCallback<OnSelectionChangeFunc>(
@@ -317,29 +297,17 @@ function CanvasGraphInner({
       }
 
       saveTimerRef.current = setTimeout(() => {
-        const allNodesById = new Map(allNodes.map((currentNode) => [currentNode.id, currentNode] as const));
         const positions = Object.fromEntries(
           allNodes
             .map((node) => {
               const original = nodesById.get(node.id);
-              const parentNode = node.parentId ? allNodesById.get(node.parentId) : undefined;
-              const position = parentNode
-                ? {
-                    x: parentNode.position.x + node.position.x,
-                    y: parentNode.position.y + node.position.y,
-                  }
-                : {
-                    x: node.position.x,
-                    y: node.position.y,
-                  };
-
               return original
                 ? [
                     node.id,
                     {
                       nodeType: original.type,
-                      x: position.x,
-                      y: position.y,
+                      x: node.position.x,
+                      y: node.position.y,
                     },
                   ]
                 : null;
@@ -351,7 +319,7 @@ function CanvasGraphInner({
           positions,
           viewport: getViewport(),
         });
-      }, 260);
+      }, 1500);
     },
     [getViewport, nodesById, saveLayout]
   );
@@ -375,11 +343,11 @@ function CanvasGraphInner({
       const plan = resolveCanvasGroupingPlan({
         activeNodeId: draggedNodeId,
         targetNodeId,
-        selectedNodeIds,
-        nodes: data?.nodes ?? [],
+        selectedNodeIds: selectedNodeIdsRef.current,
+        nodes: nodesDataRef.current,
       });
 
-      const draggedNode = (data?.nodes ?? []).find((candidate) => candidate.id === draggedNodeId);
+      const draggedNode = nodesDataRef.current.find((candidate) => candidate.id === draggedNodeId);
 
       persistLayout(allNodes);
       dragRef.current = null;
@@ -391,7 +359,7 @@ function CanvasGraphInner({
         void onGroupDrop({ activeNodeId: draggedNodeId, targetNodeId: null });
       }
     },
-    [data?.nodes, getIntersectingNodes, onGroupDrop, persistLayout, selectedNodeIds]
+    [getIntersectingNodes, onGroupDrop, persistLayout]
   );
 
   if (isLoading || !data) {

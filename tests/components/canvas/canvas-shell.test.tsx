@@ -66,11 +66,9 @@ const canvasData: CanvasData = {
 vi.mock("@/components/canvas/canvas-graph", () => ({
   CanvasGraph: ({
     onCreateEdge,
-    onQuickEditEdge,
     onGroupDrop,
   }: {
     onCreateEdge: (payload: Record<string, unknown>) => Promise<unknown>;
-    onQuickEditEdge: (edgeId: string) => void;
     onGroupDrop: (payload: { activeNodeId: string; targetNodeId: string | null }) => Promise<void>;
   }) => (
     <div>
@@ -87,9 +85,6 @@ vi.mock("@/components/canvas/canvas-graph", () => ({
         }
       >
         Create connection
-      </button>
-      <button type="button" onClick={() => onQuickEditEdge("edge-1")}>
-        Edit connection
       </button>
       <button
         type="button"
@@ -119,7 +114,7 @@ vi.mock("@/hooks/use-canvas", () => ({
   }),
 }));
 
-vi.mock("@/lib/actions/round-workflow", () => ({
+vi.mock("@/lib/actions/consultation-workflow", () => ({
   createTheme: createThemeMock,
   moveThemeToGroup: moveThemeToGroupMock,
 }));

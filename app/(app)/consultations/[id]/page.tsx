@@ -25,7 +25,7 @@ import { OcrReviewPanel } from "@/components/consultations/ocr-review-panel";
 import { NotesEditor } from "@/components/consultations/notes-editor";
 import { PeoplePanel } from "@/components/consultations/people-panel";
 import { RoundsPanel } from "@/components/consultations/rounds-panel";
-import { useConsultation, useConsultationRounds } from "@/hooks/use-consultations";
+import { useConsultation, useConsultationRounds } from "@/hooks/use-meetings";
 import {
   markConsultationComplete,
   updateConsultationTitle,

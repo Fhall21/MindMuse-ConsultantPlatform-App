@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useConsultation } from "@/hooks/use-consultations";
+import { useConsultation } from "@/hooks/use-meetings";
 import { useEvidenceEmails } from "@/hooks/use-evidence-email";
 import { useConsultationPeople } from "@/hooks/use-people";
 import {

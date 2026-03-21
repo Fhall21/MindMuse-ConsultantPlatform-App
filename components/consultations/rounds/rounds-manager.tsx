@@ -14,7 +14,7 @@ import {
 import { fetchJson } from "@/hooks/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useConsultationRounds } from "@/hooks/use-consultations";
+import { useConsultationRounds } from "@/hooks/use-meetings";
 import { deleteRound, createRound, updateRound } from "@/lib/actions/rounds";
 import { consultationRoundSchema } from "@/lib/validations/consultation";
 

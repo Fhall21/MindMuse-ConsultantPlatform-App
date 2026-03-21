@@ -6,19 +6,19 @@ import type { ConnectionType } from "@/types/canvas";
 
 export async function PATCH(
   request: Request,
-  { params }: { params: Promise<{ roundId: string; edgeId: string }> }
+  { params }: { params: Promise<{ consultationId: string; edgeId: string }> }
 ) {
-  const { roundId, edgeId } = await params;
+  const { consultationId, edgeId } = await params;
   const client = await requireRouteClient();
   if ("response" in client) return client.response;
 
   try {
-    await requireOwnedRound(roundId, client.userId);
+    await requireOwnedRound(consultationId, client.userId);
 
     const body = await request.json();
     const { connection_type, note } = body;
 
-    const edge = await updateCanvasConnection(roundId, client.userId, edgeId, {
+    const edge = await updateCanvasConnection(consultationId, client.userId, edgeId, {
       connectionType: connection_type as ConnectionType | undefined,
       note: note !== undefined ? note : undefined,
     });
@@ -32,16 +32,16 @@ export async function PATCH(
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: Promise<{ roundId: string; edgeId: string }> }
+  { params }: { params: Promise<{ consultationId: string; edgeId: string }> }
 ) {
-  const { roundId, edgeId } = await params;
+  const { consultationId, edgeId } = await params;
   const client = await requireRouteClient();
   if ("response" in client) return client.response;
 
   try {
-    await requireOwnedRound(roundId, client.userId);
+    await requireOwnedRound(consultationId, client.userId);
 
-    await deleteCanvasConnection(roundId, client.userId, edgeId);
+    await deleteCanvasConnection(consultationId, client.userId, edgeId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

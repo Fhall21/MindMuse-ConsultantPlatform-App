@@ -9,14 +9,14 @@ export async function POST(request: Request) {
   }
 
   const { ids } = (await request.json()) as { ids?: string[] };
-  const roundIds = Array.isArray(ids) ? ids.filter(Boolean) : [];
+  const consultationIds = Array.isArray(ids) ? ids.filter(Boolean) : [];
 
-  if (roundIds.length === 0) {
+  if (consultationIds.length === 0) {
     return NextResponse.json({});
   }
 
   try {
-    const counts = await countConsultationsByRoundIds(roundIds, client.userId);
+    const counts = await countConsultationsByRoundIds(consultationIds, client.userId);
     return NextResponse.json(counts);
   } catch (error) {
     return jsonError(

@@ -64,7 +64,7 @@ export function LinkedConsultationsSection({
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Link
-                      href={`/consultations/${c.id}`}
+                      href={`/meetings/${c.id}`}
                       className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 text-foreground"
                     >
                       {c.title}

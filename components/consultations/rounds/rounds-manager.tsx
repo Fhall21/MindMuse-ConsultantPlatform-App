@@ -258,7 +258,7 @@ export function RoundsManager() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-0.5">
                           <Link
-                            href={`/consultations/rounds/${round.id}`}
+                            href={`/consultations/${round.id}`}
                             className="text-sm font-medium hover:text-primary hover:underline transition-colors"
                           >
                             {round.label}
@@ -276,7 +276,7 @@ export function RoundsManager() {
                             size="sm"
                             asChild
                           >
-                            <Link href={`/consultations/rounds/${round.id}`}>
+                            <Link href={`/consultations/${round.id}`}>
                               View
                             </Link>
                           </Button>

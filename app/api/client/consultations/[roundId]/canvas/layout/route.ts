@@ -6,14 +6,14 @@ import type { CanvasLayoutPosition, CanvasViewport } from "@/types/canvas";
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ roundId: string }> }
+  { params }: { params: Promise<{ consultationId: string }> }
 ) {
-  const { roundId } = await params;
+  const { consultationId } = await params;
   const client = await requireRouteClient();
   if ("response" in client) return client.response;
 
   try {
-    await requireOwnedRound(roundId, client.userId);
+    await requireOwnedRound(consultationId, client.userId);
 
     const body = await request.json();
     const { positions, viewport } = body;
@@ -29,7 +29,7 @@ export async function POST(
       return jsonError("Invalid layout data", 400);
     }
 
-    await saveCanvasLayout(roundId, client.userId, {
+    await saveCanvasLayout(consultationId, client.userId, {
       positions: positions as Record<string, CanvasLayoutPosition>,
       viewport: viewport as CanvasViewport,
     });

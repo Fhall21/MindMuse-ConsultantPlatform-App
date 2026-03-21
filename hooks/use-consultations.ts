@@ -1,32 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import type {
-  Consultation,
-  ConsultationRound,
-  EvidenceEmail,
-  Insight,
-} from "@/types/db";
+
+import {
+  getRoundDetail,
+  type RoundDetail,
+} from "@/lib/actions/consultation-workflow";
+import type { ConsultationRound } from "@/types/db";
 import { fetchJson } from "@/hooks/api";
-
-export function useConsultations() {
-  return useQuery({
-    queryKey: ["consultations"],
-    queryFn: () => fetchJson<Consultation[]>("/api/client/consultations"),
-  });
-}
-
-export function useConsultation(id: string) {
-  return useQuery({
-    queryKey: ["consultations", id],
-    queryFn: () =>
-      fetchJson<{
-        consultation: Consultation;
-        themes: Insight[];
-        people: Array<{ person_id: string }>;
-        latestEvidenceEmail: EvidenceEmail | null;
-      }>(`/api/client/consultations/${id}`),
-    enabled: !!id,
-  });
-}
 
 export function useConsultationRounds() {
   return useQuery({
@@ -34,3 +13,13 @@ export function useConsultationRounds() {
     queryFn: () => fetchJson<ConsultationRound[]>("/api/client/rounds"),
   });
 }
+
+export function useRoundDetail(roundId: string) {
+  return useQuery({
+    queryKey: ["consultation_rounds", roundId, "detail"],
+    queryFn: async () => getRoundDetail(roundId),
+    enabled: Boolean(roundId),
+  });
+}
+
+export type { RoundDetail };

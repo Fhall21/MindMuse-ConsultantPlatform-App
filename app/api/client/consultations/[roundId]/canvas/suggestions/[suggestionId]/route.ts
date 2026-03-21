@@ -7,17 +7,17 @@ import { requireOwnedRound } from "@/lib/data/ownership";
 import { insertAuditLogEntry } from "@/lib/data/audit-log";
 import type { CanvasEdge, ConnectionType } from "@/types/canvas";
 
-/** POST /rounds/[roundId]/canvas/suggestions/[suggestionId] — accept an AI suggestion */
+/** POST /rounds/[consultationId]/canvas/suggestions/[suggestionId] — accept an AI suggestion */
 export async function POST(
   _request: Request,
-  { params }: { params: Promise<{ roundId: string; suggestionId: string }> }
+  { params }: { params: Promise<{ consultationId: string; suggestionId: string }> }
 ) {
-  const { roundId, suggestionId } = await params;
+  const { consultationId, suggestionId } = await params;
   const client = await requireRouteClient();
   if ("response" in client) return client.response;
 
   try {
-    await requireOwnedRound(roundId, client.userId);
+    await requireOwnedRound(consultationId, client.userId);
 
     const existing = await db
       .select()
@@ -25,7 +25,7 @@ export async function POST(
       .where(
         and(
           eq(canvasConnections.id, suggestionId),
-          eq(canvasConnections.roundId, roundId),
+          eq(canvasConnections.consultationId, consultationId),
           eq(canvasConnections.origin, "ai_suggested")
         )
       )
@@ -74,17 +74,17 @@ export async function POST(
   }
 }
 
-/** DELETE /rounds/[roundId]/canvas/suggestions/[suggestionId] — reject an AI suggestion */
+/** DELETE /rounds/[consultationId]/canvas/suggestions/[suggestionId] — reject an AI suggestion */
 export async function DELETE(
   _request: Request,
-  { params }: { params: Promise<{ roundId: string; suggestionId: string }> }
+  { params }: { params: Promise<{ consultationId: string; suggestionId: string }> }
 ) {
-  const { roundId, suggestionId } = await params;
+  const { consultationId, suggestionId } = await params;
   const client = await requireRouteClient();
   if ("response" in client) return client.response;
 
   try {
-    await requireOwnedRound(roundId, client.userId);
+    await requireOwnedRound(consultationId, client.userId);
 
     const existing = await db
       .select()
@@ -92,7 +92,7 @@ export async function DELETE(
       .where(
         and(
           eq(canvasConnections.id, suggestionId),
-          eq(canvasConnections.roundId, roundId),
+          eq(canvasConnections.consultationId, consultationId),
           eq(canvasConnections.origin, "ai_suggested")
         )
       )

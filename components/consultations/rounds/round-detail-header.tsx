@@ -13,7 +13,7 @@ export function RoundDetailHeader({ round }: RoundDetailHeaderProps) {
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Link
-          href="/consultations/rounds"
+          href="/consultations/"
           className="hover:text-foreground transition-colors"
         >
           Rounds

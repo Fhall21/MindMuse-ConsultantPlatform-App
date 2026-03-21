@@ -100,7 +100,7 @@ export function PersonSheet({ personId, open, onClose }: PersonSheetProps) {
                       <li key={consultation.id} className="rounded-md border p-3">
                         <div className="flex items-center justify-between gap-2">
                           <Link
-                            href={`/consultations/${consultation.id}`}
+                            href={`/meetings/${consultation.id}`}
                             className="font-medium hover:underline"
                           >
                             {consultation.title}

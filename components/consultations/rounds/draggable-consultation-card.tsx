@@ -71,7 +71,7 @@ export function DraggableConsultationCard({
 
       {/* Consultation info */}
       <Link
-        href={`/consultations/${consultationId}`}
+        href={`/meetings/${consultationId}`}
         className="min-w-0 flex-1 space-y-0.5 hover:underline"
         onClick={(e) => e.stopPropagation()}
       >

@@ -1067,7 +1067,7 @@ export function ReportView({ artifactId }: ReportViewProps) {
               <p>
                 <span className="font-medium text-foreground">Round:</span>{" "}
                 <Link
-                  href={`/consultations/rounds/${report.roundId}`}
+                  href={`/consultations/${report.roundId}`}
                   className="underline transition-colors hover:text-foreground"
                 >
                   {report.roundLabel}

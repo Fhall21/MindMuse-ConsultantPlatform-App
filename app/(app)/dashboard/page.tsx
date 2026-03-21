@@ -60,7 +60,7 @@ function RecentConsultationRow({ consultation }: { consultation: Consultation })
     <div className="flex items-center justify-between py-3">
       <div className="min-w-0 flex-1">
         <Link
-          href={`/consultations/${consultation.id}`}
+          href={`/meetings/${consultation.id}`}
           className="truncate text-sm font-medium hover:underline"
         >
           {consultation.title}
@@ -118,7 +118,7 @@ export default function DashboardPage() {
 
       <div className="flex flex-wrap gap-2">
         <Button asChild size="sm">
-          <Link href="/consultations/new">New Consultation</Link>
+          <Link href="/meetings/new">New Consultation</Link>
         </Button>
         <Button asChild variant="ghost" size="sm">
           <Link href="/people">People</Link>
@@ -156,7 +156,7 @@ export default function DashboardPage() {
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold tracking-tight">Recent consultations</h2>
           <Button asChild variant="ghost" size="sm" className="text-xs">
-            <Link href="/consultations">View all →</Link>
+            <Link href="/consultations/">View all →</Link>
           </Button>
         </div>
 

@@ -1057,7 +1057,7 @@ export const phases = pgTable(
   })
 );
 
-export const consultationRounds = consultations;
+export const consultationRounds = meetings;
 export const consultationPeople = meetingPeople;
 export const roundOutputArtifacts = consultationOutputArtifacts;
 export const roundCrossInsights = consultationCrossInsights;

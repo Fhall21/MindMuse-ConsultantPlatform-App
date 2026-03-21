@@ -17,7 +17,6 @@ import {
 } from "@/lib/data/domain-read";
 import type {
   AuditLogEntry,
-  Consultation,
   ConsultationRound,
   Insight,
 } from "@/types/db";
@@ -27,7 +26,7 @@ import {
   type ReportInputSnapshot,
 } from "@/lib/report-graph";
 
-type ConsultationContext = Pick<Consultation, "id" | "title" | "round_id">;
+type ConsultationContext = Pick<ConsultationRound, "id" | "title" | "round_id">;
 type RoundContext = Pick<ConsultationRound, "id" | "label" | "description">;
 
 export interface ThemeProvenanceContext {
@@ -160,7 +159,10 @@ function collateRoundAcceptedThemes(params: {
 
   themes.forEach((theme) => {
     const key = normalizeLabel(theme.label);
-    const consultation = consultationById.get(theme.consultation_id) ?? null;
+    const consultationId = theme.consultation_id ?? theme.meeting_id;
+    const consultation = consultationId
+      ? (consultationById.get(consultationId) ?? null)
+      : null;
     const existing = grouped.get(key);
     const nextProvenance = buildProvenanceContext({
       consultation,
@@ -269,9 +271,9 @@ function buildIncludedThemes(
 async function loadConsultationById(params: {
   userId: string;
   consultationId: string;
-}): Promise<Consultation | null> {
+}): Promise<ConsultationRound | null> {
   const { consultationId, userId } = params;
-  return getConsultationForUser(consultationId, userId);
+  return getRoundForUser(consultationId, userId);
 }
 
 async function loadRoundContext(params: {
@@ -307,7 +309,7 @@ async function loadRoundSummaryInternal(params: {
     (consultation) => ({
       id: consultation.id,
       title: consultation.title,
-      consultation_id: consultation.round_id,
+      round_id: consultation.round_id,
     })
   ) as ConsultationContext[];
   const consultationIds = consultations.map((consultation) => consultation.id);
@@ -607,7 +609,7 @@ export async function getMeetingReportData(
   const consultationContext: ConsultationContext = {
     id: consultation.id,
     title: consultation.title,
-    consultation_id: consultation.round_id,
+    round_id: consultation.round_id,
   };
 
   let localAcceptedThemes: Insight[] = [];

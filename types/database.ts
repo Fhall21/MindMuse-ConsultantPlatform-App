@@ -3,7 +3,9 @@ export type ConsultationStatus = "draft" | "complete";
 export interface Meeting {
   id: string;
   title: string;
+  label: string;
   transcript_raw: string | null;
+  description: string | null;
   // TODO: Agent 1 — add `notes text` column to meetings migration
   notes?: string | null;
   created_at: string;
@@ -11,6 +13,7 @@ export interface Meeting {
   user_id: string;
   status: ConsultationStatus;
   consultation_id: string | null;
+  round_id: string | null;
 }
 
 export interface Consultation {
@@ -19,6 +22,11 @@ export interface Consultation {
   label: string;
   description: string | null;
   created_at: string;
+  title?: string;
+  transcript_raw?: string | null;
+  updated_at?: string;
+  status?: ConsultationStatus;
+  round_id?: string | null;
 }
 
 export type ThemeStatus =
@@ -32,6 +40,8 @@ export type ThemeOrigin = "manual" | "ai_refined";
 export interface Theme {
   id: string;
   consultation_id: string;
+  meeting_id?: string;
+  round_id: string;
   user_id: string;
   label: string;
   description: string | null;
@@ -53,6 +63,7 @@ export interface ThemeMember {
   id: string;
   theme_id: string;
   consultation_id: string;
+  source_consultation_id: string;
   insight_id: string;
   source_meeting_id: string;
   user_id: string;
@@ -89,6 +100,8 @@ export type RoundOutputArtifactStatus = "generated";
 export interface ConsultationOutputArtifact {
   id: string;
   consultation_id: string;
+  meeting_id?: string;
+  round_id: string;
   user_id: string;
   artifact_type: RoundOutputArtifactType;
   status: RoundOutputArtifactStatus;
@@ -104,6 +117,7 @@ export interface ConsultationOutputArtifact {
 export interface Insight {
   id: string;
   meeting_id: string;
+  consultation_id?: string;
   label: string;
   description: string | null;
   accepted: boolean;
@@ -158,6 +172,7 @@ export interface EvidenceEmail {
 export interface AuditLogEntry {
   id: string;
   meeting_id: string | null;
+  consultation_id: string | null;
   action: string;
   entity_type: string | null;
   entity_id: string | null;

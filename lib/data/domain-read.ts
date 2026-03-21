@@ -19,6 +19,7 @@ import {
   consultations,
   evidenceEmails,
   insights,
+  meetings,
   people,
   roundOutputArtifacts,
   themes,
@@ -45,6 +46,7 @@ import {
 } from "./mappers";
 import {
   requireOwnedConsultation,
+  requireOwnedMeeting,
   requireOwnedPerson,
   requireOwnedRound,
 } from "./ownership";
@@ -119,21 +121,21 @@ export async function getConsultationForUser(
 export async function listConsultationsForRound(
   roundId: string,
   userId: string
-): Promise<Consultation[]> {
-  await requireOwnedRound(roundId, userId);
+): Promise<ConsultationRound[]> {
+  await requireOwnedConsultation(roundId, userId);
 
   const rows = await db
     .select()
-    .from(consultations)
+    .from(meetings)
     .where(
       and(
-        eq(consultations.roundId, roundId),
-        eq(consultations.userId, userId)
+        eq(meetings.consultationId, roundId),
+        eq(meetings.userId, userId)
       )
     )
-    .orderBy(asc(consultations.createdAt));
+    .orderBy(asc(meetings.createdAt));
 
-  return rows.map(mapConsultationRecord);
+  return rows.map(mapConsultationRoundRecord);
 }
 
 export async function listRoundsForUser(
@@ -216,9 +218,9 @@ export async function listInsightsForConsultation(
   userId: string,
   options: { accepted?: boolean } = {}
 ): Promise<Insight[]> {
-  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedMeeting(consultationId, userId);
 
-  const conditions = [eq(insights.consultationId, consultationId)];
+  const conditions = [eq(insights.meetingId, consultationId)];
 
   if (options.accepted !== undefined) {
     conditions.push(eq(insights.accepted, options.accepted));
@@ -244,8 +246,8 @@ export async function listInsightsForConsultations(
   }
 
   const conditions = [
-    eq(consultations.userId, userId),
-    inArray(insights.consultationId, ids),
+    eq(meetings.userId, userId),
+    inArray(insights.meetingId, ids),
   ];
 
   if (options.accepted !== undefined) {
@@ -255,7 +257,7 @@ export async function listInsightsForConsultations(
   const rows = await db
     .select({ insight: insights })
     .from(insights)
-    .innerJoin(consultations, eq(insights.consultationId, consultations.id))
+    .innerJoin(meetings, eq(insights.meetingId, meetings.id))
     .where(and(...conditions))
     .orderBy(desc(insights.createdAt));
 
@@ -266,22 +268,22 @@ export async function deleteInsightsForConsultation(
   consultationId: string,
   userId: string
 ) {
-  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedMeeting(consultationId, userId);
 
-  await db.delete(insights).where(eq(insights.consultationId, consultationId));
+  await db.delete(insights).where(eq(insights.meetingId, consultationId));
 }
 
 export async function listPeopleForConsultation(
   consultationId: string,
   userId: string
 ): Promise<Person[]> {
-  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedMeeting(consultationId, userId);
 
   const rows = await db
     .select({ person: people })
     .from(consultationPeople)
     .innerJoin(people, eq(consultationPeople.personId, people.id))
-    .where(eq(consultationPeople.consultationId, consultationId))
+    .where(eq(consultationPeople.meetingId, consultationId))
     .orderBy(desc(people.createdAt));
 
   return rows.map(({ person }) => mapPersonRecord(person));
@@ -291,15 +293,15 @@ export async function listConsultationPersonLinks(
   consultationId: string,
   userId: string
 ): Promise<Array<{ consultation_id: string; person_id: string }>> {
-  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedMeeting(consultationId, userId);
 
   const rows = await db
     .select({
-      consultationId: consultationPeople.consultationId,
+      consultationId: consultationPeople.meetingId,
       personId: consultationPeople.personId,
     })
     .from(consultationPeople)
-    .where(eq(consultationPeople.consultationId, consultationId));
+    .where(eq(consultationPeople.meetingId, consultationId));
 
   return rows.map((row) => ({
     consultation_id: row.consultationId,
@@ -310,25 +312,25 @@ export async function listConsultationPersonLinks(
 export async function listConsultationsForPerson(
   personId: string,
   userId: string
-): Promise<Consultation[]> {
+): Promise<ConsultationRound[]> {
   await requireOwnedPerson(personId, userId);
 
   const rows = await db
-    .select({ consultation: consultations })
+    .select({ consultation: meetings })
     .from(consultationPeople)
     .innerJoin(
-      consultations,
-      eq(consultationPeople.consultationId, consultations.id)
+      meetings,
+      eq(consultationPeople.meetingId, meetings.id)
     )
     .where(
       and(
         eq(consultationPeople.personId, personId),
-        eq(consultations.userId, userId)
+        eq(meetings.userId, userId)
       )
     )
-    .orderBy(desc(consultations.createdAt));
+    .orderBy(desc(meetings.createdAt));
 
-  return rows.map(({ consultation }) => mapConsultationRecord(consultation));
+  return rows.map(({ consultation }) => mapConsultationRoundRecord(consultation));
 }
 
 export async function listConsultationIdsForPerson(
@@ -350,17 +352,17 @@ export async function countPeopleByConsultationIds(
 
   const rows = await db
     .select({
-      consultationId: consultationPeople.consultationId,
+      consultationId: consultationPeople.meetingId,
     })
     .from(consultationPeople)
     .innerJoin(
-      consultations,
-      eq(consultationPeople.consultationId, consultations.id)
+      meetings,
+      eq(consultationPeople.meetingId, meetings.id)
     )
     .where(
       and(
-        eq(consultations.userId, userId),
-        inArray(consultationPeople.consultationId, ids)
+        eq(meetings.userId, userId),
+        inArray(consultationPeople.meetingId, ids)
       )
     );
 
@@ -406,13 +408,13 @@ export async function countConsultationsByRoundIds(
 
   const rows = await db
     .select({
-      roundId: consultations.roundId,
+      roundId: meetings.consultationId,
     })
-    .from(consultations)
+    .from(meetings)
     .where(
       and(
-        eq(consultations.userId, userId),
-        inArray(consultations.roundId, ids)
+        eq(meetings.userId, userId),
+        inArray(meetings.consultationId, ids)
       )
     );
 
@@ -430,12 +432,12 @@ export async function listEvidenceEmailsForConsultation(
   consultationId: string,
   userId: string
 ): Promise<EvidenceEmail[]> {
-  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedMeeting(consultationId, userId);
 
   const rows = await db
     .select()
     .from(evidenceEmails)
-    .where(eq(evidenceEmails.consultationId, consultationId))
+    .where(eq(evidenceEmails.meetingId, consultationId))
     .orderBy(desc(evidenceEmails.createdAt));
 
   return rows.map(mapEvidenceEmailRecord);
@@ -462,13 +464,13 @@ export async function listEvidenceEmailsForConsultations(
     .select({ email: evidenceEmails })
     .from(evidenceEmails)
     .innerJoin(
-      consultations,
-      eq(evidenceEmails.consultationId, consultations.id)
+      meetings,
+      eq(evidenceEmails.meetingId, meetings.id)
     )
     .where(
       and(
-        eq(consultations.userId, userId),
-        inArray(evidenceEmails.consultationId, ids)
+        eq(meetings.userId, userId),
+        inArray(evidenceEmails.meetingId, ids)
       )
     )
     .orderBy(asc(evidenceEmails.createdAt));
@@ -487,12 +489,12 @@ export async function listAuditEventsForUser(
   }
 
   if (filters.consultationId) {
-    conditions.push(eq(auditLog.consultationId, filters.consultationId));
+    conditions.push(eq(auditLog.meetingId, filters.consultationId));
   }
 
   const consultationIds = uniqueIds(filters.consultationIds ?? []);
   if (consultationIds.length > 0) {
-    conditions.push(inArray(auditLog.consultationId, consultationIds));
+    conditions.push(inArray(auditLog.meetingId, consultationIds));
   }
 
   if (filters.action) {
@@ -601,10 +603,10 @@ export async function listRoundOutputArtifactsForRound(
   userId: string,
   artifactType?: string
 ): Promise<RoundOutputArtifact[]> {
-  await requireOwnedRound(roundId, userId);
+  await requireOwnedConsultation(roundId, userId);
 
   const conditions = [
-    eq(roundOutputArtifacts.roundId, roundId),
+    eq(roundOutputArtifacts.consultationId, roundId),
     eq(roundOutputArtifacts.userId, userId),
   ];
 
@@ -636,13 +638,13 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
     db
       .select({ count: sql<number>`count(distinct ${consultationPeople.personId})::int` })
       .from(consultationPeople)
-      .innerJoin(consultations, eq(consultationPeople.consultationId, consultations.id))
-      .where(eq(consultations.userId, userId)),
+      .innerJoin(meetings, eq(consultationPeople.meetingId, meetings.id))
+      .where(eq(meetings.userId, userId)),
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(evidenceEmails)
-      .innerJoin(consultations, eq(evidenceEmails.consultationId, consultations.id))
-      .where(and(eq(consultations.userId, userId), eq(evidenceEmails.status, "sent"))),
+      .innerJoin(meetings, eq(evidenceEmails.meetingId, meetings.id))
+      .where(and(eq(meetings.userId, userId), eq(evidenceEmails.status, "sent"))),
   ]);
 
   return {
@@ -656,14 +658,14 @@ export async function listDraftThemesForRound(
   roundId: string,
   userId: string
 ): Promise<Theme[]> {
-  await requireOwnedRound(roundId, userId);
+  await requireOwnedConsultation(roundId, userId);
 
   const rows = await db
     .select()
     .from(themes)
     .where(
       and(
-        eq(themes.roundId, roundId),
+        eq(themes.consultationId, roundId),
         eq(themes.userId, userId),
         eq(themes.status, "draft")
       )

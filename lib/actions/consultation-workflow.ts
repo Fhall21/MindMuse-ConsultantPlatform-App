@@ -400,6 +400,8 @@ function mapThemeRecord(row: ThemeRow): Theme {
   return {
     id: row.id,
     consultation_id: row.consultationId,
+    meeting_id: row.consultationId,
+    round_id: row.consultationId,
     user_id: row.userId,
     label: row.label,
     description: row.description,
@@ -425,6 +427,7 @@ function mapThemeMemberRecord(
     id: row.id,
     theme_id: row.themeId,
     consultation_id: row.consultationId,
+    source_consultation_id: row.sourceMeetingId,
     insight_id: row.insightId,
     source_meeting_id: row.sourceMeetingId,
     user_id: row.userId,
@@ -916,7 +919,7 @@ async function insertRoundDecision(params: {
   } = params;
 
   await db.insert(roundDecisions).values({
-    roundId,
+    consultationId: roundId,
     userId,
     targetType,
     targetId,
@@ -949,7 +952,10 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
 
   let analytics: RoundAnalyticsSummary;
   try {
-    analytics = await loadRoundAnalyticsSummary({ roundId, consultationIds });
+    analytics = await loadRoundAnalyticsSummary({
+      consultationId: roundId,
+      meetingIds: consultationIds,
+    });
     console.log("[getRoundDetail] analytics loaded ok");
   } catch (analyticsError) {
     console.error("[getRoundDetail] analytics load failed — falling back to empty summary. Run: bun run db:migrate", {
@@ -1341,9 +1347,9 @@ export async function moveThemeToGroup(
       typeof position === "number" ? position : targetMembers.length;
     await db.insert(themeMembers).values({
       themeId: targetGroup.id,
-      roundId,
+      consultationId: roundId,
       insightId: theme.id,
-      sourceConsultationId: theme.consultation.id,
+      sourceMeetingId: theme.consultation.id,
       userId,
       position: nextPosition,
       createdBy: userId,
@@ -1503,7 +1509,7 @@ export async function splitTheme(
   const [created] = await db
     .insert(themes)
     .values({
-      roundId: round.id,
+      consultationId: round.id,
       userId,
       label: defaultLabel,
       description:
@@ -2305,7 +2311,7 @@ async function generateRoundOutput(
   const [created] = await db
     .insert(roundOutputArtifacts)
     .values({
-      roundId,
+      consultationId: roundId,
       userId,
       artifactType,
       status: "generated",

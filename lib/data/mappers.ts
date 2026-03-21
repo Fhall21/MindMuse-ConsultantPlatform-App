@@ -61,12 +61,15 @@ export function mapConsultationRoundRecord(
   return {
     id: row.id,
     title: row.title,
+    label: row.title,
     transcript_raw: row.transcriptRaw ?? null,
+    description: row.transcriptRaw ?? null,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
     user_id: row.userId,
     status: row.status as ConsultationRound["status"],
-    meeting_id: row.consultationId,
+    consultation_id: row.consultationId,
+    round_id: row.consultationId,
   };
 }
 
@@ -74,6 +77,7 @@ export function mapInsightRecord(row: InsightRow): Insight {
   return {
     id: row.id,
     meeting_id: row.meetingId,
+    consultation_id: row.meetingId,
     label: row.label,
     description: row.description,
     accepted: row.accepted,
@@ -86,7 +90,9 @@ export function mapInsightRecord(row: InsightRow): Insight {
 export function mapThemeRecord(row: ThemeRow): Theme {
   return {
     id: row.id,
+    consultation_id: row.consultationId,
     meeting_id: row.consultationId,
+    round_id: row.consultationId,
     user_id: row.userId,
     label: row.label,
     description: row.description,
@@ -137,6 +143,12 @@ export function mapAuditLogRecord(row: AuditLogRow): AuditLogEntry {
   return {
     id: row.id,
     meeting_id: row.meetingId,
+    consultation_id:
+      (typeof row.payload?.consultation_id === "string"
+        ? row.payload.consultation_id
+        : typeof row.payload?.consultationId === "string"
+          ? row.payload.consultationId
+          : null),
     action: row.action,
     entity_type: row.entityType,
     entity_id: row.entityId,
@@ -151,7 +163,9 @@ export function mapRoundOutputArtifactRecord(
 ): RoundOutputArtifact {
   return {
     id: row.id,
+    consultation_id: row.consultationId,
     meeting_id: row.consultationId,
+    round_id: row.consultationId,
     user_id: row.userId,
     artifact_type: row.artifactType as RoundOutputArtifact["artifact_type"],
     status: row.status as RoundOutputArtifact["status"],

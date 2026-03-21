@@ -181,6 +181,7 @@ export interface RoundAnalyticsSummary {
 
 interface BuildRoundAnalyticsParams {
   meetingIds: string[];
+  consultationIds?: string[];
   jobRows: AnalyticsJobRow[];
   extractionRows: ExtractionResultRow[];
   offsetRows: TermExtractionOffsetRow[];
@@ -190,12 +191,14 @@ interface BuildRoundAnalyticsParams {
 
 export function buildRoundAnalyticsSummary({
   meetingIds,
+  consultationIds,
   jobRows,
   extractionRows,
   offsetRows,
   clusterRows,
   membershipRows,
 }: BuildRoundAnalyticsParams): RoundAnalyticsSummary {
+  const normalizedMeetingIds = meetingIds.length > 0 ? meetingIds : (consultationIds ?? []);
   const latestJobsByMeeting = latestRow(jobRows);
   const latestExtractionByMeeting = latestRow(extractionRows);
 
@@ -236,7 +239,7 @@ export function buildRoundAnalyticsSummary({
       : null;
 
   return {
-    consultationCount: meetingIds.length,
+    consultationCount: normalizedMeetingIds.length,
     processedConsultationCount: completedConsultationCount,
     failedConsultationCount,
     activeConsultationCount,

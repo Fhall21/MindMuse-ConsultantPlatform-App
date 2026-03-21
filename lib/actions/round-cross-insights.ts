@@ -19,18 +19,18 @@ export async function addRoundCrossInsight(
   const [created] = await db
     .insert(roundCrossInsights)
     .values({
-      roundId,
+      consultationId: roundId,
       label,
       description: description ?? null,
-      sourceConsultationIds: [consultationId],
+      sourceMeetingIds: [consultationId],
       createdBy: userId,
     })
     .returning({
       id: roundCrossInsights.id,
-      roundId: roundCrossInsights.roundId,
+      roundId: roundCrossInsights.consultationId,
       label: roundCrossInsights.label,
       description: roundCrossInsights.description,
-      sourceConsultationIds: roundCrossInsights.sourceConsultationIds,
+      sourceConsultationIds: roundCrossInsights.sourceMeetingIds,
       createdBy: roundCrossInsights.createdBy,
       createdAt: roundCrossInsights.createdAt,
     });

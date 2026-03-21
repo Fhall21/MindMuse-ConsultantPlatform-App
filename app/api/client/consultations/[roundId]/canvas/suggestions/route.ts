@@ -8,21 +8,21 @@ import type { AiConnectionSuggestion } from "@/types/canvas";
 
 export async function GET(
   _request: Request,
-  { params }: { params: Promise<{ consultationId: string }> }
+  { params }: { params: Promise<{ roundId: string }> }
 ) {
-  const { consultationId } = await params;
+  const { roundId } = await params;
   const client = await requireRouteClient();
   if ("response" in client) return client.response;
 
   try {
-    await requireOwnedRound(consultationId, client.userId);
+    await requireOwnedRound(roundId, client.userId);
 
     const rows = await db
       .select()
       .from(canvasConnections)
       .where(
         and(
-          eq(canvasConnections.consultationId, consultationId),
+          eq(canvasConnections.consultationId, roundId),
           eq(canvasConnections.origin, "ai_suggested"),
           isNull(canvasConnections.aiSuggestionAcceptedAt)
         )
@@ -30,7 +30,7 @@ export async function GET(
 
     const suggestions: AiConnectionSuggestion[] = rows.map((row) => ({
       id: row.id,
-      consultation_id: consultationId,
+      consultation_id: roundId,
       source_node_id: row.fromNodeId,
       target_node_id: row.toNodeId,
       suggested_connection_type: row.connectionType as AiConnectionSuggestion["suggested_connection_type"],
@@ -50,14 +50,14 @@ export async function GET(
 
 export async function POST(
   _request: Request,
-  { params }: { params: Promise<{ consultationId: string }> }
+  { params }: { params: Promise<{ roundId: string }> }
 ) {
-  const { consultationId } = await params;
+  const { roundId } = await params;
   const client = await requireRouteClient();
   if ("response" in client) return client.response;
 
   try {
-    await requireOwnedRound(consultationId, client.userId);
+    await requireOwnedRound(roundId, client.userId);
 
     return NextResponse.json(
       { message: "AI suggestion generation not yet implemented" },

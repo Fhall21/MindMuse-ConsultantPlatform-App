@@ -6,14 +6,14 @@ import type { ConnectionType } from "@/types/canvas";
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ consultationId: string }> }
+  { params }: { params: Promise<{ roundId: string }> }
 ) {
-  const { consultationId } = await params;
+  const { roundId } = await params;
   const client = await requireRouteClient();
   if ("response" in client) return client.response;
 
   try {
-    await requireOwnedRound(consultationId, client.userId);
+    await requireOwnedRound(roundId, client.userId);
 
     const body = await request.json();
     const {
@@ -38,7 +38,7 @@ export async function POST(
       return jsonError("Missing required fields", 400);
     }
 
-    const edge = await createCanvasConnection(consultationId, client.userId, {
+    const edge = await createCanvasConnection(roundId, client.userId, {
       fromNodeType: resolvedFromNodeType,
       fromNodeId: resolvedFromNodeId,
       toNodeType: resolvedToNodeType,

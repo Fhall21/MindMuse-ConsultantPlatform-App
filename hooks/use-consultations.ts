@@ -14,11 +14,11 @@ export function useConsultations() {
   });
 }
 
-export function useConsultationDetail(consultationId: string) {
+export function useRoundDetail(roundId: string) {
   return useQuery({
-    queryKey: ["consultations", consultationId, "detail"],
-    queryFn: async () => getRoundDetail(consultationId),
-    enabled: Boolean(consultationId),
+    queryKey: ["consultation_rounds", roundId, "detail"],
+    queryFn: async () => getRoundDetail(roundId),
+    enabled: Boolean(roundId),
   });
 }
 

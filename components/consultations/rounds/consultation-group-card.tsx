@@ -137,7 +137,7 @@ export function ConsultationGroupCard({
           )}
 
           <Badge variant="secondary" className="shrink-0 text-xs">
-            {group.members.length} consultation{group.members.length !== 1 ? "s" : ""}
+            {group.members.length} meeting{group.members.length !== 1 ? "s" : ""}
           </Badge>
 
           {/* Actions */}
@@ -195,7 +195,7 @@ export function ConsultationGroupCard({
           <SortableContext items={memberIds} strategy={verticalListSortingStrategy}>
             {group.members.length === 0 ? (
               <p className="text-xs text-muted-foreground py-2 text-center">
-                No consultations — drag one here or delete this group
+                No meetings yet — drag one here or delete this group
               </p>
             ) : (
               group.members.map((member) => {

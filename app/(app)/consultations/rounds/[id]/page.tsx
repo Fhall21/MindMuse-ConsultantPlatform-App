@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useConsultationDetail } from "@/hooks/use-consultations";
+import { useRoundDetail } from "@/hooks/use-consultations";
 import { RoundDetailHeader } from "@/components/consultations/rounds/round-detail-header";
 import { LinkedConsultationsSection } from "@/components/consultations/rounds/linked-consultations-section";
 import { ThemeGroupingWorkspace } from "@/components/consultations/rounds/theme-grouping-workspace";
@@ -43,7 +43,7 @@ export default function RoundDetailPage({
 }) {
   const { id } = use(params);
   const queryClient = useQueryClient();
-  const { data, isLoading, error } = useConsultationDetail(id);
+  const { data, isLoading, error } = useRoundDetail(id);
 
   // Adapt Agent 1 types to component-friendly shapes
   const adaptedSourceThemes: SourceTheme[] = data?.sourceThemes
@@ -196,9 +196,9 @@ export default function RoundDetailPage({
 
       <Separator />
 
-      {/* Linked Consultations */}
+      {/* Linked Meetings */}
       <section className="space-y-3">
-        <SectionHeading>Linked Consultations</SectionHeading>
+        <SectionHeading>Linked Meetings</SectionHeading>
         <LinkedConsultationsSection consultations={adaptedConsultations} />
       </section>
 

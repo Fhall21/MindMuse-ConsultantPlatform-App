@@ -144,80 +144,22 @@ export async function getMeetingForUser(
   return row ? mapMeetingRecord(row) : null;
 }
 
-export async function listConsultationsForRound(
-  roundId: string,
+export async function listMeetingsForConsultationGroup(
+  consultationId: string,
   userId: string
-): Promise<Consultation[]> {
-  await requireOwnedConsultationGroup(roundId, userId);
+): Promise<ConsultationRound[]> {
+  await requireOwnedConsultationGroup(consultationId, userId);
 
   const rows = await db
     .select()
     .from(consultationRounds)
     .where(
       and(
-        eq(consultationRounds.consultationId, roundId),
+        eq(consultationRounds.consultationId, consultationId),
         eq(consultationRounds.userId, userId)
       )
     )
     .orderBy(asc(consultationRounds.createdAt));
-
-  return rows.map((row) => ({
-    id: row.id,
-    user_id: row.userId,
-    label: row.title,
-    description: row.transcriptRaw ?? null,
-    created_at: row.createdAt.toISOString(),
-  }));
-}
-
-export async function listRoundsForUser(
-  userId: string
-): Promise<ConsultationRound[]> {
-  const rows = await db
-    .select()
-    .from(consultationRounds)
-    .where(eq(consultationRounds.userId, userId))
-    .orderBy(desc(consultationRounds.createdAt));
-
-  return rows.map(mapConsultationRoundRecord);
-}
-
-export async function getRoundForUser(
-  roundId: string,
-  userId: string
-): Promise<ConsultationRound | null> {
-  const [row] = await db
-    .select()
-    .from(consultationRounds)
-    .where(
-      and(
-        eq(consultationRounds.id, roundId),
-        eq(consultationRounds.userId, userId)
-      )
-    )
-    .limit(1);
-
-  return row ? mapConsultationRoundRecord(row) : null;
-}
-
-export async function listRoundsByIdsForUser(
-  roundIds: string[],
-  userId: string
-): Promise<ConsultationRound[]> {
-  const ids = uniqueIds(roundIds);
-  if (ids.length === 0) {
-    return [];
-  }
-
-  const rows = await db
-    .select()
-    .from(consultationRounds)
-    .where(
-      and(
-        eq(consultationRounds.userId, userId),
-        inArray(consultationRounds.id, ids)
-      )
-    );
 
   return rows.map(mapConsultationRoundRecord);
 }

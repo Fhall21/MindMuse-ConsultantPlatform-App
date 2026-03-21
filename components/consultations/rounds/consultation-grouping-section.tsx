@@ -228,8 +228,8 @@ export function ConsultationGroupingSection({
         {consultations.length === 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Linked Consultations</CardTitle>
-              <CardDescription>No consultations assigned to this round yet.</CardDescription>
+              <CardTitle className="text-base">Linked Meetings</CardTitle>
+              <CardDescription>No meetings assigned to this consultation yet.</CardDescription>
             </CardHeader>
           </Card>
         )}

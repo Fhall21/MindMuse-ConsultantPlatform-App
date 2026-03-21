@@ -368,8 +368,8 @@ function buildFallbackOutput(params: {
     "",
     roundDescription ? `Round description: ${roundDescription}` : null,
     consultationTitles.length > 0
-      ? `Linked consultations: ${consultationTitles.join(", ")}`
-      : "Linked consultations: none recorded",
+      ? `Linked meetings: ${consultationTitles.join(", ")}`
+      : "Linked meetings: none recorded",
     "",
     "Accepted round themes:",
     ...roundThemeLines,

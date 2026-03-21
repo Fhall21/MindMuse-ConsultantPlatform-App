@@ -35,9 +35,9 @@ export function LinkedConsultationsSection({
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Linked Consultations</CardTitle>
+          <CardTitle className="text-base">Linked Meetings</CardTitle>
           <CardDescription>
-            No consultations assigned to this round yet.
+            No meetings assigned to this consultation yet.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -47,9 +47,9 @@ export function LinkedConsultationsSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Linked Consultations</CardTitle>
+        <CardTitle className="text-base">Linked Meetings</CardTitle>
         <CardDescription>
-          {consultations.length} consultation{consultations.length !== 1 ? "s" : ""} in this round
+          {consultations.length} meeting{consultations.length !== 1 ? "s" : ""} in this consultation
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">

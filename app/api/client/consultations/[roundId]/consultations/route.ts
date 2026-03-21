@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listConsultationsForRound } from "@/lib/data/domain-read";
+import { listMeetingsForConsultationGroup } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../../_helpers";
 
 export async function GET(
@@ -13,11 +13,11 @@ export async function GET(
   }
 
   try {
-    const consultations = await listConsultationsForRound(roundId, client.userId);
+    const consultations = await listMeetingsForConsultationGroup(roundId, client.userId);
     return NextResponse.json(
       consultations.map((consultation) => ({
         id: consultation.id,
-        label: consultation.label,
+        label: consultation.title,
       }))
     );
   } catch (error) {

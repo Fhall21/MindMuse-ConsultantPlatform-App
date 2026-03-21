@@ -594,11 +594,11 @@ export async function getReportArtifactVersions(
   }));
 }
 
-export async function getConsultationReportData(
-  consultationId: string
+export async function getMeetingReportData(
+  meetingId: string
 ): Promise<ConsultationReportData | null> {
   const userId = await requireCurrentUserId();
-  const consultation = await loadConsultationById({ consultationId, userId });
+  const consultation = await loadConsultationById({ consultationId: meetingId, userId });
 
   if (!consultation) {
     return null;
@@ -612,13 +612,13 @@ export async function getConsultationReportData(
 
   let localAcceptedThemes: Insight[] = [];
   try {
-    localAcceptedThemes = await listInsightsForConsultation(consultationId, userId, {
+    localAcceptedThemes = await listInsightsForConsultation(meetingId, userId, {
       accepted: true,
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error(
-      `[consultation-report] failed to load accepted themes for ${consultationId}: ${detail}`
+      `[meeting-report] failed to load accepted themes for ${meetingId}: ${detail}`
     );
   }
   const round = consultation.round_id
@@ -638,7 +638,7 @@ export async function getConsultationReportData(
   if (!round) {
     const rejectedEvents = await loadRejectedAuditEvents({
       userId,
-      consultationIds: [consultationId],
+      consultationIds: [meetingId],
     });
 
     const consultationById = new Map([[consultation.id, consultationContext]]);
@@ -693,3 +693,5 @@ export async function getConsultationReportData(
     roundSummary,
   };
 }
+
+export const getConsultationReportData = getMeetingReportData;

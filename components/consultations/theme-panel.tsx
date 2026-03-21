@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { fetchJson } from "@/hooks/api";
 import { useMeeting } from "@/hooks/use-meetings";
-import { useThemes } from "@/hooks/use-themes";
+import { useMeetingThemes } from "@/hooks/use-themes";
 import { acceptTheme, addUserTheme, rejectTheme, saveThemes } from "@/lib/actions/themes";
 import { cn } from "@/lib/utils";
 import type { Insight } from "@/types/db";
@@ -26,7 +26,8 @@ import { ThemeRejectionDialog } from "@/components/consultations/theme-rejection
 
 
 interface ThemePanelProps {
-  consultationId: string;
+  meetingId?: string;
+  consultationId?: string;
 }
 
 interface ExtractedTheme {
@@ -143,10 +144,11 @@ function getConfidenceLabel(confidence?: number) {
   };
 }
 
-export function ThemePanel({ consultationId }: ThemePanelProps) {
+export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
+  const resolvedMeetingId = meetingId ?? consultationId;
   const queryClient = useQueryClient();
-  const consultationQuery = useMeeting(consultationId);
-  const themesQuery = useThemes(consultationId);
+  const meetingQuery = useMeeting(resolvedMeetingId ?? "");
+  const themesQuery = useMeetingThemes(resolvedMeetingId ?? "");
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -181,10 +183,10 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     setAddThemeLabel("");
     setAddThemeDescription("");
     setRejectionDialogTheme(null);
-  }, [consultationId]);
+  }, [resolvedMeetingId]);
 
-  const transcript = consultationQuery.data?.consultation.transcript_raw?.trim() ?? "";
-  const consultationIsLocked = consultationQuery.data?.consultation.status === "complete";
+  const transcript = meetingQuery.data?.meeting.transcript_raw?.trim() ?? "";
+  const consultationIsLocked = meetingQuery.data?.meeting.status === "complete";
   const savedThemes = useMemo(() => themesQuery.data ?? [], [themesQuery.data]);
 
   const rejectedThemeList = useMemo(
@@ -258,9 +260,9 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
 
   async function refreshPanelData() {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] }),
-      queryClient.invalidateQueries({ queryKey: ["themes", consultationId] }),
-      queryClient.invalidateQueries({ queryKey: ["audit_log", consultationId] }),
+      queryClient.invalidateQueries({ queryKey: ["meetings", resolvedMeetingId] }),
+      queryClient.invalidateQueries({ queryKey: ["themes", "meeting", resolvedMeetingId] }),
+      queryClient.invalidateQueries({ queryKey: ["audit_log", "meeting", resolvedMeetingId] }),
     ]);
   }
 
@@ -281,7 +283,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
 
       if (options?.replaceExisting) {
         await fetchJson<{ ok: true }>(
-          `/api/client/themes/consultations/${consultationId}`,
+          `/api/client/themes/consultations/${resolvedMeetingId}`,
           {
             method: "DELETE",
           }
@@ -289,7 +291,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
       }
 
       const savedThemeIds = (await saveThemes(
-        consultationId,
+        resolvedMeetingId!,
         extractedThemes.map((theme) => ({
           label: theme.label,
           confidence: theme.confidence,
@@ -327,12 +329,12 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     setActiveThemeId(themeId);
 
     try {
-      await acceptTheme(themeId, consultationId);
+      await acceptTheme(themeId, resolvedMeetingId!);
       await refreshPanelData();
     } catch (error) {
       console.error("[theme-panel] failed to accept insight", {
         themeId,
-        consultationId,
+        meetingId: resolvedMeetingId,
         error,
       });
       setErrorMessage(getErrorMessage(error));
@@ -363,7 +365,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     setRejectionDialogTheme(null);
 
     try {
-      await rejectTheme(theme.id, consultationId, rationale);
+      await rejectTheme(theme.id, resolvedMeetingId!, rationale);
       await refreshPanelData();
     } catch (error) {
       setRejectedThemes((current) => {
@@ -393,7 +395,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
 
     try {
       // addUserTheme: sets is_user_added=true, accepted=true, weight=2.0, logs learning signal
-      await addUserTheme(consultationId, label, addThemeDescription.trim() || undefined);
+      await addUserTheme(resolvedMeetingId!, label, addThemeDescription.trim() || undefined);
 
       setAddThemeLabel("");
       setAddThemeDescription("");
@@ -432,18 +434,18 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     <>
       <Card className="border-border/70">
         <CardContent className="space-y-4">
-          {consultationQuery.isPending || themesQuery.isPending ? (
+          {meetingQuery.isPending || themesQuery.isPending ? (
             <p className="text-sm text-muted-foreground">Loading theme data…</p>
           ) : null}
 
-          {consultationQuery.error || themesQuery.error ? (
+          {meetingQuery.error || themesQuery.error ? (
             <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {getErrorMessage(consultationQuery.error ?? themesQuery.error)}
+              {getErrorMessage(meetingQuery.error ?? themesQuery.error)}
             </p>
           ) : null}
 
           {/* Empty state */}
-          {!consultationQuery.isPending && !themesQuery.isPending && totalThemeCount === 0 ? (
+          {!meetingQuery.isPending && !themesQuery.isPending && totalThemeCount === 0 ? (
             <div className="space-y-3 rounded-lg border border-dashed border-border/80 bg-muted/20 p-4">
               <p className="text-sm text-muted-foreground">No themes extracted yet.</p>
               <div className="flex flex-wrap items-center gap-3">
@@ -484,7 +486,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
           ) : null}
 
           {/* In-progress review */}
-          {!consultationQuery.isPending && !themesQuery.isPending && totalThemeCount > 0 && !allReviewed ? (
+          {!meetingQuery.isPending && !themesQuery.isPending && totalThemeCount > 0 && !allReviewed ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">
@@ -608,7 +610,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
           ) : null}
 
           {/* All reviewed */}
-          {!consultationQuery.isPending && !themesQuery.isPending && allReviewed ? (
+          {!meetingQuery.isPending && !themesQuery.isPending && allReviewed ? (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-1">

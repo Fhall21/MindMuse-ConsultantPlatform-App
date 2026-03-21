@@ -137,7 +137,7 @@ export async function getTranscriptionJob(jobId: string): Promise<TranscriptionJ
   return mapTranscriptionJob(mapTranscriptionRow(job));
 }
 
-export async function getTranscriptionJobsForConsultation(
+export async function getTranscriptionJobsForMeeting(
   meetingId: string
 ): Promise<DatabaseTranscriptionJob[]> {
   const rows = await db
@@ -148,6 +148,8 @@ export async function getTranscriptionJobsForConsultation(
 
   return rows.map(mapTranscriptionRow);
 }
+
+export const getTranscriptionJobsForConsultation = getTranscriptionJobsForMeeting;
 
 interface CreateTranscriptionJobParams {
   meetingId: string;
@@ -260,7 +262,7 @@ interface GetTranscriptionJobTimelineParams {
 export async function getTranscriptionJobTimeline({
   meetingId,
 }: GetTranscriptionJobTimelineParams): Promise<DatabaseTranscriptionJob[]> {
-  return getTranscriptionJobsForConsultation(meetingId);
+  return getTranscriptionJobsForMeeting(meetingId);
 }
 
 interface CreateOcrJobParams {
@@ -371,7 +373,7 @@ export async function updateOcrJob({
   return mapOcrRow(updated);
 }
 
-export async function getOcrJobsForConsultation(
+export async function getOcrJobsForMeeting(
   meetingId: string
 ): Promise<DatabaseOcrJob[]> {
   const rows = await db
@@ -382,6 +384,8 @@ export async function getOcrJobsForConsultation(
 
   return rows.map((job) => mapOcrJob(mapOcrRow(job)));
 }
+
+export const getOcrJobsForConsultation = getOcrJobsForMeeting;
 
 export async function getOcrJob(jobId: string): Promise<DatabaseOcrJob> {
   const [job] = await db
@@ -404,7 +408,7 @@ interface GetOcrJobTimelineParams {
 export async function getOcrJobTimeline({
   meetingId,
 }: GetOcrJobTimelineParams): Promise<DatabaseOcrJob[]> {
-  return getOcrJobsForConsultation(meetingId);
+  return getOcrJobsForMeeting(meetingId);
 }
 
 interface CreateIngestionArtifactParams {
@@ -518,11 +522,13 @@ export async function getIngestionArtifactTimeline({
   return rows.map(mapIngestionArtifactRow);
 }
 
-export async function getIngestionArtifactsForConsultation(
+export async function getIngestionArtifactsForMeeting(
   meetingId: string
 ): Promise<DatabaseIngestionArtifact[]> {
   return getIngestionArtifactTimeline({ meetingId });
 }
+
+export const getIngestionArtifactsForConsultation = getIngestionArtifactsForMeeting;
 
 export async function getIngestionArtifactById(
   artifactId: string

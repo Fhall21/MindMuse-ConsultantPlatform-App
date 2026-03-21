@@ -148,7 +148,7 @@ export async function deletePerson(id: string) {
   });
 }
 
-export async function linkPersonToConsultation(
+export async function linkPersonToMeeting(
   meetingId: string,
   personId: string
 ) {
@@ -177,7 +177,9 @@ export async function linkPersonToConsultation(
   });
 }
 
-export async function unlinkPersonFromConsultation(
+export const linkPersonToConsultation = linkPersonToMeeting;
+
+export async function unlinkPersonFromMeeting(
   meetingId: string,
   personId: string
 ) {
@@ -202,3 +204,5 @@ export async function unlinkPersonFromConsultation(
     metadata: { personId },
   });
 }
+
+export const unlinkPersonFromConsultation = unlinkPersonFromMeeting;

@@ -4,15 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useMeeting } from "@/hooks/use-meetings";
-import { useEvidenceEmails } from "@/hooks/use-evidence-email";
-import { useConsultationPeople } from "@/hooks/use-people";
+import { useMeetingEvidenceEmails } from "@/hooks/use-evidence-email";
+import { useMeetingPeople } from "@/hooks/use-people";
 import {
   acceptEmailDraft,
   markEmailSent,
   saveEmailDraft,
 } from "@/lib/actions/evidence-emails";
 import {
-  getConsultationReportData,
+  getMeetingReportData,
   type IncludedThemeSelection,
 } from "@/lib/actions/reports";
 import type { EvidenceEmail } from "@/types/db";
@@ -31,7 +31,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 interface EmailDraftPanelProps {
-  consultationId: string;
+  meetingId?: string;
+  consultationId?: string;
 }
 
 interface EmailDraftResponse {
@@ -172,15 +173,16 @@ function buildFallbackIncludedThemes(params: {
     }));
 }
 
-export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
+export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelProps) {
+  const resolvedMeetingId = meetingId ?? consultationId;
   const queryClient = useQueryClient();
-  const consultationQuery = useMeeting(consultationId);
-  const evidenceEmailsQuery = useEvidenceEmails(consultationId);
-  const peopleQuery = useConsultationPeople(consultationId);
+  const meetingQuery = useMeeting(resolvedMeetingId ?? "");
+  const evidenceEmailsQuery = useMeetingEvidenceEmails(resolvedMeetingId ?? "");
+  const peopleQuery = useMeetingPeople(resolvedMeetingId ?? "");
   const reportQuery = useQuery({
-    queryKey: ["consultation-report", consultationId],
-    queryFn: async () => getConsultationReportData(consultationId),
-    enabled: !!consultationId,
+    queryKey: ["meeting-report", resolvedMeetingId],
+    queryFn: async () => getMeetingReportData(resolvedMeetingId ?? ""),
+    enabled: !!resolvedMeetingId,
   });
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -196,29 +198,29 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
 
   const acceptedThemeLabels = useMemo(
     () =>
-      (consultationQuery.data?.themes ?? [])
+      (meetingQuery.data?.themes ?? [])
         .filter((theme) => theme.accepted)
         .map((theme) => theme.label),
-    [consultationQuery.data?.themes]
+    [meetingQuery.data?.themes]
   );
 
   const includedThemes = useMemo<IncludedThemeSelection[]>(() => {
     const fromReport = reportQuery.data?.includedThemes;
     if (fromReport && fromReport.length > 0) return fromReport;
     return buildFallbackIncludedThemes({
-      consultationId,
-      consultationTitle: consultationQuery.data?.consultation.title,
-      roundId: consultationQuery.data?.consultation.round_id,
+      consultationId: resolvedMeetingId!,
+      consultationTitle: meetingQuery.data?.meeting.title,
+      roundId: meetingQuery.data?.meeting.consultation_id,
       roundLabel: reportQuery.data?.roundLabel ?? null,
       labels: acceptedThemeLabels,
     });
   }, [
     acceptedThemeLabels,
-    consultationId,
-    consultationQuery.data?.consultation.round_id,
-    consultationQuery.data?.consultation.title,
+    meetingQuery.data?.meeting.consultation_id,
+    meetingQuery.data?.meeting.title,
     reportQuery.data?.includedThemes,
     reportQuery.data?.roundLabel,
+    resolvedMeetingId,
   ]);
 
   const includedThemeLabels = useMemo(
@@ -242,17 +244,17 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
   const themesChangedSinceEmail = useMemo(() => {
     if (!currentDraft || currentDraft.status !== "draft" || !currentDraft.generated_at) return false;
     const generatedAt = new Date(currentDraft.generated_at).getTime();
-    return (consultationQuery.data?.themes ?? []).some(
+    return (meetingQuery.data?.themes ?? []).some(
       (theme) => theme.accepted && new Date(theme.created_at).getTime() > generatedAt
     );
-  }, [currentDraft, consultationQuery.data?.themes]);
+  }, [currentDraft, meetingQuery.data?.themes]);
 
   useEffect(() => {
     setErrorMessage(null);
     setShowHistory(false);
     setConfirmAcceptOpen(false);
     setConfirmRegenerateOpen(false);
-  }, [consultationId]);
+  }, [resolvedMeetingId]);
 
   useEffect(() => {
     setSubject(currentDraftSubject);
@@ -261,17 +263,17 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
 
   async function refreshPanelData() {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] }),
-      queryClient.invalidateQueries({ queryKey: ["evidence_emails", consultationId] }),
-      queryClient.invalidateQueries({ queryKey: ["audit_log", consultationId] }),
+      queryClient.invalidateQueries({ queryKey: ["meetings", resolvedMeetingId] }),
+      queryClient.invalidateQueries({ queryKey: ["evidence_emails", "meeting", resolvedMeetingId] }),
+      queryClient.invalidateQueries({ queryKey: ["audit_log", "meeting", resolvedMeetingId] }),
       queryClient.invalidateQueries({
-        queryKey: ["consultation-report", consultationId],
+        queryKey: ["meeting-report", resolvedMeetingId],
       }),
     ]);
   }
 
   async function handleGenerateDraft() {
-    const transcript = consultationQuery.data?.consultation.transcript_raw?.trim() ?? "";
+    const transcript = meetingQuery.data?.meeting.transcript_raw?.trim() ?? "";
 
     if (!transcript || includedThemeLabels.length === 0) {
       return;
@@ -285,9 +287,9 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
         transcript,
         themes: includedThemeLabels,
         people: (peopleQuery.data ?? []).map((person) => person.name),
-        consultation_title: consultationQuery.data?.consultation.title,
+        consultation_title: meetingQuery.data?.meeting.title,
         consultation_date: formatConsultationDate(
-          consultationQuery.data?.consultation.created_at
+          meetingQuery.data?.meeting.created_at
         ),
       });
 
@@ -301,7 +303,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
       }
 
       await saveEmailDraft({
-        consultationId,
+        meetingId: resolvedMeetingId!,
         subject: nextSubject,
         body: nextBody,
         themeSelections: includedThemes,
@@ -325,7 +327,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
 
     try {
       await saveEmailDraft({
-        consultationId,
+        meetingId: resolvedMeetingId!,
         subject,
         body,
         themeSelections: includedThemes,
@@ -349,14 +351,14 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
     try {
       const draftIdToAccept = isDirty
         ? await saveEmailDraft({
-            consultationId,
+            meetingId: resolvedMeetingId!,
             subject,
             body,
             themeSelections: includedThemes,
           })
         : currentDraft.id;
 
-      await acceptEmailDraft(draftIdToAccept, consultationId);
+      await acceptEmailDraft(draftIdToAccept, resolvedMeetingId!);
       setConfirmAcceptOpen(false);
       await refreshPanelData();
     } catch (error) {
@@ -375,7 +377,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
     setIsSending(true);
 
     try {
-      await markEmailSent(currentDraft.id, consultationId);
+      await markEmailSent(currentDraft.id, resolvedMeetingId!);
       await refreshPanelData();
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -398,7 +400,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
               </Badge>
             </div>
           ) : null}
-          {consultationQuery.isPending ||
+          {meetingQuery.isPending ||
           evidenceEmailsQuery.isPending ||
           peopleQuery.isPending ? (
             <p className="text-sm text-muted-foreground">
@@ -406,19 +408,19 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
             </p>
           ) : null}
 
-          {consultationQuery.error ||
+          {meetingQuery.error ||
           evidenceEmailsQuery.error ||
           peopleQuery.error ? (
             <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {getErrorMessage(
-                consultationQuery.error ??
+                meetingQuery.error ??
                   evidenceEmailsQuery.error ??
                   peopleQuery.error
               )}
             </p>
           ) : null}
 
-          {!consultationQuery.isPending &&
+          {!meetingQuery.isPending &&
           !evidenceEmailsQuery.isPending &&
           currentDraft === null ? (
             <div className="space-y-3 rounded-lg border border-dashed border-border/80 bg-muted/20 p-4">
@@ -430,7 +432,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                   disabled={
                     isGenerating ||
                     includedThemeLabels.length === 0 ||
-                    !(consultationQuery.data?.consultation.transcript_raw?.trim())
+                    !(meetingQuery.data?.meeting.transcript_raw?.trim())
                   }
                   onClick={() => void handleGenerateDraft()}
                 >
@@ -468,7 +470,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                     disabled={
                       isGenerating ||
                       includedThemeLabels.length === 0 ||
-                      !(consultationQuery.data?.consultation.transcript_raw?.trim())
+                      !(meetingQuery.data?.meeting.transcript_raw?.trim())
                     }
                   >
                     {isGenerating ? (
@@ -486,12 +488,12 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
               <div className="space-y-2">
                 <label
                   className="text-sm font-medium"
-                  htmlFor={`email-subject-${consultationId}`}
+                  htmlFor={`email-subject-${resolvedMeetingId}`}
                 >
                   Subject
                 </label>
                 <Input
-                  id={`email-subject-${consultationId}`}
+                  id={`email-subject-${resolvedMeetingId}`}
                   value={subject}
                   readOnly={isReadOnly}
                   onChange={(event) => setSubject(event.target.value)}
@@ -501,12 +503,12 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
               <div className="space-y-2">
                 <label
                   className="text-sm font-medium"
-                  htmlFor={`email-body-${consultationId}`}
+                  htmlFor={`email-body-${resolvedMeetingId}`}
                 >
                   Draft body
                 </label>
                 <Textarea
-                  id={`email-body-${consultationId}`}
+                  id={`email-body-${resolvedMeetingId}`}
                   className="min-h-[200px]"
                   value={body}
                   readOnly={isReadOnly}

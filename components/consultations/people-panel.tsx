@@ -16,10 +16,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { useConsultationPeople, usePeople } from "@/hooks/use-people";
+import { useMeetingPeople, usePeople } from "@/hooks/use-people";
 import {
-  linkPersonToConsultation,
-  unlinkPersonFromConsultation,
+  linkPersonToMeeting,
+  unlinkPersonFromMeeting,
   createPerson,
 } from "@/lib/actions/people";
 import {
@@ -31,7 +31,8 @@ import { personSchema, type PersonFormData } from "@/lib/validations/consultatio
 import type { Person } from "@/types/db";
 
 interface PeoplePanelProps {
-  consultationId: string;
+  meetingId?: string;
+  consultationId?: string;
 }
 
 function getErrorMessage(error: unknown, fallbackMessage: string) {
@@ -69,9 +70,10 @@ function getPersonSummary(person: Pick<Person, "working_group" | "work_type" | "
     .join(" · ");
 }
 
-export function PeoplePanel({ consultationId }: PeoplePanelProps) {
+export function PeoplePanel({ meetingId, consultationId }: PeoplePanelProps) {
+  const resolvedMeetingId = meetingId ?? consultationId;
   const queryClient = useQueryClient();
-  const { data: linkedPeople, isLoading } = useConsultationPeople(consultationId);
+  const { data: linkedPeople, isLoading } = useMeetingPeople(resolvedMeetingId ?? "");
   const { data: allPeople } = usePeople();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -133,14 +135,14 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
   );
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ["consultation_people", consultationId] });
+    queryClient.invalidateQueries({ queryKey: ["meeting_people", resolvedMeetingId] });
     queryClient.invalidateQueries({ queryKey: ["people"] });
   }
 
   async function handleLink(person: Person) {
     setLinking(person.id);
     try {
-      await linkPersonToConsultation(consultationId, person.id);
+      await linkPersonToMeeting(resolvedMeetingId!, person.id);
       invalidate();
       setDialogOpen(false);
       setSearch("");
@@ -155,7 +157,7 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
   async function handleUnlink(personId: string) {
     setUnlinking(personId);
     try {
-      await unlinkPersonFromConsultation(consultationId, personId);
+      await unlinkPersonFromMeeting(resolvedMeetingId!, personId);
       invalidate();
     } catch (err) {
       console.error(err);
@@ -175,7 +177,7 @@ export function PeoplePanel({ consultationId }: PeoplePanelProps) {
         role: data.role?.trim() || undefined,
         email: data.email?.trim() || undefined,
       });
-      await linkPersonToConsultation(consultationId, personId);
+      await linkPersonToMeeting(resolvedMeetingId!, personId);
       invalidate();
       setDialogOpen(false);
       setShowCreateForm(false);

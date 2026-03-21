@@ -164,7 +164,7 @@ export function AuditExportPanel() {
             Date range: {filters.dateFrom ?? "Any"} to {filters.dateTo ?? "Any"}
           </p>
           <p className="text-muted-foreground">
-            Consultation: {selectedConsultation?.title ?? "All consultations"}
+            Consultation: {selectedConsultation?.label ?? "All consultations"}
           </p>
           <p className="text-muted-foreground">
             User: {selectedUser?.label ?? "All visible users"}

@@ -11,19 +11,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useConsultations } from "@/hooks/use-consultations";
-import { setConsultationRound } from "@/lib/actions/consultations";
+import { assignMeetingConsultation } from "@/lib/actions/consultations";
 
 interface RoundsPanelProps {
-  consultationId: string;
+  meetingId?: string;
+  consultationId?: string;
   currentRoundId: string | null;
   currentRoundLabel: string | null;
 }
 
 export function RoundsPanel({
+  meetingId,
   consultationId,
   currentRoundId,
   currentRoundLabel,
 }: RoundsPanelProps) {
+  const resolvedMeetingId = meetingId ?? consultationId;
   const queryClient = useQueryClient();
   const { data: rounds } = useConsultations();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -32,8 +35,8 @@ export function RoundsPanel({
   async function handleSelect(roundId: string | null) {
     setAssigning(roundId ?? "__clear__");
     try {
-      await setConsultationRound(consultationId, roundId);
-      queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] });
+      await assignMeetingConsultation(resolvedMeetingId!, roundId);
+      queryClient.invalidateQueries({ queryKey: ["meetings", resolvedMeetingId] });
       setDialogOpen(false);
     } catch (err) {
       console.error(err);

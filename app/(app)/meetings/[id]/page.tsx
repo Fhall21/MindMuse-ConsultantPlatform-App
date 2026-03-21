@@ -210,7 +210,7 @@ export default function MeetingDetailPage({
                 Consultation
               </p>
               <RoundsPanel
-                consultationId={id}
+                meetingId={id}
                 currentRoundId={meeting.consultation_id}
                 currentRoundLabel={currentConsultation?.label ?? null}
               />
@@ -243,7 +243,7 @@ export default function MeetingDetailPage({
                   Link people before audio transcription so the expected speaker count is clear.
                 </p>
               </div>
-              <PeoplePanel consultationId={id} />
+              <PeoplePanel meetingId={id} />
             </div>
           </div>
         </div>
@@ -255,7 +255,7 @@ export default function MeetingDetailPage({
       <section className="space-y-3">
         <SectionHeading>Transcript</SectionHeading>
         <TranscriptIntakePanel
-          consultationId={id}
+          meetingId={id}
           initialTranscript={meeting.transcript_raw}
           readOnly={!isDraft}
         />
@@ -266,7 +266,7 @@ export default function MeetingDetailPage({
       {/* Handwritten notes OCR */}
       <section className="space-y-3">
         <SectionHeading>Handwritten notes photo</SectionHeading>
-        <OcrReviewPanel consultationId={id} />
+        <OcrReviewPanel meetingId={id} />
       </section>
 
       <Separator />
@@ -275,7 +275,7 @@ export default function MeetingDetailPage({
       <section className="space-y-3">
         <SectionHeading>Notes</SectionHeading>
         <NotesEditor
-          consultationId={id}
+          meetingId={id}
           initialValue={meeting.notes}
           readOnly={!isDraft}
         />
@@ -286,7 +286,7 @@ export default function MeetingDetailPage({
       {/* Themes — Agent 4 slot */}
       <section className="space-y-3">
         <SectionHeading>Themes</SectionHeading>
-        <ThemePanel consultationId={id} />
+        <ThemePanel meetingId={id} />
       </section>
 
       <Separator />
@@ -294,7 +294,7 @@ export default function MeetingDetailPage({
       {/* Evidence Email — Agent 4 slot */}
       <section className="space-y-3">
         <SectionHeading>Evidence Email</SectionHeading>
-        <EmailDraftPanel consultationId={id} />
+        <EmailDraftPanel meetingId={id} />
       </section>
 
       <Separator />
@@ -302,7 +302,7 @@ export default function MeetingDetailPage({
       {/* Audit Trail — Agent 4 slot */}
       <section className="space-y-3">
         <SectionHeading>Audit Trail</SectionHeading>
-        <AuditTrail consultationId={id} />
+        <AuditTrail meetingId={id} />
       </section>
 
       {/* Mark Complete confirmation */}

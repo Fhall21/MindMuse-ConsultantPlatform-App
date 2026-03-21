@@ -8,18 +8,21 @@ import { Button } from "@/components/ui/button";
 import { updateTranscript } from "@/lib/actions/consultations";
 
 interface TranscriptEditorProps {
-  consultationId: string;
+  meetingId?: string;
+  consultationId?: string;
   initialValue: string | null;
   readOnly?: boolean;
   onSaved?: () => void;
 }
 
 export function TranscriptEditor({
+  meetingId,
   consultationId,
   initialValue,
   readOnly = false,
   onSaved,
 }: TranscriptEditorProps) {
+  const resolvedMeetingId = meetingId ?? consultationId;
   const [text, setText] = useState(initialValue ?? "");
   const [savedText, setSavedText] = useState(initialValue ?? "");
   const [saving, setSaving] = useState(false);
@@ -41,11 +44,11 @@ export function TranscriptEditor({
     if (!isDirty || saving) return;
     setSaving(true);
     try {
-      await updateTranscript({ id: consultationId, transcriptRaw: text });
+      await updateTranscript({ id: resolvedMeetingId!, transcriptRaw: text });
       setSavedText(text);
       setSavedAt(new Date());
       setShowSavedConfirm(true);
-      queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] });
+      queryClient.invalidateQueries({ queryKey: ["meetings", resolvedMeetingId] });
       onSaved?.();
       if (savedConfirmTimer.current) clearTimeout(savedConfirmTimer.current);
       savedConfirmTimer.current = setTimeout(() => setShowSavedConfirm(false), 3000);

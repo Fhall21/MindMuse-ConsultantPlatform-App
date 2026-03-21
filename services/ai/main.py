@@ -1,13 +1,51 @@
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
 from routers import clarification, draft, ocr, rounds, shorthand, templates, themes, transcribe
 
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Start the analytics job polling worker on startup; stop it on shutdown."""
+    engine = None
+    worker_task: asyncio.Task | None = None  # type: ignore[type-arg]
+
+    try:
+        from workers.analytics_job_worker import create_db_engine, run_worker_loop
+        engine = create_db_engine()
+        worker_task = asyncio.create_task(run_worker_loop(engine))
+        logger.info("[lifespan] analytics worker started")
+    except Exception as exc:
+        # Worker startup failure is non-fatal — the API still serves requests.
+        logger.warning("[lifespan] analytics worker could not start: %s", exc)
+
+    try:
+        yield
+    finally:
+        if worker_task and not worker_task.done():
+            worker_task.cancel()
+            try:
+                await worker_task
+            except asyncio.CancelledError:
+                pass
+        if engine is not None:
+            engine.dispose()
+        logger.info("[lifespan] analytics worker stopped")
+
+
 app = FastAPI(
     title="ConsultantPlatform AI Service",
     description="AI sidecar for theme extraction, email drafting, transcription, and OCR",
     version="0.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

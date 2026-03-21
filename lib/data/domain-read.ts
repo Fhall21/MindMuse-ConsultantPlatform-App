@@ -132,6 +132,18 @@ export async function getMeetingForUser(
   return row ? mapConsultationRoundRecord(row) : null;
 }
 
+export async function listMeetingsForUser(
+  userId: string
+): Promise<Meeting[]> {
+  const rows = await db
+    .select()
+    .from(meetings)
+    .where(eq(meetings.userId, userId))
+    .orderBy(desc(meetings.createdAt));
+
+  return rows.map(mapConsultationRoundRecord);
+}
+
 export async function listMeetingsForConsultation(
   consultationId: string,
   userId: string

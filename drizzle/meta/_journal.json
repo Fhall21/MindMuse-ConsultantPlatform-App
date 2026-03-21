@@ -29,6 +29,20 @@
       "when": 1774188000000,
       "tag": "0003_stage7_analytics",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774188600000,
+      "tag": "0004_round_cross_insights",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774189200000,
+      "tag": "0005_rename_consultation_round_to_meeting_consultation",
+      "breakpoints": true
     }
   ]
 }

@@ -1,11 +1,18 @@
--- Rename consultation_rounds → consultations
-ALTER TABLE consultation_rounds RENAME TO consultations;
-
 -- Rename consultations → meetings
 ALTER TABLE consultations RENAME TO meetings;
 
+-- Update FK column names in meetings: round_id → consultation_id
+ALTER TABLE meetings RENAME COLUMN round_id TO consultation_id;
+ALTER INDEX idx_consultations_round_id RENAME TO idx_meetings_consultation_id;
+
+-- Rename consultation_rounds → consultations
+ALTER TABLE consultation_rounds RENAME TO consultations;
+
 -- Rename consultation_people → meeting_people
 ALTER TABLE consultation_people RENAME TO meeting_people;
+
+-- Update FK column names in meeting_people: consultation_id → meeting_id
+ALTER TABLE meeting_people RENAME COLUMN consultation_id TO meeting_id;
 
 -- Rename consultation_groups → meeting_groups
 ALTER TABLE consultation_groups RENAME TO meeting_groups;
@@ -76,15 +83,19 @@ ALTER INDEX idx_consultation_groups_round_id RENAME TO idx_meeting_groups_consul
 ALTER INDEX idx_consultation_groups_user_round RENAME TO idx_meeting_groups_user_consultation;
 
 -- Update FK column names in consultation_group_members
-ALTER TABLE consultation_group_members RENAME COLUMN round_id TO consultation_id;
 ALTER TABLE consultation_group_members RENAME COLUMN consultation_id TO meeting_id;
-ALTER INDEX idx_consultation_group_members_round_id RENAME TO idx_consultation_group_members_consultation_id;
+ALTER TABLE consultation_group_members RENAME COLUMN round_id TO consultation_id;
 ALTER INDEX idx_consultation_group_members_consultation_id RENAME TO idx_consultation_group_members_meeting_id;
+ALTER INDEX idx_consultation_group_members_round_id RENAME TO idx_consultation_group_members_consultation_id;
 ALTER INDEX consultation_group_members_round_consultation_key RENAME TO consultation_group_members_consultation_meeting_key;
 
 -- Update FK column names in canvas_connections: round_id → consultation_id
 ALTER TABLE canvas_connections RENAME COLUMN round_id TO consultation_id;
 ALTER INDEX idx_canvas_connections_round_user_created RENAME TO idx_canvas_connections_consultation_user_created;
+
+-- Update FK column names in canvas_layout_state: round_id → consultation_id
+ALTER TABLE canvas_layout_state RENAME COLUMN round_id TO consultation_id;
+ALTER INDEX idx_canvas_layout_state_round_user RENAME TO idx_canvas_layout_state_consultation_user;
 
 -- Update CHECK constraints that reference old column names
 ALTER TABLE consultation_decisions DROP CONSTRAINT round_decisions_target_type_check;

@@ -29,8 +29,8 @@ export type { ThemeDetail as ConsultationThemeGroupDetail, ThemeMemberDetail as 
 
 export interface SourceTheme {
   id: string; // = sourceThemeId
-  sourceMeetingId: string; // = meetingId
-  sourceMeetingTitle: string; // = meetingTitle
+  sourceConsultationId: string; // = consultationId
+  sourceConsultationTitle: string; // = consultationTitle
   label: string;
   description: string | null;
   editableLabel: string;
@@ -59,3 +59,7 @@ export type ThemeOrigin = "manual" | "ai_refined";
 export type { ThemeDetail as ConsultationThemeGroup, ThemeDraftState as ConsultationThemeGroupDraft } from "@/lib/actions/consultation-workflow";
 export type ConsultationThemeGroupStatus = "draft" | "accepted" | "discarded" | "management_rejected";
 export type ConsultationThemeGroupOrigin = "manual" | "ai_refined";
+
+// Additional aliases for page component compatibility
+export type { ThemeDetail as RoundThemeGroup } from "@/lib/actions/consultation-workflow";
+export type RoundConsultationSummary = ConsultationMeetingSummary;

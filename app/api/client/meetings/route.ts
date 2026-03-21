@@ -9,9 +9,9 @@ export async function GET() {
   }
 
   try {
-    const consultations = await listConsultationsForUser(client.userId);
-    return NextResponse.json(consultations);
+    const meetings = await listConsultationsForUser(client.userId);
+    return NextResponse.json(meetings);
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Failed to load consultations");
+    return jsonError(error instanceof Error ? error.message : "Failed to load meetings");
   }
 }

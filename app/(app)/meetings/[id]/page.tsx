@@ -216,7 +216,7 @@ export default function ConsultationDetailPage({
             {!isDraft && consultation.round_id ? (
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" asChild>
-                  <Link href={`/consultations/rounds/${consultation.round_id}`}>
+                  <Link href={`/consultations/${consultation.round_id}`}>
                     Open round workspace &rarr;
                   </Link>
                 </Button>

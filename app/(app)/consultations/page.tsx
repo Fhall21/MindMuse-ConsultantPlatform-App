@@ -209,7 +209,7 @@ export default function ConsultationsPage() {
           <p className="text-sm text-muted-foreground">Open or create a consultation.</p>
         </div>
         <Button asChild>
-          <Link href="/consultations/new">New Consultation</Link>
+          <Link href="/meetings/new">New Consultation</Link>
         </Button>
       </div>
 
@@ -235,7 +235,7 @@ export default function ConsultationsPage() {
         <div className="space-y-3 border-t border-border/80 pt-4">
           <p className="text-sm text-muted-foreground">No consultations yet.</p>
           <Button asChild>
-            <Link href="/consultations/new">New Consultation</Link>
+            <Link href="/meetings/new">New Consultation</Link>
           </Button>
         </div>
       ) : hasNoFilteredRows ? (

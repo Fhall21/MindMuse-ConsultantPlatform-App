@@ -25,14 +25,14 @@ export default async function CanvasRoundPage({ params }: CanvasRoundPageProps) 
       {/* Breadcrumb header */}
       <header className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
         <Link
-          href="/consultations/rounds"
+          href="/consultations/"
           className="text-sm text-muted-foreground hover:text-foreground"
         >
           Rounds
         </Link>
         <span className="text-sm text-muted-foreground">/</span>
         <Link
-          href={`/consultations/rounds/${roundId}`}
+          href={`/consultations/${roundId}`}
           className="text-sm text-muted-foreground hover:text-foreground"
         >
           {round.label}

@@ -162,7 +162,7 @@ export default function RoundDetailPage({
           Failed to load round. It may not exist or you may not have access.
         </p>
         <Button variant="ghost" asChild>
-          <Link href="/consultations/rounds">Back to rounds</Link>
+          <Link href="/consultations/">Back to rounds</Link>
         </Button>
       </div>
     );
@@ -176,7 +176,7 @@ export default function RoundDetailPage({
       <div className="flex items-start justify-between gap-4">
         <RoundDetailHeader round={data.round} />
         <Button variant="outline" size="sm" asChild className="shrink-0">
-          <Link href={`/canvas/round/${id}`}>Evidence canvas →</Link>
+          <Link href={`/canvas/consultation/${id}`}>Evidence canvas →</Link>
         </Button>
       </div>
 

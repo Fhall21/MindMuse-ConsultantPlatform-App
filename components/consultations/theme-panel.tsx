@@ -11,14 +11,7 @@ import { cn } from "@/lib/utils";
 import type { Insight } from "@/types/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -438,17 +431,6 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
   return (
     <>
       <Card className="border-border/70">
-        <CardHeader>
-          <div>
-            <CardTitle>Theme Review</CardTitle>
-            <CardDescription>Extract consultation themes, review them, and keep clarification prompts close at hand.</CardDescription>
-          </div>
-          {totalThemeCount > 0 ? (
-            <CardAction>
-              <Badge variant="secondary">{reviewedCount} reviewed</Badge>
-            </CardAction>
-          ) : null}
-        </CardHeader>
         <CardContent className="space-y-4">
           {consultationQuery.isPending || themesQuery.isPending ? (
             <p className="text-sm text-muted-foreground">Loading theme data…</p>

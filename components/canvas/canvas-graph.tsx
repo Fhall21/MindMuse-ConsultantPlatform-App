@@ -29,6 +29,7 @@ interface CanvasGraphProps {
   filters: CanvasFilterState;
   selectedNodeIds: string[];
   selectedEdgeId: string | null;
+  aiGeneratedGroupIds?: Set<string>;
   onSelectionChange: (nodeIds: string[]) => void;
   onNodeFocus: (id: string | null) => void;
   onEdgeSelect: (id: string | null) => void;
@@ -80,7 +81,11 @@ function applyFilters(nodes: CanvasNode[], edges: CanvasEdge[], filters: CanvasF
   return { filteredNodes, filteredEdges };
 }
 
-function buildFlowNodes(nodes: CanvasNode[], selectedNodeIds: string[]): Node[] {
+function buildFlowNodes(
+  nodes: CanvasNode[],
+  selectedNodeIds: string[],
+  aiGeneratedGroupIds: Set<string>
+): Node[] {
   const selectedSet = new Set(selectedNodeIds);
   const labelsById = new Map(nodes.map((node) => [node.id, node.label] as const));
   const themeById = new Map(
@@ -91,7 +96,7 @@ function buildFlowNodes(nodes: CanvasNode[], selectedNodeIds: string[]): Node[] 
     .filter((node) => node.type === "theme")
     .map((node) => {
       const previewLabels = node.memberIds
-        .slice(0, 3)
+        .slice(0, 4)
         .map((memberId) => labelsById.get(memberId))
         .filter((label): label is string => Boolean(label));
 
@@ -102,13 +107,14 @@ function buildFlowNodes(nodes: CanvasNode[], selectedNodeIds: string[]): Node[] 
         selected: selectedSet.has(node.id),
         draggable: true,
         style: {
-          width: 300,
-          minHeight: Math.max(180, 132 + node.memberIds.length * 44),
+          width: 320,
+          minHeight: Math.max(160, 120 + node.memberIds.length * 32),
         },
         data: {
           node,
           isNestedInGroup: false,
           memberPreviewLabels: previewLabels,
+          aiGenerated: aiGeneratedGroupIds.has(node.id),
         } satisfies CanvasNodeCardData,
       } satisfies Node;
     });
@@ -177,6 +183,7 @@ function CanvasGraphInner({
   filters,
   selectedNodeIds,
   selectedEdgeId,
+  aiGeneratedGroupIds = new Set(),
   onSelectionChange,
   onNodeFocus,
   onEdgeSelect,
@@ -190,6 +197,10 @@ function CanvasGraphInner({
   const dragRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragSelectionRef = useRef(false);
+  // Suppresses handleSelectionChange while a node-click is being processed
+  // so we don't get a double-update cycle (click handler + ReactFlow's own
+  // onSelectionChange both calling the same parent state setters).
+  const clickHandlingRef = useRef(false);
 
   const nodesById = useMemo(
     () => new Map((data?.nodes ?? []).map((node) => [node.id, node] as const)),
@@ -202,8 +213,8 @@ function CanvasGraphInner({
   );
 
   const flowNodes = useMemo(
-    () => buildFlowNodes(filteredNodes, selectedNodeIds),
-    [filteredNodes, selectedNodeIds]
+    () => buildFlowNodes(filteredNodes, selectedNodeIds, aiGeneratedGroupIds),
+    [filteredNodes, selectedNodeIds, aiGeneratedGroupIds]
   );
 
   const flowEdges = useMemo(
@@ -214,6 +225,7 @@ function CanvasGraphInner({
   const handleNodeClick: NodeMouseHandler = useCallback(
     (event, node) => {
       event.preventDefault();
+      clickHandlingRef.current = true;
       const isMultiToggle = event.metaKey || event.ctrlKey || event.shiftKey;
       if (isMultiToggle) {
         const next = new Set(selectedNodeIds);
@@ -228,13 +240,18 @@ function CanvasGraphInner({
       }
       onNodeFocus(node.id);
       onEdgeSelect(null);
+      // Reset after React has flushed this update so handleSelectionChange
+      // (fired by ReactFlow in the same tick) is suppressed.
+      Promise.resolve().then(() => { clickHandlingRef.current = false; });
     },
     [onEdgeSelect, onNodeFocus, onSelectionChange, selectedNodeIds]
   );
 
   const handleSelectionChange = useCallback<OnSelectionChangeFunc>(
     ({ nodes }) => {
-      if (dragSelectionRef.current) {
+      // Suppress during active click or drag — those handlers call the same
+      // parent setters directly, so firing again causes a cascade.
+      if (dragSelectionRef.current || clickHandlingRef.current) {
         return;
       }
       if (nodes.length === 0) {
@@ -242,9 +259,10 @@ function CanvasGraphInner({
       }
       onSelectionChange(nodes.map((node) => node.id));
       onNodeFocus(nodes[nodes.length - 1]?.id ?? null);
-      onEdgeSelect(null);
+      // Do NOT call onEdgeSelect here — it's set by handleNodeClick /
+      // handlePaneClick and calling it here causes extra update cycles.
     },
-    [onEdgeSelect, onNodeFocus, onSelectionChange]
+    [onNodeFocus, onSelectionChange]
   );
 
   const handleEdgeClick: EdgeMouseHandler = useCallback(

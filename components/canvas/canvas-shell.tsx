@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Layers3, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -10,9 +10,11 @@ import { CanvasGraph } from "@/components/canvas/canvas-graph";
 import { ConnectionTypePrompt } from "@/components/canvas/connection-type-prompt";
 import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
+import { MultiSelectionPanel } from "@/components/canvas/multi-selection-panel";
 import { useCanvas, useCreateEdge, useUpdateEdge } from "@/hooks/use-canvas";
 import { resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
-import { createTheme, moveThemeToGroup } from "@/lib/actions/round-workflow";
+import { createTheme, moveThemeToGroup, updateTheme } from "@/lib/actions/round-workflow";
+import { suggestGroupLabel } from "@/lib/actions/canvas-ai";
 import { defaultFilterState, type CanvasFilterState, type ConnectionType } from "@/types/canvas";
 
 interface CanvasShellProps {
@@ -30,10 +32,7 @@ interface ConnectionPromptState {
 }
 
 function equalStringSets(a: string[], b: string[]) {
-  if (a.length !== b.length) {
-    return false;
-  }
-
+  if (a.length !== b.length) return false;
   const bSet = new Set(b);
   return a.every((item) => bSet.has(item));
 }
@@ -50,6 +49,10 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [connectionPrompt, setConnectionPrompt] = useState<ConnectionPromptState | null>(null);
+  const [isGrouping, setIsGrouping] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  // Track which theme group IDs were titled by AI so cards can show the indicator
+  const [aiGeneratedGroupIds, setAiGeneratedGroupIds] = useState<Set<string>>(new Set());
 
   const nodes = useMemo(() => canvasQuery.data?.nodes ?? [], [canvasQuery.data?.nodes]);
   const edges = useMemo(() => canvasQuery.data?.edges ?? [], [canvasQuery.data?.edges]);
@@ -61,16 +64,21 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     ? edges.find((edge) => edge.id === selectedEdgeId) ?? null
     : null;
 
-  const hasSidePanel = Boolean(selectedNode || selectedEdge || showSuggestions);
-  const selectedInsightCount = selectedNodeIds.filter((id) =>
-    nodes.some((node) => node.id === id && node.type === "insight")
-  ).length;
+  // Multi-selection panel shows when 2+ nodes are selected and nothing is focused
+  const selectedInsightNodes = useMemo(
+    () => nodes.filter((n) => selectedNodeIds.includes(n.id) && n.type === "insight"),
+    [nodes, selectedNodeIds]
+  );
+  const showMultiSelect =
+    selectedNodeIds.length >= 2 && !focusedNodeId && !selectedEdgeId && !showSuggestions;
+  const hasSidePanel = Boolean(
+    selectedNode || selectedEdge || showSuggestions || showMultiSelect
+  );
 
   const nodeLabelsById = useMemo(
     () => new Map(nodes.map((node) => [node.id, node.label] as const)),
     [nodes]
   );
-
   const nodePositionsById = useMemo(
     () => new Map(nodes.map((node) => [node.id, node.position] as const)),
     [nodes]
@@ -78,6 +86,13 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
   const invalidateCanvas = () =>
     queryClient.invalidateQueries({ queryKey: ["canvas", roundId] });
+
+  // Stable — prevents ReactFlow from rebuilding its selection handler on every render
+  const handleCanvasSelectionChange = useCallback((nextIds: string[]) => {
+    setSelectedNodeIds((current) =>
+      equalStringSets(current, nextIds) ? current : nextIds
+    );
+  }, []);
 
   function handleClose() {
     setFocusedNodeId(null);
@@ -104,28 +119,16 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
       position: (() => {
         const source = nodePositionsById.get(createdEdge.source_node_id);
         const target = nodePositionsById.get(createdEdge.target_node_id);
-        if (!source || !target) {
-          return null;
-        }
-
-        return {
-          x: (source.x + target.x) / 2,
-          y: (source.y + target.y) / 2,
-        };
+        if (!source || !target) return null;
+        return { x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 };
       })(),
     });
 
     return createdEdge;
   }
 
-  async function handleSelectConnectionType(payload: {
-    type: ConnectionType;
-    note: string;
-  }) {
-    if (!connectionPrompt) {
-      return;
-    }
-
+  async function handleSelectConnectionType(payload: { type: ConnectionType; note: string }) {
+    if (!connectionPrompt) return;
     await updateEdge.mutateAsync({
       id: connectionPrompt.edgeId,
       connection_type: payload.type,
@@ -134,21 +137,73 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     setConnectionPrompt(null);
   }
 
-  async function handleGroupDrop(params: { activeNodeId: string; targetNodeId: string | null }) {
-    if (!canvasQuery.data) {
-      return;
+  // ─── Multi-select: group selected insights into a theme ─────────────────────
+
+  async function handleGroupSelected() {
+    const insightIds = selectedInsightNodes.map((n) => n.id);
+    if (insightIds.length < 2) return;
+
+    setIsGrouping(true);
+    try {
+      const { groupId } = await createTheme(roundId, insightIds);
+
+      // Ask AI to name the group from the insight labels/descriptions
+      const aiLabel = await suggestGroupLabel(
+        selectedInsightNodes.map((n) => n.label),
+        selectedInsightNodes.map((n) => n.description ?? null)
+      );
+      if (aiLabel) {
+        await updateTheme(groupId, { label: aiLabel });
+        setAiGeneratedGroupIds((prev) => new Set([...prev, groupId]));
+      }
+
+      void invalidateCanvas();
+      setSelectedNodeIds([]);
+      setFocusedNodeId(null);
+    } finally {
+      setIsGrouping(false);
     }
+  }
+
+  // ─── Multi-select: connect selected nodes in a chain ────────────────────────
+
+  async function handleConnectSelected() {
+    const selectedNodes = nodes.filter((n) => selectedNodeIds.includes(n.id));
+    if (selectedNodes.length < 2) return;
+
+    setIsConnecting(true);
+    try {
+      for (let i = 0; i < selectedNodes.length - 1; i++) {
+        const source = selectedNodes[i];
+        const target = selectedNodes[i + 1];
+        await createEdge.mutateAsync({
+          source_node_type: source.type,
+          source_node_id: source.id,
+          target_node_type: target.type,
+          target_node_id: target.id,
+          connection_type: "related_to",
+        });
+      }
+      void invalidateCanvas();
+      setSelectedNodeIds([]);
+      setFocusedNodeId(null);
+    } finally {
+      setIsConnecting(false);
+    }
+  }
+
+  // ─── Drag-and-drop grouping ──────────────────────────────────────────────────
+
+  async function handleGroupDrop(params: { activeNodeId: string; targetNodeId: string | null }) {
+    if (!canvasQuery.data) return;
 
     if (!params.targetNodeId) {
       const activeNode = canvasQuery.data.nodes.find((node) => node.id === params.activeNodeId);
-      if (!activeNode || activeNode.type !== "insight" || !activeNode.groupId) {
-        return;
-      }
+      if (!activeNode || activeNode.type !== "insight" || !activeNode.groupId) return;
 
       const selectedInsightIds = selectedNodeIds.filter((id) =>
         canvasQuery.data?.nodes.some((node) => node.id === id && node.type === "insight")
       );
-
       const insightIds = selectedInsightIds.includes(params.activeNodeId)
         ? selectedInsightIds
         : [params.activeNodeId];
@@ -167,9 +222,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
       nodes: canvasQuery.data.nodes,
     });
 
-    if (plan.type === "noop") {
-      return;
-    }
+    if (plan.type === "noop") return;
 
     if (plan.type === "create-group") {
       await createTheme(canvasQuery.data.round_id, plan.seedInsightIds);
@@ -188,6 +241,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
   return (
     <div className="flex h-full flex-col">
+      {/* Toolbar */}
       <div className="flex items-center gap-3 border-b px-4 py-3">
         <span className="text-sm font-medium text-muted-foreground">{roundLabel}</span>
         <Separator orientation="vertical" className="h-4" />
@@ -227,20 +281,25 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          {selectedInsightCount > 1 ? (
-            <Badge variant="secondary" className="gap-1">
-              <Layers3 className="h-3 w-3" />
-              {selectedInsightCount} insights ready to group
-            </Badge>
-          ) : null}
-          <Button variant="outline" size="sm" onClick={() => setShowSuggestions((value) => !value)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setShowSuggestions((value) => !value);
+              setFocusedNodeId(null);
+              setSelectedEdgeId(null);
+            }}
+          >
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
             AI suggestions
           </Button>
-          <span className="text-xs text-muted-foreground">Drag onto a card to group</span>
+          <span className="text-xs text-muted-foreground">
+            Shift+click to multi-select
+          </span>
         </div>
       </div>
 
+      {/* Canvas + side panel */}
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1 bg-muted/30">
           <CanvasGraph
@@ -248,19 +307,20 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
             filters={filters}
             selectedNodeIds={selectedNodeIds}
             selectedEdgeId={selectedEdgeId}
-            onSelectionChange={(nextSelection) =>
-              setSelectedNodeIds((current) =>
-                equalStringSets(current, nextSelection) ? current : nextSelection
-              )
-            }
-            onNodeFocus={setFocusedNodeId}
+            aiGeneratedGroupIds={aiGeneratedGroupIds}
+            onSelectionChange={handleCanvasSelectionChange}
+            onNodeFocus={(id) => {
+              setFocusedNodeId(id);
+              // A single-node focus clears multi-select panel
+              if (id && selectedNodeIds.length > 1 && !selectedNodeIds.includes(id)) {
+                setSelectedNodeIds([id]);
+              }
+            }}
             onEdgeSelect={setSelectedEdgeId}
             onCreateEdge={handleCreateEdge}
             onQuickEditEdge={(edgeId) => {
               const edge = edges.find((item) => item.id === edgeId);
-              if (!edge) {
-                return;
-              }
+              if (!edge) return;
               setSelectedEdgeId(edgeId);
               setConnectionPrompt({
                 edgeId,
@@ -294,6 +354,19 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
                 roundId={roundId}
                 nodes={nodes}
                 onClose={() => setShowSuggestions(false)}
+              />
+            ) : showMultiSelect ? (
+              <MultiSelectionPanel
+                selectedNodeIds={selectedNodeIds}
+                nodes={nodes}
+                isGrouping={isGrouping}
+                isConnecting={isConnecting}
+                onGroup={handleGroupSelected}
+                onConnect={handleConnectSelected}
+                onClear={() => {
+                  setSelectedNodeIds([]);
+                  setFocusedNodeId(null);
+                }}
               />
             ) : (
               <NodeDetailPanel

@@ -82,6 +82,7 @@ export function ConnectionTypePrompt({
 
   return (
     <div
+      data-testid="connection-type-prompt"
       className="absolute bottom-4 left-4 z-20 w-[320px] rounded-md border bg-background p-4 shadow-xl"
       style={promptStyle}
     >

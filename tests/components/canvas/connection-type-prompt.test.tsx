@@ -43,8 +43,7 @@ describe("ConnectionTypePrompt", () => {
       />
     );
 
-    const promptHeading = screen.getByText("Set connection type");
-    const prompt = promptHeading.closest("div")?.parentElement;
+    const prompt = screen.getByTestId("connection-type-prompt");
 
     expect(prompt).toHaveStyle({ left: "90px", top: "192px" });
 

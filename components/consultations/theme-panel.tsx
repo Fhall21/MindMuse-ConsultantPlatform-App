@@ -258,7 +258,7 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
 
   async function refreshPanelData() {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] }),
+      queryClient.invalidateQueries({ queryKey: ["meetings", consultationId] }),
       queryClient.invalidateQueries({ queryKey: ["themes", consultationId] }),
       queryClient.invalidateQueries({ queryKey: ["audit_log", consultationId] }),
     ]);

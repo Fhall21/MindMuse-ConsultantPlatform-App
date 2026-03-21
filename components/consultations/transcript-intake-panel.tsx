@@ -31,7 +31,7 @@ interface MammothLike {
 }
 
 interface ConsultationCacheData {
-  consultation?: {
+  meeting?: {
     transcript_raw: string | null;
   } & Record<string, unknown>;
   [key: string]: unknown;
@@ -191,16 +191,16 @@ export function TranscriptIntakePanel({
     setTranscriptValue(text);
     setActiveTab("paste");
     queryClient.setQueryData<ConsultationCacheData>(
-      ["consultations", consultationId],
+      ["meetings", consultationId],
       (current) => {
-        if (!current?.consultation) {
+        if (!current?.meeting) {
           return current;
         }
 
         return {
           ...current,
-          consultation: {
-            ...current.consultation,
+          meeting: {
+            ...current.meeting,
             transcript_raw: text,
           },
         };
@@ -214,7 +214,10 @@ export function TranscriptIntakePanel({
     updateTranscript({ id: consultationId, transcriptRaw: text })
       .then(() => {
         pendingLocalRef.current = false;
-        return queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] });
+        return Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["meetings", consultationId] }),
+          queryClient.invalidateQueries({ queryKey: ["meetings"] }),
+        ]);
       })
       .catch(() => {
         // Optimistic update still in place; user can manually save.
@@ -271,7 +274,10 @@ export function TranscriptIntakePanel({
       try {
         await updateTranscript({ id: consultationId, transcriptRaw: extractedText });
         pendingLocalRef.current = false;
-        await queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["meetings", consultationId] }),
+          queryClient.invalidateQueries({ queryKey: ["meetings"] }),
+        ]);
       } catch {
         // Auto-save failed — the optimistic update is still in place; the
         // user can manually save from the Paste tab.

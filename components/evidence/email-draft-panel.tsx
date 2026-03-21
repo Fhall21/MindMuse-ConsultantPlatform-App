@@ -261,7 +261,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
 
   async function refreshPanelData() {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] }),
+      queryClient.invalidateQueries({ queryKey: ["meetings", consultationId] }),
       queryClient.invalidateQueries({ queryKey: ["evidence_emails", consultationId] }),
       queryClient.invalidateQueries({ queryKey: ["audit_log", consultationId] }),
       queryClient.invalidateQueries({

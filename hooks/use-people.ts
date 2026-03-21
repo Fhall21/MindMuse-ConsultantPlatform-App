@@ -13,7 +13,7 @@ export function useConsultationPeople(consultationId: string) {
   return useQuery({
     queryKey: ["consultation_people", consultationId],
     queryFn: () =>
-      fetchJson<Person[]>(`/api/client/consultations/${consultationId}/people`),
+      fetchJson<Person[]>(`/api/client/meetings/${consultationId}/people`),
     enabled: !!consultationId,
   });
 }

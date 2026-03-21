@@ -45,7 +45,10 @@ export function TranscriptEditor({
       setSavedText(text);
       setSavedAt(new Date());
       setShowSavedConfirm(true);
-      queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["meetings", consultationId] }),
+        queryClient.invalidateQueries({ queryKey: ["meetings"] }),
+      ]);
       onSaved?.();
       if (savedConfirmTimer.current) clearTimeout(savedConfirmTimer.current);
       savedConfirmTimer.current = setTimeout(() => setShowSavedConfirm(false), 3000);

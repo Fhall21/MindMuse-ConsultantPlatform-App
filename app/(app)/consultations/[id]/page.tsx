@@ -72,7 +72,10 @@ export default function ConsultationDetailPage({
     setCompleting(true);
     try {
       await markConsultationComplete(id);
-      queryClient.invalidateQueries({ queryKey: ["consultations", id] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["meetings", id] }),
+        queryClient.invalidateQueries({ queryKey: ["meetings"] }),
+      ]);
       setConfirmCompleteOpen(false);
     } catch (err) {
       console.error(err);
@@ -88,7 +91,10 @@ export default function ConsultationDetailPage({
     setSavingTitle(true);
     try {
       await updateConsultationTitle({ id, title: titleDraft });
-      await queryClient.invalidateQueries({ queryKey: ["consultations", id] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["meetings", id] }),
+        queryClient.invalidateQueries({ queryKey: ["meetings"] }),
+      ]);
       toast.success("Consultation title updated.");
     } catch (err) {
       console.error(err);

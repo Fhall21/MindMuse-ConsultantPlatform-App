@@ -307,7 +307,7 @@ async function loadRoundSummaryInternal(params: {
     (consultation) => ({
       id: consultation.id,
       title: consultation.title,
-      round_id: consultation.round_id,
+      consultation_id: consultation.round_id,
     })
   ) as ConsultationContext[];
   const consultationIds = consultations.map((consultation) => consultation.id);
@@ -607,7 +607,7 @@ export async function getConsultationReportData(
   const consultationContext: ConsultationContext = {
     id: consultation.id,
     title: consultation.title,
-    round_id: consultation.round_id,
+    consultation_id: consultation.round_id,
   };
 
   let localAcceptedThemes: Insight[] = [];

@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { canvasConnections } from "@/db/schema";
 import { jsonError, requireRouteClient } from "../../../../../_helpers";
-import { requireOwnedConsultation } from "@/lib/data/ownership";
+import { requireOwnedMeeting } from "@/lib/data/ownership";
 import { insertAuditLogEntry } from "@/lib/data/audit-log";
 import type { CanvasEdge, ConnectionType } from "@/types/canvas";
 
@@ -12,13 +12,14 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string; suggestionId: string }> }
 ) {
-  const { id: consultationId, suggestionId } = await params;
+  const { id: meetingId, suggestionId } = await params;
   const client = await requireRouteClient();
   if ("response" in client) return client.response;
 
   try {
-    const consultation = await requireOwnedConsultation(consultationId, client.userId);
-    if (!consultation.roundId) return jsonError("Consultation has no active round", 400);
+    const meeting = await requireOwnedMeeting(meetingId, client.userId);
+    const consultationId = meeting.consultationId;
+    if (!consultationId) return jsonError("Meeting has no active consultation", 400);
 
     const existing = await db
       .select()
@@ -26,7 +27,7 @@ export async function POST(
       .where(
         and(
           eq(canvasConnections.id, suggestionId),
-          eq(canvasConnections.roundId, consultation.roundId),
+          eq(canvasConnections.consultationId, consultationId),
           eq(canvasConnections.origin, "ai_suggested")
         )
       )
@@ -45,7 +46,7 @@ export async function POST(
 
     await insertAuditLogEntry({
       userId: client.userId,
-      consultationId,
+      consultationId: meetingId,
       action: "accepted",
       entityType: "ai_suggestion",
       entityId: suggestionId,
@@ -81,13 +82,14 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string; suggestionId: string }> }
 ) {
-  const { id: consultationId, suggestionId } = await params;
+  const { id: meetingId, suggestionId } = await params;
   const client = await requireRouteClient();
   if ("response" in client) return client.response;
 
   try {
-    const consultation = await requireOwnedConsultation(consultationId, client.userId);
-    if (!consultation.roundId) return jsonError("Consultation has no active round", 400);
+    const meeting = await requireOwnedMeeting(meetingId, client.userId);
+    const consultationId = meeting.consultationId;
+    if (!consultationId) return jsonError("Meeting has no active consultation", 400);
 
     const existing = await db
       .select()
@@ -95,7 +97,7 @@ export async function DELETE(
       .where(
         and(
           eq(canvasConnections.id, suggestionId),
-          eq(canvasConnections.roundId, consultation.roundId),
+          eq(canvasConnections.consultationId, consultationId),
           eq(canvasConnections.origin, "ai_suggested")
         )
       )
@@ -111,7 +113,7 @@ export async function DELETE(
 
     await insertAuditLogEntry({
       userId: client.userId,
-      consultationId,
+      consultationId: meetingId,
       action: "rejected",
       entityType: "ai_suggestion",
       entityId: suggestionId,

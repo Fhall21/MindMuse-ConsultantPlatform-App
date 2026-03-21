@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useConsultations } from "@/hooks/use-meetings";
+import { useConsultations } from "@/hooks/use-consultations";
 import { useAuditExport, useAuditExportUsers } from "@/hooks/use-audit-export";
 import type { AuditExportFormat, AuditExportFilters } from "@/types/db";
 import { Button } from "@/components/ui/button";
@@ -127,7 +127,7 @@ export function AuditExportPanel() {
               <option value="">All consultations</option>
               {consultations.map((consultation) => (
                 <option key={consultation.id} value={consultation.id}>
-                  {consultation.title}
+                  {consultation.label}
                 </option>
               ))}
             </select>

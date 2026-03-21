@@ -2,12 +2,12 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { RoundThemeGroupDraft } from "@/types/round-detail";
+import type { ConsultationThemeGroupDraft } from "@/types/round-detail";
 
 interface AIDraftReviewProps {
   currentLabel: string;
   currentDescription: string | null;
-  draft: RoundThemeGroupDraft;
+  draft: ConsultationThemeGroupDraft;
   onAccept: () => void;
   onDiscard: () => void;
   disabled?: boolean;

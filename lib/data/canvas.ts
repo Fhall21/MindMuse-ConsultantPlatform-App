@@ -13,7 +13,7 @@ import type {
   CanvasViewport,
   ConnectionType,
 } from "@/types/canvas";
-import { requireOwnedRound } from "./ownership";
+import { requireOwnedConsultation } from "./ownership";
 import { insertAuditLogEntry } from "./audit-log";
 
 type CanvasConnectionInsert = typeof canvasConnections.$inferInsert;
@@ -24,10 +24,10 @@ type CanvasLayoutInsert = typeof canvasLayoutState.$inferInsert;
  * Returns edges that the user created (origin = 'manual' or accepted AI suggestions).
  */
 export async function loadCanvasConnections(
-  roundId: string,
+  consultationId: string,
   userId: string
 ): Promise<CanvasEdge[]> {
-  await requireOwnedRound(roundId, userId);
+  await requireOwnedConsultation(consultationId, userId);
 
   const rows = await db
     .select({
@@ -43,7 +43,7 @@ export async function loadCanvasConnections(
     .from(canvasConnections)
     .where(
       and(
-        eq(canvasConnections.roundId, roundId),
+        eq(canvasConnections.consultationId, consultationId),
         eq(canvasConnections.userId, userId)
       )
     )
@@ -65,20 +65,20 @@ export async function loadCanvasConnections(
  * Load canvas layout state (positions + viewport) for a round × user.
  */
 export async function loadCanvasLayout(
-  roundId: string,
+  consultationId: string,
   userId: string
 ): Promise<{
   positions: Record<string, CanvasPosition>;
   viewport: CanvasViewport;
 }> {
-  await requireOwnedRound(roundId, userId);
+  await requireOwnedConsultation(consultationId, userId);
 
   const rows = await db
     .select()
     .from(canvasLayoutState)
     .where(
       and(
-        eq(canvasLayoutState.roundId, roundId),
+        eq(canvasLayoutState.consultationId, consultationId),
         eq(canvasLayoutState.userId, userId)
       )
     );
@@ -108,7 +108,7 @@ export async function loadCanvasLayout(
  * Create a new canvas connection (edge).
  */
 export async function createCanvasConnection(
-  roundId: string,
+  consultationId: string,
   userId: string,
   connectionData: {
     fromNodeType: string;
@@ -119,14 +119,14 @@ export async function createCanvasConnection(
     note?: string;
   }
 ): Promise<CanvasEdge> {
-  await requireOwnedRound(roundId, userId);
+  await requireOwnedConsultation(consultationId, userId);
 
   const id = crypto.randomUUID();
   const now = new Date();
 
   await db.insert(canvasConnections).values({
     id,
-      roundId,
+      consultationId,
       userId,
       fromNodeType: connectionData.fromNodeType as CanvasConnectionInsert["fromNodeType"],
       fromNodeId: connectionData.fromNodeId as CanvasConnectionInsert["fromNodeId"],
@@ -163,7 +163,7 @@ export async function createCanvasConnection(
  * Update a canvas connection (edge).
  */
 export async function updateCanvasConnection(
-  roundId: string,
+  consultationId: string,
   userId: string,
   edgeId: string,
   updates: {
@@ -171,7 +171,7 @@ export async function updateCanvasConnection(
     note?: string | null;
   }
 ): Promise<CanvasEdge> {
-  await requireOwnedRound(roundId, userId);
+  await requireOwnedConsultation(consultationId, userId);
 
   const existing = await db
     .select()
@@ -179,7 +179,7 @@ export async function updateCanvasConnection(
     .where(
       and(
         eq(canvasConnections.id, edgeId),
-        eq(canvasConnections.roundId, roundId),
+        eq(canvasConnections.consultationId, consultationId),
         eq(canvasConnections.userId, userId)
       )
     )
@@ -234,11 +234,11 @@ export async function updateCanvasConnection(
  * Delete a canvas connection (edge).
  */
 export async function deleteCanvasConnection(
-  roundId: string,
+  consultationId: string,
   userId: string,
   edgeId: string
 ): Promise<void> {
-  await requireOwnedRound(roundId, userId);
+  await requireOwnedConsultation(consultationId, userId);
 
   const existing = await db
     .select()
@@ -246,7 +246,7 @@ export async function deleteCanvasConnection(
     .where(
       and(
         eq(canvasConnections.id, edgeId),
-        eq(canvasConnections.roundId, roundId),
+        eq(canvasConnections.consultationId, consultationId),
         eq(canvasConnections.userId, userId)
       )
     )
@@ -271,14 +271,14 @@ export async function deleteCanvasConnection(
  * Save canvas layout state (node positions + viewport).
  */
 export async function saveCanvasLayout(
-  roundId: string,
+  consultationId: string,
   userId: string,
   layout: {
     positions: Record<string, CanvasLayoutPosition>;
     viewport: CanvasViewport;
   }
 ): Promise<void> {
-  await requireOwnedRound(roundId, userId);
+  await requireOwnedConsultation(consultationId, userId);
 
   const now = new Date();
 
@@ -288,7 +288,7 @@ export async function saveCanvasLayout(
       .insert(canvasLayoutState)
       .values({
         id: crypto.randomUUID(),
-        roundId,
+        consultationId,
         userId,
         nodeType: position.nodeType,
         nodeId: nodeId as CanvasLayoutInsert["nodeId"],
@@ -299,7 +299,7 @@ export async function saveCanvasLayout(
       })
       .onConflictDoUpdate({
         target: [
-          canvasLayoutState.roundId,
+          canvasLayoutState.consultationId,
           canvasLayoutState.userId,
           canvasLayoutState.nodeType,
           canvasLayoutState.nodeId,
@@ -317,10 +317,10 @@ export async function saveCanvasLayout(
     .insert(canvasLayoutState)
     .values({
       id: crypto.randomUUID(),
-      roundId,
+      consultationId,
       userId,
       nodeType: "viewport",
-      nodeId: roundId as CanvasLayoutInsert["nodeId"],
+      nodeId: consultationId as CanvasLayoutInsert["nodeId"],
       zoom: layout.viewport.zoom.toString(),
       panX: layout.viewport.x.toString(),
       panY: layout.viewport.y.toString(),
@@ -329,7 +329,7 @@ export async function saveCanvasLayout(
     })
     .onConflictDoUpdate({
       target: [
-        canvasLayoutState.roundId,
+        canvasLayoutState.consultationId,
         canvasLayoutState.userId,
         canvasLayoutState.nodeType,
         canvasLayoutState.nodeId,

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { saveCanvasLayout } from "@/lib/data/canvas";
 import { jsonError, requireRouteClient } from "../../../../_helpers";
-import { requireOwnedConsultation } from "@/lib/data/ownership";
+import { requireOwnedMeeting } from "@/lib/data/ownership";
 import type { CanvasLayoutPosition, CanvasViewport } from "@/types/canvas";
 
 export async function POST(
@@ -13,8 +13,9 @@ export async function POST(
   if ("response" in client) return client.response;
 
   try {
-    const consultation = await requireOwnedConsultation(consultationId, client.userId);
-    if (!consultation.roundId) return jsonError("Consultation has no active round", 400);
+    const meeting = await requireOwnedMeeting(consultationId, client.userId);
+    const consultationGroupId = meeting.consultationId;
+    if (!consultationGroupId) return jsonError("Meeting has no active consultation", 400);
 
     const body = await request.json();
     const { positions, viewport } = body;
@@ -30,7 +31,7 @@ export async function POST(
       return jsonError("Invalid layout data", 400);
     }
 
-    await saveCanvasLayout(consultation.roundId, client.userId, {
+    await saveCanvasLayout(consultationGroupId, client.userId, {
       positions: positions as Record<string, CanvasLayoutPosition>,
       viewport: viewport as CanvasViewport,
     });

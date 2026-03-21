@@ -12,7 +12,7 @@ import { emitAuditEvent } from "./audit";
  * Returns the new job id.
  */
 export async function submitOcrResult(params: {
-  consultationId: string;
+  meetingId: string;
   extractedText: string;
   confidenceScore: number;
 }): Promise<string> {
@@ -21,9 +21,9 @@ export async function submitOcrResult(params: {
   const [created] = await db
     .insert(ocrJobs)
     .values({
-      consultationId: params.consultationId,
+      meetingId: params.meetingId,
       // No Supabase Storage in v1 — record source inline
-      imageFileKey: `inline/${params.consultationId}/${Date.now()}`,
+      imageFileKey: `inline/${params.meetingId}/${Date.now()}`,
       status: "completed",
       extractedText: params.extractedText,
       confidenceScore: params.confidenceScore.toString(),
@@ -34,7 +34,7 @@ export async function submitOcrResult(params: {
     .returning({ id: ocrJobs.id });
 
   await emitAuditEvent({
-    consultationId: params.consultationId,
+    consultationId: params.meetingId,
     action: AUDIT_ACTIONS.OCR_EXTRACTION_COMPLETED,
     entityType: "ocr_job",
     entityId: created.id,
@@ -48,7 +48,7 @@ export async function submitOcrResult(params: {
 }
 
 export async function saveOcrCorrections(
-  consultationId: string,
+  meetingId: string,
   ocrJobId: string,
   correctedText: string
 ): Promise<void> {
@@ -58,7 +58,7 @@ export async function saveOcrCorrections(
       extractedText: correctedText,
       updatedAt: new Date(),
     })
-    .where(and(eq(ocrJobs.id, ocrJobId), eq(ocrJobs.consultationId, consultationId)))
+    .where(and(eq(ocrJobs.id, ocrJobId), eq(ocrJobs.meetingId, meetingId)))
     .returning();
 
   if (!updated) {
@@ -66,7 +66,7 @@ export async function saveOcrCorrections(
   }
 
   await emitAuditEvent({
-    consultationId,
+    consultationId: meetingId,
     action: AUDIT_ACTIONS.OCR_CORRECTIONS_SAVED,
     entityType: "ocr_job",
     entityId: ocrJobId,

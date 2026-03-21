@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { evidenceEmails } from "@/db/schema";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
-import { requireOwnedConsultation } from "@/lib/data/ownership";
+import { requireOwnedMeeting } from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "./audit-actions";
 import { emitAuditEvent } from "./audit";
 
@@ -21,25 +21,25 @@ interface EmailThemeSelection {
 }
 
 interface SaveEmailDraftParams {
-  consultationId: string;
+  meetingId: string;
   subject: string;
   body: string;
   themeSelections?: EmailThemeSelection[];
 }
 
 export async function saveEmailDraft({
-  consultationId,
+  meetingId,
   subject,
   body,
   themeSelections,
 }: SaveEmailDraftParams) {
   const userId = await requireCurrentUserId();
-  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedMeeting(meetingId, userId);
 
   const [created] = await db
     .insert(evidenceEmails)
     .values({
-      consultationId,
+      meetingId,
       subject,
       bodyDraft: body,
       status: "draft",
@@ -48,7 +48,7 @@ export async function saveEmailDraft({
     .returning({ id: evidenceEmails.id });
 
   await emitAuditEvent({
-    consultationId,
+    consultationId: meetingId,
     action: AUDIT_ACTIONS.EVIDENCE_EMAIL_GENERATED,
     entityType: "evidence_email",
     entityId: created.id,
@@ -68,10 +68,10 @@ export async function saveEmailDraft({
 
 export async function acceptEmailDraft(
   id: string,
-  consultationId: string
+  meetingId: string
 ) {
   const userId = await requireCurrentUserId();
-  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedMeeting(meetingId, userId);
 
   await db
     .update(evidenceEmails)
@@ -79,19 +79,19 @@ export async function acceptEmailDraft(
       status: "accepted",
       acceptedAt: new Date(),
     })
-    .where(and(eq(evidenceEmails.id, id), eq(evidenceEmails.consultationId, consultationId)));
+    .where(and(eq(evidenceEmails.id, id), eq(evidenceEmails.meetingId, meetingId)));
 
   await emitAuditEvent({
-    consultationId,
+    consultationId: meetingId,
     action: AUDIT_ACTIONS.EVIDENCE_EMAIL_ACCEPTED,
     entityType: "evidence_email",
     entityId: id,
   });
 }
 
-export async function markEmailSent(id: string, consultationId: string) {
+export async function markEmailSent(id: string, meetingId: string) {
   const userId = await requireCurrentUserId();
-  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedMeeting(meetingId, userId);
 
   await db
     .update(evidenceEmails)
@@ -99,10 +99,10 @@ export async function markEmailSent(id: string, consultationId: string) {
       status: "sent",
       sentAt: new Date(),
     })
-    .where(and(eq(evidenceEmails.id, id), eq(evidenceEmails.consultationId, consultationId)));
+    .where(and(eq(evidenceEmails.id, id), eq(evidenceEmails.meetingId, meetingId)));
 
   await emitAuditEvent({
-    consultationId,
+    consultationId: meetingId,
     action: AUDIT_ACTIONS.EVIDENCE_EMAIL_SENT,
     entityType: "evidence_email",
     entityId: id,

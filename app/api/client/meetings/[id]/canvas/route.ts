@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { meetings, insights, themeMembers, themes } from "@/db/schema";
 import { loadCanvasConnections, loadCanvasLayout } from "@/lib/data/canvas";
 import { jsonError, requireRouteClient } from "../../../_helpers";
-import { requireOwnedMeeting } from "@/lib/data/ownership";
+import { requireOwnedConsultation } from "@/lib/data/ownership";
 import type { CanvasNode } from "@/types/canvas";
 
 function buildFallbackPositions(nodes: CanvasNode[]) {
@@ -58,7 +58,7 @@ export async function GET(
 
   try {
     // Verify meeting ownership
-    await requireOwnedMeeting(meetingId, client.userId);
+    await requireOwnedConsultation(meetingId, client.userId);
 
     const meeting = await db
       .select()
@@ -124,7 +124,7 @@ export async function GET(
         meetingTitle: meetings.title,
       })
       .from(insights)
-      .innerJoin(meetings, eq(insights.consultationId, meetings.id))
+      .innerJoin(meetings, eq(insights.meetingId, meetings.id))
       .where(
         and(
           eq(meetings.consultationId, consultationId),
@@ -140,7 +140,7 @@ export async function GET(
       description: insight.description,
       accepted: insight.accepted,
       subgroup: null,
-      sourceConsultationId: insight.consultationId,
+      sourceConsultationId: insight.meetingId,
       sourceConsultationTitle: meetingTitle,
       groupId: groupIdByInsight.get(insight.id) ?? null,
       memberIds: [],

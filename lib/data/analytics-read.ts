@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   analyticsJobs,
-  consultations,
+  meetings,
   extractionResults,
   termClusterMemberships,
   termClusters,
@@ -19,10 +19,10 @@ import type {
   TermClusterMembership,
   TermExtraction,
 } from "@/types/analytics";
-import { requireOwnedConsultation, requireOwnedRound } from "./ownership";
+import { requireOwnedMeeting, requireOwnedRound } from "./ownership";
 
 type AnalyticsJobRow = typeof analyticsJobs.$inferSelect;
-type ConsultationRow = typeof consultations.$inferSelect;
+type MeetingRow = typeof meetings.$inferSelect;
 type ExtractionResultRow = typeof extractionResults.$inferSelect;
 type TermExtractionOffsetRow = typeof termExtractionOffsets.$inferSelect;
 type TermClusterRow = typeof termClusters.$inferSelect;
@@ -72,8 +72,8 @@ function toStringArray(value: unknown): string[] {
 function mapJobRow(row: AnalyticsJobRow): AnalyticsJobStatus {
   return {
     jobId: row.id,
-    consultationId: row.consultationId,
-    roundId: row.roundId ?? null,
+    consultationId: row.meetingId,
+    roundId: row.consultationId ?? null,
     phase: row.phase,
     progress: row.progress,
     startedAt: toIsoString(row.startedAt),
@@ -103,7 +103,7 @@ function mapExtractionResultRow(
     .map(mapExtractionTermRow);
 
   return {
-    consultationId: row.consultationId,
+    consultationId: row.meetingId,
     extractedAt: toIsoString(row.extractedAt) ?? new Date().toISOString(),
     terms: resultTerms,
     metadata: {
@@ -121,30 +121,30 @@ function mapClusterRow(row: TermClusterRow): TermCluster {
     label: row.label,
     representativeTerms: toStringArray(row.representativeTerms),
     allTerms: toStringArray(row.allTerms),
-    consultationCount: row.consultationCount,
+    consultationCount: row.meetingCount,
   };
 }
 
 function mapMembershipRow(row: TermClusterMembershipRow): TermClusterMembership {
   return {
-    consultationId: row.consultationId,
+    consultationId: row.meetingId,
     term: row.term,
     clusterId: row.clusterId,
     membershipProbability: toNumber(row.membershipProbability),
   };
 }
 
-function latestRow<T extends { consultationId: string; createdAt: Date }>(rows: T[]) {
-  const latestByConsultation = new Map<string, T>();
+function latestRow<T extends { meetingId: string; createdAt: Date }>(rows: T[]) {
+  const latestByMeeting = new Map<string, T>();
 
   for (const row of rows) {
-    const current = latestByConsultation.get(row.consultationId);
+    const current = latestByMeeting.get(row.meetingId);
     if (!current || row.createdAt > current.createdAt) {
-      latestByConsultation.set(row.consultationId, row);
+      latestByMeeting.set(row.meetingId, row);
     }
   }
 
-  return latestByConsultation;
+  return latestByMeeting;
 }
 
 function maxIsoDate(values: Array<Date | string | null | undefined>): string | null {
@@ -180,7 +180,7 @@ export interface RoundAnalyticsSummary {
 }
 
 interface BuildRoundAnalyticsParams {
-  consultationIds: string[];
+  meetingIds: string[];
   jobRows: AnalyticsJobRow[];
   extractionRows: ExtractionResultRow[];
   offsetRows: TermExtractionOffsetRow[];
@@ -189,18 +189,18 @@ interface BuildRoundAnalyticsParams {
 }
 
 export function buildRoundAnalyticsSummary({
-  consultationIds,
+  meetingIds,
   jobRows,
   extractionRows,
   offsetRows,
   clusterRows,
   membershipRows,
 }: BuildRoundAnalyticsParams): RoundAnalyticsSummary {
-  const latestJobsByConsultation = latestRow(jobRows);
-  const latestExtractionByConsultation = latestRow(extractionRows);
+  const latestJobsByMeeting = latestRow(jobRows);
+  const latestExtractionByMeeting = latestRow(extractionRows);
 
   const latestExtractionResultIds = new Set(
-    Array.from(latestExtractionByConsultation.values()).map((row) => row.id)
+    Array.from(latestExtractionByMeeting.values()).map((row) => row.id)
   );
 
   const latestOffsets = offsetRows.filter((row) => latestExtractionResultIds.has(row.extractionResultId));
@@ -212,7 +212,7 @@ export function buildRoundAnalyticsSummary({
   let failedConsultationCount = 0;
   let activeConsultationCount = 0;
 
-  for (const job of latestJobsByConsultation.values()) {
+  for (const job of latestJobsByMeeting.values()) {
     if (job.phase === "complete") {
       completedConsultationCount += 1;
     } else if (job.phase === "failed") {
@@ -222,7 +222,7 @@ export function buildRoundAnalyticsSummary({
     }
   }
 
-  const extractionConfidenceValues = Array.from(latestExtractionByConsultation.values()).map((row) =>
+  const extractionConfidenceValues = Array.from(latestExtractionByMeeting.values()).map((row) =>
     toNumber(row.confidence)
   );
   const averageExtractionConfidence =
@@ -236,7 +236,7 @@ export function buildRoundAnalyticsSummary({
       : null;
 
   return {
-    consultationCount: consultationIds.length,
+    consultationCount: meetingIds.length,
     processedConsultationCount: completedConsultationCount,
     failedConsultationCount,
     activeConsultationCount,
@@ -244,7 +244,7 @@ export function buildRoundAnalyticsSummary({
     clusterCount: clusterRows.length,
     outlierTermCount: membershipRows.filter((row) => row.clusterId === -1).length,
     averageExtractionConfidence,
-    latestExtractionAt: maxIsoDate(Array.from(latestExtractionByConsultation.values()).map((row) => row.extractedAt)),
+    latestExtractionAt: maxIsoDate(Array.from(latestExtractionByMeeting.values()).map((row) => row.extractedAt)),
     latestClusteredAt: maxIsoDate(clusterRows.map((row) => row.clusteredAt)),
     latestJobStatus: latestJobRow ? mapJobRow(latestJobRow) : null,
     clusters: clusterRows.map(mapClusterRow),
@@ -252,15 +252,15 @@ export function buildRoundAnalyticsSummary({
 }
 
 interface LoadRoundAnalyticsSummaryParams {
-  roundId: string;
-  consultationIds: string[];
+  consultationId: string;
+  meetingIds: string[];
 }
 
 export async function loadRoundAnalyticsSummary({
-  roundId,
-  consultationIds,
+  consultationId,
+  meetingIds,
 }: LoadRoundAnalyticsSummaryParams): Promise<RoundAnalyticsSummary> {
-  if (consultationIds.length === 0) {
+  if (meetingIds.length === 0) {
     return {
       consultationCount: 0,
       processedConsultationCount: 0,
@@ -283,40 +283,40 @@ export async function loadRoundAnalyticsSummary({
       .from(analyticsJobs)
       .where(
         and(
-          eq(analyticsJobs.roundId, roundId),
-          inArray(analyticsJobs.consultationId, consultationIds)
+          eq(analyticsJobs.consultationId, consultationId),
+          inArray(analyticsJobs.meetingId, meetingIds)
         )
       )
-      .orderBy(asc(analyticsJobs.consultationId), desc(analyticsJobs.createdAt)),
+      .orderBy(asc(analyticsJobs.meetingId), desc(analyticsJobs.createdAt)),
     db
       .select()
       .from(extractionResults)
       .where(
         and(
-          eq(extractionResults.roundId, roundId),
-          inArray(extractionResults.consultationId, consultationIds)
+          eq(extractionResults.consultationId, consultationId),
+          inArray(extractionResults.meetingId, meetingIds)
         )
       )
-      .orderBy(asc(extractionResults.consultationId), desc(extractionResults.extractedAt)),
+      .orderBy(asc(extractionResults.meetingId), desc(extractionResults.extractedAt)),
     db
       .select()
       .from(termClusters)
-      .where(eq(termClusters.roundId, roundId))
+      .where(eq(termClusters.consultationId, consultationId))
       .orderBy(desc(termClusters.clusteredAt)),
     db
       .select()
       .from(termClusterMemberships)
-      .where(eq(termClusterMemberships.roundId, roundId))
+      .where(eq(termClusterMemberships.consultationId, consultationId))
       .orderBy(
-        asc(termClusterMemberships.consultationId),
+        asc(termClusterMemberships.meetingId),
         asc(termClusterMemberships.clusterId),
         asc(termClusterMemberships.term)
       ),
   ]);
 
-  const latestExtractionByConsultation = latestRow(extractionRows);
+  const latestExtractionByMeeting = latestRow(extractionRows);
   const latestExtractionResultIds = new Set(
-    Array.from(latestExtractionByConsultation.values()).map((row) => row.id)
+    Array.from(latestExtractionByMeeting.values()).map((row) => row.id)
   );
   const offsetRows = latestExtractionResultIds.size === 0
     ? []
@@ -324,10 +324,10 @@ export async function loadRoundAnalyticsSummary({
         .select()
         .from(termExtractionOffsets)
         .where(inArray(termExtractionOffsets.extractionResultId, Array.from(latestExtractionResultIds)))
-        .orderBy(asc(termExtractionOffsets.consultationId), asc(termExtractionOffsets.charStart))) as TermExtractionOffsetRow[]);
+        .orderBy(asc(termExtractionOffsets.meetingId), asc(termExtractionOffsets.charStart))) as TermExtractionOffsetRow[]);
 
   return buildRoundAnalyticsSummary({
-    consultationIds,
+    meetingIds,
     jobRows,
     extractionRows,
     offsetRows,
@@ -337,44 +337,44 @@ export async function loadRoundAnalyticsSummary({
 }
 
 export async function getRoundAnalyticsSummary(
-  roundId: string,
+  consultationId: string,
   userId: string
 ): Promise<RoundAnalyticsSummary> {
-  await requireOwnedRound(roundId, userId);
+  await requireOwnedRound(consultationId, userId);
 
-  const consultationsForRound = (await db
-    .select({ id: consultations.id })
-    .from(consultations)
-    .where(and(eq(consultations.roundId, roundId), eq(consultations.userId, userId)))
-    .orderBy(asc(consultations.createdAt))) as Array<Pick<ConsultationRow, "id">>;
+  const meetingsForConsultation = (await db
+    .select({ id: meetings.id })
+    .from(meetings)
+    .where(and(eq(meetings.consultationId, consultationId), eq(meetings.userId, userId)))
+    .orderBy(asc(meetings.createdAt))) as Array<Pick<MeetingRow, "id">>;
 
   return loadRoundAnalyticsSummary({
-    roundId,
-    consultationIds: consultationsForRound.map((consultation) => consultation.id),
+    consultationId,
+    meetingIds: meetingsForConsultation.map((meeting) => meeting.id),
   });
 }
 
 export async function getConsultationAnalytics(
-  consultationId: string,
+  meetingId: string,
   userId: string
 ): Promise<ConsultationAnalytics> {
-  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedMeeting(meetingId, userId);
 
   const [jobRows, extractionRows, membershipRows] = await Promise.all([
     db
       .select()
       .from(analyticsJobs)
-      .where(eq(analyticsJobs.consultationId, consultationId))
+      .where(eq(analyticsJobs.meetingId, meetingId))
       .orderBy(desc(analyticsJobs.createdAt)),
     db
       .select()
       .from(extractionResults)
-      .where(eq(extractionResults.consultationId, consultationId))
+      .where(eq(extractionResults.meetingId, meetingId))
       .orderBy(desc(extractionResults.extractedAt)),
     db
       .select()
       .from(termClusterMemberships)
-      .where(eq(termClusterMemberships.consultationId, consultationId))
+      .where(eq(termClusterMemberships.meetingId, meetingId))
       .orderBy(asc(termClusterMemberships.clusterId), asc(termClusterMemberships.term)),
   ]);
 
@@ -394,7 +394,7 @@ export async function getConsultationAnalytics(
   }
 
   return {
-    consultationId,
+    consultationId: meetingId,
     jobStatus: latestJobRow ? mapJobRow(latestJobRow) : null,
     extraction,
     clusterMemberships: membershipRows.map(mapMembershipRow),
@@ -403,14 +403,14 @@ export async function getConsultationAnalytics(
 }
 
 export async function getRoundAnalytics(
-  roundId: string,
+  consultationId: string,
   userId: string
 ): Promise<RoundAnalyticsResponse> {
-  const summary = await getRoundAnalyticsSummary(roundId, userId);
+  const summary = await getRoundAnalyticsSummary(consultationId, userId);
 
   return {
     data: {
-      roundId,
+      roundId: consultationId,
       clusters: summary.clusters,
       consultationCount: summary.consultationCount,
       processedConsultationCount: summary.processedConsultationCount,

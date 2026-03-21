@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { Consultation, Person } from "@/types/db";
+import type { Meeting, Person } from "@/types/db";
 import {
   getPersonForUser,
   listConsultationsForPerson,
@@ -8,7 +8,7 @@ import { jsonError, requireRouteClient } from "../../_helpers";
 
 interface PersonSheetResponse {
   person: Person;
-  consultations: Pick<Consultation, "id" | "title" | "status" | "created_at">[];
+  consultations: Pick<Meeting, "id" | "title" | "status" | "created_at">[];
 }
 
 export async function GET(
@@ -35,8 +35,8 @@ export async function GET(
       person,
       consultations: consultations.map((consultation) => ({
         id: consultation.id,
-        title: consultation.title,
-        status: consultation.status,
+        title: consultation.label,
+        status: "draft" as const,
         created_at: consultation.created_at,
       })),
     } satisfies PersonSheetResponse);

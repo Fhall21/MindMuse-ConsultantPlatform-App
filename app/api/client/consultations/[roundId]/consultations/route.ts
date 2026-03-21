@@ -17,8 +17,7 @@ export async function GET(
     return NextResponse.json(
       consultations.map((consultation) => ({
         id: consultation.id,
-        title: consultation.title,
-        status: consultation.status,
+        label: consultation.label,
       }))
     );
   } catch (error) {

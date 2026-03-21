@@ -3,9 +3,10 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
-  meetingGroups as consultationGroups,
+  consultations as consultationGroups,
   consultations as consultationRounds,
   consultations,
+  meetings,
   insights,
   people,
 } from "@/db/schema";
@@ -30,6 +31,20 @@ export async function requireOwnedConsultation(
   }
 
   return consultation;
+}
+
+export async function requireOwnedMeeting(meetingId: string, userId: string) {
+  const [meeting] = await db
+    .select()
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.userId, userId)))
+    .limit(1);
+
+  if (!meeting) {
+    throw new Error("Meeting not found");
+  }
+
+  return meeting;
 }
 
 export async function requireOwnedTheme(themeId: string, consultationId: string, userId: string) {

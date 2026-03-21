@@ -2,10 +2,10 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { consultationPeople, people } from "@/db/schema";
+import { meetingPeople, people } from "@/db/schema";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
 import {
-  requireOwnedConsultation,
+  requireOwnedMeeting,
   requireOwnedPerson,
 } from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "./audit-actions";
@@ -149,18 +149,18 @@ export async function deletePerson(id: string) {
 }
 
 export async function linkPersonToConsultation(
-  consultationId: string,
+  meetingId: string,
   personId: string
 ) {
   const userId = await requireCurrentUserId();
-  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedMeeting(meetingId, userId);
   await requireOwnedPerson(personId, userId);
 
   try {
     await db
-      .insert(consultationPeople)
+      .insert(meetingPeople)
       .values({
-        consultationId,
+        meetingId,
         personId,
       })
       .onConflictDoNothing();
@@ -169,7 +169,7 @@ export async function linkPersonToConsultation(
   }
 
   await emitAuditEvent({
-    consultationId,
+    consultationId: meetingId,
     action: AUDIT_ACTIONS.PERSON_LINKED,
     entityType: "person",
     entityId: personId,
@@ -178,24 +178,24 @@ export async function linkPersonToConsultation(
 }
 
 export async function unlinkPersonFromConsultation(
-  consultationId: string,
+  meetingId: string,
   personId: string
 ) {
   const userId = await requireCurrentUserId();
-  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedMeeting(meetingId, userId);
   await requireOwnedPerson(personId, userId);
 
   await db
-    .delete(consultationPeople)
+    .delete(meetingPeople)
     .where(
       and(
-        eq(consultationPeople.consultationId, consultationId),
-        eq(consultationPeople.personId, personId)
+        eq(meetingPeople.meetingId, meetingId),
+        eq(meetingPeople.personId, personId)
       )
     );
 
   await emitAuditEvent({
-    consultationId,
+    consultationId: meetingId,
     action: AUDIT_ACTIONS.PERSON_UNLINKED,
     entityType: "person",
     entityId: personId,

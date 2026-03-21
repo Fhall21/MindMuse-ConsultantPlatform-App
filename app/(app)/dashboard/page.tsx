@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMeetings } from "@/hooks/use-meetings";
 import { useDashboardStats } from "@/hooks/use-dashboard-stats";
-import type { Consultation } from "@/types/db";
+import type { Meeting } from "@/types/db";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("en-GB", {
@@ -55,7 +55,7 @@ function MetricValue({
   );
 }
 
-function RecentConsultationRow({ consultation }: { consultation: Consultation }) {
+function RecentConsultationRow({ consultation }: { consultation: Meeting }) {
   return (
     <div className="flex items-center justify-between py-3">
       <div className="min-w-0 flex-1">

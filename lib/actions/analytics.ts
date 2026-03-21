@@ -5,13 +5,13 @@ import { db } from "@/db/client";
 import {
   analyticsJobs,
   auditLog,
-  consultations,
-  roundDecisions,
+  consultationDecisions,
+  meetings,
   termClusters,
 } from "@/db/schema";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
 import {
-  requireOwnedConsultation,
+  requireOwnedMeeting,
   requireOwnedRound,
 } from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "./audit-actions";
@@ -58,8 +58,8 @@ function trimToNull(value: unknown): string | null {
 function mapJobRow(row: AnalyticsJobRow): AnalyticsJobStatus {
   return {
     jobId: row.id,
-    consultationId: row.consultationId,
-    roundId: row.roundId ?? null,
+    consultationId: row.meetingId,
+    roundId: row.consultationId ?? null,
     phase: row.phase,
     progress: row.progress,
     startedAt: toIsoString(row.startedAt),
@@ -71,7 +71,7 @@ function mapJobRow(row: AnalyticsJobRow): AnalyticsJobStatus {
 async function insertAnalyticsAuditLog(
   tx: AnalyticsDbWriter,
   params: {
-    consultationId?: string | null;
+    meetingId?: string | null;
     userId: string;
     action: string;
     entityType?: string;
@@ -80,7 +80,7 @@ async function insertAnalyticsAuditLog(
   }
 ) {
   await tx.insert(auditLog).values({
-    consultationId: params.consultationId ?? null,
+    meetingId: params.meetingId ?? null,
     userId: params.userId,
     action: params.action,
     entityType: params.entityType ?? null,
@@ -89,95 +89,95 @@ async function insertAnalyticsAuditLog(
   });
 }
 
-async function getLatestJobForConsultation(consultationId: string) {
+async function getLatestJobForMeeting(meetingId: string) {
   const [row] = await db
     .select()
     .from(analyticsJobs)
-    .where(eq(analyticsJobs.consultationId, consultationId))
+    .where(eq(analyticsJobs.meetingId, meetingId))
     .orderBy(desc(analyticsJobs.createdAt))
     .limit(1);
 
   return row ?? null;
 }
 
-async function getLatestJobStatusesForRound(roundId: string) {
-  const consultationRows = await db
-    .select({ id: consultations.id })
-    .from(consultations)
-    .where(eq(consultations.roundId, roundId))
-    .orderBy(asc(consultations.createdAt));
+async function getLatestJobStatusesForRound(consultationId: string) {
+  const meetingRows = await db
+    .select({ id: meetings.id })
+    .from(meetings)
+    .where(eq(meetings.consultationId, consultationId))
+    .orderBy(asc(meetings.createdAt));
 
   const latestJobs = await db
     .select()
     .from(analyticsJobs)
     .where(
       and(
-        eq(analyticsJobs.roundId, roundId),
+        eq(analyticsJobs.consultationId, consultationId),
         inArray(
-          analyticsJobs.consultationId,
-          consultationRows.map((consultation) => consultation.id)
+          analyticsJobs.meetingId,
+          meetingRows.map((meeting) => meeting.id)
         )
       )
     )
-    .orderBy(asc(analyticsJobs.consultationId), desc(analyticsJobs.createdAt));
+    .orderBy(asc(analyticsJobs.meetingId), desc(analyticsJobs.createdAt));
 
-  const latestByConsultation = new Map<string, AnalyticsJobRow>();
+  const latestByMeeting = new Map<string, AnalyticsJobRow>();
   for (const row of latestJobs) {
-    if (!latestByConsultation.has(row.consultationId)) {
-      latestByConsultation.set(row.consultationId, row);
+    if (!latestByMeeting.has(row.meetingId)) {
+      latestByMeeting.set(row.meetingId, row);
     }
   }
 
-  return consultationRows.map((consultation) => ({
-    consultationId: consultation.id,
-    jobStatus: latestByConsultation.get(consultation.id)
-      ? mapJobRow(latestByConsultation.get(consultation.id) as AnalyticsJobRow)
+  return meetingRows.map((meeting) => ({
+    consultationId: meeting.id,
+    jobStatus: latestByMeeting.get(meeting.id)
+      ? mapJobRow(latestByMeeting.get(meeting.id) as AnalyticsJobRow)
       : null,
   }));
 }
 
 export async function getConsultationAnalyticsData(
-  consultationId: string
+  meetingId: string
 ): Promise<ConsultationAnalytics> {
   const userId = await requireCurrentUserId();
-  return getConsultationAnalytics(consultationId, userId);
+  return getConsultationAnalytics(meetingId, userId);
 }
 
-export async function getRoundAnalyticsData(roundId: string): Promise<RoundAnalyticsResponse> {
+export async function getRoundAnalyticsData(consultationId: string): Promise<RoundAnalyticsResponse> {
   const userId = await requireCurrentUserId();
-  return getRoundAnalytics(roundId, userId);
+  return getRoundAnalytics(consultationId, userId);
 }
 
 export async function getConsultationAnalyticsJobStatus(
-  consultationId: string
+  meetingId: string
 ): Promise<AnalyticsJobStatus | null> {
   const userId = await requireCurrentUserId();
-  await requireOwnedConsultation(consultationId, userId);
+  await requireOwnedMeeting(meetingId, userId);
 
-  const latestJob = await getLatestJobForConsultation(consultationId);
+  const latestJob = await getLatestJobForMeeting(meetingId);
   return latestJob ? mapJobRow(latestJob) : null;
 }
 
 export async function getRoundAnalyticsJobStatuses(
-  roundId: string
+  consultationId: string
 ): Promise<RoundAnalyticsJobsResponse> {
   const userId = await requireCurrentUserId();
-  await requireOwnedRound(roundId, userId);
+  await requireOwnedRound(consultationId, userId);
 
   return {
-    data: await getLatestJobStatusesForRound(roundId),
+    data: await getLatestJobStatusesForRound(consultationId),
   };
 }
 
 export async function triggerConsultationAnalyticsJob(
-  consultationId: string,
-  roundId?: string | null
+  meetingId: string,
+  consultationId?: string | null
 ): Promise<AnalyticsJobTriggerResponse> {
   const userId = await requireCurrentUserId();
-  const consultation = await requireOwnedConsultation(consultationId, userId);
+  const meeting = await requireOwnedMeeting(meetingId, userId);
 
-  if (roundId && consultation.roundId && consultation.roundId !== roundId) {
-    throw new Error("Consultation does not belong to the requested round");
+  if (consultationId && meeting.consultationId && meeting.consultationId !== consultationId) {
+    throw new Error("Meeting does not belong to the requested consultation");
   }
 
   const activeJob = await db
@@ -185,7 +185,7 @@ export async function triggerConsultationAnalyticsJob(
     .from(analyticsJobs)
     .where(
       and(
-        eq(analyticsJobs.consultationId, consultationId),
+        eq(analyticsJobs.meetingId, meetingId),
         inArray(analyticsJobs.phase, ACTIVE_JOB_PHASES)
       )
     )
@@ -204,22 +204,22 @@ export async function triggerConsultationAnalyticsJob(
     const [job] = await tx
       .insert(analyticsJobs)
       .values({
-        consultationId,
-        roundId: roundId ?? consultation.roundId ?? null,
+        meetingId,
+        consultationId: consultationId ?? meeting.consultationId ?? null,
         phase: "queued",
         progress: -1,
       })
       .returning({ id: analyticsJobs.id });
 
     await insertAnalyticsAuditLog(tx, {
-      consultationId,
+      meetingId,
       userId,
       action: AUDIT_ACTIONS.ANALYTICS_JOB_TRIGGERED,
       entityType: "analytics_job",
       entityId: job.id,
       metadata: {
-        consultationId,
-        roundId: roundId ?? consultation.roundId ?? null,
+        meetingId,
+        consultationId: consultationId ?? meeting.consultationId ?? null,
         phase: "queued",
       },
     });
@@ -234,27 +234,27 @@ export async function triggerConsultationAnalyticsJob(
 }
 
 export async function triggerRoundAnalyticsJobs(
-  roundId: string
+  consultationId: string
 ): Promise<{ jobCount: number }> {
   const userId = await requireCurrentUserId();
-  await requireOwnedRound(roundId, userId);
+  await requireOwnedRound(consultationId, userId);
 
-  const consultationRows = await db
-    .select({ id: consultations.id })
-    .from(consultations)
-    .where(and(eq(consultations.roundId, roundId), eq(consultations.userId, userId)))
-    .orderBy(asc(consultations.createdAt));
+  const meetingRows = await db
+    .select({ id: meetings.id })
+    .from(meetings)
+    .where(and(eq(meetings.consultationId, consultationId), eq(meetings.userId, userId)))
+    .orderBy(asc(meetings.createdAt));
 
   let jobCount = 0;
 
   await db.transaction(async (tx) => {
-    for (const consultation of consultationRows) {
+    for (const meeting of meetingRows) {
       const [activeJob] = await tx
         .select()
         .from(analyticsJobs)
         .where(
           and(
-            eq(analyticsJobs.consultationId, consultation.id),
+            eq(analyticsJobs.meetingId, meeting.id),
             inArray(analyticsJobs.phase, ACTIVE_JOB_PHASES)
           )
         )
@@ -268,22 +268,22 @@ export async function triggerRoundAnalyticsJobs(
       const [created] = await tx
         .insert(analyticsJobs)
         .values({
-          consultationId: consultation.id,
-          roundId,
+          meetingId: meeting.id,
+          consultationId,
           phase: "queued",
           progress: -1,
         })
         .returning({ id: analyticsJobs.id });
 
       await insertAnalyticsAuditLog(tx, {
-        consultationId: consultation.id,
+        meetingId: meeting.id,
         userId,
         action: AUDIT_ACTIONS.ANALYTICS_JOB_TRIGGERED,
         entityType: "analytics_job",
         entityId: created.id,
         metadata: {
-          consultationId: consultation.id,
-          roundId,
+          meetingId: meeting.id,
+          consultationId,
           phase: "queued",
         },
       });
@@ -308,7 +308,7 @@ export async function recordAnalyticsClusterDecision(params: {
   const [cluster] = await db
     .select()
     .from(termClusters)
-    .where(and(eq(termClusters.roundId, params.roundId), eq(termClusters.clusterId, params.clusterId)))
+    .where(and(eq(termClusters.consultationId, params.roundId), eq(termClusters.clusterId, params.clusterId)))
     .limit(1);
 
   if (!cluster) {
@@ -350,9 +350,9 @@ export async function recordAnalyticsClusterDecision(params: {
     }
 
     const [decision] = await tx
-      .insert(roundDecisions)
+      .insert(consultationDecisions)
       .values({
-        roundId: params.roundId,
+        consultationId: params.roundId,
         userId,
         targetType: "theme_group" as const,
         targetId: cluster.id,
@@ -369,7 +369,7 @@ export async function recordAnalyticsClusterDecision(params: {
       .returning();
 
     await insertAnalyticsAuditLog(tx, {
-      consultationId: null,
+      meetingId: null,
       userId,
       action: auditAction,
       entityType: "analytics_cluster",
@@ -402,12 +402,12 @@ export async function recordAnalyticsClusterDecision(params: {
   };
 }
 
-export async function getRoundAnalyticsDataSet(roundId: string): Promise<RoundAnalytics> {
+export async function getRoundAnalyticsDataSet(consultationId: string): Promise<RoundAnalytics> {
   const userId = await requireCurrentUserId();
-  const summary = await getRoundAnalyticsSummary(roundId, userId);
+  const summary = await getRoundAnalyticsSummary(consultationId, userId);
 
   return {
-    roundId,
+    roundId: consultationId,
     clusters: summary.clusters,
     consultationCount: summary.consultationCount,
     processedConsultationCount: summary.processedConsultationCount,

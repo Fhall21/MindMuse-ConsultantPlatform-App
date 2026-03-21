@@ -8,17 +8,23 @@
 
 export type {
   RoundDetail as ConsultationDetail,
+  RoundDetail,
   RoundDetailConsultation as ConsultationDetailMeeting,
+  RoundDetailConsultation,
   RoundSourceTheme,
   ThemeDetail,
   ThemeMemberDetail,
   ThemeDraftState,
   RoundDecisionHistoryItem as ConsultationDecisionHistoryItem,
+  RoundDecisionHistoryItem,
   RoundOutputSummary as ConsultationOutputSummary,
   RoundOutputCollection as ConsultationOutputCollection,
+  RoundOutputCollection,
   RoundHistoryEvent as ConsultationHistoryEvent,
   RoundAnalyticsSummary as ConsultationAnalyticsSummary,
+  RoundAnalyticsSummary,
   ConsultationGroupDetail as MeetingGroupDetail,
+  ConsultationGroupDetail,
   ConsultationGroupMemberDetail as MeetingGroupMemberDetail,
 } from "@/lib/actions/consultation-workflow";
 
@@ -62,4 +68,6 @@ export type ConsultationThemeGroupOrigin = "manual" | "ai_refined";
 
 // Additional aliases for page component compatibility
 export type { ThemeDetail as RoundThemeGroup } from "@/lib/actions/consultation-workflow";
+export type { ThemeDraftState as RoundThemeGroupDraft } from "@/lib/actions/consultation-workflow";
+export type RoundThemeGroupStatus = "draft" | "accepted" | "discarded" | "management_rejected";
 export type RoundConsultationSummary = ConsultationMeetingSummary;

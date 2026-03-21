@@ -19,6 +19,8 @@ import {
 import {
   buildReportGraphModel,
   formatConnectionTypeLabel,
+  getAcceptedConsultationThemes,
+  getSupportingMeetingThemes,
   type ReportGraphModel,
 } from "@/lib/report-graph";
 import {
@@ -335,17 +337,8 @@ function LegacyFindingsSection({
   report: ReportArtifactDetail;
   template: ReportTemplate;
 }) {
-  const inputThemes = report.inputSnapshot.accepted_round_themes as
-    | Array<{ label: string; description?: string | null }>
-    | undefined;
-  const supportingThemes =
-    report.inputSnapshot.supporting_consultation_themes as
-      | Array<{
-          label: string;
-          description?: string | null;
-          consultation_title?: string | null;
-        }>
-      | undefined;
+  const inputThemes = getAcceptedConsultationThemes(report.inputSnapshot);
+  const supportingThemes = getSupportingMeetingThemes(report.inputSnapshot);
 
   const acceptedToShow =
     template === "executive" ? inputThemes?.slice(0, 3) : inputThemes;

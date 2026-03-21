@@ -24,6 +24,9 @@ import type {
 } from "@/types/db";
 import {
   buildReportGraphModel,
+  getAcceptedConsultationThemes,
+  getMeetingTitles,
+  getSupportingMeetingThemes,
   toReportInputSnapshot,
   type ReportInputSnapshot,
 } from "@/lib/report-graph";
@@ -208,7 +211,8 @@ function buildRejectedThemeReference(params: {
     return null;
   }
 
-  const roundId = getStringValue(payload.round_id);
+  const roundId =
+    getStringValue(payload.consultation_id) ?? getStringValue(payload.round_id);
   const meetingId = event.meeting_id ?? event.consultation_id;
   const consultation = meetingId
     ? (consultationById.get(meetingId) ?? null)
@@ -495,19 +499,15 @@ export async function getReportArtifact(
 
   const inputSnapshot = toReportInputSnapshot(artifact.input_snapshot ?? {});
   const graphModel = buildReportGraphModel(inputSnapshot);
-  const consultationTitles = Array.isArray(inputSnapshot.consultations)
-    ? (inputSnapshot.consultations as string[])
-    : [];
+  const consultationTitles = getMeetingTitles(inputSnapshot);
+  const acceptedThemes = getAcceptedConsultationThemes(inputSnapshot);
+  const supportingThemes = getSupportingMeetingThemes(inputSnapshot);
   const acceptedThemeCount = graphModel
     ? graphModel.acceptedThemeCount
-    : Array.isArray(inputSnapshot.accepted_round_themes)
-      ? inputSnapshot.accepted_round_themes.length
-      : 0;
+    : acceptedThemes.length;
   const supportingThemeCount = graphModel
     ? graphModel.supportingThemeCount
-    : Array.isArray(inputSnapshot.supporting_consultation_themes)
-      ? inputSnapshot.supporting_consultation_themes.length
-      : 0;
+    : supportingThemes.length;
 
   // Load live consultation metadata (dates + linked people) for compliance display
   const liveConsultations = await listMeetingsForConsultation(artifact.consultation_id, userId);

@@ -7,7 +7,7 @@ import type {
   GraphSnapshotNode,
 } from "@/lib/graph/types";
 
-export interface LegacyAcceptedRoundTheme {
+export interface AcceptedConsultationThemeSnapshot {
   label: string;
   description?: string | null;
   source_kind?: string | null;
@@ -16,7 +16,7 @@ export interface LegacyAcceptedRoundTheme {
   is_user_added?: boolean;
 }
 
-export interface LegacySupportingConsultationTheme {
+export interface SupportingMeetingThemeSnapshot {
   label: string;
   description?: string | null;
   source_kind?: string | null;
@@ -26,13 +26,17 @@ export interface LegacySupportingConsultationTheme {
 }
 
 export interface ReportInputSnapshot {
+  consultationId?: string;
   roundId?: string;
   round_id?: string;
+  meetingTitles?: string[];
   groups?: unknown[];
   themes?: unknown[];
   consultations?: string[];
-  accepted_round_themes?: LegacyAcceptedRoundTheme[];
-  supporting_consultation_themes?: LegacySupportingConsultationTheme[];
+  accepted_consultation_themes?: AcceptedConsultationThemeSnapshot[];
+  accepted_round_themes?: AcceptedConsultationThemeSnapshot[];
+  supporting_meeting_themes?: SupportingMeetingThemeSnapshot[];
+  supporting_consultation_themes?: SupportingMeetingThemeSnapshot[];
   graphNetwork?: GraphNetworkSnapshot;
 }
 
@@ -172,8 +176,44 @@ export function toReportInputSnapshot(
   const snapshot = value as ReportInputSnapshot;
   return {
     ...snapshot,
-    roundId: snapshot.roundId ?? snapshot.round_id,
+    consultationId: snapshot.consultationId ?? snapshot.roundId ?? snapshot.round_id,
+    roundId: snapshot.roundId ?? snapshot.round_id ?? snapshot.consultationId,
+    meetingTitles: snapshot.meetingTitles ?? snapshot.consultations,
+    consultations: snapshot.consultations ?? snapshot.meetingTitles,
+    accepted_consultation_themes:
+      snapshot.accepted_consultation_themes ?? snapshot.accepted_round_themes,
+    accepted_round_themes:
+      snapshot.accepted_round_themes ?? snapshot.accepted_consultation_themes,
+    supporting_meeting_themes:
+      snapshot.supporting_meeting_themes ?? snapshot.supporting_consultation_themes,
+    supporting_consultation_themes:
+      snapshot.supporting_consultation_themes ?? snapshot.supporting_meeting_themes,
   };
+}
+
+export function getMeetingTitles(
+  value: Record<string, unknown> | ReportInputSnapshot
+): string[] {
+  const snapshot = toReportInputSnapshot(value);
+  return Array.isArray(snapshot.meetingTitles) ? snapshot.meetingTitles : [];
+}
+
+export function getAcceptedConsultationThemes(
+  value: Record<string, unknown> | ReportInputSnapshot
+): AcceptedConsultationThemeSnapshot[] {
+  const snapshot = toReportInputSnapshot(value);
+  return Array.isArray(snapshot.accepted_consultation_themes)
+    ? snapshot.accepted_consultation_themes
+    : [];
+}
+
+export function getSupportingMeetingThemes(
+  value: Record<string, unknown> | ReportInputSnapshot
+): SupportingMeetingThemeSnapshot[] {
+  const snapshot = toReportInputSnapshot(value);
+  return Array.isArray(snapshot.supporting_meeting_themes)
+    ? snapshot.supporting_meeting_themes
+    : [];
 }
 
 export function getGraphSnapshot(

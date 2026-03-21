@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
   Sparkles,
   ThumbsDown,
   ThumbsUp,
+  Lightbulb,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,7 @@ import {
   useRoundAnalyticsJobs,
   useTriggerRoundAnalyticsJobs,
 } from "@/hooks/use-analytics";
+import { addAnalyticsClusterAsInsight } from "@/lib/actions/analytics-insights";
 
 type AnalyticsPanelState = "idle" | "queued" | "running" | "failed" | "complete";
 
@@ -157,6 +159,8 @@ export function AnalyticsPanel({
   const [decisionRationale, setDecisionRationale] = useState("");
   const [editedLabel, setEditedLabel] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [convertedClusters, setConvertedClusters] = useState<Set<number>>(new Set());
 
   const consultationLabelById = useMemo(
     () => new Map(consultations.map((c) => [c.id, c.title])),
@@ -237,6 +241,27 @@ export function AnalyticsPanel({
       setErrorMessage(message);
       toast.error(message);
     }
+  }
+
+  async function handleAddAsInsight(clusterId: number) {
+    setErrorMessage(null);
+    startTransition(async () => {
+      try {
+        const result = await addAnalyticsClusterAsInsight(roundId, clusterId);
+        setConvertedClusters((prev) => new Set([...prev, clusterId]));
+        toast.success("Insight created and added to theme grouping", {
+          description: result.clusterLabel,
+        });
+        // Invalidate round detail query to refresh theme grouping
+        await queryClient.invalidateQueries({
+          queryKey: ["consultation_rounds", roundId, "detail"],
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to create insight";
+        setErrorMessage(message);
+        toast.error(message);
+      }
+    });
   }
 
   const progress = analytics.latestJobStatus
@@ -431,6 +456,19 @@ export function AnalyticsPanel({
 
                   {!isPending ? (
                     <div className="flex items-center gap-1.5">
+                      {!convertedClusters.has(cluster.clusterId) && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={isPending}
+                          onClick={() => void handleAddAsInsight(cluster.clusterId)}
+                          title="Create a cross-consultation insight and theme group from this cluster"
+                        >
+                          <Lightbulb className="mr-1.5 h-3.5 w-3.5" />
+                          Add as Insight
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         size="sm"

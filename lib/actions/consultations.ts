@@ -8,15 +8,15 @@ import { requireOwnedMeeting, requireOwnedConsultation } from "@/lib/data/owners
 import { AUDIT_ACTIONS } from "./audit-actions";
 import { emitAuditEvent } from "./audit";
 
-interface CreateConsultationParams {
+interface CreateMeetingParams {
   title: string;
   consultationId?: string;
 }
 
-export async function createConsultation({
+export async function createMeeting({
   title,
   consultationId,
-}: CreateConsultationParams) {
+}: CreateMeetingParams) {
   const userId = await requireCurrentUserId();
 
   if (consultationId) {
@@ -44,12 +44,14 @@ export async function createConsultation({
   return created.id;
 }
 
+export const createConsultation = createMeeting;
+
 interface UpdateTranscriptParams {
   id: string;
   transcriptRaw: string;
 }
 
-export async function updateConsultationTitle({
+export async function updateMeetingTitle({
   id,
   title,
 }: {
@@ -83,6 +85,8 @@ export async function updateConsultationTitle({
   });
 }
 
+export const updateConsultationTitle = updateMeetingTitle;
+
 export async function updateTranscript({
   id,
   transcriptRaw,
@@ -104,7 +108,7 @@ export async function updateTranscript({
   });
 }
 
-export async function setConsultationRound(
+export async function assignMeetingConsultation(
   id: string,
   consultationId: string | null
 ) {
@@ -128,6 +132,8 @@ export async function setConsultationRound(
   });
 }
 
+export const setConsultationRound = assignMeetingConsultation;
+
 export async function updateNotes({
   id,
   notes,
@@ -143,7 +149,7 @@ export async function updateNotes({
   );
 }
 
-export async function markConsultationComplete(id: string) {
+export async function markMeetingComplete(id: string) {
   const userId = await requireCurrentUserId();
   await requireOwnedMeeting(id, userId);
 
@@ -159,3 +165,5 @@ export async function markConsultationComplete(id: string) {
     entityId: id,
   });
 }
+
+export const markConsultationComplete = markMeetingComplete;

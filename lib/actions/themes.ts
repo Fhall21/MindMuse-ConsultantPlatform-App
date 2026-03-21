@@ -22,6 +22,14 @@ function trimToNull(value?: string | null) {
   return trimmed ? trimmed : null;
 }
 
+function normalizeRequiredId(value: string, field: string) {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new Error(`${field} is required.`);
+  }
+  return normalized;
+}
+
 export async function saveThemes(
   consultationId: string,
   themeItems: ThemeData[]
@@ -61,36 +69,68 @@ export async function acceptTheme(
   consultationId: string,
   roundId?: string
 ) {
-  const userId = await requireCurrentUserId();
-  const { theme } = await requireOwnedTheme(id, consultationId, userId);
+  try {
+    const normalizedInsightId = normalizeRequiredId(id, "Insight ID");
+    const normalizedConsultationId = normalizeRequiredId(
+      consultationId,
+      "Consultation ID"
+    );
+    const normalizedRoundId = trimToNull(roundId);
+    const userId = await requireCurrentUserId();
+    const { theme } = await requireOwnedTheme(
+      normalizedInsightId,
+      normalizedConsultationId,
+      userId
+    );
 
-  await db
-    .update(insights)
-    .set({ accepted: true })
-    .where(and(eq(insights.id, id), eq(insights.consultationId, consultationId)));
+    await db.transaction(async (tx) => {
+      const updated = await tx
+        .update(insights)
+        .set({ accepted: true })
+        .where(
+          and(
+            eq(insights.id, theme.id),
+            eq(insights.consultationId, normalizedConsultationId)
+          )
+        )
+        .returning({ id: insights.id });
 
-  await db.insert(insightDecisionLogs).values({
-    userId,
-    consultationId,
-    insightId: id,
-    insightLabel: theme.label,
-    roundId: roundId || null,
-    decisionType: "accept",
-    rationale: null,
-  });
+      if (updated.length === 0) {
+        throw new Error("Theme no longer exists in this consultation.");
+      }
 
-  // Emit audit event with decision context
-  await emitAuditEvent({
-    consultationId,
-    action: AUDIT_ACTIONS.THEME_ACCEPTED,
-    entityType: "theme",
-    entityId: id,
-    metadata: {
-      decision_type: "accept",
-      theme_label: theme.label,
-      round_id: roundId || null,
-    },
-  });
+      await tx.insert(insightDecisionLogs).values({
+        userId,
+        consultationId: normalizedConsultationId,
+        insightId: theme.id,
+        insightLabel: theme.label,
+        roundId: normalizedRoundId,
+        decisionType: "accept",
+        rationale: null,
+      });
+    });
+
+    // Emit audit event with decision context
+    await emitAuditEvent({
+      consultationId: normalizedConsultationId,
+      action: AUDIT_ACTIONS.THEME_ACCEPTED,
+      entityType: "theme",
+      entityId: theme.id,
+      metadata: {
+        decision_type: "accept",
+        theme_label: theme.label,
+        round_id: normalizedRoundId,
+      },
+    });
+  } catch (error) {
+    console.error("[themes.acceptTheme] failed", {
+      insightId: id,
+      consultationId,
+      roundId: roundId ?? null,
+      error,
+    });
+    throw error;
+  }
 }
 
 /**
@@ -104,6 +144,7 @@ export async function rejectTheme(
   rationale: string = "",
   roundId?: string
 ) {
+  const normalizedRoundId = trimToNull(roundId);
   const trimmedRationale = trimToNull(rationale);
   const userId = await requireCurrentUserId();
   const { consultation, theme } = await requireOwnedTheme(id, consultationId, userId);
@@ -120,7 +161,7 @@ export async function rejectTheme(
       consultationId,
       insightId: id,
       insightLabel: theme.label,
-      roundId: roundId || null,
+      roundId: normalizedRoundId,
       decisionType: "reject",
       rationale: trimmedRationale,
     })
@@ -146,7 +187,7 @@ export async function rejectTheme(
       decision_type: "reject",
       theme_label: theme.label,
       rationale: trimmedRationale,
-      round_id: roundId || null,
+      round_id: normalizedRoundId,
     },
   });
 }
@@ -161,6 +202,7 @@ export async function addUserTheme(
   description?: string,
   roundId?: string
 ) {
+  const normalizedRoundId = trimToNull(roundId);
   const userId = await requireCurrentUserId();
   await requireOwnedConsultation(consultationId, userId);
 
@@ -185,7 +227,7 @@ export async function addUserTheme(
       consultationId,
       insightId: themeId,
       insightLabel: label,
-      roundId: roundId || null,
+      roundId: normalizedRoundId,
       decisionType: "user_added",
       rationale: null,
     });
@@ -199,7 +241,7 @@ export async function addUserTheme(
     metadata: {
       decision_type: "user_added",
       label,
-      round_id: roundId || null,
+      round_id: normalizedRoundId,
     },
   });
 

@@ -5,13 +5,13 @@ import { describe, expect, it } from "vitest";
 import { SourceThemeCard } from "@/components/consultations/rounds/source-theme-card";
 
 describe("SourceThemeCard", () => {
-  it("shows the source consultation pill on the card", () => {
+  it("shows the source meeting pill on the card", () => {
     render(
       <SourceThemeCard
         theme={{
           id: "theme-1",
-          sourceConsultationId: "consultation-1",
-          sourceConsultationTitle: "North depot interview",
+          sourceMeetingId: "consultation-1",
+          sourceMeetingTitle: "North depot interview",
           label: "Staff fatigue",
           description: "Repeated fatigue concerns across the shift.",
           editableLabel: "Staff fatigue",

@@ -189,8 +189,8 @@ export function ThemeGroupCard({
             {group.members.map((member: ThemeMemberDetail) => {
               const adaptedTheme: SourceTheme = {
                 id: member.insightId,
-                sourceConsultationId: member.sourceConsultationId,
-                sourceConsultationTitle: member.sourceConsultationTitle,
+                sourceMeetingId: member.sourceConsultationId,
+                sourceMeetingTitle: member.sourceConsultationTitle,
                 label: member.label,
                 description: member.description,
                 editableLabel: member.label,

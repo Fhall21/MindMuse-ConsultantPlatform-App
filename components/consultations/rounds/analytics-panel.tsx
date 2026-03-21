@@ -29,18 +29,17 @@ import type {
 } from "@/types/round-detail";
 import {
   isAnalyticsJobActive,
-  useAnalyticsClusterDecision,
-  useRoundAnalyticsJobs,
-  useTriggerRoundAnalyticsJobs,
+  useConsultationGroupAnalyticsClusterDecision,
+  useConsultationGroupAnalyticsJobs,
+  useTriggerConsultationGroupAnalyticsJobs,
 } from "@/hooks/use-analytics";
 import { addAnalyticsClusterAsInsight } from "@/lib/actions/analytics-insights";
 
 type AnalyticsPanelState = "idle" | "queued" | "running" | "failed" | "complete";
 
 interface AnalyticsPanelProps {
-  roundId: string;
-  roundLabel: string;
-  consultations: RoundDetailConsultation[];
+  consultationGroupId: string;
+  meetings: RoundDetailConsultation[];
   analytics: RoundAnalyticsSummary;
   decisionHistory: ConsultationDecisionHistoryItem[];
 }
@@ -146,15 +145,15 @@ function DecisionBadge({ decision }: { decision: ConsultationDecisionHistoryItem
 }
 
 export function AnalyticsPanel({
-  roundId,
-  consultations,
+  consultationGroupId,
+  meetings,
   analytics,
   decisionHistory,
 }: AnalyticsPanelProps) {
   const queryClient = useQueryClient();
-  const roundJobsQuery = useRoundAnalyticsJobs(roundId);
-  const triggerRoundAnalyticsMutation = useTriggerRoundAnalyticsJobs(roundId);
-  const analyticsDecisionMutation = useAnalyticsClusterDecision(roundId);
+  const consultationGroupJobsQuery = useConsultationGroupAnalyticsJobs(consultationGroupId);
+  const triggerConsultationGroupAnalyticsMutation = useTriggerConsultationGroupAnalyticsJobs(consultationGroupId);
+  const analyticsDecisionMutation = useConsultationGroupAnalyticsClusterDecision(consultationGroupId);
   const [pendingDecision, setPendingDecision] = useState<ClusterDecisionDraft | null>(null);
   const [decisionRationale, setDecisionRationale] = useState("");
   const [editedLabel, setEditedLabel] = useState("");
@@ -162,22 +161,22 @@ export function AnalyticsPanel({
   const [isPending, startTransition] = useTransition();
   const [convertedClusters, setConvertedClusters] = useState<Set<number>>(new Set());
 
-  const consultationLabelById = useMemo(
-    () => new Map(consultations.map((c) => [c.id, c.title])),
-    [consultations]
+  const meetingLabelById = useMemo(
+    () => new Map(meetings.map((meeting) => [meeting.id, meeting.title])),
+    [meetings]
   );
 
   const hasActiveJobs = Boolean(
-    roundJobsQuery.data?.data.some((job) => isAnalyticsJobActive(job.jobStatus))
+    consultationGroupJobsQuery.data?.data.some((job) => isAnalyticsJobActive(job.jobStatus))
   );
   const panelState = getPanelState(analytics, hasActiveJobs);
 
   useEffect(() => {
-    if (!roundJobsQuery.data) return;
+    if (!consultationGroupJobsQuery.data) return;
     void queryClient.invalidateQueries({
-      queryKey: ["consultation_rounds", roundId, "detail"],
+      queryKey: ["consultation_rounds", consultationGroupId, "detail"],
     });
-  }, [queryClient, roundId, roundJobsQuery.data]);
+  }, [queryClient, consultationGroupId, consultationGroupJobsQuery.data]);
 
   const clusterDecisionById = useMemo(() => {
     const map = new Map<string, ConsultationDecisionHistoryItem>();
@@ -198,7 +197,7 @@ export function AnalyticsPanel({
   async function handleTriggerRoundAnalytics() {
     setErrorMessage(null);
     try {
-      const result = await triggerRoundAnalyticsMutation.mutateAsync();
+      const result = await triggerConsultationGroupAnalyticsMutation.mutateAsync();
       toast.success(
         result.jobCount > 1
           ? `${result.jobCount} analytics jobs queued`
@@ -247,14 +246,14 @@ export function AnalyticsPanel({
     setErrorMessage(null);
     startTransition(async () => {
       try {
-        const result = await addAnalyticsClusterAsInsight(roundId, clusterId);
+        const result = await addAnalyticsClusterAsInsight(consultationGroupId, clusterId);
         setConvertedClusters((prev) => new Set([...prev, clusterId]));
         toast.success("Insight created and added to theme grouping", {
           description: result.clusterLabel,
         });
         // Invalidate round detail query to refresh theme grouping
         await queryClient.invalidateQueries({
-          queryKey: ["consultation_rounds", roundId, "detail"],
+          queryKey: ["consultation_rounds", consultationGroupId, "detail"],
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to create insight";
@@ -289,9 +288,9 @@ export function AnalyticsPanel({
               variant="outline"
               size="sm"
               onClick={() => void handleTriggerRoundAnalytics()}
-              disabled={triggerRoundAnalyticsMutation.isPending}
+              disabled={triggerConsultationGroupAnalyticsMutation.isPending}
             >
-              {triggerRoundAnalyticsMutation.isPending ? (
+              {triggerConsultationGroupAnalyticsMutation.isPending ? (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               ) : (
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
@@ -305,12 +304,12 @@ export function AnalyticsPanel({
               size="sm"
               onClick={() => void handleTriggerRoundAnalytics()}
               disabled={
-                triggerRoundAnalyticsMutation.isPending ||
+                triggerConsultationGroupAnalyticsMutation.isPending ||
                 panelState === "queued" ||
                 panelState === "running"
               }
             >
-              {triggerRoundAnalyticsMutation.isPending ? (
+              {triggerConsultationGroupAnalyticsMutation.isPending ? (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Sparkles className="mr-1.5 h-3.5 w-3.5" />
@@ -338,7 +337,7 @@ export function AnalyticsPanel({
         </p>
       ) : null}
 
-      {roundJobsQuery.isError ? (
+      {consultationGroupJobsQuery.isError ? (
         <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           Could not load job statuses.
         </p>
@@ -353,7 +352,7 @@ export function AnalyticsPanel({
       {/* Idle state */}
       {panelState === "idle" ? (
         <p className="text-sm text-muted-foreground">
-          No analytics have been run for this round yet. Run analytics to generate
+          No analytics have been run for this consultation group yet. Run analytics to generate
           cluster suggestions from extraction data.
         </p>
       ) : null}
@@ -374,7 +373,7 @@ export function AnalyticsPanel({
           <span>
             <span className="font-medium">{analytics.processedConsultationCount}</span>
             <span className="ml-1 text-muted-foreground">
-              of {analytics.consultationCount} consultations processed
+              of {analytics.consultationCount} meetings processed
             </span>
           </span>
           {analytics.outlierTermCount > 0 ? (
@@ -386,13 +385,13 @@ export function AnalyticsPanel({
         </div>
       ) : null}
 
-      {/* Per-consultation job list — only while active */}
+      {/* Per-meeting job list — only while active */}
       {(panelState === "running" || panelState === "queued") &&
-      roundJobsQuery.data?.data.length ? (
+      consultationGroupJobsQuery.data?.data.length ? (
         <div className="space-y-1.5">
-          {roundJobsQuery.data.data.map((entry) => {
+          {consultationGroupJobsQuery.data.data.map((entry) => {
             const title =
-              consultationLabelById.get(entry.consultationId) ?? entry.consultationId;
+              meetingLabelById.get(entry.consultationId) ?? entry.consultationId;
             const job = entry.jobStatus;
             const active = isAnalyticsJobActive(job);
             const failed = job?.phase === "failed";
@@ -448,8 +447,8 @@ export function AnalyticsPanel({
                     <p className="text-xs text-muted-foreground">
                       {cluster.consultationCount}{" "}
                       {cluster.consultationCount !== 1
-                        ? "consultations"
-                        : "consultation"}{" "}
+                        ? "meetings"
+                        : "meeting"}{" "}
                       · {terms.length} term{terms.length !== 1 ? "s" : ""}
                     </p>
                   </div>
@@ -463,7 +462,7 @@ export function AnalyticsPanel({
                           variant="outline"
                           disabled={isPending}
                           onClick={() => void handleAddAsInsight(cluster.clusterId)}
-                          title="Create a cross-consultation insight and theme group from this cluster"
+                          title="Create a cross-meeting insight and theme group from this cluster"
                         >
                           <Lightbulb className="mr-1.5 h-3.5 w-3.5" />
                           Add as Insight

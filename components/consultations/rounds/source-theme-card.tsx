@@ -72,7 +72,7 @@ export function SourceThemeCard({
             variant="outline"
             className="h-4 border-amber-200 bg-amber-50 px-1 text-[10px] text-amber-800"
           >
-            {theme.sourceConsultationTitle}
+            {theme.sourceMeetingTitle}
           </Badge>
           {theme.lockedFromSource ? (
             <Badge

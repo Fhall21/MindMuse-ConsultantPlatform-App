@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 
 interface DraggableConsultationCardProps {
-  consultationId: string;
+  meetingId: string;
   title: string;
   status: string;
   themeCount?: number;
@@ -22,7 +22,7 @@ function statusBadgeVariant(status: string) {
 }
 
 export function DraggableConsultationCard({
-  consultationId,
+  meetingId,
   title,
   status,
   themeCount,
@@ -36,7 +36,7 @@ export function DraggableConsultationCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: consultationId });
+  } = useSortable({ id: meetingId });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -64,14 +64,14 @@ export function DraggableConsultationCard({
       {/* Checkbox for multi-select */}
       <Checkbox
         checked={isSelected}
-        onCheckedChange={() => onToggleSelect(consultationId)}
+        onCheckedChange={() => onToggleSelect(meetingId)}
         aria-label={`Select ${title}`}
         className="shrink-0"
       />
 
       {/* Consultation info */}
       <Link
-        href={`/meetings/${consultationId}`}
+        href={`/meetings/${meetingId}`}
         className="min-w-0 flex-1 space-y-0.5 hover:underline"
         onClick={(e) => e.stopPropagation()}
       >

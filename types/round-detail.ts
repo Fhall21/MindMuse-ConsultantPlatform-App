@@ -35,8 +35,8 @@ export type { ThemeDetail as ConsultationThemeGroupDetail, ThemeMemberDetail as 
 
 export interface SourceTheme {
   id: string; // = sourceThemeId
-  sourceConsultationId: string; // = consultationId
-  sourceConsultationTitle: string; // = consultationTitle
+  sourceMeetingId: string; // = consultationId in the server payload
+  sourceMeetingTitle: string; // = consultationTitle in the server payload
   label: string;
   description: string | null;
   editableLabel: string;
@@ -71,3 +71,4 @@ export type { ThemeDetail as RoundThemeGroup } from "@/lib/actions/consultation-
 export type { ThemeDraftState as RoundThemeGroupDraft } from "@/lib/actions/consultation-workflow";
 export type RoundThemeGroupStatus = "draft" | "accepted" | "discarded" | "management_rejected";
 export type RoundConsultationSummary = ConsultationMeetingSummary;
+export type LinkedMeetingSummary = ConsultationMeetingSummary;

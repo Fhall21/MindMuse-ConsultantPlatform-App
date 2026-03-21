@@ -59,7 +59,7 @@ interface ConsultationGroupingSectionProps {
   roundId: string;
   roundLabel: string | null;
   initialGroups: ConsultationGroupDetail[];
-  consultations: RoundConsultationSummary[];
+  meetings: RoundConsultationSummary[];
   acceptedThemes: SourceTheme[];
 }
 
@@ -67,7 +67,7 @@ export function ConsultationGroupingSection({
   roundId,
   roundLabel,
   initialGroups,
-  consultations,
+  meetings,
   acceptedThemes,
 }: ConsultationGroupingSectionProps) {
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
@@ -85,7 +85,7 @@ export function ConsultationGroupingSection({
     handleAssignConsultationsToGroup,
     handleGroupSelected,
     handleDragEnd,
-  } = useConsultationGrouping({ roundId, initialGroups, consultations });
+  } = useConsultationGrouping({ roundId, initialGroups, meetings });
 
   // dnd-kit sensors: pointer (mouse) + touch with 8px distance to avoid click conflicts
   const sensors = useSensors(
@@ -93,15 +93,15 @@ export function ConsultationGroupingSection({
     useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 4 } })
   );
 
-  const activeDragConsultation = activeDragId
-    ? consultations.find((c) => c.id === activeDragId)
+  const activeDragMeeting = activeDragId
+    ? meetings.find((meeting) => meeting.id === activeDragId)
     : null;
   const activeDragCount =
     activeDragId && selectedIds.has(activeDragId) && selectedIds.size > 1
       ? selectedIds.size
       : 1;
 
-  // Accept an AI suggestion: create group + assign its consultations
+  // Accept an AI suggestion: create group + assign its meetings
   const handleAcceptAiSuggestion = async (suggestion: SuggestedConsultationGroup) => {
     const groupId = await handleCreateGroup(suggestion.label);
     if (!groupId) return;
@@ -182,7 +182,7 @@ export function ConsultationGroupingSection({
         }}
         onDragCancel={() => setActiveDragId(null)}
       >
-        {/* Ungrouped consultations */}
+        {/* Ungrouped meetings */}
         {ungrouped.length > 0 && (
           <Card>
             <CardHeader className="py-3 px-4">
@@ -190,7 +190,7 @@ export function ConsultationGroupingSection({
                 Ungrouped ({ungrouped.length})
               </CardTitle>
               <CardDescription className="text-xs">
-                Drag consultations into a group, or select and use &ldquo;Group Selected&rdquo;
+                Drag meetings into a group, or select and use &ldquo;Group Selected&rdquo;
               </CardDescription>
             </CardHeader>
             <CardContent className="px-4 pb-4">
@@ -202,7 +202,7 @@ export function ConsultationGroupingSection({
                   {ungrouped.map((c) => (
                     <DraggableConsultationCard
                       key={c.id}
-                      consultationId={c.id}
+                      meetingId={c.id}
                       title={c.title}
                       status={c.status}
                       themeCount={c.themeCount}
@@ -216,8 +216,8 @@ export function ConsultationGroupingSection({
           </Card>
         )}
 
-        {/* No consultations at all */}
-        {consultations.length === 0 && (
+        {/* No meetings at all */}
+        {meetings.length === 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Linked Meetings</CardTitle>
@@ -226,8 +226,8 @@ export function ConsultationGroupingSection({
           </Card>
         )}
 
-        {/* All consultations grouped — show ungrouped drop zone placeholder */}
-        {consultations.length > 0 && ungrouped.length === 0 && groups.length > 0 && (
+        {/* All meetings grouped — show ungrouped drop zone placeholder */}
+        {meetings.length > 0 && ungrouped.length === 0 && groups.length > 0 && (
           <UngroupedDropZone>
             <p className="text-xs text-muted-foreground text-center py-2">
               Drop here to ungroup
@@ -241,7 +241,7 @@ export function ConsultationGroupingSection({
             <ConsultationGroupCard
               key={group.id}
               group={group}
-              consultations={consultations}
+              meetings={meetings}
               selectedIds={selectedIds}
               roundLabel={roundLabel}
               onToggleSelect={toggleSelect}
@@ -253,19 +253,19 @@ export function ConsultationGroupingSection({
 
         {/* Drag overlay */}
         <DragOverlay>
-          {activeDragConsultation ? (
+          {activeDragMeeting ? (
             <div className="rotate-1 space-y-2 opacity-80">
               <DraggableConsultationCard
-                consultationId={activeDragConsultation.id}
-                title={activeDragConsultation.title}
-                status={activeDragConsultation.status}
-                themeCount={activeDragConsultation.themeCount}
+                meetingId={activeDragMeeting.id}
+                title={activeDragMeeting.title}
+                status={activeDragMeeting.status}
+                themeCount={activeDragMeeting.themeCount}
                 isSelected={false}
                 onToggleSelect={() => {}}
               />
               {activeDragCount > 1 ? (
                 <div className="rounded-full border bg-background px-3 py-1 text-xs font-medium shadow-sm">
-                  Moving {activeDragCount} consultations together
+                  Moving {activeDragCount} meetings together
                 </div>
               ) : null}
             </div>
@@ -279,7 +279,7 @@ export function ConsultationGroupingSection({
         onOpenChange={setAiDialogOpen}
         roundLabel={roundLabel}
         acceptedThemes={acceptedThemes}
-        consultations={consultations}
+        meetings={meetings}
         onAcceptSuggestion={handleAcceptAiSuggestion}
       />
     </div>

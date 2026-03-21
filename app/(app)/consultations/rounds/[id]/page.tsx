@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRoundDetail } from "@/hooks/use-consultations";
+import { useConsultationGroupDetail } from "@/hooks/use-consultations";
 import { RoundDetailHeader } from "@/components/consultations/rounds/round-detail-header";
 import { LinkedConsultationsSection } from "@/components/consultations/rounds/linked-consultations-section";
 import { ThemeGroupingWorkspace } from "@/components/consultations/rounds/theme-grouping-workspace";
@@ -43,14 +43,14 @@ export default function RoundDetailPage({
 }) {
   const { id } = use(params);
   const queryClient = useQueryClient();
-  const { data, isLoading, error } = useRoundDetail(id);
+  const { data, isLoading, error } = useConsultationGroupDetail(id);
 
   // Adapt Agent 1 types to component-friendly shapes
   const adaptedSourceThemes: SourceTheme[] = data?.sourceThemes
     ? data.sourceThemes.map((theme) => ({
         id: theme.sourceThemeId,
-        sourceConsultationId: theme.consultationId,
-        sourceConsultationTitle: theme.consultationTitle,
+        sourceMeetingId: theme.consultationId,
+        sourceMeetingTitle: theme.consultationTitle,
         label: theme.label,
         description: theme.description,
         editableLabel: theme.editableLabel,
@@ -62,10 +62,10 @@ export default function RoundDetailPage({
       }))
     : [];
 
-  const adaptedConsultations: RoundConsultationSummary[] = data?.consultations
+  const adaptedMeetings: RoundConsultationSummary[] = data?.consultations
     ? (() => {
         const themeCountMap = new Map<string, number>();
-      for (const theme of data.sourceThemes ?? []) {
+        for (const theme of data.sourceThemes ?? []) {
           themeCountMap.set(
             theme.consultationId,
             (themeCountMap.get(theme.consultationId) || 0) + 1
@@ -199,7 +199,7 @@ export default function RoundDetailPage({
       {/* Linked Meetings */}
       <section className="space-y-3">
         <SectionHeading>Linked Meetings</SectionHeading>
-        <LinkedConsultationsSection consultations={adaptedConsultations} />
+        <LinkedConsultationsSection meetings={adaptedMeetings} />
       </section>
 
       <Separator />
@@ -208,9 +208,8 @@ export default function RoundDetailPage({
       <section className="space-y-3">
         <SectionHeading>Analytics</SectionHeading>
         <AnalyticsPanel
-          roundId={id}
-          roundLabel={data.round.label}
-          consultations={data.consultations}
+          consultationGroupId={id}
+          meetings={data.consultations}
           analytics={data.analytics}
           decisionHistory={data.decisionHistory}
         />
@@ -243,7 +242,7 @@ export default function RoundDetailPage({
       {/* Audit Trail */}
       <section className="space-y-3">
         <SectionHeading>Audit Trail</SectionHeading>
-        <RoundAuditTrail roundId={id} />
+        <RoundAuditTrail consultationGroupId={id} />
       </section>
     </div>
   );

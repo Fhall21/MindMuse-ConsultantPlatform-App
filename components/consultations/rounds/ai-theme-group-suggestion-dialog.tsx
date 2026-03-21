@@ -73,7 +73,7 @@ export function AiThemeGroupSuggestionDialog({
         theme_id: t.id,
         label: t.label,
         description: t.description ?? null,
-        consultation_title: t.sourceConsultationTitle,
+        consultation_title: t.sourceMeetingTitle,
         is_user_added: t.isUserAdded,
       }));
 

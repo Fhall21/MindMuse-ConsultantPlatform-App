@@ -20,7 +20,7 @@ import { generateGroupSummary } from "@/lib/actions/consultation-groups";
 
 interface ConsultationGroupCardProps {
   group: LocalGroup;
-  consultations: RoundConsultationSummary[]; // full list for themeCount lookup
+  meetings: RoundConsultationSummary[]; // full list for themeCount lookup
   selectedIds: Set<string>;
   roundLabel: string | null;
   onToggleSelect: (id: string) => void;
@@ -30,7 +30,7 @@ interface ConsultationGroupCardProps {
 
 export function ConsultationGroupCard({
   group,
-  consultations,
+  meetings,
   selectedIds,
   roundLabel,
   onToggleSelect,
@@ -46,8 +46,8 @@ export function ConsultationGroupCard({
 
   const { setNodeRef, isOver } = useDroppable({ id: group.id });
 
-  const consultationMap = new Map(consultations.map((c) => [c.id, c]));
-  const memberIds = group.members.map((m) => m.consultationId);
+  const meetingMap = new Map(meetings.map((meeting) => [meeting.id, meeting]));
+  const memberIds = group.members.map((member) => member.meetingId);
 
   const handleRenameConfirm = async () => {
     const trimmed = editLabel.trim();
@@ -71,16 +71,16 @@ export function ConsultationGroupCard({
   const handleGenerateSummary = async () => {
     setIsGeneratingSummary(true);
     try {
-      const memberConsultations = group.members.map((m) => {
+      const memberMeetings = group.members.map((member) => {
         return {
-          consultation_id: m.consultationId,
-          consultation_title: m.consultationTitle,
+          consultation_id: member.meetingId,
+          consultation_title: member.meetingTitle,
           theme_labels: [], // themes not available at this level — FastAPI handles gracefully
           theme_descriptions: [],
         };
       });
 
-      const result = await generateGroupSummary(roundLabel, group.label, memberConsultations);
+      const result = await generateGroupSummary(roundLabel, group.label, memberMeetings);
       setGroupSummary(result.content);
     } catch {
       toast.error("Failed to generate group summary");
@@ -199,15 +199,15 @@ export function ConsultationGroupCard({
               </p>
             ) : (
               group.members.map((member) => {
-                const c = consultationMap.get(member.consultationId);
+                const meeting = meetingMap.get(member.meetingId);
                 return (
                   <DraggableConsultationCard
-                    key={member.consultationId}
-                    consultationId={member.consultationId}
-                    title={member.consultationTitle}
-                    status={member.consultationStatus}
-                    themeCount={c?.themeCount}
-                    isSelected={selectedIds.has(member.consultationId)}
+                    key={member.meetingId}
+                    meetingId={member.meetingId}
+                    title={member.meetingTitle}
+                    status={member.meetingStatus}
+                    themeCount={meeting?.themeCount}
+                    isSelected={selectedIds.has(member.meetingId)}
                     onToggleSelect={onToggleSelect}
                   />
                 );

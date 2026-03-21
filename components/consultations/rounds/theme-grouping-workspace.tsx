@@ -131,15 +131,15 @@ export function ThemeGroupingWorkspace({
     [sourceThemes, groupedThemeIds]
   );
 
-  const themesByConsultation = useMemo(() => {
+  const themesByMeeting = useMemo(() => {
     const map = new Map<string, { title: string; themes: SourceTheme[] }>();
     for (const theme of ungroupedThemes) {
-      const existing = map.get(theme.sourceConsultationId);
+      const existing = map.get(theme.sourceMeetingId);
       if (existing) {
         existing.themes.push(theme);
       } else {
-        map.set(theme.sourceConsultationId, {
-          title: theme.sourceConsultationTitle,
+        map.set(theme.sourceMeetingId, {
+          title: theme.sourceMeetingTitle,
           themes: [theme],
         });
       }
@@ -200,8 +200,8 @@ export function ThemeGroupingWorkspace({
                       ({
                         id: theme.id,
                         insightId: theme.id,
-                        sourceConsultationId: theme.sourceConsultationId,
-                        sourceConsultationTitle: theme.sourceConsultationTitle,
+                        sourceConsultationId: theme.sourceMeetingId,
+                        sourceConsultationTitle: theme.sourceMeetingTitle,
                         label: theme.label,
                         description: theme.description,
                         lockedFromSource: theme.lockedFromSource,
@@ -635,13 +635,13 @@ export function ThemeGroupingWorkspace({
               isDragOverUngrouped && "bg-accent/30",
             )}
           >
-            {themesByConsultation.length === 0 ? (
+            {themesByMeeting.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
                 All themes are grouped. Drag themes here to ungroup them.
               </p>
             ) : (
-              themesByConsultation.map(([consultationId, { title, themes }]) => (
-                <div key={consultationId} className="space-y-1.5">
+              themesByMeeting.map(([meetingId, { title, themes }]) => (
+                <div key={meetingId} className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <div className="h-px flex-1 bg-border/60" />
                     <span className="text-xs font-medium text-muted-foreground">

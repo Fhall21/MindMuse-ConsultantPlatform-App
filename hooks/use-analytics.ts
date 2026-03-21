@@ -26,8 +26,10 @@ export const analyticsQueryKeys = {
   consultation: (consultationId: string) => ["analytics", "consultation", consultationId] as const,
   consultationJob: (consultationId: string) =>
     ["analytics", "consultation", consultationId, "job"] as const,
-  round: (roundId: string) => ["analytics", "round", roundId] as const,
-  roundJobs: (roundId: string) => ["analytics", "round", roundId, "jobs"] as const,
+  consultationGroup: (consultationGroupId: string) =>
+    ["analytics", "consultation_group", consultationGroupId] as const,
+  consultationGroupJobs: (consultationGroupId: string) =>
+    ["analytics", "consultation_group", consultationGroupId, "jobs"] as const,
 };
 
 export function isAnalyticsJobActive(jobStatus: AnalyticsJobStatus | null | undefined) {
@@ -68,20 +70,30 @@ export function useConsultationAnalyticsJobStatus(consultationId: string) {
   });
 }
 
-export function useRoundAnalytics(roundId: string) {
+export function useConsultationGroupAnalytics(consultationGroupId: string) {
   return useQuery({
-    queryKey: analyticsQueryKeys.round(roundId),
-    queryFn: () => fetchJson<RoundAnalyticsResponse>(`/api/client/analytics/rounds/${roundId}`),
-    enabled: Boolean(roundId),
+    queryKey: analyticsQueryKeys.consultationGroup(consultationGroupId),
+    queryFn: () =>
+      fetchJson<RoundAnalyticsResponse>(
+        `/api/client/analytics/consultation-groups/${consultationGroupId}`
+      ),
+    enabled: Boolean(consultationGroupId),
     retry: false,
   });
 }
 
-export function useRoundAnalyticsJobs(roundId: string) {
+export function useRoundAnalytics(consultationGroupId: string) {
+  return useConsultationGroupAnalytics(consultationGroupId);
+}
+
+export function useConsultationGroupAnalyticsJobs(consultationGroupId: string) {
   return useQuery({
-    queryKey: analyticsQueryKeys.roundJobs(roundId),
-    queryFn: () => fetchJson<RoundAnalyticsJobsResponse>(`/api/client/analytics/rounds/${roundId}/jobs`),
-    enabled: Boolean(roundId),
+    queryKey: analyticsQueryKeys.consultationGroupJobs(consultationGroupId),
+    queryFn: () =>
+      fetchJson<RoundAnalyticsJobsResponse>(
+        `/api/client/analytics/consultation-groups/${consultationGroupId}/jobs`
+      ),
+    enabled: Boolean(consultationGroupId),
     retry: false,
     refetchInterval: (query) => {
       const data = query.state.data as RoundAnalyticsJobsResponse | undefined;
@@ -94,21 +106,32 @@ export function useRoundAnalyticsJobs(roundId: string) {
   });
 }
 
-export function useTriggerRoundAnalyticsJobs(roundId: string) {
+export function useRoundAnalyticsJobs(consultationGroupId: string) {
+  return useConsultationGroupAnalyticsJobs(consultationGroupId);
+}
+
+export function useTriggerConsultationGroupAnalyticsJobs(consultationGroupId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: () =>
-      fetchJson<{ jobCount: number }>(`/api/client/analytics/rounds/${roundId}/jobs`, {
+      fetchJson<{ jobCount: number }>(
+        `/api/client/analytics/consultation-groups/${consultationGroupId}/jobs`,
+        {
         method: "POST",
-      }),
+        }
+      ),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: analyticsQueryKeys.round(roundId) }),
-        queryClient.invalidateQueries({ queryKey: analyticsQueryKeys.roundJobs(roundId) }),
+        queryClient.invalidateQueries({ queryKey: analyticsQueryKeys.consultationGroup(consultationGroupId) }),
+        queryClient.invalidateQueries({ queryKey: analyticsQueryKeys.consultationGroupJobs(consultationGroupId) }),
       ]);
     },
   });
+}
+
+export function useTriggerRoundAnalyticsJobs(consultationGroupId: string) {
+  return useTriggerConsultationGroupAnalyticsJobs(consultationGroupId);
 }
 
 export function useTriggerConsultationAnalyticsJob(consultationId: string) {
@@ -130,13 +153,13 @@ export function useTriggerConsultationAnalyticsJob(consultationId: string) {
   });
 }
 
-export function useAnalyticsClusterDecision(roundId: string) {
+export function useConsultationGroupAnalyticsClusterDecision(consultationGroupId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ clusterId, ...payload }: AnalyticsClusterDecisionRequest & { clusterId: number }) =>
       fetchJson<AnalyticsClusterDecisionResponse>(
-        `/api/client/analytics/rounds/${roundId}/clusters/${clusterId}/decision`,
+        `/api/client/analytics/consultation-groups/${consultationGroupId}/clusters/${clusterId}/decision`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -145,9 +168,13 @@ export function useAnalyticsClusterDecision(roundId: string) {
       ),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: analyticsQueryKeys.round(roundId) }),
-        queryClient.invalidateQueries({ queryKey: ["consultation_rounds", roundId, "detail"] }),
+        queryClient.invalidateQueries({ queryKey: analyticsQueryKeys.consultationGroup(consultationGroupId) }),
+        queryClient.invalidateQueries({ queryKey: ["consultation_rounds", consultationGroupId, "detail"] }),
       ]);
     },
   });
+}
+
+export function useAnalyticsClusterDecision(consultationGroupId: string) {
+  return useConsultationGroupAnalyticsClusterDecision(consultationGroupId);
 }

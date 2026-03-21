@@ -17,9 +17,9 @@ import type { ConsultationGroupDetail, RoundConsultationSummary } from "@/types/
 
 export interface LocalGroupMember {
   id: string;
-  consultationId: string;
-  consultationTitle: string;
-  consultationStatus: string;
+  meetingId: string;
+  meetingTitle: string;
+  meetingStatus: string;
   position: number;
 }
 
@@ -35,13 +35,13 @@ export interface LocalGroup {
 interface UseConsultationGroupingProps {
   roundId: string;
   initialGroups: ConsultationGroupDetail[];
-  consultations: RoundConsultationSummary[];
+  meetings: RoundConsultationSummary[];
 }
 
 export function useConsultationGrouping({
   roundId,
   initialGroups,
-  consultations,
+  meetings,
 }: UseConsultationGroupingProps) {
   const [groups, setGroups] = useState<LocalGroup[]>(() =>
     initialGroups.map((g) => ({
@@ -50,9 +50,9 @@ export function useConsultationGrouping({
       position: g.position,
       members: g.members.map((m) => ({
         id: m.id,
-        consultationId: m.consultationId,
-        consultationTitle: m.consultationTitle,
-        consultationStatus: m.consultationStatus,
+        meetingId: m.consultationId,
+        meetingTitle: m.consultationTitle,
+        meetingStatus: m.consultationStatus,
         position: m.position,
       })),
     }))
@@ -60,24 +60,24 @@ export function useConsultationGrouping({
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // In-flight guard: consultation IDs currently being persisted
+  // In-flight guard: meeting IDs currently being persisted
   const inFlightIds = useRef<Set<string>>(new Set());
 
-  // ─── Derived: which consultations are ungrouped ─────────────────────────────
+  // ─── Derived: which meetings are ungrouped ──────────────────────────────────
 
-  const groupedConsultationIds = new Set(
-    groups.flatMap((g) => g.members.map((m) => m.consultationId))
+  const groupedMeetingIds = new Set(
+    groups.flatMap((g) => g.members.map((m) => m.meetingId))
   );
 
-  const ungrouped = consultations.filter((c) => !groupedConsultationIds.has(c.id));
+  const ungrouped = meetings.filter((meeting) => !groupedMeetingIds.has(meeting.id));
 
   // ─── Selection ──────────────────────────────────────────────────────────────
 
-  const toggleSelect = useCallback((consultationId: string) => {
+  const toggleSelect = useCallback((meetingId: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(consultationId)) next.delete(consultationId);
-      else next.add(consultationId);
+      if (next.has(meetingId)) next.delete(meetingId);
+      else next.add(meetingId);
       return next;
     });
   }, []);
@@ -127,38 +127,38 @@ export function useConsultationGrouping({
   }, []);
 
   const handleAssignConsultationsToGroup = useCallback(
-    async (consultationIds: string[], targetGroupId: string, startPosition = 0) => {
-      const ids = [...new Set(consultationIds.filter(Boolean))];
+    async (meetingIds: string[], targetGroupId: string, startPosition = 0) => {
+      const ids = [...new Set(meetingIds.filter(Boolean))];
       if (ids.length === 0) return;
 
       if (ids.some((id) => inFlightIds.current.has(id))) return;
       ids.forEach((id) => inFlightIds.current.add(id));
 
       setGroups((prev) => {
-        const consultationMap = new Map(consultations.map((c) => [c.id, c]));
+        const meetingMap = new Map(meetings.map((meeting) => [meeting.id, meeting]));
         return prev.map((g) => {
           if (g.id !== targetGroupId) {
             return {
               ...g,
               members: g.members.filter(
-                (m) => !ids.includes(m.consultationId)
+                (m) => !ids.includes(m.meetingId)
               ),
             };
           }
 
           const retainedMembers = g.members.filter(
-            (m) => !ids.includes(m.consultationId)
+            (m) => !ids.includes(m.meetingId)
           );
-          const existingIds = new Set(retainedMembers.map((m) => m.consultationId));
+          const existingIds = new Set(retainedMembers.map((m) => m.meetingId));
           const toAdd = ids
             .filter((id) => !existingIds.has(id))
             .map((id, index): LocalGroupMember => {
-              const consultation = consultationMap.get(id);
+              const meeting = meetingMap.get(id);
               return {
                 id: `optimistic-${targetGroupId}-${id}`,
-                consultationId: id,
-                consultationTitle: consultation?.title ?? "",
-                consultationStatus: consultation?.status ?? "draft",
+                meetingId: id,
+                meetingTitle: meeting?.title ?? "",
+                meetingStatus: meeting?.status ?? "draft",
                 position: startPosition + index,
               };
             });
@@ -182,10 +182,10 @@ export function useConsultationGrouping({
         ids.forEach((id) => inFlightIds.current.delete(id));
       }
     },
-    [consultations, roundId]
+    [meetings, roundId]
   );
 
-  // ─── Group selected consultations ───────────────────────────────────────────
+  // ─── Group selected meetings ────────────────────────────────────────────────
 
   const handleGroupSelected = useCallback(
     async (targetGroupId: string) => {
@@ -206,23 +206,23 @@ export function useConsultationGrouping({
    *   - Ungrouped area: "ungrouped"
    *   - Group: group.id
    *
-   * Draggable ID: consultation.id
+   * Draggable ID: meeting.id
    */
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {
       const { active, over } = event;
       if (!over) return;
 
-      const consultationId = active.id as string;
-      if (inFlightIds.current.has(consultationId)) return;
+      const meetingId = active.id as string;
+      if (inFlightIds.current.has(meetingId)) return;
       const draggedIds =
-        selectedIds.has(consultationId) && selectedIds.size > 1
+        selectedIds.has(meetingId) && selectedIds.size > 1
           ? Array.from(selectedIds)
-          : [consultationId];
+          : [meetingId];
 
       // Determine source container
       const sourceGroup = groups.find((g) =>
-        g.members.some((m) => m.consultationId === consultationId)
+        g.members.some((m) => m.meetingId === meetingId)
       );
       const sourceContainerId = sourceGroup?.id ?? "ungrouped";
 
@@ -233,9 +233,9 @@ export function useConsultationGrouping({
       if (over.id === "ungrouped" || overIsGroup) {
         targetContainerId = over.id as string;
       } else {
-        // over.id is a consultation ID — find which container owns it
+        // over.id is a meeting ID — find which container owns it
         const owningGroup = groups.find((g) =>
-          g.members.some((m) => m.consultationId === over.id)
+          g.members.some((m) => m.meetingId === over.id)
         );
         targetContainerId = owningGroup?.id ?? "ungrouped";
       }
@@ -246,8 +246,8 @@ export function useConsultationGrouping({
         const group = groups.find((g) => g.id === targetContainerId);
         if (!group) return;
 
-        const oldIndex = group.members.findIndex((m) => m.consultationId === consultationId);
-        const newIndex = group.members.findIndex((m) => m.consultationId === over.id);
+        const oldIndex = group.members.findIndex((m) => m.meetingId === meetingId);
+        const newIndex = group.members.findIndex((m) => m.meetingId === over.id);
         if (oldIndex === newIndex || oldIndex === -1 || newIndex === -1) return;
 
         const reordered = arrayMove(group.members, oldIndex, newIndex).map((m, i) => ({
@@ -260,17 +260,17 @@ export function useConsultationGrouping({
           prev.map((g) => (g.id === targetContainerId ? { ...g, members: reordered } : g))
         );
 
-        inFlightIds.current.add(consultationId);
+        inFlightIds.current.add(meetingId);
         try {
           await reorderGroupMembers(
             targetContainerId,
             roundId,
-            reordered.map((m) => m.consultationId)
+            reordered.map((m) => m.meetingId)
           );
         } catch {
           toast.error("Failed to save order");
         } finally {
-          inFlightIds.current.delete(consultationId);
+          inFlightIds.current.delete(meetingId);
         }
         return;
       }
@@ -280,19 +280,19 @@ export function useConsultationGrouping({
       const targetGroup = targetGroupId ? groups.find((g) => g.id === targetGroupId) : null;
       const newPosition = targetGroup ? targetGroup.members.length : 0;
 
-      const draggedConsultations = draggedIds
-        .map((id) => consultations.find((consultation) => consultation.id === id))
-        .filter((consultation): consultation is RoundConsultationSummary => Boolean(consultation));
-      if (draggedConsultations.length === 0) return;
+      const draggedMeetings = draggedIds
+        .map((id) => meetings.find((meeting) => meeting.id === id))
+        .filter((meeting): meeting is RoundConsultationSummary => Boolean(meeting));
+      if (draggedMeetings.length === 0) return;
 
       // Optimistic
       setGroups((prev) =>
         prev.map((g) => {
           // Remove from source
-          if (g.id === sourceContainerId || draggedIds.some((id) => g.members.some((m) => m.consultationId === id))) {
+          if (g.id === sourceContainerId || draggedIds.some((id) => g.members.some((m) => m.meetingId === id))) {
             return {
               ...g,
-              members: g.members.filter((member) => !draggedIds.includes(member.consultationId)),
+              members: g.members.filter((member) => !draggedIds.includes(member.meetingId)),
             };
           }
           // Add to target
@@ -301,11 +301,11 @@ export function useConsultationGrouping({
               ...g,
                 members: [
                   ...g.members,
-                  ...draggedConsultations.map((consultation, index) => ({
-                    id: `optimistic-${consultation.id}`,
-                    consultationId: consultation.id,
-                    consultationTitle: consultation.title,
-                    consultationStatus: consultation.status,
+                  ...draggedMeetings.map((meeting, index) => ({
+                    id: `optimistic-${meeting.id}`,
+                    meetingId: meeting.id,
+                    meetingTitle: meeting.title,
+                    meetingStatus: meeting.status,
                     position: newPosition + index,
                   })),
                 ],
@@ -324,26 +324,26 @@ export function useConsultationGrouping({
         );
         clearSelection();
       } catch {
-        toast.error("Failed to move consultation");
+        toast.error("Failed to move meeting");
         // Revert optimistic update on error
         setGroups((prev) =>
           prev.map((g) => {
             if (g.id === targetGroupId) {
               return {
                 ...g,
-                members: g.members.filter((member) => !draggedIds.includes(member.consultationId)),
+                members: g.members.filter((member) => !draggedIds.includes(member.meetingId)),
               };
             }
-            if (g.id === sourceContainerId || draggedIds.some((id) => g.members.some((m) => m.consultationId === id))) {
+            if (g.id === sourceContainerId || draggedIds.some((id) => g.members.some((m) => m.meetingId === id))) {
               return {
                 ...g,
                 members: [
                   ...g.members,
-                  ...draggedConsultations.map((consultation, index) => ({
-                    id: `optimistic-${consultation.id}`,
-                    consultationId: consultation.id,
-                    consultationTitle: consultation.title,
-                    consultationStatus: consultation.status,
+                  ...draggedMeetings.map((meeting, index) => ({
+                    id: `optimistic-${meeting.id}`,
+                    meetingId: meeting.id,
+                    meetingTitle: meeting.title,
+                    meetingStatus: meeting.status,
                     position: g.members.length + index,
                   })),
                 ],
@@ -356,7 +356,7 @@ export function useConsultationGrouping({
         draggedIds.forEach((id) => inFlightIds.current.delete(id));
       }
     },
-    [clearSelection, consultations, groups, roundId, selectedIds]
+    [clearSelection, meetings, groups, roundId, selectedIds]
   );
 
   return {

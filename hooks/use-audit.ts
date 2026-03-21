@@ -13,11 +13,15 @@ export function useAuditEvents(consultationId: string) {
   });
 }
 
-export function useRoundAuditEvents(roundId: string) {
+export function useConsultationGroupAuditEvents(consultationGroupId: string) {
   return useQuery({
-    queryKey: ["audit_log", "round", roundId],
+    queryKey: ["audit_log", "consultation_group", consultationGroupId],
     queryFn: () =>
-      fetchJson<AuditLogEntry[]>(`/api/client/audit/rounds/${roundId}`),
-    enabled: !!roundId,
+      fetchJson<AuditLogEntry[]>(`/api/client/audit/consultation-groups/${consultationGroupId}`),
+    enabled: !!consultationGroupId,
   });
+}
+
+export function useRoundAuditEvents(consultationGroupId: string) {
+  return useConsultationGroupAuditEvents(consultationGroupId);
 }

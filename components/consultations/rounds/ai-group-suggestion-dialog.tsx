@@ -27,7 +27,7 @@ interface AiGroupSuggestionDialogProps {
   onOpenChange: (open: boolean) => void;
   roundLabel: string | null;
   acceptedThemes: SourceTheme[];          // All source themes from the round
-  consultations: RoundConsultationSummary[];
+  meetings: RoundConsultationSummary[];
   onAcceptSuggestion: (suggestion: SuggestedConsultationGroup) => Promise<void>;
 }
 
@@ -36,7 +36,7 @@ export function AiGroupSuggestionDialog({
   onOpenChange,
   roundLabel,
   acceptedThemes,
-  consultations,
+  meetings,
   onAcceptSuggestion,
 }: AiGroupSuggestionDialogProps) {
   const [selectedThemeLabels, setSelectedThemeLabels] = useState<Set<string>>(new Set());
@@ -45,7 +45,7 @@ export function AiGroupSuggestionDialog({
   const [acceptedSuggestionLabels, setAcceptedSuggestionLabels] = useState<Set<string>>(new Set());
   const [rejectedSuggestionLabels, setRejectedSuggestionLabels] = useState<Set<string>>(new Set());
 
-  // Deduplicate theme labels across consultations
+  // Deduplicate theme labels across meetings
   const uniqueThemeLabels = Array.from(
     new Set(acceptedThemes.map((t) => t.label))
   ).sort();
@@ -68,18 +68,18 @@ export function AiGroupSuggestionDialog({
     setRejectedSuggestionLabels(new Set());
 
     try {
-      // Build consultation theme input: group themes by consultation
-      const themesByConsultation = new Map<string, SourceTheme[]>();
+      // Build meeting theme input: group themes by meeting
+      const themesByMeeting = new Map<string, SourceTheme[]>();
       for (const theme of acceptedThemes) {
-        const existing = themesByConsultation.get(theme.sourceConsultationId) ?? [];
-        themesByConsultation.set(theme.sourceConsultationId, [...existing, theme]);
+        const existing = themesByMeeting.get(theme.sourceMeetingId) ?? [];
+        themesByMeeting.set(theme.sourceMeetingId, [...existing, theme]);
       }
 
-      const consultationInputs: ConsultationThemeInput[] = consultations.map((c) => {
-        const themes = themesByConsultation.get(c.id) ?? [];
+      const consultationInputs: ConsultationThemeInput[] = meetings.map((meeting) => {
+        const themes = themesByMeeting.get(meeting.id) ?? [];
         return {
-          consultation_id: c.id,
-          consultation_title: c.title,
+          consultation_id: meeting.id,
+          consultation_title: meeting.title,
           theme_labels: themes.map((t) => t.label),
           theme_descriptions: themes.map((t) => t.description ?? ""),
         };
@@ -129,7 +129,7 @@ export function AiGroupSuggestionDialog({
     (s) => !rejectedSuggestionLabels.has(s.label)
   );
 
-  const consultationMap = new Map(consultations.map((c) => [c.id, c]));
+  const meetingMap = new Map(meetings.map((meeting) => [meeting.id, meeting]));
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -141,7 +141,7 @@ export function AiGroupSuggestionDialog({
           </DialogTitle>
           <DialogDescription>
             Select 2 or more themes to cluster around. The AI will suggest which
-            consultations naturally share those themes.
+            meetings naturally share those themes.
           </DialogDescription>
         </DialogHeader>
 
@@ -240,10 +240,10 @@ export function AiGroupSuggestionDialog({
 
                   <div className="flex flex-wrap gap-1">
                     {suggestion.consultation_ids.map((id) => {
-                      const c = consultationMap.get(id);
+                      const meeting = meetingMap.get(id);
                       return (
                         <Badge key={id} variant="outline" className="text-xs">
-                          {c?.title ?? id}
+                          {meeting?.title ?? id}
                         </Badge>
                       );
                     })}

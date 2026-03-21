@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { useAuditEvents, useRoundAuditEvents } from "@/hooks/use-audit";
+import { useAuditEvents, useConsultationGroupAuditEvents } from "@/hooks/use-audit";
 import type { AuditLogEntry } from "@/types/db";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -271,7 +271,7 @@ function TimelineEvents({ events }: { events: AuditLogEntry[] }) {
 function AuditTrailCard({
   auditQuery,
 }: {
-  auditQuery: ReturnType<typeof useAuditEvents> | ReturnType<typeof useRoundAuditEvents>;
+  auditQuery: ReturnType<typeof useAuditEvents> | ReturnType<typeof useConsultationGroupAuditEvents>;
 }) {
   const [showEarlier, setShowEarlier] = useState(false);
 
@@ -335,11 +335,11 @@ export function AuditTrail({ consultationId }: AuditTrailProps) {
 }
 
 interface RoundAuditTrailProps {
-  roundId: string;
+  consultationGroupId: string;
 }
 
-export function RoundAuditTrail({ roundId }: RoundAuditTrailProps) {
-  const auditQuery = useRoundAuditEvents(roundId);
+export function RoundAuditTrail({ consultationGroupId }: RoundAuditTrailProps) {
+  const auditQuery = useConsultationGroupAuditEvents(consultationGroupId);
   return (
     <AuditTrailCard
       auditQuery={auditQuery}

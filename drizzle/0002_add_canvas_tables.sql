@@ -2,6 +2,15 @@
 -- canvas_connections, canvas_layout_state
 -- PostgreSQL-portable SQL with standard trigger support
 
+-- Ensure trigger function exists (defined in 0000a, but included here as safeguard)
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ============================================================
 -- canvas_connections
 -- Typed directed edges between graph nodes (themes/insights).

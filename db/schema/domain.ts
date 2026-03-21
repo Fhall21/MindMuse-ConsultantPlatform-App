@@ -23,8 +23,8 @@ const timestamps = {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 };
 
-export const consultationRounds = pgTable(
-  "consultation_rounds",
+export const consultations = pgTable(
+  "consultations",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: uuid("user_id")
@@ -35,12 +35,12 @@ export const consultationRounds = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    userIdx: index("idx_consultation_rounds_user_id").on(table.userId),
+    userIdx: index("idx_consultations_user_id").on(table.userId),
   })
 );
 
-export const consultations = pgTable(
-  "consultations",
+export const meetings = pgTable(
+  "meetings",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     title: text("title").notNull(),
@@ -49,17 +49,17 @@ export const consultations = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     status: text("status").default("draft").notNull(),
-    roundId: uuid("round_id").references(() => consultationRounds.id, { onDelete: "set null" }),
+    consultationId: uuid("consultation_id").references(() => consultations.id, { onDelete: "set null" }),
     ...timestamps,
   },
   (table) => ({
     statusCheck: check(
-      "consultations_status_check",
+      "meetings_status_check",
       sql`${table.status} in ('draft', 'complete')`
     ),
-    userIdx: index("idx_consultations_user_id").on(table.userId),
-    statusIdx: index("idx_consultations_status").on(table.status),
-    roundIdx: index("idx_consultations_round_id").on(table.roundId),
+    userIdx: index("idx_meetings_user_id").on(table.userId),
+    statusIdx: index("idx_meetings_status").on(table.status),
+    consultationIdx: index("idx_meetings_consultation_id").on(table.consultationId),
   })
 );
 
@@ -67,9 +67,9 @@ export const insights = pgTable(
   "insights",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    consultationId: uuid("consultation_id")
+    meetingId: uuid("meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
     label: text("label").notNull(),
     description: text("description"),
     accepted: boolean("accepted").default(false).notNull(),
@@ -78,7 +78,7 @@ export const insights = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    consultationIdx: index("idx_insights_consultation_id").on(table.consultationId),
+    meetingIdx: index("idx_insights_meeting_id").on(table.meetingId),
     userAddedIdx: index("idx_insights_user_added").on(table.isUserAdded),
   })
 );
@@ -102,18 +102,18 @@ export const people = pgTable(
   })
 );
 
-export const consultationPeople = pgTable(
-  "consultation_people",
+export const meetingPeople = pgTable(
+  "meeting_people",
   {
-    consultationId: uuid("consultation_id")
+    meetingId: uuid("meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
     personId: uuid("person_id")
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.consultationId, table.personId] }),
+    pk: primaryKey({ columns: [table.meetingId, table.personId] }),
   })
 );
 
@@ -121,9 +121,9 @@ export const evidenceEmails = pgTable(
   "evidence_emails",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    consultationId: uuid("consultation_id")
+    meetingId: uuid("meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
     subject: text("subject"),
     bodyDraft: text("body_draft"),
     bodyFinal: text("body_final"),
@@ -138,10 +138,10 @@ export const evidenceEmails = pgTable(
       "evidence_emails_status_check",
       sql`${table.status} in ('draft', 'accepted', 'sent')`
     ),
-    consultationIdx: index("idx_evidence_emails_consultation_id").on(table.consultationId),
+    meetingIdx: index("idx_evidence_emails_meeting_id").on(table.meetingId),
     statusIdx: index("idx_evidence_emails_status").on(table.status),
-    consultationStatusIdx: index("idx_evidence_emails_consultation_id_status").on(
-      table.consultationId,
+    meetingStatusIdx: index("idx_evidence_emails_meeting_id_status").on(
+      table.meetingId,
       table.status
     ),
   })
@@ -151,7 +151,7 @@ export const auditLog = pgTable(
   "audit_log",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    consultationId: uuid("consultation_id").references(() => consultations.id, {
+    meetingId: uuid("meeting_id").references(() => meetings.id, {
       onDelete: "cascade",
     }),
     action: text("action").notNull(),
@@ -164,7 +164,7 @@ export const auditLog = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
   },
   (table) => ({
-    consultationIdx: index("idx_audit_log_consultation_id").on(table.consultationId),
+    meetingIdx: index("idx_audit_log_meeting_id").on(table.meetingId),
     userIdx: index("idx_audit_log_user_id").on(table.userId),
     createdAtIdx: index("idx_audit_log_created_at").on(table.createdAt),
     entityTypeIdx: index("idx_audit_log_entity_type").on(table.entityType),
@@ -177,9 +177,9 @@ export const transcriptionJobs = pgTable(
   "transcription_jobs",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    consultationId: uuid("consultation_id")
+    meetingId: uuid("meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
     audioFileKey: text("audio_file_key").notNull(),
     status: text("status").default("queued").notNull(),
     transcriptText: text("transcript_text"),
@@ -194,12 +194,12 @@ export const transcriptionJobs = pgTable(
       "transcription_jobs_status_check",
       sql`${table.status} in ('queued', 'processing', 'completed', 'failed')`
     ),
-    consultationStatusIdx: index("idx_transcription_jobs_consultation_status").on(
-      table.consultationId,
+    meetingStatusIdx: index("idx_transcription_jobs_meeting_status").on(
+      table.meetingId,
       table.status
     ),
-    consultationRequestedIdx: index("idx_transcription_jobs_consultation_requested").on(
-      table.consultationId,
+    meetingRequestedIdx: index("idx_transcription_jobs_meeting_requested").on(
+      table.meetingId,
       table.requestedAt
     ),
     statusIdx: index("idx_transcription_jobs_status").on(table.status),
@@ -210,9 +210,9 @@ export const ocrJobs = pgTable(
   "ocr_jobs",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    consultationId: uuid("consultation_id")
+    meetingId: uuid("meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
     imageFileKey: text("image_file_key").notNull(),
     status: text("status").default("queued").notNull(),
     extractedText: text("extracted_text"),
@@ -228,12 +228,12 @@ export const ocrJobs = pgTable(
       "ocr_jobs_status_check",
       sql`${table.status} in ('queued', 'processing', 'completed', 'failed')`
     ),
-    consultationStatusIdx: index("idx_ocr_jobs_consultation_status").on(
-      table.consultationId,
+    meetingStatusIdx: index("idx_ocr_jobs_meeting_status").on(
+      table.meetingId,
       table.status
     ),
-    consultationRequestedIdx: index("idx_ocr_jobs_consultation_requested").on(
-      table.consultationId,
+    meetingRequestedIdx: index("idx_ocr_jobs_meeting_requested").on(
+      table.meetingId,
       table.requestedAt
     ),
     statusIdx: index("idx_ocr_jobs_status").on(table.status),
@@ -244,9 +244,9 @@ export const ingestionArtifacts = pgTable(
   "ingestion_artifacts",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    consultationId: uuid("consultation_id")
+    meetingId: uuid("meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
     artifactType: text("artifact_type").notNull(),
     sourceFileKey: text("source_file_key").notNull(),
     metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
@@ -255,15 +255,15 @@ export const ingestionArtifacts = pgTable(
     ...timestamps,
   },
   (table) => ({
-    consultationTypeIdx: index("idx_ingestion_artifacts_consultation_type").on(
-      table.consultationId,
+    meetingTypeIdx: index("idx_ingestion_artifacts_meeting_type").on(
+      table.meetingId,
       table.artifactType
     ),
-    consultationCreatedIdx: index("idx_ingestion_artifacts_consultation_created").on(
-      table.consultationId,
+    meetingCreatedIdx: index("idx_ingestion_artifacts_meeting_created").on(
+      table.meetingId,
       table.createdAt
     ),
-    acceptedIdx: index("idx_ingestion_artifacts_accepted").on(table.consultationId, table.accepted),
+    acceptedIdx: index("idx_ingestion_artifacts_accepted").on(table.meetingId, table.accepted),
   })
 );
 
@@ -274,11 +274,11 @@ export const insightDecisionLogs = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    consultationId: uuid("consultation_id")
+    meetingId: uuid("meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
     insightId: uuid("insight_id").references(() => insights.id, { onDelete: "set null" }),
-    roundId: uuid("round_id").references(() => consultationRounds.id, { onDelete: "set null" }),
+    consultationId: uuid("consultation_id").references(() => consultations.id, { onDelete: "set null" }),
     decisionType: text("decision_type").notNull(),
     rationale: text("rationale"),
     insightLabel: text("insight_label").notNull(),
@@ -290,12 +290,12 @@ export const insightDecisionLogs = pgTable(
       sql`${table.decisionType} in ('accept', 'reject', 'user_added')`
     ),
     userIdx: index("idx_insight_decision_logs_user_id").on(table.userId),
-    consultationIdx: index("idx_insight_decision_logs_consultation_id").on(table.consultationId),
+    meetingIdx: index("idx_insight_decision_logs_meeting_id").on(table.meetingId),
     insightIdx: index("idx_insight_decision_logs_insight_id").on(table.insightId),
-    roundIdx: index("idx_insight_decision_logs_round_id").on(table.roundId),
-    userConsultationCreatedIdx: index("idx_insight_decision_logs_user_consultation_created").on(
+    consultationIdx: index("idx_insight_decision_logs_consultation_id").on(table.consultationId),
+    userMeetingCreatedIdx: index("idx_insight_decision_logs_user_meeting_created").on(
       table.userId,
-      table.consultationId,
+      table.meetingId,
       table.createdAt
     ),
     insightLabelIdx: index("idx_insight_decision_logs_insight_label").on(table.insightLabel),
@@ -310,9 +310,9 @@ export const themes = pgTable(
   "themes",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    roundId: uuid("round_id")
+    consultationId: uuid("consultation_id")
       .notNull()
-      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+      .references(() => consultations.id, { onDelete: "cascade" }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -347,10 +347,10 @@ export const themes = pgTable(
       "themes_origin_check",
       sql`${table.origin} in ('manual', 'ai_refined')`
     ),
-    roundIdx: index("idx_themes_round_id").on(table.roundId),
-    userRoundStatusIdx: index("idx_themes_user_round_status").on(
+    consultationIdx: index("idx_themes_consultation_id").on(table.consultationId),
+    userConsultationStatusIdx: index("idx_themes_user_consultation_status").on(
       table.userId,
-      table.roundId,
+      table.consultationId,
       table.status
     ),
   })
@@ -363,15 +363,15 @@ export const themeMembers = pgTable(
     themeId: uuid("theme_id")
       .notNull()
       .references(() => themes.id, { onDelete: "cascade" }),
-    roundId: uuid("round_id")
+    consultationId: uuid("consultation_id")
       .notNull()
-      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+      .references(() => consultations.id, { onDelete: "cascade" }),
     insightId: uuid("insight_id")
       .notNull()
       .references(() => insights.id, { onDelete: "cascade" }),
-    sourceConsultationId: uuid("source_consultation_id")
+    sourceMeetingId: uuid("source_meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -383,22 +383,22 @@ export const themeMembers = pgTable(
   },
   (table) => ({
     positionCheck: check("theme_members_position_check", sql`${table.position} >= 0`),
-    roundInsightUnique: unique("theme_members_round_insight_key").on(
-      table.roundId,
+    consultationInsightUnique: unique("theme_members_consultation_insight_key").on(
+      table.consultationId,
       table.insightId
     ),
-    roundIdx: index("idx_theme_members_round_id").on(table.roundId),
+    consultationIdx: index("idx_theme_members_consultation_id").on(table.consultationId),
     insightIdx: index("idx_theme_members_insight_id").on(table.insightId),
   })
 );
 
-export const roundDecisions = pgTable(
-  "round_decisions",
+export const consultationDecisions = pgTable(
+  "consultation_decisions",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    roundId: uuid("round_id")
+    consultationId: uuid("consultation_id")
       .notNull()
-      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+      .references(() => consultations.id, { onDelete: "cascade" }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -411,19 +411,19 @@ export const roundDecisions = pgTable(
   },
   (table) => ({
     targetCheck: check(
-      "round_decisions_target_type_check",
+      "consultation_decisions_target_type_check",
       sql`${table.targetType} in ('source_theme', 'theme_group', 'round_output')`
     ),
     decisionCheck: check(
-      "round_decisions_decision_type_check",
+      "consultation_decisions_decision_type_check",
       sql`${table.decisionType} in ('accepted', 'discarded', 'management_rejected')`
     ),
     rationaleCheck: check(
-      "round_decisions_management_rejected_requires_rationale",
+      "consultation_decisions_management_rejected_requires_rationale",
       sql`${table.decisionType} <> 'management_rejected' or (${table.rationale} is not null and btrim(${table.rationale}) <> '')`
     ),
-    roundTargetIdx: index("idx_round_decisions_round_target").on(
-      table.roundId,
+    consultationTargetIdx: index("idx_consultation_decisions_consultation_target").on(
+      table.consultationId,
       table.targetType,
       table.targetId,
       table.createdAt
@@ -431,13 +431,13 @@ export const roundDecisions = pgTable(
   })
 );
 
-export const roundOutputArtifacts = pgTable(
-  "round_output_artifacts",
+export const consultationOutputArtifacts = pgTable(
+  "consultation_output_artifacts",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    roundId: uuid("round_id")
+    consultationId: uuid("consultation_id")
       .notNull()
-      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+      .references(() => consultations.id, { onDelete: "cascade" }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -458,28 +458,28 @@ export const roundOutputArtifacts = pgTable(
   },
   (table) => ({
     artifactCheck: check(
-      "round_output_artifacts_artifact_type_check",
+      "consultation_output_artifacts_artifact_type_check",
       sql`${table.artifactType} in ('summary', 'report', 'email')`
     ),
     statusCheck: check(
-      "round_output_artifacts_status_check",
+      "consultation_output_artifacts_status_check",
       sql`${table.status} in ('generated')`
     ),
-    roundTypeIdx: index("idx_round_output_artifacts_round_type").on(
-      table.roundId,
+    consultationTypeIdx: index("idx_consultation_output_artifacts_consultation_type").on(
+      table.consultationId,
       table.artifactType,
       table.generatedAt
     ),
   })
 );
 
-export const consultationGroups = pgTable(
-  "consultation_groups",
+export const meetingGroups = pgTable(
+  "meeting_groups",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    roundId: uuid("round_id")
+    consultationId: uuid("consultation_id")
       .notNull()
-      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+      .references(() => consultations.id, { onDelete: "cascade" }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -491,9 +491,9 @@ export const consultationGroups = pgTable(
     ...timestamps,
   },
   (table) => ({
-    positionCheck: check("consultation_groups_position_check", sql`${table.position} >= 0`),
-    roundIdx: index("idx_consultation_groups_round_id").on(table.roundId),
-    userRoundIdx: index("idx_consultation_groups_user_round").on(table.userId, table.roundId),
+    positionCheck: check("meeting_groups_position_check", sql`${table.position} >= 0`),
+    consultationIdx: index("idx_meeting_groups_consultation_id").on(table.consultationId),
+    userConsultationIdx: index("idx_meeting_groups_user_consultation").on(table.userId, table.consultationId),
   })
 );
 
@@ -503,13 +503,13 @@ export const consultationGroupMembers = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     groupId: uuid("group_id")
       .notNull()
-      .references(() => consultationGroups.id, { onDelete: "cascade" }),
-    roundId: uuid("round_id")
-      .notNull()
-      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+      .references(() => meetingGroups.id, { onDelete: "cascade" }),
     consultationId: uuid("consultation_id")
       .notNull()
       .references(() => consultations.id, { onDelete: "cascade" }),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -521,13 +521,13 @@ export const consultationGroupMembers = pgTable(
   },
   (table) => ({
     positionCheck: check("consultation_group_members_position_check", sql`${table.position} >= 0`),
-    roundConsultationUnique: unique("consultation_group_members_round_consultation_key").on(
-      table.roundId,
-      table.consultationId
+    consultationMeetingUnique: unique("consultation_group_members_consultation_meeting_key").on(
+      table.consultationId,
+      table.meetingId
     ),
     groupIdx: index("idx_consultation_group_members_group_id").on(table.groupId),
-    roundIdx: index("idx_consultation_group_members_round_id").on(table.roundId),
     consultationIdx: index("idx_consultation_group_members_consultation_id").on(table.consultationId),
+    meetingIdx: index("idx_consultation_group_members_meeting_id").on(table.meetingId),
   })
 );
 
@@ -611,9 +611,9 @@ export const canvasConnections = pgTable(
   "canvas_connections",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    roundId: uuid("round_id")
+    consultationId: uuid("consultation_id")
       .notNull()
-      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+      .references(() => consultations.id, { onDelete: "cascade" }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -663,19 +663,19 @@ export const canvasConnections = pgTable(
       sql`${table.confidence} is null or (${table.confidence} >= 0 and ${table.confidence} <= 1)`
     ),
     typedEdgeUnique: unique("canvas_connections_typed_edge_unique").on(
-      table.roundId,
+      table.consultationId,
       table.fromNodeType,
       table.fromNodeId,
       table.toNodeType,
       table.toNodeId,
       table.connectionType
     ),
-    roundIdx: index("idx_canvas_connections_round_id").on(table.roundId),
-    roundUserIdx: index("idx_canvas_connections_round_user").on(table.roundId, table.userId),
+    consultationIdx: index("idx_canvas_connections_consultation_id").on(table.consultationId),
+    consultationUserIdx: index("idx_canvas_connections_consultation_user").on(table.consultationId, table.userId),
     fromNodeIdx: index("idx_canvas_connections_from_node").on(table.fromNodeType, table.fromNodeId),
     toNodeIdx: index("idx_canvas_connections_to_node").on(table.toNodeType, table.toNodeId),
     originPendingIdx: index("idx_canvas_connections_origin_pending").on(
-      table.roundId,
+      table.consultationId,
       table.origin
     ),
   })
@@ -685,9 +685,9 @@ export const canvasLayoutState = pgTable(
   "canvas_layout_state",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    roundId: uuid("round_id")
+    consultationId: uuid("consultation_id")
       .notNull()
-      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+      .references(() => consultations.id, { onDelete: "cascade" }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -710,25 +710,25 @@ export const canvasLayoutState = pgTable(
       sql`${table.nodeType} in ('theme', 'insight', 'person', 'group', 'viewport')`
     ),
     nodeUnique: unique("canvas_layout_state_node_unique").on(
-      table.roundId,
+      table.consultationId,
       table.userId,
       table.nodeType,
       table.nodeId
     ),
-    roundUserIdx: index("idx_canvas_layout_state_round_user").on(table.roundId, table.userId),
+    consultationUserIdx: index("idx_canvas_layout_state_consultation_user").on(table.consultationId, table.userId),
   })
 );
 
-export const roundCrossInsights = pgTable(
-  "round_cross_insights",
+export const consultationCrossInsights = pgTable(
+  "consultation_cross_insights",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    roundId: uuid("round_id")
+    consultationId: uuid("consultation_id")
       .notNull()
-      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+      .references(() => consultations.id, { onDelete: "cascade" }),
     label: text("label").notNull(),
     description: text("description"),
-    sourceConsultationIds: jsonb("source_consultation_ids")
+    sourceMeetingIds: jsonb("source_meeting_ids")
       .$type<string[]>()
       .default(sql`'[]'::jsonb`)
       .notNull(),
@@ -738,8 +738,8 @@ export const roundCrossInsights = pgTable(
     ...timestamps,
   },
   (table) => ({
-    roundIdx: index("idx_round_cross_insights_round_id").on(table.roundId),
-    createdByIdx: index("idx_round_cross_insights_created_by").on(table.createdBy),
+    consultationIdx: index("idx_consultation_cross_insights_consultation_id").on(table.consultationId),
+    createdByIdx: index("idx_consultation_cross_insights_created_by").on(table.createdBy),
   })
 );
 
@@ -769,10 +769,10 @@ export const analyticsJobs = pgTable(
   "analytics_jobs",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    consultationId: uuid("consultation_id")
+    meetingId: uuid("meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
-    roundId: uuid("round_id").references(() => consultationRounds.id, { onDelete: "set null" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    consultationId: uuid("consultation_id").references(() => consultations.id, { onDelete: "set null" }),
     phase: text("phase").default("queued").notNull().$type<AnalyticsJobPhase>(),
     progress: integer("progress").default(-1).notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }),
@@ -789,16 +789,16 @@ export const analyticsJobs = pgTable(
       "analytics_jobs_progress_check",
       sql`${table.progress} >= -1 and ${table.progress} <= 100`
     ),
+    meetingCreatedIdx: index("idx_analytics_jobs_meeting_created").on(
+      table.meetingId,
+      table.createdAt.desc()
+    ),
     consultationCreatedIdx: index("idx_analytics_jobs_consultation_created").on(
       table.consultationId,
       table.createdAt.desc()
     ),
-    roundCreatedIdx: index("idx_analytics_jobs_round_created").on(
-      table.roundId,
-      table.createdAt.desc()
-    ),
-    activeConsultationIdx: uniqueIndex("idx_analytics_jobs_active_consultation")
-      .on(table.consultationId)
+    activeMeetingIdx: uniqueIndex("idx_analytics_jobs_active_meeting")
+      .on(table.meetingId)
       .where(
         sql`${table.phase} in ('queued', 'extracting', 'embedding', 'clustering', 'syncing')`
       ),
@@ -809,10 +809,10 @@ export const extractionResults = pgTable(
   "extraction_results",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    consultationId: uuid("consultation_id")
+    meetingId: uuid("meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
-    roundId: uuid("round_id").references(() => consultationRounds.id, { onDelete: "set null" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    consultationId: uuid("consultation_id").references(() => consultations.id, { onDelete: "set null" }),
     extractedAt: timestamp("extracted_at", { withTimezone: true }).defaultNow().notNull(),
     extractor: text("extractor").notNull().$type<AnalyticsExtractor>(),
     modelVersion: text("model_version").notNull(),
@@ -837,12 +837,12 @@ export const extractionResults = pgTable(
       "extraction_results_confidence_check",
       sql`${table.confidence} >= 0 and ${table.confidence} <= 1`
     ),
-    consultationExtractedIdx: index("idx_extraction_results_consultation_extracted").on(
-      table.consultationId,
+    meetingExtractedIdx: index("idx_extraction_results_meeting_extracted").on(
+      table.meetingId,
       table.extractedAt.desc()
     ),
-    roundExtractedIdx: index("idx_extraction_results_round_extracted").on(
-      table.roundId,
+    consultationExtractedIdx: index("idx_extraction_results_consultation_extracted").on(
+      table.consultationId,
       table.extractedAt.desc()
     ),
   })
@@ -855,9 +855,9 @@ export const termExtractionOffsets = pgTable(
     extractionResultId: uuid("extraction_result_id")
       .notNull()
       .references(() => extractionResults.id, { onDelete: "cascade" }),
-    consultationId: uuid("consultation_id")
+    meetingId: uuid("meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
     term: text("term").notNull(),
     original: text("original"),
     entityType: text("entity_type").notNull().$type<AnalyticsTermEntityType>(),
@@ -883,8 +883,8 @@ export const termExtractionOffsets = pgTable(
       "term_extraction_offsets_char_range_check",
       sql`${table.charStart} >= 0 and ${table.charEnd} > ${table.charStart}`
     ),
-    consultationCharIdx: index("idx_term_extraction_offsets_consultation_char").on(
-      table.consultationId,
+    meetingCharIdx: index("idx_term_extraction_offsets_meeting_char").on(
+      table.meetingId,
       table.charStart
     ),
     extractionResultIdx: index("idx_term_extraction_offsets_extraction_result").on(
@@ -897,9 +897,9 @@ export const termEmbeddings = pgTable(
   "term_embeddings",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    consultationId: uuid("consultation_id")
+    meetingId: uuid("meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
     term: text("term").notNull(),
     entityType: text("entity_type").notNull().$type<AnalyticsTermEntityType>(),
     embedding: vector("embedding", { dimensions: 1536 }).notNull(),
@@ -910,12 +910,12 @@ export const termEmbeddings = pgTable(
       "term_embeddings_entity_type_check",
       sql`${table.entityType} in ('THEME', 'ISSUE', 'PERSON', 'ORG', 'LOCATION', 'DATE', 'OTHER')`
     ),
-    consultationTermEntityUnique: unique("term_embeddings_consultation_term_entity_key").on(
-      table.consultationId,
+    meetingTermEntityUnique: unique("term_embeddings_meeting_term_entity_key").on(
+      table.meetingId,
       table.term,
       table.entityType
     ),
-    consultationIdx: index("idx_term_embeddings_consultation_id").on(table.consultationId),
+    meetingIdx: index("idx_term_embeddings_meeting_id").on(table.meetingId),
     embeddingCosineIdx: index("idx_term_embeddings_embedding_cosine").using(
       "ivfflat",
       table.embedding.op("vector_cosine_ops")
@@ -927,9 +927,9 @@ export const termClusters = pgTable(
   "term_clusters",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    roundId: uuid("round_id")
+    consultationId: uuid("consultation_id")
       .notNull()
-      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+      .references(() => consultations.id, { onDelete: "cascade" }),
     clusterId: integer("cluster_id").notNull(),
     label: text("label").notNull(),
     representativeTerms: jsonb("representative_terms")
@@ -937,21 +937,21 @@ export const termClusters = pgTable(
       .default(sql`'[]'::jsonb`)
       .notNull(),
     allTerms: jsonb("all_terms").$type<string[]>().default(sql`'[]'::jsonb`).notNull(),
-    consultationCount: integer("consultation_count").notNull(),
+    meetingCount: integer("meeting_count").notNull(),
     clusteredAt: timestamp("clustered_at", { withTimezone: true }).defaultNow().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    consultationCountCheck: check(
-      "term_clusters_consultation_count_check",
-      sql`${table.consultationCount} >= 0`
+    meetingCountCheck: check(
+      "term_clusters_meeting_count_check",
+      sql`${table.meetingCount} >= 0`
     ),
-    roundClusterUnique: unique("term_clusters_round_cluster_key").on(
-      table.roundId,
+    consultationClusterUnique: unique("term_clusters_consultation_cluster_key").on(
+      table.consultationId,
       table.clusterId
     ),
-    roundClusteredIdx: index("idx_term_clusters_round_clustered").on(
-      table.roundId,
+    consultationClusteredIdx: index("idx_term_clusters_consultation_clustered").on(
+      table.consultationId,
       table.clusteredAt.desc()
     ),
   })
@@ -961,12 +961,12 @@ export const termClusterMemberships = pgTable(
   "term_cluster_memberships",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    roundId: uuid("round_id")
-      .notNull()
-      .references(() => consultationRounds.id, { onDelete: "cascade" }),
     consultationId: uuid("consultation_id")
       .notNull()
       .references(() => consultations.id, { onDelete: "cascade" }),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
     term: text("term").notNull(),
     clusterId: integer("cluster_id").notNull(),
     membershipProbability: numeric("membership_probability", { precision: 4, scale: 3 })
@@ -979,16 +979,16 @@ export const termClusterMemberships = pgTable(
       "term_cluster_memberships_probability_check",
       sql`${table.membershipProbability} >= 0 and ${table.membershipProbability} <= 1`
     ),
-    roundConsultationTermUnique: unique("term_cluster_memberships_round_consultation_term_key").on(
-      table.roundId,
+    consultationMeetingTermUnique: unique("term_cluster_memberships_consultation_meeting_term_key").on(
       table.consultationId,
+      table.meetingId,
       table.term
     ),
-    roundClusterIdx: index("idx_term_cluster_memberships_round_cluster").on(
-      table.roundId,
+    consultationClusterIdx: index("idx_term_cluster_memberships_consultation_cluster").on(
+      table.consultationId,
       table.clusterId
     ),
-    consultationIdx: index("idx_term_cluster_memberships_consultation_id").on(table.consultationId),
+    meetingIdx: index("idx_term_cluster_memberships_meeting_id").on(table.meetingId),
   })
 );
 
@@ -996,10 +996,10 @@ export const analyticsOutbox = pgTable(
   "analytics_outbox",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    consultationId: uuid("consultation_id")
+    meetingId: uuid("meeting_id")
       .notNull()
-      .references(() => consultations.id, { onDelete: "cascade" }),
-    roundId: uuid("round_id").references(() => consultationRounds.id, { onDelete: "set null" }),
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    consultationId: uuid("consultation_id").references(() => consultations.id, { onDelete: "set null" }),
     eventType: text("event_type")
       .default("consultation_projection_refresh")
       .notNull()
@@ -1024,9 +1024,35 @@ export const analyticsOutbox = pgTable(
     pendingIdx: index("idx_analytics_outbox_pending")
       .on(table.id)
       .where(sql`${table.processedAt} is null`),
-    consultationCreatedIdx: index("idx_analytics_outbox_consultation_created").on(
-      table.consultationId,
+    meetingCreatedIdx: index("idx_analytics_outbox_meeting_created").on(
+      table.meetingId,
       table.createdAt.desc()
     ),
+  })
+);
+
+export const phases = pgTable(
+  "phases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    type: text("type")
+      .notNull()
+      .$type<"discovery" | "discussion" | "review_feedback">(),
+    label: text("label"),
+    position: integer("position").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    typeCheck: check(
+      "phases_type_check",
+      sql`${table.type} in ('discovery', 'discussion', 'review_feedback')`
+    ),
+    positionCheck: check("phases_position_check", sql`${table.position} >= 0`),
+    meetingIdx: index("idx_phases_meeting_id").on(table.meetingId),
+    typeIdx: index("idx_phases_type").on(table.type),
   })
 );

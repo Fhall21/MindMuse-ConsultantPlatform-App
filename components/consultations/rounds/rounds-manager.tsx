@@ -38,7 +38,7 @@ export function RoundsManager() {
   const consultationCountsQuery = useQuery({
     queryKey: ["consultation_rounds", "counts", roundIds],
     queryFn: () =>
-      fetchJson<Record<string, number>>("/api/client/rounds/consultation-counts", {
+      fetchJson<Record<string, number>>("/api/client/consultations/consultation-counts", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

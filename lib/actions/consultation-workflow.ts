@@ -6,8 +6,8 @@ import {
   auditLog,
   consultationGroupMembers,
   meetingGroups as consultationGroups,
-  meetings as consultationRounds,
-  consultations,
+  consultations as consultationRounds,
+  meetings as consultationMeetings,
   evidenceEmails,
   insights,
   consultationDecisions as roundDecisions,
@@ -465,21 +465,21 @@ async function loadOwnedRound(params: { userId: string; roundId: string }) {
     throw new Error("Round not found");
   }
 
-  return mapConsultationRoundRecord(row);
+  return mapConsultationRecord(row);
 }
 
 async function loadRoundConsultations(params: { userId: string; roundId: string }) {
   const { userId, roundId } = params;
   const rows = await db
     .select()
-    .from(consultationRounds)
+    .from(consultationMeetings)
     .where(
       and(
-        eq(consultationRounds.consultationId, roundId),
-        eq(consultationRounds.userId, userId)
+        eq(consultationMeetings.consultationId, roundId),
+        eq(consultationMeetings.userId, userId)
       )
     )
-    .orderBy(asc(consultationRounds.createdAt));
+    .orderBy(asc(consultationMeetings.createdAt));
 
   return rows.map(mapConsultationRoundRecord);
 }
@@ -723,15 +723,15 @@ async function loadInsightsForRound(params: {
   const rows = await db
     .select({
       insight: insights,
-      consultation: consultationRounds,
+      consultation: consultationMeetings,
     })
     .from(insights)
-    .innerJoin(consultationRounds, eq(insights.meetingId, consultationRounds.id))
+    .innerJoin(consultationMeetings, eq(insights.meetingId, consultationMeetings.id))
     .where(
       and(
         inArray(insights.id, themeIds),
-        eq(consultationRounds.userId, userId),
-        eq(consultationRounds.consultationId, roundId)
+        eq(consultationMeetings.userId, userId),
+        eq(consultationMeetings.consultationId, roundId)
       )
     )
     .orderBy(asc(insights.createdAt));
@@ -785,7 +785,7 @@ async function loadGroupMembers(params: { groupId: string }) {
 
 async function writeGroupDraftSuggestion(params: {
   group: Theme;
-  round: ConsultationRound;
+  round: Consultation;
   memberThemes: InsightWithConsultation[];
   userId: string;
   structuralChange: string;
@@ -820,7 +820,7 @@ async function writeGroupDraftSuggestion(params: {
 
   try {
     const response = (await callAIService("/rounds/refine-group-draft", {
-      round_label: round.title,
+      round_label: round.label,
       current_label: group.label,
       current_description: group.description,
       structural_change: structuralChange,
@@ -1152,8 +1152,8 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
   return {
     round: {
       id: round.id,
-      label: round.title,
-      description: round.transcript_raw ?? null,
+      label: round.label,
+      description: round.description ?? null,
       linkedConsultationCount: consultations.length,
     },
     consultations: consultationItems,
@@ -1992,11 +1992,11 @@ async function loadThemeWithRoundContext(params: {
   const [row] = await db
     .select({
       insight: insights,
-      consultation: consultationRounds,
+      consultation: consultationMeetings,
     })
     .from(insights)
-    .innerJoin(consultationRounds, eq(insights.meetingId, consultationRounds.id))
-    .where(and(eq(insights.id, themeId), eq(consultationRounds.userId, userId)))
+    .innerJoin(consultationMeetings, eq(insights.meetingId, consultationMeetings.id))
+    .where(and(eq(insights.id, themeId), eq(consultationMeetings.userId, userId)))
     .limit(1);
 
   if (!row) {
@@ -2079,7 +2079,7 @@ async function loadThemeMembershipsForRound(params: {
 
 async function refreshGroupDraftForCurrentMembers(params: {
   userId: string;
-  round: ConsultationRound;
+  round: Consultation;
   groupId: string;
   structuralChange: string;
 }) {

@@ -5,40 +5,40 @@ import { db } from "@/db/client";
 import {
   termClusters,
   termClusterMemberships,
-  roundCrossInsights,
+  consultationCrossInsights,
   themes,
   insights,
   themeMembers,
 } from "@/db/schema";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
-import { requireOwnedRound } from "@/lib/data/ownership";
+import { requireOwnedConsultation } from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";
 import { emitAuditEvent } from "@/lib/actions/audit";
 
 /**
  * Add an analytics cluster as a cross-consultation insight and create a theme group.
  *
- * - Creates a round_cross_insights entry with auto-generated description
+ * - Creates a consultation_cross_insights entry with auto-generated description
  * - Creates a themes group to organize the insight
- * - Description format: "N consultations mentioned terms such as term1, term2, term3..."
+ * - Description format: "N meetings mentioned terms such as term1, term2, term3..."
  */
-export async function addAnalyticsClusterAsInsight(roundId: string, clusterId: number) {
+export async function addAnalyticsClusterAsInsight(consultationId: string, clusterId: number) {
   const userId = await requireCurrentUserId();
-  await requireOwnedRound(roundId, userId);
+  await requireOwnedConsultation(consultationId, userId);
 
   // Fetch cluster data
   const cluster = await db.query.termClusters.findFirst({
-    where: and(eq(termClusters.roundId, roundId), eq(termClusters.clusterId, clusterId)),
+    where: and(eq(termClusters.consultationId, consultationId), eq(termClusters.clusterId, clusterId)),
   });
 
   if (!cluster) {
-    throw new Error(`Cluster ${clusterId} not found for round ${roundId}.`);
+    throw new Error(`Cluster ${clusterId} not found for consultation ${consultationId}.`);
   }
 
-  // Fetch all memberships for this cluster to get unique consultations
+  // Fetch all memberships for this cluster to get unique meetings
   const memberships = await db.query.termClusterMemberships.findMany({
     where: and(
-      eq(termClusterMemberships.roundId, roundId),
+      eq(termClusterMemberships.consultationId, consultationId),
       eq(termClusterMemberships.clusterId, clusterId)
     ),
   });
@@ -47,24 +47,24 @@ export async function addAnalyticsClusterAsInsight(roundId: string, clusterId: n
     throw new Error(`No memberships found for cluster ${clusterId}.`);
   }
 
-  // Get unique consultation IDs and terms
-  const uniqueConsultationIds = Array.from(new Set(memberships.map((m) => m.consultationId)));
+  // Get unique meeting IDs and terms
+  const uniqueMeetingIds = Array.from(new Set(memberships.map((m) => m.meetingId)));
   const uniqueTerms = Array.from(new Set(memberships.map((m) => m.term)));
 
-  // Generate description: "N consultations mentioned terms such as term1, term2, term3..."
+  // Generate description: "N meetings mentioned terms such as term1, term2, term3..."
   const termList = uniqueTerms.slice(0, 5).join(", ");
   const termSuffix = uniqueTerms.length > 5 ? `, +${uniqueTerms.length - 5} more` : "";
-  const consultationWord = uniqueConsultationIds.length === 1 ? "consultation" : "consultations";
-  const description = `${uniqueConsultationIds.length} ${consultationWord} mentioned terms such as ${termList}${termSuffix}`;
+  const meetingWord = uniqueMeetingIds.length === 1 ? "meeting" : "meetings";
+  const description = `${uniqueMeetingIds.length} ${meetingWord} mentioned terms such as ${termList}${termSuffix}`;
 
-  // Create round_cross_insights entry (metadata about the pattern)
-  const [roundInsight] = await db
-    .insert(roundCrossInsights)
+  // Create consultation_cross_insights entry (metadata about the pattern)
+  const [crossInsight] = await db
+    .insert(consultationCrossInsights)
     .values({
-      roundId,
+      consultationId,
       label: cluster.label,
       description,
-      sourceConsultationIds: uniqueConsultationIds,
+      sourceMeetingIds: uniqueMeetingIds,
       createdBy: userId,
     })
     .returning();
@@ -73,7 +73,7 @@ export async function addAnalyticsClusterAsInsight(roundId: string, clusterId: n
   const [group] = await db
     .insert(themes)
     .values({
-      roundId,
+      consultationId,
       userId,
       label: cluster.label,
       description,
@@ -84,12 +84,12 @@ export async function addAnalyticsClusterAsInsight(roundId: string, clusterId: n
     })
     .returning();
 
-  // Create insights entry (one per cluster, scoped to first consultation for DB compatibility)
+  // Create insights entry (one per cluster, scoped to first meeting for DB compatibility)
   // This allows the cluster to be manipulated as an independent insight in the theme grouping
   const [clusterInsight] = await db
     .insert(insights)
     .values({
-      consultationId: uniqueConsultationIds[0],
+      meetingId: uniqueMeetingIds[0],
       label: cluster.label,
       description: description,
       accepted: true,
@@ -100,9 +100,9 @@ export async function addAnalyticsClusterAsInsight(roundId: string, clusterId: n
   // Link the insight to the theme group via themeMembers
   await db.insert(themeMembers).values({
     themeId: group.id,
-    roundId,
+    consultationId,
     insightId: clusterInsight.id,
-    sourceConsultationId: uniqueConsultationIds[0],
+    sourceMeetingId: uniqueMeetingIds[0],
     userId,
     createdBy: userId,
   });
@@ -112,12 +112,12 @@ export async function addAnalyticsClusterAsInsight(roundId: string, clusterId: n
     consultationId: null,
     action: AUDIT_ACTIONS.ROUND_CROSS_INSIGHT_ADDED,
     entityType: "round_cross_insight",
-    entityId: roundInsight.id,
+    entityId: crossInsight.id,
     metadata: {
-      roundId,
+      consultationId,
       clusterId,
       clusterLabel: cluster.label,
-      sourceConsultationIds: uniqueConsultationIds,
+      sourceMeetingIds: uniqueMeetingIds,
       termCount: uniqueTerms.length,
     },
   });
@@ -128,7 +128,7 @@ export async function addAnalyticsClusterAsInsight(roundId: string, clusterId: n
     entityType: "round_theme_group",
     entityId: group.id,
     metadata: {
-      roundId,
+      consultationId,
       clusterId,
       insightId: clusterInsight.id,
       label: cluster.label,
@@ -136,12 +136,12 @@ export async function addAnalyticsClusterAsInsight(roundId: string, clusterId: n
   });
 
   return {
-    roundInsightId: roundInsight.id,
+    crossInsightId: crossInsight.id,
     groupId: group.id,
     clusterInsightId: clusterInsight.id,
     clusterLabel: cluster.label,
     description,
-    consultationCount: uniqueConsultationIds.length,
+    meetingCount: uniqueMeetingIds.length,
     termCount: uniqueTerms.length,
   };
 }

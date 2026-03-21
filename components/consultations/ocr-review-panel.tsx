@@ -88,13 +88,13 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
 
     try {
       createdJobId = await createOcrJob({
-        consultationId,
+        meetingId: consultationId,
         imageFileKey: `inline/${consultationId}/${Date.now()}-${file.name}`,
       });
 
       await updateOcrJob({
         jobId: createdJobId,
-        consultationId,
+        meetingId: consultationId,
         status: "processing",
         startedAt: new Date().toISOString(),
       });
@@ -124,7 +124,7 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
 
       await updateOcrJob({
         jobId: createdJobId,
-        consultationId,
+        meetingId: consultationId,
         status: "completed",
         extractedText: result.extracted_text,
         confidenceScore: result.confidence,
@@ -143,7 +143,7 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
       if (createdJobId) {
         await updateOcrJob({
           jobId: createdJobId,
-          consultationId,
+          meetingId: consultationId,
           status: "failed",
           errorMessage: message,
           completedAt: new Date().toISOString(),

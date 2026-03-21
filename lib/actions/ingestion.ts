@@ -57,7 +57,7 @@ function toConfidenceScore(value: string | number | null | undefined) {
 function mapTranscriptionRow(row: typeof transcriptionJobs.$inferSelect): DatabaseTranscriptionJob {
   return {
     id: row.id,
-    consultation_id: row.consultationId,
+    meeting_id: row.meetingId,
     audio_file_key: row.audioFileKey,
     status: row.status as DatabaseTranscriptionJob["status"],
     transcript_text: row.transcriptText,
@@ -73,7 +73,7 @@ function mapTranscriptionRow(row: typeof transcriptionJobs.$inferSelect): Databa
 function mapOcrRow(row: typeof ocrJobs.$inferSelect): DatabaseOcrJob {
   return {
     id: row.id,
-    consultation_id: row.consultationId,
+    meeting_id: row.meetingId,
     image_file_key: row.imageFileKey,
     status: row.status as DatabaseOcrJob["status"],
     extracted_text: row.extractedText,
@@ -92,7 +92,7 @@ function mapIngestionArtifactRow(
 ): DatabaseIngestionArtifact {
   return {
     id: row.id,
-    consultation_id: row.consultationId,
+    meeting_id: row.meetingId,
     artifact_type: row.artifactType as DatabaseIngestionArtifact["artifact_type"],
     source_file_key: row.sourceFileKey,
     metadata: row.metadata,
@@ -103,20 +103,20 @@ function mapIngestionArtifactRow(
   };
 }
 
-function buildAudioFileKey(consultationId: string, fileName: string) {
-  return `audio/${consultationId}/${Date.now()}-${fileName}`;
+function buildAudioFileKey(meetingId: string, fileName: string) {
+  return `audio/${meetingId}/${Date.now()}-${fileName}`;
 }
 
 export async function uploadAudioForTranscription(params: {
-  consultationId: string;
+  meetingId: string;
   fileName: string;
   fileType: string;
   /** base64-encoded file content */
   fileBase64: string;
 }): Promise<{ jobId: string }> {
-  const audioFileKey = buildAudioFileKey(params.consultationId, params.fileName);
+  const audioFileKey = buildAudioFileKey(params.meetingId, params.fileName);
   const jobId = await createTranscriptionJob({
-    consultationId: params.consultationId,
+    meetingId: params.meetingId,
     audioFileKey,
   });
 
@@ -138,37 +138,37 @@ export async function getTranscriptionJob(jobId: string): Promise<TranscriptionJ
 }
 
 export async function getTranscriptionJobsForConsultation(
-  consultationId: string
+  meetingId: string
 ): Promise<DatabaseTranscriptionJob[]> {
   const rows = await db
     .select()
     .from(transcriptionJobs)
-    .where(eq(transcriptionJobs.consultationId, consultationId))
+    .where(eq(transcriptionJobs.meetingId, meetingId))
     .orderBy(desc(transcriptionJobs.requestedAt));
 
   return rows.map(mapTranscriptionRow);
 }
 
 interface CreateTranscriptionJobParams {
-  consultationId: string;
+  meetingId: string;
   audioFileKey: string;
 }
 
 export async function createTranscriptionJob({
-  consultationId,
+  meetingId,
   audioFileKey,
 }: CreateTranscriptionJobParams): Promise<string> {
   const [created] = await db
     .insert(transcriptionJobs)
     .values({
-      consultationId,
+      meetingId,
       audioFileKey,
       status: "queued",
     })
     .returning({ id: transcriptionJobs.id });
 
   await emitAuditEvent({
-    consultationId,
+    consultationId: meetingId,
     action: AUDIT_ACTIONS.AUDIO_UPLOADED,
     entityType: "transcription_job",
     entityId: created.id,
@@ -176,7 +176,7 @@ export async function createTranscriptionJob({
   });
 
   await emitAuditEvent({
-    consultationId,
+    consultationId: meetingId,
     action: AUDIT_ACTIONS.AUDIO_TRANSCRIPTION_REQUESTED,
     entityType: "transcription_job",
     entityId: created.id,
@@ -188,7 +188,7 @@ export async function createTranscriptionJob({
 
 interface UpdateTranscriptionJobParams {
   jobId: string;
-  consultationId?: string;
+  meetingId?: string;
   status: IngestionStatus;
   transcriptText?: string;
   errorMessage?: string;
@@ -198,7 +198,7 @@ interface UpdateTranscriptionJobParams {
 
 export async function updateTranscriptionJob({
   jobId,
-  consultationId,
+  meetingId,
   status,
   transcriptText,
   errorMessage,
@@ -224,7 +224,7 @@ export async function updateTranscriptionJob({
     throw new Error("Transcription job not found");
   }
 
-  const resolvedConsultationId = consultationId ?? updated.consultationId;
+  const resolvedMeetingId = meetingId ?? updated.meetingId;
 
   let auditAction = "";
   let metadata: Record<string, string | number | null | undefined> = {
@@ -242,7 +242,7 @@ export async function updateTranscriptionJob({
 
   if (auditAction) {
     await emitAuditEvent({
-      consultationId: resolvedConsultationId,
+      consultationId: resolvedMeetingId,
       action: auditAction,
       entityType: "transcription_job",
       entityId: jobId,
@@ -254,35 +254,35 @@ export async function updateTranscriptionJob({
 }
 
 interface GetTranscriptionJobTimelineParams {
-  consultationId: string;
+  meetingId: string;
 }
 
 export async function getTranscriptionJobTimeline({
-  consultationId,
+  meetingId,
 }: GetTranscriptionJobTimelineParams): Promise<DatabaseTranscriptionJob[]> {
-  return getTranscriptionJobsForConsultation(consultationId);
+  return getTranscriptionJobsForConsultation(meetingId);
 }
 
 interface CreateOcrJobParams {
-  consultationId: string;
+  meetingId: string;
   imageFileKey: string;
 }
 
 export async function createOcrJob({
-  consultationId,
+  meetingId,
   imageFileKey,
 }: CreateOcrJobParams): Promise<string> {
   const [created] = await db
     .insert(ocrJobs)
     .values({
-      consultationId,
+      meetingId,
       imageFileKey,
       status: "queued",
     })
     .returning({ id: ocrJobs.id });
 
   await emitAuditEvent({
-    consultationId,
+    consultationId: meetingId,
     action: AUDIT_ACTIONS.OCR_UPLOADED,
     entityType: "ocr_job",
     entityId: created.id,
@@ -290,7 +290,7 @@ export async function createOcrJob({
   });
 
   await emitAuditEvent({
-    consultationId,
+    consultationId: meetingId,
     action: AUDIT_ACTIONS.OCR_EXTRACTION_REQUESTED,
     entityType: "ocr_job",
     entityId: created.id,
@@ -302,7 +302,7 @@ export async function createOcrJob({
 
 interface UpdateOcrJobParams {
   jobId: string;
-  consultationId?: string;
+  meetingId?: string;
   status: IngestionStatus;
   extractedText?: string;
   confidenceScore?: number;
@@ -313,7 +313,7 @@ interface UpdateOcrJobParams {
 
 export async function updateOcrJob({
   jobId,
-  consultationId,
+  meetingId,
   status,
   extractedText,
   confidenceScore,
@@ -341,7 +341,7 @@ export async function updateOcrJob({
     throw new Error("OCR job not found");
   }
 
-  const resolvedConsultationId = consultationId ?? updated.consultationId;
+  const resolvedMeetingId = meetingId ?? updated.meetingId;
 
   let auditAction = "";
   let metadata: Record<string, string | number | null | undefined> = {
@@ -360,7 +360,7 @@ export async function updateOcrJob({
 
   if (auditAction) {
     await emitAuditEvent({
-      consultationId: resolvedConsultationId,
+      consultationId: resolvedMeetingId,
       action: auditAction,
       entityType: "ocr_job",
       entityId: jobId,
@@ -372,12 +372,12 @@ export async function updateOcrJob({
 }
 
 export async function getOcrJobsForConsultation(
-  consultationId: string
+  meetingId: string
 ): Promise<DatabaseOcrJob[]> {
   const rows = await db
     .select()
     .from(ocrJobs)
-    .where(eq(ocrJobs.consultationId, consultationId))
+    .where(eq(ocrJobs.meetingId, meetingId))
     .orderBy(desc(ocrJobs.requestedAt));
 
   return rows.map((job) => mapOcrJob(mapOcrRow(job)));
@@ -398,24 +398,24 @@ export async function getOcrJob(jobId: string): Promise<DatabaseOcrJob> {
 }
 
 interface GetOcrJobTimelineParams {
-  consultationId: string;
+  meetingId: string;
 }
 
 export async function getOcrJobTimeline({
-  consultationId,
+  meetingId,
 }: GetOcrJobTimelineParams): Promise<DatabaseOcrJob[]> {
-  return getOcrJobsForConsultation(consultationId);
+  return getOcrJobsForConsultation(meetingId);
 }
 
 interface CreateIngestionArtifactParams {
-  consultationId: string;
+  meetingId: string;
   artifactType: IngestionArtifactType;
   sourceFileKey: string;
   metadata?: Record<string, unknown>;
 }
 
 export async function createIngestionArtifact({
-  consultationId,
+  meetingId,
   artifactType,
   sourceFileKey,
   metadata,
@@ -423,7 +423,7 @@ export async function createIngestionArtifact({
   const [created] = await db
     .insert(ingestionArtifacts)
     .values({
-      consultationId,
+      meetingId,
       artifactType,
       sourceFileKey,
       metadata: metadata || null,
@@ -443,7 +443,7 @@ export async function createIngestionArtifact({
 
   if (auditAction) {
     await emitAuditEvent({
-      consultationId,
+      consultationId: meetingId,
       action: auditAction,
       entityType: "ingestion_artifact",
       entityId: created.id,
@@ -456,14 +456,14 @@ export async function createIngestionArtifact({
 
 interface UpdateIngestionArtifactParams {
   artifactId: string;
-  consultationId?: string;
+  meetingId?: string;
   accepted?: boolean;
   notes?: string;
 }
 
 export async function updateIngestionArtifact({
   artifactId,
-  consultationId,
+  meetingId,
   accepted,
   notes,
 }: UpdateIngestionArtifactParams): Promise<DatabaseIngestionArtifact> {
@@ -483,7 +483,7 @@ export async function updateIngestionArtifact({
     throw new Error("Ingestion artifact not found");
   }
 
-  const resolvedConsultationId = consultationId ?? updated.consultationId;
+  const resolvedMeetingId = meetingId ?? updated.meetingId;
 
   if (accepted !== undefined) {
     const auditAction = accepted
@@ -491,7 +491,7 @@ export async function updateIngestionArtifact({
       : AUDIT_ACTIONS.OCR_REVIEW_REJECTED;
 
     await emitAuditEvent({
-      consultationId: resolvedConsultationId,
+      consultationId: resolvedMeetingId,
       action: auditAction,
       entityType: "ingestion_artifact",
       entityId: artifactId,
@@ -503,25 +503,25 @@ export async function updateIngestionArtifact({
 }
 
 interface GetIngestionArtifactTimelineParams {
-  consultationId: string;
+  meetingId: string;
 }
 
 export async function getIngestionArtifactTimeline({
-  consultationId,
+  meetingId,
 }: GetIngestionArtifactTimelineParams): Promise<DatabaseIngestionArtifact[]> {
   const rows = await db
     .select()
     .from(ingestionArtifacts)
-    .where(eq(ingestionArtifacts.consultationId, consultationId))
+    .where(eq(ingestionArtifacts.meetingId, meetingId))
     .orderBy(desc(ingestionArtifacts.createdAt));
 
   return rows.map(mapIngestionArtifactRow);
 }
 
 export async function getIngestionArtifactsForConsultation(
-  consultationId: string
+  meetingId: string
 ): Promise<DatabaseIngestionArtifact[]> {
-  return getIngestionArtifactTimeline({ consultationId });
+  return getIngestionArtifactTimeline({ meetingId });
 }
 
 export async function getIngestionArtifactById(
@@ -541,7 +541,7 @@ export async function getIngestionArtifactById(
 }
 
 export async function getIngestionArtifactsByType(
-  consultationId: string,
+  meetingId: string,
   artifactType: string
 ): Promise<DatabaseIngestionArtifact[]> {
   const rows = await db
@@ -549,7 +549,7 @@ export async function getIngestionArtifactsByType(
     .from(ingestionArtifacts)
     .where(
       and(
-        eq(ingestionArtifacts.consultationId, consultationId),
+        eq(ingestionArtifacts.meetingId, meetingId),
         eq(ingestionArtifacts.artifactType, artifactType as IngestionArtifactType)
       )
     )

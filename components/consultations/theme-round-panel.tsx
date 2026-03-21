@@ -107,12 +107,12 @@ export function ThemeRoundPanel({ roundId, roundLabel }: ThemeRoundPanelProps) {
     }
 
     for (const theme of themes) {
-      const list = map.get(theme.consultation_id);
+      const list = map.get(theme.meeting_id);
       if (list) {
-        const consultation = consultations.find((c) => c.id === theme.consultation_id);
+        const consultation = consultations.find((c) => c.id === theme.meeting_id);
         list.push({
           ...theme,
-          consultationId: theme.consultation_id,
+          consultationId: theme.meeting_id,
           consultationTitle: consultation?.title ?? "Untitled",
           consultationStatus: consultation?.status ?? "draft",
         });

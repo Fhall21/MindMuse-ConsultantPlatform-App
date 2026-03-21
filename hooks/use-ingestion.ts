@@ -48,7 +48,7 @@ export function useTranscriptionJob(jobId: string) {
       const data = await getTranscriptionJob(jobId);
       return {
         id: data.jobId,
-        consultation_id: "",
+        meeting_id: "",
         audio_file_key: "",
         status: data.status,
         transcript_text: data.transcript,

@@ -26,6 +26,7 @@ export type ReportTemplatePrescriptiveness = "flexible" | "moderate" | "strict";
 
 export type {
   Consultation,
+  Meeting,
   Meeting as ConsultationRound,
   Theme,
   ThemeMember,

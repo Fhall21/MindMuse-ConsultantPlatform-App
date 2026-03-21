@@ -3,9 +3,10 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
-  meetingGroups as consultationGroups,
+  consultations as consultationGroups,
   consultations as consultationRounds,
   consultations,
+  meetings,
   insights,
   people,
 } from "@/db/schema";
@@ -32,8 +33,22 @@ export async function requireOwnedConsultation(
   return consultation;
 }
 
-export async function requireOwnedTheme(themeId: string, consultationId: string, userId: string) {
-  const consultation = await requireOwnedConsultation(consultationId, userId);
+export async function requireOwnedMeeting(meetingId: string, userId: string) {
+  const [meeting] = await db
+    .select()
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.userId, userId)))
+    .limit(1);
+
+  if (!meeting) {
+    throw new Error("Meeting not found");
+  }
+
+  return meeting;
+}
+
+export async function requireOwnedTheme(themeId: string, meetingId: string, userId: string) {
+  const meeting = await requireOwnedMeeting(meetingId, userId);
 
   const [theme] = await db
     .select()
@@ -41,7 +56,7 @@ export async function requireOwnedTheme(themeId: string, consultationId: string,
     .where(
       and(
         eq(insights.id, themeId),
-        eq(insights.consultationId, consultation.id)
+        eq(insights.meetingId, meeting.id)
       )
     )
     .limit(1);
@@ -50,7 +65,7 @@ export async function requireOwnedTheme(themeId: string, consultationId: string,
     throw new Error("Theme not found");
   }
 
-  return { consultation, theme };
+  return { meeting, theme };
 }
 
 export async function requireOwnedRound(roundId: string, userId: string) {

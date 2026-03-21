@@ -38,7 +38,7 @@ export default function NewConsultationPage() {
     try {
       const id = await createConsultation({
         title: data.title,
-        roundId: data.roundId || undefined,
+        consultationId: data.roundId || undefined,
       });
       router.push(`/consultations/${id}`);
     } catch (err) {

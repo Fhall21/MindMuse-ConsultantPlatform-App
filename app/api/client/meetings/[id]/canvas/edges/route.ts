@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { createCanvasConnection } from "@/lib/data/canvas";
 import { jsonError, requireRouteClient } from "../../../../_helpers";
-import { requireOwnedConsultation } from "@/lib/data/ownership";
+import { requireOwnedMeeting } from "@/lib/data/ownership";
 import type { ConnectionType } from "@/types/canvas";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: consultationId } = await params;
+  const { id: meetingId } = await params;
   const client = await requireRouteClient();
 
   if ("response" in client) {
@@ -16,9 +16,10 @@ export async function POST(
   }
 
   try {
-    const consultation = await requireOwnedConsultation(consultationId, client.userId);
-    if (!consultation.roundId) {
-      return jsonError("Consultation has no active round", 400);
+    const meeting = await requireOwnedMeeting(meetingId, client.userId);
+    const consultationId = meeting.consultationId;
+    if (!consultationId) {
+      return jsonError("Meeting has no active consultation", 400);
     }
 
     const body = await request.json();
@@ -51,7 +52,7 @@ export async function POST(
     }
 
     const edge = await createCanvasConnection(
-      consultation.roundId,
+      consultationId,
       client.userId,
       {
         fromNodeType: resolvedFromNodeType,

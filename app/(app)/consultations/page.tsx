@@ -24,12 +24,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fetchJson } from "@/hooks/api";
-import { useConsultations } from "@/hooks/use-consultations";
-import type { Consultation } from "@/types/db";
+import { useMeetings } from "@/hooks/use-meetings";
+import type { Meeting } from "@/types/db";
 
 type StatusFilter = "all" | "draft" | "complete";
 
-interface ConsultationListRow extends Consultation {
+interface ConsultationListRow extends Meeting {
   roundLabel: string | null;
   peopleCount: number;
 }
@@ -49,7 +49,7 @@ export default function ConsultationsPage() {
     { id: "created_at", desc: true },
   ]);
 
-  const consultationsQuery = useConsultations();
+  const consultationsQuery = useMeetings();
 
   const consultations = consultationsQuery.data;
 

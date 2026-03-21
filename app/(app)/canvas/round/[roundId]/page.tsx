@@ -35,7 +35,7 @@ export default async function CanvasRoundPage({ params }: CanvasRoundPageProps) 
           href={`/consultations/${roundId}`}
           className="text-sm text-muted-foreground hover:text-foreground"
         >
-          {round.label}
+          {round.title}
         </Link>
         <span className="text-sm text-muted-foreground">/</span>
         <span className="text-sm font-medium">Canvas</span>
@@ -43,7 +43,7 @@ export default async function CanvasRoundPage({ params }: CanvasRoundPageProps) 
 
       {/* Canvas workspace — fills remaining height */}
       <div className="flex-1 overflow-hidden">
-        <CanvasShell roundId={roundId} roundLabel={round.label} />
+        <CanvasShell roundId={roundId} roundLabel={round.title} />
       </div>
     </div>
   );

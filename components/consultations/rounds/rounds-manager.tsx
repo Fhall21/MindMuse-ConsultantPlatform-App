@@ -14,9 +14,9 @@ import {
 import { fetchJson } from "@/hooks/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useConsultationRounds } from "@/hooks/use-meetings";
+import { useConsultations } from "@/hooks/use-consultations";
 import { deleteRound, createRound, updateRound } from "@/lib/actions/rounds";
-import { consultationRoundSchema } from "@/lib/validations/consultation";
+import { consultationSchema as consultationRoundSchema } from "@/lib/validations/consultation";
 
 export function RoundsManager() {
   const queryClient = useQueryClient();
@@ -31,7 +31,7 @@ export function RoundsManager() {
   const [editingLabel, setEditingLabel] = useState("");
   const [editingDescription, setEditingDescription] = useState("");
 
-  const roundsQuery = useConsultationRounds();
+  const roundsQuery = useConsultations();
   const rounds = roundsQuery.data;
   const roundIds = useMemo(() => (rounds ?? []).map((round) => round.id), [rounds]);
 

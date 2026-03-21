@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { fetchJson } from "@/hooks/api";
-import { useConsultation } from "@/hooks/use-meetings";
+import { useMeeting } from "@/hooks/use-meetings";
 import { useThemes } from "@/hooks/use-themes";
 import { acceptTheme, addUserTheme, rejectTheme, saveThemes } from "@/lib/actions/themes";
 import { cn } from "@/lib/utils";
@@ -145,7 +145,7 @@ function getConfidenceLabel(confidence?: number) {
 
 export function ThemePanel({ consultationId }: ThemePanelProps) {
   const queryClient = useQueryClient();
-  const consultationQuery = useConsultation(consultationId);
+  const consultationQuery = useMeeting(consultationId);
   const themesQuery = useThemes(consultationId);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -183,8 +183,8 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
     setRejectionDialogTheme(null);
   }, [consultationId]);
 
-  const transcript = consultationQuery.data?.consultation.transcript_raw?.trim() ?? "";
-  const consultationIsLocked = consultationQuery.data?.consultation.status === "complete";
+  const transcript = consultationQuery.data?.meeting.transcript_raw?.trim() ?? "";
+  const consultationIsLocked = consultationQuery.data?.meeting.status === "complete";
   const savedThemes = useMemo(() => themesQuery.data ?? [], [themesQuery.data]);
 
   const rejectedThemeList = useMemo(

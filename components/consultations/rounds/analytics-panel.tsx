@@ -23,7 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type {
-  RoundDecisionHistoryItem,
+  ConsultationDecisionHistoryItem,
   RoundDetailConsultation,
   RoundAnalyticsSummary,
 } from "@/types/round-detail";
@@ -42,7 +42,7 @@ interface AnalyticsPanelProps {
   roundLabel: string;
   consultations: RoundDetailConsultation[];
   analytics: RoundAnalyticsSummary;
-  decisionHistory: RoundDecisionHistoryItem[];
+  decisionHistory: ConsultationDecisionHistoryItem[];
 }
 
 interface ClusterDecisionDraft {
@@ -111,7 +111,7 @@ function StatusPill({ state }: { state: AnalyticsPanelState }) {
   );
 }
 
-function getDecisionActionLabel(decision: RoundDecisionHistoryItem | null) {
+function getDecisionActionLabel(decision: ConsultationDecisionHistoryItem | null) {
   if (!decision) return null;
   const action =
     typeof decision.metadata?.analytics_decision_action === "string"
@@ -122,7 +122,7 @@ function getDecisionActionLabel(decision: RoundDecisionHistoryItem | null) {
   return decision.decisionType === "management_rejected" ? "rejected" : "accepted";
 }
 
-function DecisionBadge({ decision }: { decision: RoundDecisionHistoryItem | null }) {
+function DecisionBadge({ decision }: { decision: ConsultationDecisionHistoryItem | null }) {
   const label = getDecisionActionLabel(decision);
   if (!label || label === "accepted") {
     return (
@@ -180,7 +180,7 @@ export function AnalyticsPanel({
   }, [queryClient, roundId, roundJobsQuery.data]);
 
   const clusterDecisionById = useMemo(() => {
-    const map = new Map<string, RoundDecisionHistoryItem>();
+    const map = new Map<string, ConsultationDecisionHistoryItem>();
     for (const decision of decisionHistory) {
       const metadataClusterId =
         typeof decision.metadata?.analytics_cluster_record_id === "string"

@@ -5,7 +5,6 @@ import {
   listAuditEventsForUser,
   listConsultationsByIdsForUser,
   listEvidenceEmailsForConsultations,
-  listRoundsByIdsForUser,
   listInsightsForConsultations,
 } from "@/lib/data/domain-read";
 import type {
@@ -16,7 +15,6 @@ import type {
   AuditExportPackage,
   AuditLogEntry,
   Consultation,
-  ConsultationRound,
   EvidenceEmail,
   Insight,
 } from "@/types/db";
@@ -160,7 +158,7 @@ function buildArtifactSummary(
 function toExportEvent(event: AuditLogEntry): AuditExportEvent {
   return {
     id: event.id,
-    consultationId: event.consultation_id,
+    consultationId: event.meeting_id,
     timestamp: event.created_at,
     action: event.action,
     label: getActionLabel(event.action),
@@ -194,12 +192,12 @@ function buildConsultationRecord(params: {
 
   return {
     consultationId: consultation?.id ?? null,
-    title: consultation?.title ?? "Unlinked consultation events",
+    title: consultation?.label ?? "Unlinked events",
     roundLabel,
-    status: consultation?.status ?? null,
+    status: null,
     userId: consultation?.user_id ?? (events[0]?.userId ?? null),
     createdAt: consultation?.created_at ?? null,
-    updatedAt: consultation?.updated_at ?? null,
+    updatedAt: null,
     chronology: events,
     lifecycleMarkers: buildLifecycleMarkers(events),
     artifactSummary: buildArtifactSummary(themes, evidenceEmails),
@@ -225,41 +223,27 @@ export async function generateAuditExport(
     ascending: true,
   });
 
-  const consultationIds = Array.from(
+  const meetingIds = Array.from(
     new Set(
       auditEvents
-        .map((event) => event.consultation_id)
-        .filter((consultationId): consultationId is string => Boolean(consultationId))
+        .map((event) => event.meeting_id)
+        .filter((meetingId): meetingId is string => Boolean(meetingId))
     )
   );
 
   let consultations: Consultation[] = [];
   let evidenceEmails: EvidenceEmail[] = [];
   let themes: Insight[] = [];
-  let rounds: ConsultationRound[] = [];
 
-  if (consultationIds.length > 0) {
+  if (meetingIds.length > 0) {
     [consultations, evidenceEmails, themes] = await Promise.all([
-      listConsultationsByIdsForUser(consultationIds, currentUserId),
-      listEvidenceEmailsForConsultations(consultationIds, currentUserId),
-      listInsightsForConsultations(consultationIds, currentUserId),
+      listConsultationsByIdsForUser(meetingIds, currentUserId),
+      listEvidenceEmailsForConsultations(meetingIds, currentUserId),
+      listInsightsForConsultations(meetingIds, currentUserId),
     ]);
-
-    const roundIds = Array.from(
-      new Set(
-        consultations
-          .map((consultation) => consultation.round_id)
-          .filter((roundId): roundId is string => Boolean(roundId))
-      )
-    );
-
-    if (roundIds.length > 0) {
-      rounds = await listRoundsByIdsForUser(roundIds, currentUserId);
-    }
   }
 
   const consultationById = new Map(consultations.map((consultation) => [consultation.id, consultation]));
-  const roundLabelById = new Map(rounds.map((round) => [round.id, round.label]));
 
   const eventsByConsultationId = new Map<string, AuditExportEvent[]>();
 
@@ -271,18 +255,18 @@ export async function generateAuditExport(
     eventsByConsultationId.set(key, currentEvents);
   }
 
-  const themesByConsultationId = themes.reduce<Map<string, Insight[]>>((accumulator, theme) => {
-    const currentThemes = accumulator.get(theme.consultation_id) ?? [];
+  const themesByMeetingId = themes.reduce<Map<string, Insight[]>>((accumulator, theme) => {
+    const currentThemes = accumulator.get(theme.meeting_id) ?? [];
     currentThemes.push(theme);
-    accumulator.set(theme.consultation_id, currentThemes);
+    accumulator.set(theme.meeting_id, currentThemes);
     return accumulator;
   }, new Map<string, Insight[]>());
 
-  const evidenceEmailsByConsultationId = evidenceEmails.reduce<Map<string, EvidenceEmail[]>>(
+  const evidenceEmailsByMeetingId = evidenceEmails.reduce<Map<string, EvidenceEmail[]>>(
     (accumulator, evidenceEmail) => {
-      const currentEvidenceEmails = accumulator.get(evidenceEmail.consultation_id) ?? [];
+      const currentEvidenceEmails = accumulator.get(evidenceEmail.meeting_id) ?? [];
       currentEvidenceEmails.push(evidenceEmail);
-      accumulator.set(evidenceEmail.consultation_id, currentEvidenceEmails);
+      accumulator.set(evidenceEmail.meeting_id, currentEvidenceEmails);
       return accumulator;
     },
     new Map<string, EvidenceEmail[]>()
@@ -290,15 +274,13 @@ export async function generateAuditExport(
 
   const consultationRecords = Array.from(eventsByConsultationId.entries()).map(([key, events]) => {
     const consultation = key === "__unlinked__" ? null : (consultationById.get(key) ?? null);
-    const roundLabel =
-      consultation?.round_id ? (roundLabelById.get(consultation.round_id) ?? null) : null;
 
     return buildConsultationRecord({
       consultation,
-      roundLabel,
+      roundLabel: null,
       events,
-      themes: consultation ? (themesByConsultationId.get(consultation.id) ?? []) : [],
-      evidenceEmails: consultation ? (evidenceEmailsByConsultationId.get(consultation.id) ?? []) : [],
+      themes: key !== "__unlinked__" ? (themesByMeetingId.get(key) ?? []) : [],
+      evidenceEmails: key !== "__unlinked__" ? (evidenceEmailsByMeetingId.get(key) ?? []) : [],
     });
   });
 

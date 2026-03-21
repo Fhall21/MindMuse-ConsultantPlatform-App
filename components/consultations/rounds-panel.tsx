@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useConsultationRounds } from "@/hooks/use-meetings";
+import { useConsultations } from "@/hooks/use-consultations";
 import { setConsultationRound } from "@/lib/actions/consultations";
 
 interface RoundsPanelProps {
@@ -25,7 +25,7 @@ export function RoundsPanel({
   currentRoundLabel,
 }: RoundsPanelProps) {
   const queryClient = useQueryClient();
-  const { data: rounds } = useConsultationRounds();
+  const { data: rounds } = useConsultations();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [assigning, setAssigning] = useState<string | null>(null);
 

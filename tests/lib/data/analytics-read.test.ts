@@ -8,7 +8,7 @@ import { buildRoundAnalyticsSummary } from "@/lib/data/analytics-read";
 
 function buildInput(overrides: Partial<Parameters<typeof buildRoundAnalyticsSummary>[0]> = {}) {
   return {
-    consultationIds: [],
+    meetingIds: [],
     jobRows: [],
     extractionRows: [],
     offsetRows: [],
@@ -41,12 +41,12 @@ describe("lib/data/analytics-read", () => {
   it("counts latest job states per consultation and keeps the newest job status", () => {
     const summary = buildRoundAnalyticsSummary(
       buildInput({
-        consultationIds: ["consultation-1", "consultation-2", "consultation-3"],
+        meetingIds: ["consultation-1", "consultation-2", "consultation-3"],
         jobRows: [
           {
             id: "job-1",
-            consultationId: "consultation-1",
-            roundId: "round-1",
+            meetingId: "consultation-1",
+            consultationId: "round-1",
             phase: "queued",
             progress: -1,
             startedAt: null,
@@ -57,8 +57,8 @@ describe("lib/data/analytics-read", () => {
           },
           {
             id: "job-2",
-            consultationId: "consultation-1",
-            roundId: "round-1",
+            meetingId: "consultation-1",
+            consultationId: "round-1",
             phase: "complete",
             progress: 100,
             startedAt: new Date("2026-03-19T10:05:00.000Z"),
@@ -69,8 +69,8 @@ describe("lib/data/analytics-read", () => {
           },
           {
             id: "job-3",
-            consultationId: "consultation-2",
-            roundId: "round-1",
+            meetingId: "consultation-2",
+            consultationId: "round-1",
             phase: "failed",
             progress: 100,
             startedAt: new Date("2026-03-19T11:00:00.000Z"),
@@ -81,8 +81,8 @@ describe("lib/data/analytics-read", () => {
           },
           {
             id: "job-4",
-            consultationId: "consultation-3",
-            roundId: "round-1",
+            meetingId: "consultation-3",
+            consultationId: "round-1",
             phase: "extracting",
             progress: 22,
             startedAt: new Date("2026-03-19T12:00:00.000Z"),
@@ -105,12 +105,12 @@ describe("lib/data/analytics-read", () => {
   it("keeps outliers explicit and counts clustered terms separately", () => {
     const summary = buildRoundAnalyticsSummary(
       buildInput({
-        consultationIds: ["consultation-1", "consultation-2"],
+        meetingIds: ["consultation-1", "consultation-2"],
         extractionRows: [
           {
             id: "extraction-1",
-            consultationId: "consultation-1",
-            roundId: "round-1",
+            meetingId: "consultation-1",
+            consultationId: "round-1",
             extractedAt: new Date("2026-03-19T10:00:00.000Z"),
             extractor: "langextract",
             modelVersion: "1.0.0",
@@ -125,8 +125,8 @@ describe("lib/data/analytics-read", () => {
           },
           {
             id: "extraction-2",
-            consultationId: "consultation-2",
-            roundId: "round-1",
+            meetingId: "consultation-2",
+            consultationId: "round-1",
             extractedAt: new Date("2026-03-19T11:00:00.000Z"),
             extractor: "spacy",
             modelVersion: "1.0.0",
@@ -144,7 +144,7 @@ describe("lib/data/analytics-read", () => {
           {
             id: "offset-1",
             extractionResultId: "extraction-1",
-            consultationId: "consultation-1",
+            meetingId: "consultation-1",
             term: "workload",
             original: "workload",
             entityType: "THEME",
@@ -160,7 +160,7 @@ describe("lib/data/analytics-read", () => {
           {
             id: "offset-2",
             extractionResultId: "extraction-2",
-            consultationId: "consultation-2",
+            meetingId: "consultation-2",
             term: "escalation",
             original: "escalation",
             entityType: "ISSUE",
@@ -177,12 +177,12 @@ describe("lib/data/analytics-read", () => {
         clusterRows: [
           {
             id: "cluster-1",
-            roundId: "round-1",
+            consultationId: "round-1",
             clusterId: 1,
             label: "Workload and escalation",
             representativeTerms: ["workload", "escalation"],
             allTerms: ["workload", "escalation"],
-            consultationCount: 2,
+            meetingCount: 2,
             clusteredAt: new Date("2026-03-19T12:00:00.000Z"),
             createdAt: new Date("2026-03-19T12:00:00.000Z"),
           },
@@ -190,8 +190,8 @@ describe("lib/data/analytics-read", () => {
         membershipRows: [
           {
             id: "membership-1",
-            roundId: "round-1",
-            consultationId: "consultation-1",
+            consultationId: "round-1",
+            meetingId: "consultation-1",
             term: "workload",
             clusterId: 1,
             membershipProbability: 0.94,
@@ -199,8 +199,8 @@ describe("lib/data/analytics-read", () => {
           },
           {
             id: "membership-2",
-            roundId: "round-1",
-            consultationId: "consultation-2",
+            consultationId: "round-1",
+            meetingId: "consultation-2",
             term: "escalation",
             clusterId: -1,
             membershipProbability: 0.12,
@@ -221,12 +221,12 @@ describe("lib/data/analytics-read", () => {
   it("treats empty extraction offsets as an explicit no-term condition", () => {
     const summary = buildRoundAnalyticsSummary(
       buildInput({
-        consultationIds: ["consultation-1"],
+        meetingIds: ["consultation-1"],
         extractionRows: [
           {
             id: "extraction-1",
-            consultationId: "consultation-1",
-            roundId: "round-1",
+            meetingId: "consultation-1",
+            consultationId: "round-1",
             extractedAt: new Date("2026-03-19T10:00:00.000Z"),
             extractor: "combined",
             modelVersion: "1.0.0",
@@ -243,12 +243,12 @@ describe("lib/data/analytics-read", () => {
         clusterRows: [
           {
             id: "cluster-1",
-            roundId: "round-1",
+            consultationId: "round-1",
             clusterId: 7,
             label: "Operational pressure",
             representativeTerms: [],
             allTerms: [],
-            consultationCount: 1,
+            meetingCount: 1,
             clusteredAt: new Date("2026-03-19T10:30:00.000Z"),
             createdAt: new Date("2026-03-19T10:30:00.000Z"),
           },
@@ -264,12 +264,12 @@ describe("lib/data/analytics-read", () => {
   it("aggregates confidence values with numeric precision preserved", () => {
     const summary = buildRoundAnalyticsSummary(
       buildInput({
-        consultationIds: ["consultation-1", "consultation-2"],
+        meetingIds: ["consultation-1", "consultation-2"],
         extractionRows: [
           {
             id: "extraction-1",
-            consultationId: "consultation-1",
-            roundId: "round-1",
+            meetingId: "consultation-1",
+            consultationId: "round-1",
             extractedAt: new Date("2026-03-19T10:00:00.000Z"),
             extractor: "langextract",
             modelVersion: "1.0.0",
@@ -284,8 +284,8 @@ describe("lib/data/analytics-read", () => {
           },
           {
             id: "extraction-2",
-            consultationId: "consultation-2",
-            roundId: "round-1",
+            meetingId: "consultation-2",
+            consultationId: "round-1",
             extractedAt: new Date("2026-03-19T10:05:00.000Z"),
             extractor: "spacy",
             modelVersion: "1.0.0",

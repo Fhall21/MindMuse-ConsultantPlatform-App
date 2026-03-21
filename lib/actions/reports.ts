@@ -1,34 +1,71 @@
 "use server";
 
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { meetings } from "@/db/schema";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
 import {
   getConsultationForUser,
-  getRoundForUser,
   getRoundOutputArtifactForUser,
   listAuditEventsForUser,
-  listConsultationsForRound,
+  listConsultationsByIdsForUser,
   listDraftThemesForRound,
   listPeopleForConsultation,
   listRoundOutputArtifactsForRound,
   listRoundOutputArtifactsForUser,
-  listRoundsByIdsForUser,
   listInsightsForConsultation,
   listInsightsForConsultations,
 } from "@/lib/data/domain-read";
-import type {
-  AuditLogEntry,
-  Consultation,
-  ConsultationRound,
-  Insight,
-} from "@/types/db";
+import type { AuditLogEntry, Consultation, Insight, Meeting } from "@/types/db";
 import {
   buildReportGraphModel,
   toReportInputSnapshot,
   type ReportInputSnapshot,
 } from "@/lib/report-graph";
 
-type ConsultationContext = Pick<Consultation, "id" | "title" | "round_id">;
-type RoundContext = Pick<ConsultationRound, "id" | "label" | "description">;
+type ConsultationContext = Pick<Meeting, "id" | "title" | "consultation_id" | "created_at">;
+type RoundContext = Pick<Consultation, "id" | "label" | "description">;
+
+async function loadMeetingContext(params: {
+  userId: string;
+  consultationId: string;
+}): Promise<ConsultationContext | null> {
+  const { consultationId, userId } = params;
+  const [meeting] = await db
+    .select()
+    .from(meetings)
+    .where(and(eq(meetings.id, consultationId), eq(meetings.userId, userId)))
+    .limit(1);
+
+  if (!meeting) {
+    return null;
+  }
+
+  return {
+    id: meeting.id,
+    title: meeting.title,
+    consultation_id: meeting.consultationId,
+    created_at: meeting.createdAt.toISOString(),
+  };
+}
+
+async function loadMeetingsForRound(params: {
+  userId: string;
+  roundId: string;
+}): Promise<ConsultationContext[]> {
+  const { roundId, userId } = params;
+  const rows = await db
+    .select()
+    .from(meetings)
+    .where(and(eq(meetings.consultationId, roundId), eq(meetings.userId, userId)));
+
+  return rows.map((meeting) => ({
+    id: meeting.id,
+    title: meeting.title,
+    consultation_id: meeting.consultationId,
+    created_at: meeting.createdAt.toISOString(),
+  }));
+}
 
 export interface ThemeProvenanceContext {
   consultationId: string | null;
@@ -115,7 +152,7 @@ function buildProvenanceContext(params: {
   return {
     consultationId: consultation?.id ?? null,
     consultationTitle: consultation?.title ?? null,
-    roundId: round?.id ?? consultation?.round_id ?? null,
+    roundId: round?.id ?? consultation?.consultation_id ?? null,
     roundLabel: round?.label ?? null,
     isUserAdded,
   };
@@ -160,7 +197,7 @@ function collateRoundAcceptedThemes(params: {
 
   themes.forEach((theme) => {
     const key = normalizeLabel(theme.label);
-    const consultation = consultationById.get(theme.consultation_id) ?? null;
+    const consultation = consultationById.get(theme.meeting_id) ?? null;
     const existing = grouped.get(key);
     const nextProvenance = buildProvenanceContext({
       consultation,
@@ -205,8 +242,8 @@ function buildRejectedThemeReference(params: {
   }
 
   const roundId = getStringValue(payload.round_id);
-  const consultation = event.consultation_id
-    ? (consultationById.get(event.consultation_id) ?? null)
+  const consultation = event.meeting_id
+    ? (consultationById.get(event.meeting_id) ?? null)
     : null;
   const round = roundId ? (roundById.get(roundId) ?? null) : null;
   const label = getStringValue(payload.theme_label) ?? "Rejected theme";
@@ -269,9 +306,8 @@ function buildIncludedThemes(
 async function loadConsultationById(params: {
   userId: string;
   consultationId: string;
-}): Promise<Consultation | null> {
-  const { consultationId, userId } = params;
-  return getConsultationForUser(consultationId, userId);
+}): Promise<ConsultationContext | null> {
+  return loadMeetingContext(params);
 }
 
 async function loadRoundContext(params: {
@@ -279,7 +315,7 @@ async function loadRoundContext(params: {
   roundId: string;
 }): Promise<RoundContext | null> {
   const { roundId, userId } = params;
-  return getRoundForUser(roundId, userId);
+  return getConsultationForUser(roundId, userId);
 }
 
 async function loadRejectedAuditEvents(params: {
@@ -303,13 +339,7 @@ async function loadRoundSummaryInternal(params: {
   round: RoundContext;
 }): Promise<RoundSummaryData> {
   const { userId, round } = params;
-  const consultations = (await listConsultationsForRound(round.id, userId)).map(
-    (consultation) => ({
-      id: consultation.id,
-      title: consultation.title,
-      round_id: consultation.round_id,
-    })
-  ) as ConsultationContext[];
+  const consultations = await loadMeetingsForRound({ roundId: round.id, userId });
   const consultationIds = consultations.map((consultation) => consultation.id);
   const consultationById = new Map(
     consultations.map((consultation) => [consultation.id, consultation])
@@ -430,12 +460,12 @@ export async function getReportArtifacts(): Promise<ReportArtifactListItem[]> {
     return [];
   }
 
-  // Dedupe to latest per (round_id, artifact_type)
+  // Dedupe to latest per (consultation_id, artifact_type)
   const seen = new Set<string>();
   const latestArtifacts: typeof artifacts = [];
 
   for (const artifact of artifacts) {
-    const key = `${artifact.round_id}:${artifact.artifact_type}`;
+    const key = `${artifact.consultation_id}:${artifact.artifact_type}`;
     if (!seen.has(key)) {
       seen.add(key);
       latestArtifacts.push(artifact);
@@ -443,8 +473,8 @@ export async function getReportArtifacts(): Promise<ReportArtifactListItem[]> {
   }
 
   // Load round labels
-  const roundIds = Array.from(new Set(latestArtifacts.map((a) => a.round_id)));
-  const rounds = await listRoundsByIdsForUser(roundIds, userId);
+  const roundIds = Array.from(new Set(latestArtifacts.map((a) => a.consultation_id)));
+  const rounds = await listConsultationsByIdsForUser(roundIds, userId);
 
   const roundLabelById = new Map(
     rounds.map((round) => [round.id, round.label])
@@ -455,8 +485,8 @@ export async function getReportArtifacts(): Promise<ReportArtifactListItem[]> {
     artifactType: artifact.artifact_type as "summary" | "report" | "email",
     title: artifact.title ?? null,
     contentPreview: previewContent(artifact.content),
-    roundId: artifact.round_id,
-    roundLabel: roundLabelById.get(artifact.round_id) ?? "Unknown round",
+    roundId: artifact.consultation_id,
+    roundLabel: roundLabelById.get(artifact.consultation_id) ?? "Unknown round",
     generatedAt: artifact.generated_at,
     updatedAt: artifact.updated_at,
   }));
@@ -473,9 +503,9 @@ export async function getReportArtifact(
   }
 
   // Load round context
-  const round = await getRoundForUser(artifact.round_id, userId);
+  const round = await loadRoundContext({ roundId: artifact.consultation_id, userId });
   const versions = await listRoundOutputArtifactsForRound(
-    artifact.round_id,
+    artifact.consultation_id,
     userId,
     artifact.artifact_type
   );
@@ -504,7 +534,10 @@ export async function getReportArtifact(
       : 0;
 
   // Load live consultation metadata (dates + linked people) for compliance display
-  const liveConsultations = await listConsultationsForRound(artifact.round_id, userId);
+  const liveConsultations = await loadMeetingsForRound({
+    roundId: artifact.consultation_id,
+    userId,
+  });
   const liveConsultationIds = liveConsultations.map((c) => c.id);
 
   const consultationPeople = await Promise.all(
@@ -529,7 +562,7 @@ export async function getReportArtifact(
 
   // Load draft (unapproved) theme groups for the round
   const draftThemeGroups = (
-    await listDraftThemesForRound(artifact.round_id, userId)
+    await listDraftThemesForRound(artifact.consultation_id, userId)
   ).map((group) => ({
     id: group.id,
     label: group.label,
@@ -553,7 +586,7 @@ export async function getReportArtifact(
     artifactType: artifact.artifact_type as "summary" | "report" | "email",
     title: artifact.title ?? null,
     content: artifact.content,
-    roundId: artifact.round_id,
+    roundId: artifact.consultation_id,
     roundLabel: round?.label ?? "Unknown round",
     roundDescription: round?.description ?? null,
     generatedAt: artifact.generated_at,
@@ -577,7 +610,7 @@ export async function getReportArtifactVersions(
   const userId = await requireCurrentUserId();
   const [artifacts, round] = await Promise.all([
     listRoundOutputArtifactsForRound(roundId, userId, artifactType),
-    getRoundForUser(roundId, userId),
+    loadRoundContext({ roundId, userId }),
   ]);
 
   const roundLabel = round?.label ?? "Unknown round";
@@ -587,7 +620,7 @@ export async function getReportArtifactVersions(
     artifactType: artifact.artifact_type as "summary" | "report" | "email",
     title: artifact.title ?? null,
     contentPreview: previewContent(artifact.content),
-    roundId: artifact.round_id,
+    roundId: artifact.consultation_id,
     roundLabel,
     generatedAt: artifact.generated_at,
     updatedAt: artifact.updated_at,
@@ -607,7 +640,8 @@ export async function getConsultationReportData(
   const consultationContext: ConsultationContext = {
     id: consultation.id,
     title: consultation.title,
-    round_id: consultation.round_id,
+    consultation_id: consultation.consultation_id,
+    created_at: consultation.created_at,
   };
 
   let localAcceptedThemes: Insight[] = [];
@@ -621,8 +655,8 @@ export async function getConsultationReportData(
       `[consultation-report] failed to load accepted themes for ${consultationId}: ${detail}`
     );
   }
-  const round = consultation.round_id
-    ? await loadRoundContext({ userId, roundId: consultation.round_id })
+  const round = consultation.consultation_id
+    ? await loadRoundContext({ userId, roundId: consultation.consultation_id })
     : null;
 
   const consultationThemes = localAcceptedThemes

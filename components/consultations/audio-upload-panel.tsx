@@ -90,7 +90,7 @@ export function AudioUploadPanel({
 
     try {
       const { jobId: newJobId } = await uploadAudioForTranscription({
-        consultationId,
+        meetingId: consultationId,
         fileName: file.name,
         fileType: file.type,
         fileBase64: "",
@@ -101,7 +101,7 @@ export function AudioUploadPanel({
 
       await updateTranscriptionJob({
         jobId: newJobId,
-        consultationId,
+        meetingId: consultationId,
         status: "processing",
         startedAt: new Date().toISOString(),
       });
@@ -123,7 +123,7 @@ export function AudioUploadPanel({
 
       await updateTranscriptionJob({
         jobId: newJobId,
-        consultationId,
+        meetingId: consultationId,
         status: "completed",
         transcriptText: result.transcript,
         completedAt: new Date().toISOString(),
@@ -138,7 +138,7 @@ export function AudioUploadPanel({
       if (createdJobId) {
         await updateTranscriptionJob({
           jobId: createdJobId,
-          consultationId,
+          meetingId: consultationId,
           status: "failed",
           errorMessage: message,
           completedAt: new Date().toISOString(),

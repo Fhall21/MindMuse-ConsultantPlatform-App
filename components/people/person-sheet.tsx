@@ -12,7 +12,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { fetchJson } from "@/hooks/api";
-import type { Consultation, Person } from "@/types/db";
+import type { Meeting, Person } from "@/types/db";
 
 interface PersonSheetProps {
   personId: string;
@@ -22,7 +22,7 @@ interface PersonSheetProps {
 
 interface PersonSheetData {
   person: Person;
-  consultations: Pick<Consultation, "id" | "title" | "status" | "created_at">[];
+  consultations: Pick<Meeting, "id" | "title" | "status" | "created_at">[];
 }
 
 function formatDate(value: string) {

@@ -5,13 +5,13 @@ import { db } from "@/db/client";
 import {
   auditLog,
   consultationGroupMembers,
-  consultationGroups,
-  consultationRounds,
+  meetingGroups as consultationGroups,
+  meetings as consultationRounds,
   consultations,
   evidenceEmails,
   insights,
-  roundDecisions,
-  roundOutputArtifacts,
+  consultationDecisions as roundDecisions,
+  consultationOutputArtifacts as roundOutputArtifacts,
   themeMembers,
   themes,
 } from "@/db/schema";
@@ -77,7 +77,7 @@ interface LatestEvidenceEmailSummary {
 export interface RoundDetailConsultation {
   id: string;
   title: string;
-  status: Consultation["status"];
+  status: ConsultationRound["status"];
   evidenceEmail: LatestEvidenceEmailSummary | null;
   hasLockedEvidence: boolean;
 }
@@ -218,7 +218,7 @@ export interface RoundDetail {
 }
 
 interface InsightWithConsultation extends Insight {
-  consultation: Consultation;
+  consultation: ConsultationRound;
 }
 
 interface StructuralDraftResponse {
@@ -399,7 +399,7 @@ async function requireAuthenticatedContext() {
 function mapThemeRecord(row: ThemeRow): Theme {
   return {
     id: row.id,
-    round_id: row.roundId,
+    consultation_id: row.consultationId,
     user_id: row.userId,
     label: row.label,
     description: row.description,
@@ -424,9 +424,9 @@ function mapThemeMemberRecord(
   return {
     id: row.id,
     theme_id: row.themeId,
-    round_id: row.roundId,
+    consultation_id: row.consultationId,
     insight_id: row.insightId,
-    source_consultation_id: row.sourceConsultationId,
+    source_meeting_id: row.sourceMeetingId,
     user_id: row.userId,
     position: row.position,
     created_by: row.createdBy,
@@ -437,7 +437,7 @@ function mapThemeMemberRecord(
 function mapRoundDecisionRecord(row: RoundDecisionRow): RoundDecision {
   return {
     id: row.id,
-    round_id: row.roundId,
+    consultation_id: row.consultationId,
     user_id: row.userId,
     target_type: row.targetType as RoundDecision["target_type"],
     target_id: row.targetId,
@@ -472,16 +472,16 @@ async function loadRoundConsultations(params: { userId: string; roundId: string 
   const { userId, roundId } = params;
   const rows = await db
     .select()
-    .from(consultations)
+    .from(consultationRounds)
     .where(
       and(
-        eq(consultations.roundId, roundId),
-        eq(consultations.userId, userId)
+        eq(consultationRounds.consultationId, roundId),
+        eq(consultationRounds.userId, userId)
       )
     )
-    .orderBy(asc(consultations.createdAt));
+    .orderBy(asc(consultationRounds.createdAt));
 
-  return rows.map(mapConsultationRecord);
+  return rows.map(mapConsultationRoundRecord);
 }
 
 async function loadAcceptedInsights(params: { consultationIds: string[] }) {
@@ -497,7 +497,7 @@ async function loadAcceptedInsights(params: { consultationIds: string[] }) {
     .where(
       and(
         eq(insights.accepted, true),
-        inArray(insights.consultationId, consultationIds)
+        inArray(insights.meetingId, consultationIds)
       )
     )
     .orderBy(asc(insights.createdAt));
@@ -510,7 +510,7 @@ async function loadRoundGroups(params: { roundId: string }) {
   const rows = await db
     .select()
     .from(themes)
-    .where(eq(themes.roundId, roundId))
+    .where(eq(themes.consultationId, roundId))
     .orderBy(asc(themes.createdAt));
 
   return rows.map(mapThemeRecord);
@@ -521,7 +521,7 @@ async function loadRoundGroupMembers(params: { roundId: string }) {
   const rows = await db
     .select()
     .from(themeMembers)
-    .where(eq(themeMembers.roundId, roundId))
+    .where(eq(themeMembers.consultationId, roundId))
     .orderBy(
       asc(themeMembers.position),
       asc(themeMembers.createdAt)
@@ -535,7 +535,7 @@ async function loadConsultationGroups(params: { roundId: string }) {
   const rows = await db
     .select()
     .from(consultationGroups)
-    .where(eq(consultationGroups.roundId, roundId))
+    .where(eq(consultationGroups.consultationId, roundId))
     .orderBy(asc(consultationGroups.position), asc(consultationGroups.createdAt));
 
   return rows.map(
@@ -552,7 +552,7 @@ async function loadConsultationGroupMembers(params: { roundId: string }) {
   const rows = await db
     .select()
     .from(consultationGroupMembers)
-    .where(eq(consultationGroupMembers.roundId, roundId))
+    .where(eq(consultationGroupMembers.consultationId, roundId))
     .orderBy(
       asc(consultationGroupMembers.position),
       asc(consultationGroupMembers.createdAt)
@@ -562,7 +562,7 @@ async function loadConsultationGroupMembers(params: { roundId: string }) {
     (row): ConsultationGroupMemberRecord => ({
       id: row.id,
       group_id: row.groupId,
-      consultation_id: row.consultationId,
+      consultation_id: row.meetingId,
       position: row.position,
     })
   );
@@ -573,7 +573,7 @@ async function loadRoundDecisions(params: { roundId: string }) {
   const rows = await db
     .select()
     .from(roundDecisions)
-    .where(eq(roundDecisions.roundId, roundId))
+    .where(eq(roundDecisions.consultationId, roundId))
     .orderBy(desc(roundDecisions.createdAt));
 
   return rows.map(mapRoundDecisionRecord);
@@ -584,7 +584,7 @@ async function loadRoundOutputs(params: { roundId: string }) {
   const rows = await db
     .select()
     .from(roundOutputArtifacts)
-    .where(eq(roundOutputArtifacts.roundId, roundId))
+    .where(eq(roundOutputArtifacts.consultationId, roundId))
     .orderBy(desc(roundOutputArtifacts.generatedAt));
 
   return rows.map(mapRoundOutputArtifactRecord);
@@ -602,16 +602,16 @@ async function loadEvidenceEmailsByConsultation(params: {
   const rows = await db
     .select()
     .from(evidenceEmails)
-    .where(inArray(evidenceEmails.consultationId, consultationIds))
+    .where(inArray(evidenceEmails.meetingId, consultationIds))
     .orderBy(desc(evidenceEmails.createdAt));
 
   const emails = rows.map(mapEvidenceEmailRecord);
   const grouped = new Map<string, EvidenceEmail[]>();
 
   emails.forEach((email) => {
-    const bucket = grouped.get(email.consultation_id) ?? [];
+    const bucket = grouped.get(email.meeting_id) ?? [];
     bucket.push(email);
-    grouped.set(email.consultation_id, bucket);
+    grouped.set(email.meeting_id, bucket);
   });
 
   return grouped;
@@ -635,7 +635,7 @@ async function loadRoundHistory(params: {
   return rows
     .map(mapAuditLogRecord)
     .filter((entry) => {
-      if (entry.consultation_id && consultationIdSet.has(entry.consultation_id)) {
+      if (entry.meeting_id && consultationIdSet.has(entry.meeting_id)) {
         return true;
       }
 
@@ -654,7 +654,7 @@ async function loadRoundHistory(params: {
         entityId: entry.entity_id,
         actor: entry.user_id,
         createdAt: entry.created_at,
-        consultationId: entry.consultation_id,
+        consultationId: entry.meeting_id,
         payload: entry.payload ?? null,
       })
     );
@@ -723,15 +723,15 @@ async function loadInsightsForRound(params: {
   const rows = await db
     .select({
       insight: insights,
-      consultation: consultations,
+      consultation: consultationRounds,
     })
     .from(insights)
-    .innerJoin(consultations, eq(insights.consultationId, consultations.id))
+    .innerJoin(consultationRounds, eq(insights.meetingId, consultationRounds.id))
     .where(
       and(
         inArray(insights.id, themeIds),
-        eq(consultations.userId, userId),
-        eq(consultations.roundId, roundId)
+        eq(consultationRounds.userId, userId),
+        eq(consultationRounds.consultationId, roundId)
       )
     )
     .orderBy(asc(insights.createdAt));
@@ -739,7 +739,7 @@ async function loadInsightsForRound(params: {
   return rows.map(
     ({ insight, consultation }): InsightWithConsultation => ({
       ...mapInsightRecord(insight),
-      consultation: mapConsultationRecord(consultation),
+      consultation: mapConsultationRoundRecord(consultation),
     })
   );
 }
@@ -756,7 +756,7 @@ async function loadGroupForRound(params: {
     .where(
       and(
         eq(themes.id, groupId),
-        eq(themes.roundId, roundId),
+        eq(themes.consultationId, roundId),
         eq(themes.userId, userId)
       )
     )
@@ -820,7 +820,7 @@ async function writeGroupDraftSuggestion(params: {
 
   try {
     const response = (await callAIService("/rounds/refine-group-draft", {
-      round_label: round.label,
+      round_label: round.title,
       current_label: group.label,
       current_description: group.description,
       structural_change: structuralChange,
@@ -916,7 +916,7 @@ async function insertRoundDecision(params: {
   } = params;
 
   await db.insert(roundDecisions).values({
-    roundId,
+    consultationId: roundId,
     userId,
     targetType,
     targetId,
@@ -949,7 +949,10 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
 
   let analytics: RoundAnalyticsSummary;
   try {
-    analytics = await loadRoundAnalyticsSummary({ roundId, consultationIds });
+    analytics = await loadRoundAnalyticsSummary({
+      consultationId: roundId,
+      meetingIds: consultationIds,
+    });
     console.log("[getRoundDetail] analytics loaded ok");
   } catch (analyticsError) {
     console.error("[getRoundDetail] analytics load failed — falling back to empty summary. Run: bun run db:migrate", {
@@ -1016,7 +1019,7 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
 
   const insightById = new Map(acceptedInsights.map((insight) => [insight.id, insight]));
   const sourceThemes = acceptedInsights.map((theme): RoundSourceTheme => {
-    const consultation = consultationById.get(theme.consultation_id);
+    const consultation = consultationById.get(theme.meeting_id);
     if (!consultation) {
       throw new Error("Theme consultation mismatch in round detail payload");
     }
@@ -1051,12 +1054,12 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
       .filter((member) => {
         // Skip members with missing context (orphaned from failed operations)
         const theme = insightById.get(member.insight_id);
-        const consultation = consultationById.get(member.source_consultation_id);
+        const consultation = consultationById.get(member.source_meeting_id);
         if (!theme || !consultation) {
           console.warn("[getRoundDetail] skipping orphaned theme member", {
             memberId: member.id,
             insightId: member.insight_id,
-            consultationId: member.source_consultation_id,
+            consultationId: member.source_meeting_id,
             foundTheme: Boolean(theme),
             foundConsultation: Boolean(consultation),
           });
@@ -1066,7 +1069,7 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
       })
       .map((member) => {
         const theme = insightById.get(member.insight_id);
-        const consultation = consultationById.get(member.source_consultation_id);
+        const consultation = consultationById.get(member.source_meeting_id);
         const consultationSummary = consultation
           ? consultationItems.find((item) => item.id === consultation.id)
           : null;
@@ -1149,8 +1152,8 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
   return {
     round: {
       id: round.id,
-      label: round.label,
-      description: round.description ?? null,
+      label: round.title,
+      description: round.transcript_raw ?? null,
       linkedConsultationCount: consultations.length,
     },
     consultations: consultationItems,
@@ -1207,7 +1210,7 @@ export async function createTheme(
   const [created] = await db
     .insert(themes)
     .values({
-      roundId,
+      consultationId: roundId,
       userId,
       label: defaultLabel,
       description:
@@ -1226,7 +1229,7 @@ export async function createTheme(
       .delete(themeMembers)
       .where(
         and(
-          eq(themeMembers.roundId, roundId),
+          eq(themeMembers.consultationId, roundId),
           inArray(
             themeMembers.themeId,
             seedThemes.map((theme) => theme.id)
@@ -1237,9 +1240,9 @@ export async function createTheme(
     await db.insert(themeMembers).values(
       seedThemes.map((theme, index) => ({
         themeId: group.id,
-        roundId,
+        consultationId: roundId,
         insightId: theme.id,
-        sourceConsultationId: theme.consultation.id,
+        sourceMeetingId: theme.consultation.id,
         userId,
         position: index,
         createdBy: userId,
@@ -1295,7 +1298,7 @@ export async function moveThemeToGroup(
 ) {
   const { userId } = await requireAuthenticatedContext();
   const theme = await loadThemeWithRoundContext({ userId, themeId });
-  const roundId = theme.consultation.round_id;
+  const roundId = theme.consultation.consultation_id;
 
   if (!roundId) {
     throw new Error("The source theme is not assigned to a round.");
@@ -1341,9 +1344,9 @@ export async function moveThemeToGroup(
       typeof position === "number" ? position : targetMembers.length;
     await db.insert(themeMembers).values({
       themeId: targetGroup.id,
-      roundId,
+      consultationId: roundId,
       insightId: theme.id,
-      sourceConsultationId: theme.consultation.id,
+      sourceMeetingId: theme.consultation.id,
       userId,
       position: nextPosition,
       createdBy: userId,
@@ -1503,7 +1506,7 @@ export async function splitTheme(
   const [created] = await db
     .insert(themes)
     .values({
-      roundId: round.id,
+      consultationId: round.id,
       userId,
       label: defaultLabel,
       description:
@@ -1641,7 +1644,7 @@ export async function acceptRoundTarget(
     const theme = await loadThemeWithRoundContext({ userId, themeId: targetId });
 
     await insertRoundDecision({
-      roundId: theme.consultation.round_id as string,
+      roundId: theme.consultation.consultation_id as string,
       userId,
       targetType,
       targetId,
@@ -1656,7 +1659,7 @@ export async function acceptRoundTarget(
       entityType: "theme",
       entityId: targetId,
       metadata: {
-        round_id: theme.consultation.round_id,
+        round_id: theme.consultation.consultation_id,
         target_type: targetType,
       },
     });
@@ -1667,7 +1670,7 @@ export async function acceptRoundTarget(
   const output = await loadRoundOutputForContext({ userId, outputId: targetId });
 
   await insertRoundDecision({
-    roundId: output.round_id,
+    roundId: output.consultation_id,
     userId,
     targetType,
     targetId,
@@ -1679,7 +1682,7 @@ export async function acceptRoundTarget(
     entityType: "round_output_artifact",
     entityId: targetId,
     metadata: {
-      round_id: output.round_id,
+      round_id: output.consultation_id,
       target_type: targetType,
     },
   });
@@ -1805,7 +1808,7 @@ export async function managementRejectRoundTarget(
     }
 
     await insertRoundDecision({
-      roundId: theme.consultation.round_id as string,
+      roundId: theme.consultation.consultation_id as string,
       userId,
       targetType,
       targetId,
@@ -1822,7 +1825,7 @@ export async function managementRejectRoundTarget(
       entityType: "theme",
       entityId: targetId,
       metadata: {
-        round_id: theme.consultation.round_id,
+        round_id: theme.consultation.consultation_id,
         target_type: targetType,
         rationale: trimmedRationale,
         locked_from_source: lockedFromSource,
@@ -1839,7 +1842,7 @@ export async function managementRejectRoundTarget(
   }
 
   await insertRoundDecision({
-    roundId: output.round_id,
+    roundId: output.consultation_id,
     userId,
     targetType,
     targetId,
@@ -1852,7 +1855,7 @@ export async function managementRejectRoundTarget(
     entityType: "round_output_artifact",
     entityId: targetId,
     metadata: {
-      round_id: output.round_id,
+      round_id: output.consultation_id,
       target_type: targetType,
       rationale: trimmedRationale,
     },
@@ -1989,11 +1992,11 @@ async function loadThemeWithRoundContext(params: {
   const [row] = await db
     .select({
       insight: insights,
-      consultation: consultations,
+      consultation: consultationRounds,
     })
     .from(insights)
-    .innerJoin(consultations, eq(insights.consultationId, consultations.id))
-    .where(and(eq(insights.id, themeId), eq(consultations.userId, userId)))
+    .innerJoin(consultationRounds, eq(insights.meetingId, consultationRounds.id))
+    .where(and(eq(insights.id, themeId), eq(consultationRounds.userId, userId)))
     .limit(1);
 
   if (!row) {
@@ -2002,7 +2005,7 @@ async function loadThemeWithRoundContext(params: {
 
   return {
     ...mapInsightRecord(row.insight),
-    consultation: mapConsultationRecord(row.consultation),
+    consultation: mapConsultationRoundRecord(row.consultation),
   } satisfies InsightWithConsultation;
 }
 
@@ -2026,7 +2029,7 @@ async function loadGroupWithRoundContext(params: {
   const group = mapThemeRecord(row);
   const round = await loadOwnedRound({
     userId,
-    roundId: group.round_id,
+    roundId: group.consultation_id,
   });
 
   return { group, round };
@@ -2042,7 +2045,7 @@ async function loadThemeMembershipForRound(params: {
     .from(themeMembers)
     .where(
       and(
-        eq(themeMembers.roundId, roundId),
+        eq(themeMembers.consultationId, roundId),
         eq(themeMembers.insightId, themeId)
       )
     )
@@ -2066,7 +2069,7 @@ async function loadThemeMembershipsForRound(params: {
     .from(themeMembers)
     .where(
       and(
-        eq(themeMembers.roundId, roundId),
+        eq(themeMembers.consultationId, roundId),
         inArray(themeMembers.insightId, themeIds)
       )
     );
@@ -2109,7 +2112,7 @@ async function themeIsLockedFromSource(params: {
   const rows = await db
     .select({ status: evidenceEmails.status })
     .from(evidenceEmails)
-    .where(eq(evidenceEmails.consultationId, consultationId));
+    .where(eq(evidenceEmails.meetingId, consultationId));
 
   return rows.some((email) => isEvidenceLocked(email.status));
 }
@@ -2119,7 +2122,7 @@ async function groupHasLockedMembers(params: {
 }) {
   const { groupId } = params;
   const members = await loadGroupMembers({ groupId });
-  const consultationIds = Array.from(new Set(members.map((member) => member.source_consultation_id)));
+  const consultationIds = Array.from(new Set(members.map((member) => member.source_meeting_id)));
 
   if (consultationIds.length === 0) {
     return false;
@@ -2305,7 +2308,7 @@ async function generateRoundOutput(
   const [created] = await db
     .insert(roundOutputArtifacts)
     .values({
-      roundId,
+      consultationId: roundId,
       userId,
       artifactType,
       status: "generated",

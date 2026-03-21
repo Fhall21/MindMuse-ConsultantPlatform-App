@@ -55,10 +55,10 @@ export default function ConsultationDetailPage({
   const [titleDraft, setTitleDraft] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
 
-  const consultation = data?.consultation;
+  const consultation = data?.meeting;
   const isDraft = consultation?.status === "draft";
 
-  const currentRound = rounds?.find((r) => r.id === consultation?.round_id) ?? null;
+  const currentRound = rounds?.find((r) => r.id === consultation?.consultation_id) ?? null;
   const normalizedSavedTitle = consultation?.title.trim() ?? "";
   const normalizedDraftTitle = titleDraft.trim();
   const titleChanged = normalizedDraftTitle !== normalizedSavedTitle;
@@ -209,15 +209,15 @@ export default function ConsultationDetailPage({
               </p>
               <RoundsPanel
                 consultationId={id}
-                currentRoundId={consultation.round_id}
+                currentRoundId={consultation.consultation_id}
                 currentRoundLabel={currentRound?.label ?? null}
               />
             </div>
 
-            {!isDraft && consultation.round_id ? (
+            {!isDraft && consultation.consultation_id ? (
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" asChild>
-                  <Link href={`/consultations/${consultation.round_id}`}>
+                  <Link href={`/consultations/${consultation.consultation_id}`}>
                     Open consultation workspace &rarr;
                   </Link>
                 </Button>

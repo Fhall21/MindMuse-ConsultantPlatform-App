@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useConsultation } from "@/hooks/use-meetings";
+import { useMeeting } from "@/hooks/use-meetings";
 import { useEvidenceEmails } from "@/hooks/use-evidence-email";
 import { useConsultationPeople } from "@/hooks/use-people";
 import {
@@ -174,7 +174,7 @@ function buildFallbackIncludedThemes(params: {
 
 export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
   const queryClient = useQueryClient();
-  const consultationQuery = useConsultation(consultationId);
+  const consultationQuery = useMeeting(consultationId);
   const evidenceEmailsQuery = useEvidenceEmails(consultationId);
   const peopleQuery = useConsultationPeople(consultationId);
   const reportQuery = useQuery({
@@ -207,16 +207,16 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
     if (fromReport && fromReport.length > 0) return fromReport;
     return buildFallbackIncludedThemes({
       consultationId,
-      consultationTitle: consultationQuery.data?.consultation.title,
-      roundId: consultationQuery.data?.consultation.round_id,
+      consultationTitle: consultationQuery.data?.meeting.title,
+      roundId: consultationQuery.data?.meeting.consultation_id,
       roundLabel: reportQuery.data?.roundLabel ?? null,
       labels: acceptedThemeLabels,
     });
   }, [
     acceptedThemeLabels,
     consultationId,
-    consultationQuery.data?.consultation.round_id,
-    consultationQuery.data?.consultation.title,
+    consultationQuery.data?.meeting.consultation_id,
+    consultationQuery.data?.meeting.title,
     reportQuery.data?.includedThemes,
     reportQuery.data?.roundLabel,
   ]);
@@ -271,7 +271,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
   }
 
   async function handleGenerateDraft() {
-    const transcript = consultationQuery.data?.consultation.transcript_raw?.trim() ?? "";
+    const transcript = consultationQuery.data?.meeting.transcript_raw?.trim() ?? "";
 
     if (!transcript || includedThemeLabels.length === 0) {
       return;
@@ -285,9 +285,9 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
         transcript,
         themes: includedThemeLabels,
         people: (peopleQuery.data ?? []).map((person) => person.name),
-        consultation_title: consultationQuery.data?.consultation.title,
+        consultation_title: consultationQuery.data?.meeting.title,
         consultation_date: formatConsultationDate(
-          consultationQuery.data?.consultation.created_at
+          consultationQuery.data?.meeting.created_at
         ),
       });
 
@@ -301,7 +301,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
       }
 
       await saveEmailDraft({
-        consultationId,
+        meetingId: consultationId,
         subject: nextSubject,
         body: nextBody,
         themeSelections: includedThemes,
@@ -325,7 +325,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
 
     try {
       await saveEmailDraft({
-        consultationId,
+        meetingId: consultationId,
         subject,
         body,
         themeSelections: includedThemes,
@@ -349,7 +349,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
     try {
       const draftIdToAccept = isDirty
         ? await saveEmailDraft({
-            consultationId,
+          meetingId: consultationId,
             subject,
             body,
             themeSelections: includedThemes,
@@ -430,7 +430,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                   disabled={
                     isGenerating ||
                     includedThemeLabels.length === 0 ||
-                    !(consultationQuery.data?.consultation.transcript_raw?.trim())
+                    !(consultationQuery.data?.meeting.transcript_raw?.trim())
                   }
                   onClick={() => void handleGenerateDraft()}
                 >
@@ -468,7 +468,7 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
                     disabled={
                       isGenerating ||
                       includedThemeLabels.length === 0 ||
-                      !(consultationQuery.data?.consultation.transcript_raw?.trim())
+                      !(consultationQuery.data?.meeting.transcript_raw?.trim())
                     }
                   >
                     {isGenerating ? (

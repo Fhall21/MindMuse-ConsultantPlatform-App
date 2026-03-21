@@ -21,7 +21,7 @@ export async function insertAuditLogEntry({
   metadata,
 }: EmitAuditEventParams & { userId: string }) {
   await db.insert(auditLog).values({
-    consultationId: consultationId ?? null,
+    meetingId: consultationId ?? null,
     action,
     entityType: entityType ?? null,
     entityId: entityId ?? null,

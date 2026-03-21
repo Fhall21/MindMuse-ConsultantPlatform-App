@@ -1,7 +1,7 @@
 import {
   auditLog,
   consultations,
-  consultations as consultationRounds,
+  meetings,
   evidenceEmails,
   insights,
   people,
@@ -20,7 +20,7 @@ import type {
 } from "@/types/db";
 
 type ConsultationRow = typeof consultations.$inferSelect;
-type ConsultationRoundRow = typeof consultationRounds.$inferSelect;
+type ConsultationRoundRow = typeof meetings.$inferSelect;
 type InsightRow = typeof insights.$inferSelect;
 type ThemeRow = typeof themes.$inferSelect;
 type PersonRow = typeof people.$inferSelect;
@@ -48,14 +48,10 @@ function toNumber(value: string | number | null | undefined) {
 export function mapConsultationRecord(row: ConsultationRow): Consultation {
   return {
     id: row.id,
-    title: row.title,
-    transcript_raw: row.transcriptRaw,
-    notes: null,
-    created_at: row.createdAt.toISOString(),
-    updated_at: row.updatedAt.toISOString(),
     user_id: row.userId,
-    status: row.status as Consultation["status"],
-    round_id: row.roundId,
+    label: row.label,
+    description: row.description,
+    created_at: row.createdAt.toISOString(),
   };
 }
 
@@ -64,17 +60,20 @@ export function mapConsultationRoundRecord(
 ): ConsultationRound {
   return {
     id: row.id,
-    user_id: row.userId,
-    label: row.label,
-    description: row.description,
+    title: row.title,
+    transcript_raw: row.transcriptRaw ?? null,
     created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+    user_id: row.userId,
+    status: row.status as ConsultationRound["status"],
+    consultation_id: row.consultationId,
   };
 }
 
 export function mapInsightRecord(row: InsightRow): Insight {
   return {
     id: row.id,
-    consultation_id: row.consultationId,
+    meeting_id: row.meetingId,
     label: row.label,
     description: row.description,
     accepted: row.accepted,
@@ -87,7 +86,7 @@ export function mapInsightRecord(row: InsightRow): Insight {
 export function mapThemeRecord(row: ThemeRow): Theme {
   return {
     id: row.id,
-    round_id: row.roundId,
+    consultation_id: row.consultationId,
     user_id: row.userId,
     label: row.label,
     description: row.description,
@@ -122,7 +121,7 @@ export function mapPersonRecord(row: PersonRow): Person {
 export function mapEvidenceEmailRecord(row: EvidenceEmailRow): EvidenceEmail {
   return {
     id: row.id,
-    consultation_id: row.consultationId,
+    meeting_id: row.meetingId,
     subject: row.subject,
     body_draft: row.bodyDraft,
     body_final: row.bodyFinal,
@@ -137,7 +136,7 @@ export function mapEvidenceEmailRecord(row: EvidenceEmailRow): EvidenceEmail {
 export function mapAuditLogRecord(row: AuditLogRow): AuditLogEntry {
   return {
     id: row.id,
-    consultation_id: row.consultationId,
+    meeting_id: row.meetingId,
     action: row.action,
     entity_type: row.entityType,
     entity_id: row.entityId,
@@ -152,7 +151,7 @@ export function mapRoundOutputArtifactRecord(
 ): RoundOutputArtifact {
   return {
     id: row.id,
-    round_id: row.roundId,
+    consultation_id: row.consultationId,
     user_id: row.userId,
     artifact_type: row.artifactType as RoundOutputArtifact["artifact_type"],
     status: row.status as RoundOutputArtifact["status"],

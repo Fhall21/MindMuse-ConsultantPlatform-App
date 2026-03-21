@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { consultations, insights, themeMembers, themes } from "@/db/schema";
+import { meetings, insights, themeMembers, themes } from "@/db/schema";
 import { loadCanvasConnections, loadCanvasLayout } from "@/lib/data/canvas";
 import { jsonError, requireRouteClient } from "../../../_helpers";
-import { requireOwnedConsultation } from "@/lib/data/ownership";
+import { requireOwnedMeeting } from "@/lib/data/ownership";
 import type { CanvasNode } from "@/types/canvas";
 
 function buildFallbackPositions(nodes: CanvasNode[]) {
@@ -49,7 +49,7 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: consultationId } = await params;
+  const { id: meetingId } = await params;
   const client = await requireRouteClient();
 
   if ("response" in client) {
@@ -57,29 +57,29 @@ export async function GET(
   }
 
   try {
-    // Verify consultation ownership
-    await requireOwnedConsultation(consultationId, client.userId);
+    // Verify meeting ownership
+    await requireOwnedMeeting(meetingId, client.userId);
 
-    const consultation = await db
+    const meeting = await db
       .select()
-      .from(consultations)
-      .where(eq(consultations.id, consultationId))
+      .from(meetings)
+      .where(eq(meetings.id, meetingId))
       .then((rows) => rows[0]);
 
-    if (!consultation) {
-      return jsonError("Consultation not found", 404);
+    if (!meeting) {
+      return jsonError("Meeting not found", 404);
     }
 
-    const roundId = consultation.roundId;
-    if (!roundId) {
-      return jsonError("Consultation has no active round", 400);
+    const consultationId = meeting.consultationId;
+    if (!consultationId) {
+      return jsonError("Meeting has no active consultation", 400);
     }
 
     const themeRows = await db
       .select()
       .from(themes)
       .where(
-        and(eq(themes.roundId, roundId), eq(themes.userId, client.userId))
+        and(eq(themes.consultationId, consultationId), eq(themes.userId, client.userId))
       );
 
     const memberRows = await db
@@ -87,7 +87,7 @@ export async function GET(
       .from(themeMembers)
       .where(
         and(
-          eq(themeMembers.roundId, roundId),
+          eq(themeMembers.consultationId, consultationId),
           eq(themeMembers.userId, client.userId)
         )
       )
@@ -121,19 +121,19 @@ export async function GET(
     const insightRows = await db
       .select({
         insight: insights,
-        consultationTitle: consultations.title,
+        meetingTitle: meetings.title,
       })
       .from(insights)
-      .innerJoin(consultations, eq(insights.consultationId, consultations.id))
+      .innerJoin(meetings, eq(insights.consultationId, meetings.id))
       .where(
         and(
-          eq(consultations.roundId, roundId),
-          eq(consultations.userId, client.userId)
+          eq(meetings.consultationId, consultationId),
+          eq(meetings.userId, client.userId)
         )
       )
-      .orderBy(asc(consultations.createdAt), asc(insights.createdAt));
+      .orderBy(asc(meetings.createdAt), asc(insights.createdAt));
 
-    const insightNodes: CanvasNode[] = insightRows.map(({ insight, consultationTitle }) => ({
+    const insightNodes: CanvasNode[] = insightRows.map(({ insight, meetingTitle }) => ({
       id: insight.id,
       type: "insight",
       label: insight.label,
@@ -141,7 +141,7 @@ export async function GET(
       accepted: insight.accepted,
       subgroup: null,
       sourceConsultationId: insight.consultationId,
-      sourceConsultationTitle: consultationTitle,
+      sourceConsultationTitle: meetingTitle,
       groupId: groupIdByInsight.get(insight.id) ?? null,
       memberIds: [],
       isUserAdded: insight.isUserAdded,
@@ -151,8 +151,8 @@ export async function GET(
 
     // Load connections and layout
     const [edges, layout] = await Promise.all([
-      loadCanvasConnections(roundId, client.userId),
-      loadCanvasLayout(roundId, client.userId),
+      loadCanvasConnections(consultationId, client.userId),
+      loadCanvasLayout(consultationId, client.userId),
     ]);
 
     // Apply saved positions to nodes
@@ -197,8 +197,8 @@ export async function GET(
     }
 
     return NextResponse.json({
+      meeting_id: meetingId,
       consultation_id: consultationId,
-      round_id: roundId,
       nodes: allNodes,
       edges,
       viewport: layout.viewport,

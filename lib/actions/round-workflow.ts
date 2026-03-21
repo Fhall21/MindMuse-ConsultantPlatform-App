@@ -935,11 +935,44 @@ function mapTargetStatus(decision: RoundDecision | undefined): RoundTargetStatus
 }
 
 export async function getRoundDetail(roundId: string): Promise<RoundDetail | null> {
+  console.log("[getRoundDetail] start", { roundId });
+
   const { userId } = await requireAuthenticatedContext();
+  console.log("[getRoundDetail] authenticated", { userId });
+
   const round = await loadOwnedRound({ userId, roundId });
+  console.log("[getRoundDetail] round loaded", { roundId: round.id });
+
   const consultations = await loadRoundConsultations({ userId, roundId });
   const consultationIds = consultations.map((consultation) => consultation.id);
-  const analytics = await loadRoundAnalyticsSummary({ roundId, consultationIds });
+  console.log("[getRoundDetail] consultations loaded", { count: consultationIds.length });
+
+  let analytics: RoundAnalyticsSummary;
+  try {
+    analytics = await loadRoundAnalyticsSummary({ roundId, consultationIds });
+    console.log("[getRoundDetail] analytics loaded ok");
+  } catch (analyticsError) {
+    console.error("[getRoundDetail] analytics load failed — falling back to empty summary. Run: bun run db:migrate", {
+      roundId,
+      error: analyticsError instanceof Error ? analyticsError.message : analyticsError,
+    });
+    analytics = {
+      consultationCount: consultationIds.length,
+      processedConsultationCount: 0,
+      failedConsultationCount: 0,
+      activeConsultationCount: 0,
+      totalTermCount: 0,
+      clusterCount: 0,
+      outlierTermCount: 0,
+      averageExtractionConfidence: null,
+      latestExtractionAt: null,
+      latestClusteredAt: null,
+      latestJobStatus: null,
+      clusters: [],
+    };
+  }
+
+  console.log("[getRoundDetail] loading remaining data in parallel");
   const [acceptedInsights, groups, members, decisions, outputs, emailMap, history, consultationGroups, consultationGroupMembers] =
     await Promise.all([
       loadAcceptedInsights({ consultationIds }),
@@ -952,6 +985,7 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
       loadConsultationGroups({ roundId }),
       loadConsultationGroupMembers({ roundId }),
     ]);
+  console.log("[getRoundDetail] parallel load done");
 
   const consultationById = new Map(consultations.map((consultation) => [consultation.id, consultation]));
   const latestDecisionMap = latestDecisionByTarget(decisions);

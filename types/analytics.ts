@@ -180,8 +180,40 @@ export interface AnalyticsJobTriggerResponse {
   status: "queued" | "already_running";
 }
 
+export interface AnalyticsJobStatusResponse {
+  data: AnalyticsJobStatus | null;
+}
+
+export interface RoundAnalyticsJobsResponse {
+  data: Array<{
+    consultationId: string;
+    jobStatus: AnalyticsJobStatus | null;
+  }>;
+}
+
 export interface ConsultationAnalyticsResponse {
   data: ConsultationAnalytics;
+}
+
+export type AnalyticsClusterDecisionAction = "accept" | "reject" | "edit";
+
+export interface AnalyticsClusterDecisionRequest {
+  action: AnalyticsClusterDecisionAction;
+  rationale?: string;
+  editedLabel?: string;
+}
+
+export interface AnalyticsClusterDecisionResponse {
+  data: {
+    decisionId: string;
+    roundId: string;
+    clusterId: number;
+    clusterRecordId: string;
+    action: AnalyticsClusterDecisionAction;
+    decisionType: "accepted" | "discarded" | "management_rejected";
+    label: string;
+    editedLabel: string | null;
+  };
 }
 
 /** Response from POST /api/analytics/rounds/[id]/jobs */

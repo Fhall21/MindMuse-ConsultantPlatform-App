@@ -6,13 +6,7 @@ import { useAuditEvents, useRoundAuditEvents } from "@/hooks/use-audit";
 import type { AuditLogEntry } from "@/types/db";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 
 const SEVEN_DAYS_IN_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -276,12 +270,8 @@ function TimelineEvents({ events }: { events: AuditLogEntry[] }) {
 
 function AuditTrailCard({
   auditQuery,
-  title,
-  description,
 }: {
   auditQuery: ReturnType<typeof useAuditEvents> | ReturnType<typeof useRoundAuditEvents>;
-  title: string;
-  description: string;
 }) {
   const [showEarlier, setShowEarlier] = useState(false);
 
@@ -305,11 +295,6 @@ function AuditTrailCard({
 
   return (
     <Card className="border-border/70">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-
       <CardContent className="space-y-4">
         {auditQuery.isPending ? <p className="text-sm text-muted-foreground">Loading audit trail…</p> : null}
 
@@ -346,13 +331,7 @@ function AuditTrailCard({
 
 export function AuditTrail({ consultationId }: AuditTrailProps) {
   const auditQuery = useAuditEvents(consultationId);
-  return (
-    <AuditTrailCard
-      auditQuery={auditQuery}
-      title="Audit Trail"
-      description="Chronological reference of consultation actions and evidence milestones."
-    />
-  );
+  return <AuditTrailCard auditQuery={auditQuery} />;
 }
 
 interface RoundAuditTrailProps {
@@ -364,8 +343,6 @@ export function RoundAuditTrail({ roundId }: RoundAuditTrailProps) {
   return (
     <AuditTrailCard
       auditQuery={auditQuery}
-      title="Audit Trail"
-      description="Chronological record of all round actions, grouping decisions, and output events."
     />
   );
 }

@@ -25,7 +25,7 @@ import { resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
 import type { CanvasEdge, CanvasFilterState, CanvasNode, ConnectionType } from "@/types/canvas";
 
 interface CanvasGraphProps {
-  consultationId: string;
+  roundId: string;
   filters: CanvasFilterState;
   selectedNodeIds: string[];
   selectedEdgeId: string | null;
@@ -173,7 +173,7 @@ function buildFlowEdges(
 }
 
 function CanvasGraphInner({
-  consultationId,
+  roundId,
   filters,
   selectedNodeIds,
   selectedEdgeId,
@@ -184,8 +184,8 @@ function CanvasGraphInner({
   onQuickEditEdge,
   onGroupDrop,
 }: CanvasGraphProps) {
-  const { data, isLoading } = useCanvas(consultationId);
-  const saveLayout = useSaveLayout(consultationId);
+  const { data, isLoading } = useCanvas(roundId);
+  const saveLayout = useSaveLayout(roundId);
   const { getViewport, getIntersectingNodes } = useReactFlow();
   const dragRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

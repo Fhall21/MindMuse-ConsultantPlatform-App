@@ -136,8 +136,8 @@ function renderShell() {
   return render(
     <QueryClientProvider client={queryClient}>
       <CanvasShell
-        consultationId="consultation-1"
-        consultationTitle="North depot interview"
+        roundId="round-1"
+        roundLabel="North depot interview"
       />
     </QueryClientProvider>
   );

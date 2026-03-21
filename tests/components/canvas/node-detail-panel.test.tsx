@@ -75,7 +75,7 @@ describe("NodeDetailPanel", () => {
             updated_at: "2026-03-21T00:00:00.000Z",
           },
         ]}
-        consultationId="consultation-1"
+        roundId="round-1"
         onQuickTypeSelect={quickTypeSelect}
         onUngroupInsight={vi.fn()}
         onClose={vi.fn()}

@@ -16,8 +16,8 @@ import { createTheme, moveThemeToGroup } from "@/lib/actions/round-workflow";
 import { defaultFilterState, type CanvasFilterState, type ConnectionType } from "@/types/canvas";
 
 interface CanvasShellProps {
-  consultationId: string;
-  consultationTitle: string;
+  roundId: string;
+  roundLabel: string;
 }
 
 interface ConnectionPromptState {
@@ -38,11 +38,11 @@ function equalStringSets(a: string[], b: string[]) {
   return a.every((item) => bSet.has(item));
 }
 
-export function CanvasShell({ consultationId, consultationTitle }: CanvasShellProps) {
+export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
   const queryClient = useQueryClient();
-  const canvasQuery = useCanvas(consultationId);
-  const createEdge = useCreateEdge(consultationId);
-  const updateEdge = useUpdateEdge(consultationId);
+  const canvasQuery = useCanvas(roundId);
+  const createEdge = useCreateEdge(roundId);
+  const updateEdge = useUpdateEdge(roundId);
 
   const [filters, setFilters] = useState<CanvasFilterState>(defaultFilterState);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
@@ -77,7 +77,7 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
   );
 
   const invalidateCanvas = () =>
-    queryClient.invalidateQueries({ queryKey: ["canvas", consultationId] });
+    queryClient.invalidateQueries({ queryKey: ["canvas", roundId] });
 
   function handleClose() {
     setFocusedNodeId(null);
@@ -189,7 +189,7 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b px-4 py-3">
-        <span className="text-sm font-medium text-muted-foreground">{consultationTitle}</span>
+        <span className="text-sm font-medium text-muted-foreground">{roundLabel}</span>
         <Separator orientation="vertical" className="h-4" />
 
         <div className="flex items-center gap-2">
@@ -244,7 +244,7 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1 bg-muted/30">
           <CanvasGraph
-            consultationId={consultationId}
+            roundId={roundId}
             filters={filters}
             selectedNodeIds={selectedNodeIds}
             selectedEdgeId={selectedEdgeId}
@@ -291,7 +291,7 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
           <div className="w-80 shrink-0 border-l bg-background">
             {showSuggestions ? (
               <AiSuggestionsPanel
-                consultationId={consultationId}
+                roundId={roundId}
                 nodes={nodes}
                 onClose={() => setShowSuggestions(false)}
               />
@@ -301,7 +301,7 @@ export function CanvasShell({ consultationId, consultationTitle }: CanvasShellPr
                 selectedEdgeId={selectedEdgeId}
                 nodes={nodes}
                 edges={edges}
-                consultationId={consultationId}
+                roundId={roundId}
                 onQuickTypeSelect={(edge) =>
                   setConnectionPrompt({
                     edgeId: edge.id,

@@ -719,6 +719,30 @@ export const canvasLayoutState = pgTable(
   })
 );
 
+export const roundCrossInsights = pgTable(
+  "round_cross_insights",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => consultationRounds.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    description: text("description"),
+    sourceConsultationIds: jsonb("source_consultation_ids")
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    ...timestamps,
+  },
+  (table) => ({
+    roundIdx: index("idx_round_cross_insights_round_id").on(table.roundId),
+    createdByIdx: index("idx_round_cross_insights_created_by").on(table.createdBy),
+  })
+);
+
 type AnalyticsJobPhase =
   | "queued"
   | "extracting"

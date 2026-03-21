@@ -29,7 +29,7 @@ const CONNECTION_LABELS: Record<ConnectionType, string> = {
 // ---------------------------------------------------------------------------
 
 interface AiSuggestionsPanelProps {
-  consultationId: string;
+  roundId: string;
   nodes: CanvasNode[];
   onClose: () => void;
 }
@@ -41,14 +41,14 @@ interface AiSuggestionsPanelProps {
 function SuggestionCard({
   suggestion,
   nodes,
-  consultationId,
+  roundId,
 }: {
   suggestion: AiConnectionSuggestion;
   nodes: CanvasNode[];
-  consultationId: string;
+  roundId: string;
 }) {
-  const accept = useAcceptSuggestion(consultationId);
-  const reject = useRejectSuggestion(consultationId);
+  const accept = useAcceptSuggestion(roundId);
+  const reject = useRejectSuggestion(roundId);
 
   const sourceLabel =
     nodes.find((n) => n.id === suggestion.source_node_id)?.label ?? suggestion.source_node_id;
@@ -99,12 +99,12 @@ function SuggestionCard({
 // ---------------------------------------------------------------------------
 
 export function AiSuggestionsPanel({
-  consultationId,
+  roundId,
   nodes,
   onClose,
 }: AiSuggestionsPanelProps) {
-  const { data: suggestions, isLoading } = useCanvasSuggestions(consultationId);
-  const generate = useGenerateSuggestions(consultationId);
+  const { data: suggestions, isLoading } = useCanvasSuggestions(roundId);
+  const generate = useGenerateSuggestions(roundId);
 
   return (
     <div className="flex h-full flex-col">
@@ -159,7 +159,7 @@ export function AiSuggestionsPanel({
                 key={suggestion.id}
                 suggestion={suggestion}
                 nodes={nodes}
-                consultationId={consultationId}
+                roundId={roundId}
               />
             ))
           )}

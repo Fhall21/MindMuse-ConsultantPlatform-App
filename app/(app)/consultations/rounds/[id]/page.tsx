@@ -173,7 +173,12 @@ export default function RoundDetailPage({
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       {/* Header */}
-      <RoundDetailHeader round={data.round} />
+      <div className="flex items-start justify-between gap-4">
+        <RoundDetailHeader round={data.round} />
+        <Button variant="outline" size="sm" asChild className="shrink-0">
+          <Link href={`/canvas/round/${id}`}>Evidence canvas →</Link>
+        </Button>
+      </div>
 
       <Separator />
 
@@ -221,15 +226,7 @@ export default function RoundDetailPage({
 
       <Separator />
 
-      {/* Audit Trail */}
-      <section className="space-y-3">
-        <SectionHeading>Audit Trail</SectionHeading>
-        <RoundAuditTrail roundId={id} />
-      </section>
-
-      <Separator />
-
-      {/* Analytics Placeholder */}
+      {/* Analytics */}
       <section className="space-y-3">
         <SectionHeading>Analytics</SectionHeading>
         <AnalyticsPanel
@@ -239,6 +236,14 @@ export default function RoundDetailPage({
           analytics={data.analytics}
           decisionHistory={data.decisionHistory}
         />
+      </section>
+
+      <Separator />
+
+      {/* Audit Trail */}
+      <section className="space-y-3">
+        <SectionHeading>Audit Trail</SectionHeading>
+        <RoundAuditTrail roundId={id} />
       </section>
     </div>
   );

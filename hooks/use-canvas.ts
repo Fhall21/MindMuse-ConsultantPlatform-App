@@ -12,7 +12,7 @@ import type {
 } from "@/types/canvas";
 
 // ---------------------------------------------------------------------------
-// Response shape from GET /api/client/consultations/[id]/canvas
+// Response shape from GET /api/client/rounds/[roundId]/canvas
 // ---------------------------------------------------------------------------
 
 export interface CanvasData {
@@ -51,16 +51,16 @@ export interface SaveLayoutPayload {
 // Query key factory
 // ---------------------------------------------------------------------------
 
-function canvasKey(consultationId: string) {
-  return ["canvas", consultationId] as const;
+function canvasKey(roundId: string) {
+  return ["canvas", roundId] as const;
 }
 
 function updateCanvasCache(
   queryClient: ReturnType<typeof useQueryClient>,
-  consultationId: string,
+  roundId: string,
   updater: (current: CanvasData) => CanvasData
 ) {
-  queryClient.setQueryData<CanvasData>(canvasKey(consultationId), (current) =>
+  queryClient.setQueryData<CanvasData>(canvasKey(roundId), (current) =>
     current ? updater(current) : current
   );
 }
@@ -69,23 +69,23 @@ function updateCanvasCache(
 // Hooks
 // ---------------------------------------------------------------------------
 
-export function useCanvas(consultationId: string) {
+export function useCanvas(roundId: string) {
   return useQuery<CanvasData>({
-    queryKey: canvasKey(consultationId),
+    queryKey: canvasKey(roundId),
     queryFn: () =>
       fetchJson<CanvasData>(
-        `/api/client/consultations/${consultationId}/canvas`
+        `/api/client/rounds/${roundId}/canvas`
       ),
-    enabled: Boolean(consultationId),
+    enabled: Boolean(roundId),
   });
 }
 
-export function useCreateEdge(consultationId: string) {
+export function useCreateEdge(roundId: string) {
   const queryClient = useQueryClient();
   return useMutation<CanvasEdge, Error, CreateEdgePayload>({
     mutationFn: (payload) =>
       fetchJson<CanvasEdge>(
-        `/api/client/consultations/${consultationId}/canvas/edges`,
+        `/api/client/rounds/${roundId}/canvas/edges`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -93,7 +93,7 @@ export function useCreateEdge(consultationId: string) {
         }
       ),
     onSuccess: (createdEdge) => {
-      updateCanvasCache(queryClient, consultationId, (current) => ({
+      updateCanvasCache(queryClient, roundId, (current) => ({
         ...current,
         edges: [
           createdEdge,
@@ -104,12 +104,12 @@ export function useCreateEdge(consultationId: string) {
   });
 }
 
-export function useUpdateEdge(consultationId: string) {
+export function useUpdateEdge(roundId: string) {
   const queryClient = useQueryClient();
   return useMutation<CanvasEdge, Error, UpdateEdgePayload, { previous?: CanvasData }>({
     mutationFn: ({ id, ...payload }) =>
       fetchJson<CanvasEdge>(
-        `/api/client/consultations/${consultationId}/canvas/edges/${id}`,
+        `/api/client/rounds/${roundId}/canvas/edges/${id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -117,8 +117,8 @@ export function useUpdateEdge(consultationId: string) {
         }
       ),
     onMutate: async ({ id, ...updates }) => {
-      const previous = queryClient.getQueryData<CanvasData>(canvasKey(consultationId));
-      updateCanvasCache(queryClient, consultationId, (current) => ({
+      const previous = queryClient.getQueryData<CanvasData>(canvasKey(roundId));
+      updateCanvasCache(queryClient, roundId, (current) => ({
         ...current,
         edges: current.edges.map((edge) =>
           edge.id === id
@@ -135,11 +135,11 @@ export function useUpdateEdge(consultationId: string) {
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(canvasKey(consultationId), context.previous);
+        queryClient.setQueryData(canvasKey(roundId), context.previous);
       }
     },
     onSuccess: (updatedEdge) => {
-      updateCanvasCache(queryClient, consultationId, (current) => ({
+      updateCanvasCache(queryClient, roundId, (current) => ({
         ...current,
         edges: current.edges.map((edge) =>
           edge.id === updatedEdge.id ? updatedEdge : edge
@@ -149,17 +149,17 @@ export function useUpdateEdge(consultationId: string) {
   });
 }
 
-export function useDeleteEdge(consultationId: string) {
+export function useDeleteEdge(roundId: string) {
   const queryClient = useQueryClient();
   return useMutation<void, Error, string, { previous?: CanvasData }>({
     mutationFn: (edgeId) =>
       fetchJson<void>(
-        `/api/client/consultations/${consultationId}/canvas/edges/${edgeId}`,
+        `/api/client/rounds/${roundId}/canvas/edges/${edgeId}`,
         { method: "DELETE" }
       ),
     onMutate: async (edgeId) => {
-      const previous = queryClient.getQueryData<CanvasData>(canvasKey(consultationId));
-      updateCanvasCache(queryClient, consultationId, (current) => ({
+      const previous = queryClient.getQueryData<CanvasData>(canvasKey(roundId));
+      updateCanvasCache(queryClient, roundId, (current) => ({
         ...current,
         edges: current.edges.filter((edge) => edge.id !== edgeId),
       }));
@@ -167,18 +167,18 @@ export function useDeleteEdge(consultationId: string) {
     },
     onError: (_error, _edgeId, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(canvasKey(consultationId), context.previous);
+        queryClient.setQueryData(canvasKey(roundId), context.previous);
       }
     },
   });
 }
 
-export function useSaveLayout(consultationId: string) {
+export function useSaveLayout(roundId: string) {
   const queryClient = useQueryClient();
   return useMutation<void, Error, SaveLayoutPayload, { previous?: CanvasData }>({
     mutationFn: (payload) =>
       fetchJson<void>(
-        `/api/client/consultations/${consultationId}/canvas/layout`,
+        `/api/client/rounds/${roundId}/canvas/layout`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -186,8 +186,8 @@ export function useSaveLayout(consultationId: string) {
         }
       ),
     onMutate: async (payload) => {
-      const previous = queryClient.getQueryData<CanvasData>(canvasKey(consultationId));
-      updateCanvasCache(queryClient, consultationId, (current) => ({
+      const previous = queryClient.getQueryData<CanvasData>(canvasKey(roundId));
+      updateCanvasCache(queryClient, roundId, (current) => ({
         ...current,
         viewport: payload.viewport,
         nodes: current.nodes.map((node) => ({
@@ -199,7 +199,7 @@ export function useSaveLayout(consultationId: string) {
     },
     onError: (_error, _payload, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(canvasKey(consultationId), context.previous);
+        queryClient.setQueryData(canvasKey(roundId), context.previous);
       }
     },
   });
@@ -209,61 +209,61 @@ export function useSaveLayout(consultationId: string) {
 // AI suggestions
 // ---------------------------------------------------------------------------
 
-function suggestionsKey(consultationId: string) {
-  return ["canvas", consultationId, "suggestions"] as const;
+function suggestionsKey(roundId: string) {
+  return ["canvas", roundId, "suggestions"] as const;
 }
 
-export function useCanvasSuggestions(consultationId: string) {
+export function useCanvasSuggestions(roundId: string) {
   return useQuery<AiConnectionSuggestion[]>({
-    queryKey: suggestionsKey(consultationId),
+    queryKey: suggestionsKey(roundId),
     queryFn: () =>
       fetchJson<AiConnectionSuggestion[]>(
-        `/api/client/consultations/${consultationId}/canvas/suggestions`
+        `/api/client/rounds/${roundId}/canvas/suggestions`
       ),
-    enabled: Boolean(consultationId),
+    enabled: Boolean(roundId),
   });
 }
 
-export function useAcceptSuggestion(consultationId: string) {
+export function useAcceptSuggestion(roundId: string) {
   const queryClient = useQueryClient();
   return useMutation<CanvasEdge, Error, string>({
     mutationFn: (suggestionId) =>
       fetchJson<CanvasEdge>(
-        `/api/client/consultations/${consultationId}/canvas/suggestions/${suggestionId}`,
+        `/api/client/rounds/${roundId}/canvas/suggestions/${suggestionId}`,
         { method: "POST" }
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: suggestionsKey(consultationId) });
-      queryClient.invalidateQueries({ queryKey: canvasKey(consultationId) });
+      queryClient.invalidateQueries({ queryKey: suggestionsKey(roundId) });
+      queryClient.invalidateQueries({ queryKey: canvasKey(roundId) });
     },
   });
 }
 
-export function useRejectSuggestion(consultationId: string) {
+export function useRejectSuggestion(roundId: string) {
   const queryClient = useQueryClient();
   return useMutation<void, Error, string>({
     mutationFn: (suggestionId) =>
       fetchJson<void>(
-        `/api/client/consultations/${consultationId}/canvas/suggestions/${suggestionId}`,
+        `/api/client/rounds/${roundId}/canvas/suggestions/${suggestionId}`,
         { method: "DELETE" }
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: suggestionsKey(consultationId) });
-      queryClient.invalidateQueries({ queryKey: canvasKey(consultationId) });
+      queryClient.invalidateQueries({ queryKey: suggestionsKey(roundId) });
+      queryClient.invalidateQueries({ queryKey: canvasKey(roundId) });
     },
   });
 }
 
-export function useGenerateSuggestions(consultationId: string) {
+export function useGenerateSuggestions(roundId: string) {
   const queryClient = useQueryClient();
   return useMutation<{ message: string }, Error, void>({
     mutationFn: () =>
       fetchJson<{ message: string }>(
-        `/api/client/consultations/${consultationId}/canvas/suggestions`,
+        `/api/client/rounds/${roundId}/canvas/suggestions`,
         { method: "POST" }
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: suggestionsKey(consultationId) });
+      queryClient.invalidateQueries({ queryKey: suggestionsKey(roundId) });
     },
   });
 }

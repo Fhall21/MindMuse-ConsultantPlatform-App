@@ -14,7 +14,7 @@ interface NodeDetailPanelProps {
   selectedEdgeId: string | null;
   nodes: CanvasNode[];
   edges: CanvasEdge[];
-  consultationId: string;
+  roundId: string;
   onQuickTypeSelect: (edge: CanvasEdge) => void;
   onUngroupInsight: (nodeId: string) => Promise<void>;
   onClose: () => void;
@@ -25,7 +25,7 @@ export function NodeDetailPanel({
   selectedEdgeId,
   nodes,
   edges,
-  consultationId,
+  roundId,
   onQuickTypeSelect,
   onUngroupInsight,
   onClose,
@@ -60,7 +60,7 @@ export function NodeDetailPanel({
             key={selectedEdge.id}
             edge={selectedEdge}
             nodes={nodes}
-            consultationId={consultationId}
+            roundId={roundId}
             onQuickTypeSelect={onQuickTypeSelect}
             onDeleted={onClose}
           />
@@ -139,20 +139,20 @@ function NodeInfoCard({
 function EdgeEditForm({
   edge,
   nodes,
-  consultationId,
+  roundId,
   onQuickTypeSelect,
   onDeleted,
 }: {
   edge: CanvasEdge;
   nodes: CanvasNode[];
-  consultationId: string;
+  roundId: string;
   onQuickTypeSelect: (edge: CanvasEdge) => void;
   onDeleted: () => void;
 }) {
   const [note, setNote] = useState(edge.note ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const updateMutation = useUpdateEdge(consultationId);
-  const deleteMutation = useDeleteEdge(consultationId);
+  const updateMutation = useUpdateEdge(roundId);
+  const deleteMutation = useDeleteEdge(roundId);
 
   const sourceNode = nodes.find((node) => node.id === edge.source_node_id);
   const targetNode = nodes.find((node) => node.id === edge.target_node_id);

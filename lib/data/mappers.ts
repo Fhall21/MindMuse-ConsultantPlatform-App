@@ -69,7 +69,6 @@ export function mapConsultationRoundRecord(
     user_id: row.userId,
     status: row.status as ConsultationRound["status"],
     consultation_id: row.consultationId,
-    round_id: row.consultationId,
   };
 }
 
@@ -77,7 +76,6 @@ export function mapInsightRecord(row: InsightRow): Insight {
   return {
     id: row.id,
     meeting_id: row.meetingId,
-    consultation_id: row.meetingId,
     label: row.label,
     description: row.description,
     accepted: row.accepted,
@@ -92,7 +90,6 @@ export function mapThemeRecord(row: ThemeRow): Theme {
     id: row.id,
     consultation_id: row.consultationId,
     meeting_id: row.consultationId,
-    round_id: row.consultationId,
     user_id: row.userId,
     label: row.label,
     description: row.description,
@@ -165,7 +162,6 @@ export function mapRoundOutputArtifactRecord(
     id: row.id,
     consultation_id: row.consultationId,
     meeting_id: row.consultationId,
-    round_id: row.consultationId,
     user_id: row.userId,
     artifact_type: row.artifactType as RoundOutputArtifact["artifact_type"],
     status: row.status as RoundOutputArtifact["status"],

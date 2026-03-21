@@ -13,7 +13,6 @@ export interface Meeting {
   user_id: string;
   status: ConsultationStatus;
   consultation_id: string | null;
-  round_id: string | null;
 }
 
 export interface Consultation {
@@ -41,7 +40,6 @@ export interface Theme {
   id: string;
   consultation_id: string;
   meeting_id?: string;
-  round_id: string;
   user_id: string;
   label: string;
   description: string | null;
@@ -63,7 +61,6 @@ export interface ThemeMember {
   id: string;
   theme_id: string;
   consultation_id: string;
-  source_consultation_id: string;
   insight_id: string;
   source_meeting_id: string;
   user_id: string;
@@ -101,7 +98,6 @@ export interface ConsultationOutputArtifact {
   id: string;
   consultation_id: string;
   meeting_id?: string;
-  round_id: string;
   user_id: string;
   artifact_type: RoundOutputArtifactType;
   status: RoundOutputArtifactStatus;
@@ -117,7 +113,6 @@ export interface ConsultationOutputArtifact {
 export interface Insight {
   id: string;
   meeting_id: string;
-  consultation_id?: string;
   label: string;
   description: string | null;
   accepted: boolean;

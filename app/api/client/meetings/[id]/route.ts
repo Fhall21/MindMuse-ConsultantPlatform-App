@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  getConsultationForUser,
-  getLatestEvidenceEmailForConsultation,
-  listConsultationPersonLinks,
-  listInsightsForConsultation,
+  getLatestEvidenceEmailForMeeting,
+  getMeetingForUser,
+  listInsightsForMeeting,
+  listMeetingPersonLinks,
 } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../_helpers";
 
@@ -27,16 +27,16 @@ export async function GET(
   }
 
   try {
-    const meeting = await getConsultationForUser(id, client.userId);
+    const meeting = await getMeetingForUser(id, client.userId);
 
     if (!meeting) {
       return jsonError("Meeting not found", 404);
     }
 
     const [themesResult, peopleResult, latestEvidenceEmailResult] = await Promise.allSettled([
-      listInsightsForConsultation(id, client.userId),
-      listConsultationPersonLinks(id, client.userId),
-      getLatestEvidenceEmailForConsultation(id, client.userId),
+      listInsightsForMeeting(id, client.userId),
+      listMeetingPersonLinks(id, client.userId),
+      getLatestEvidenceEmailForMeeting(id, client.userId),
     ]);
 
     const themes =

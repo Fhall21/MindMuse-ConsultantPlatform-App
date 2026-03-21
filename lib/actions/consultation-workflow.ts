@@ -401,7 +401,6 @@ function mapThemeRecord(row: ThemeRow): Theme {
     id: row.id,
     consultation_id: row.consultationId,
     meeting_id: row.consultationId,
-    round_id: row.consultationId,
     user_id: row.userId,
     label: row.label,
     description: row.description,
@@ -427,7 +426,6 @@ function mapThemeMemberRecord(
     id: row.id,
     theme_id: row.themeId,
     consultation_id: row.consultationId,
-    source_consultation_id: row.sourceMeetingId,
     insight_id: row.insightId,
     source_meeting_id: row.sourceMeetingId,
     user_id: row.userId,
@@ -1301,7 +1299,7 @@ export async function moveThemeToGroup(
 ) {
   const { userId } = await requireAuthenticatedContext();
   const theme = await loadThemeWithRoundContext({ userId, themeId });
-  const roundId = theme.consultation.round_id;
+  const roundId = theme.consultation.consultation_id;
 
   if (!roundId) {
     throw new Error("The source theme is not assigned to a round.");
@@ -1647,7 +1645,7 @@ export async function acceptRoundTarget(
     const theme = await loadThemeWithRoundContext({ userId, themeId: targetId });
 
     await insertRoundDecision({
-      roundId: theme.consultation.round_id as string,
+      roundId: theme.consultation.consultation_id as string,
       userId,
       targetType,
       targetId,
@@ -1662,7 +1660,7 @@ export async function acceptRoundTarget(
       entityType: "theme",
       entityId: targetId,
       metadata: {
-        round_id: theme.consultation.round_id,
+        round_id: theme.consultation.consultation_id,
         target_type: targetType,
       },
     });
@@ -1673,7 +1671,7 @@ export async function acceptRoundTarget(
   const output = await loadRoundOutputForContext({ userId, outputId: targetId });
 
   await insertRoundDecision({
-    roundId: output.round_id,
+    roundId: output.consultation_id,
     userId,
     targetType,
     targetId,
@@ -1685,7 +1683,7 @@ export async function acceptRoundTarget(
     entityType: "round_output_artifact",
     entityId: targetId,
     metadata: {
-      round_id: output.round_id,
+      round_id: output.consultation_id,
       target_type: targetType,
     },
   });
@@ -1811,7 +1809,7 @@ export async function managementRejectRoundTarget(
     }
 
     await insertRoundDecision({
-      roundId: theme.consultation.round_id as string,
+      roundId: theme.consultation.consultation_id as string,
       userId,
       targetType,
       targetId,
@@ -1828,7 +1826,7 @@ export async function managementRejectRoundTarget(
       entityType: "theme",
       entityId: targetId,
       metadata: {
-        round_id: theme.consultation.round_id,
+        round_id: theme.consultation.consultation_id,
         target_type: targetType,
         rationale: trimmedRationale,
         locked_from_source: lockedFromSource,
@@ -1845,7 +1843,7 @@ export async function managementRejectRoundTarget(
   }
 
   await insertRoundDecision({
-    roundId: output.round_id,
+    roundId: output.consultation_id,
     userId,
     targetType,
     targetId,
@@ -1858,7 +1856,7 @@ export async function managementRejectRoundTarget(
     entityType: "round_output_artifact",
     entityId: targetId,
     metadata: {
-      round_id: output.round_id,
+      round_id: output.consultation_id,
       target_type: targetType,
       rationale: trimmedRationale,
     },
@@ -2032,7 +2030,7 @@ async function loadGroupWithRoundContext(params: {
   const group = mapThemeRecord(row);
   const round = await loadOwnedRound({
     userId,
-    roundId: group.round_id,
+    roundId: group.consultation_id,
   });
 
   return { group, round };
@@ -2125,7 +2123,7 @@ async function groupHasLockedMembers(params: {
 }) {
   const { groupId } = params;
   const members = await loadGroupMembers({ groupId });
-  const consultationIds = Array.from(new Set(members.map((member) => member.source_consultation_id)));
+  const consultationIds = Array.from(new Set(members.map((member) => member.source_meeting_id)));
 
   if (consultationIds.length === 0) {
     return false;

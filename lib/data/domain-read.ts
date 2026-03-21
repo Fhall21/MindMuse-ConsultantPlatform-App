@@ -30,6 +30,7 @@ import type {
   ConsultationRound,
   EvidenceEmail,
   Insight,
+  Meeting,
   Person,
   RoundOutputArtifact,
   Theme,
@@ -118,24 +119,41 @@ export async function getConsultationForUser(
   return row ? mapConsultationRecord(row) : null;
 }
 
-export async function listConsultationsForRound(
-  roundId: string,
+export async function getMeetingForUser(
+  meetingId: string,
   userId: string
-): Promise<ConsultationRound[]> {
-  await requireOwnedConsultation(roundId, userId);
+): Promise<Meeting | null> {
+  const [row] = await db
+    .select()
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.userId, userId)))
+    .limit(1);
+
+  return row ? mapConsultationRoundRecord(row) : null;
+}
+
+export async function listMeetingsForConsultation(
+  consultationId: string,
+  userId: string
+): Promise<Meeting[]> {
+  await requireOwnedConsultation(consultationId, userId);
 
   const rows = await db
     .select()
     .from(meetings)
     .where(
-      and(
-        eq(meetings.consultationId, roundId),
-        eq(meetings.userId, userId)
-      )
+      and(eq(meetings.consultationId, consultationId), eq(meetings.userId, userId))
     )
     .orderBy(asc(meetings.createdAt));
 
   return rows.map(mapConsultationRoundRecord);
+}
+
+export async function listConsultationsForRound(
+  roundId: string,
+  userId: string
+): Promise<ConsultationRound[]> {
+  return listMeetingsForConsultation(roundId, userId);
 }
 
 export async function listRoundsForUser(
@@ -154,18 +172,7 @@ export async function getRoundForUser(
   roundId: string,
   userId: string
 ): Promise<ConsultationRound | null> {
-  const [row] = await db
-    .select()
-    .from(consultationRounds)
-    .where(
-      and(
-        eq(consultationRounds.id, roundId),
-        eq(consultationRounds.userId, userId)
-      )
-    )
-    .limit(1);
-
-  return row ? mapConsultationRoundRecord(row) : null;
+  return getMeetingForUser(roundId, userId);
 }
 
 export async function listRoundsByIdsForUser(
@@ -179,15 +186,37 @@ export async function listRoundsByIdsForUser(
 
   const rows = await db
     .select()
-    .from(consultationRounds)
+    .from(meetings)
     .where(
       and(
-        eq(consultationRounds.userId, userId),
-        inArray(consultationRounds.id, ids)
+        eq(meetings.userId, userId),
+        inArray(meetings.id, ids)
       )
     );
 
   return rows.map(mapConsultationRoundRecord);
+}
+
+export async function listInsightsForMeeting(
+  meetingId: string,
+  userId: string,
+  options: { accepted?: boolean } = {}
+): Promise<Insight[]> {
+  await requireOwnedMeeting(meetingId, userId);
+
+  const conditions = [eq(insights.meetingId, meetingId)];
+
+  if (options.accepted !== undefined) {
+    conditions.push(eq(insights.accepted, options.accepted));
+  }
+
+  const rows = await db
+    .select()
+    .from(insights)
+    .where(and(...conditions))
+    .orderBy(desc(insights.createdAt));
+
+  return rows.map(mapInsightRecord);
 }
 
 export async function listPeopleForUser(userId: string): Promise<Person[]> {
@@ -218,37 +247,20 @@ export async function listInsightsForConsultation(
   userId: string,
   options: { accepted?: boolean } = {}
 ): Promise<Insight[]> {
-  await requireOwnedMeeting(consultationId, userId);
-
-  const conditions = [eq(insights.meetingId, consultationId)];
-
-  if (options.accepted !== undefined) {
-    conditions.push(eq(insights.accepted, options.accepted));
-  }
-
-  const rows = await db
-    .select()
-    .from(insights)
-    .where(and(...conditions))
-    .orderBy(desc(insights.createdAt));
-
-  return rows.map(mapInsightRecord);
+  return listInsightsForMeeting(consultationId, userId, options);
 }
 
-export async function listInsightsForConsultations(
-  consultationIds: string[],
+export async function listInsightsForMeetings(
+  meetingIds: string[],
   userId: string,
   options: { accepted?: boolean } = {}
 ): Promise<Insight[]> {
-  const ids = uniqueIds(consultationIds);
+  const ids = uniqueIds(meetingIds);
   if (ids.length === 0) {
     return [];
   }
 
-  const conditions = [
-    eq(meetings.userId, userId),
-    inArray(insights.meetingId, ids),
-  ];
+  const conditions = [eq(meetings.userId, userId), inArray(insights.meetingId, ids)];
 
   if (options.accepted !== undefined) {
     conditions.push(eq(insights.accepted, options.accepted));
@@ -264,48 +276,79 @@ export async function listInsightsForConsultations(
   return rows.map(({ insight }) => mapInsightRecord(insight));
 }
 
+export async function listInsightsForConsultations(
+  consultationIds: string[],
+  userId: string,
+  options: { accepted?: boolean } = {}
+): Promise<Insight[]> {
+  return listInsightsForMeetings(consultationIds, userId, options);
+}
+
+export async function deleteInsightsForMeeting(meetingId: string, userId: string) {
+  await requireOwnedMeeting(meetingId, userId);
+
+  await db.delete(insights).where(eq(insights.meetingId, meetingId));
+}
+
 export async function deleteInsightsForConsultation(
   consultationId: string,
   userId: string
 ) {
-  await requireOwnedMeeting(consultationId, userId);
+  await deleteInsightsForMeeting(consultationId, userId);
+}
 
-  await db.delete(insights).where(eq(insights.meetingId, consultationId));
+export async function listPeopleForMeeting(
+  meetingId: string,
+  userId: string
+): Promise<Person[]> {
+  await requireOwnedMeeting(meetingId, userId);
+
+  const rows = await db
+    .select({ person: people })
+    .from(consultationPeople)
+    .innerJoin(people, eq(consultationPeople.personId, people.id))
+    .where(eq(consultationPeople.meetingId, meetingId))
+    .orderBy(desc(people.createdAt));
+
+  return rows.map(({ person }) => mapPersonRecord(person));
 }
 
 export async function listPeopleForConsultation(
   consultationId: string,
   userId: string
 ): Promise<Person[]> {
-  await requireOwnedMeeting(consultationId, userId);
+  return listPeopleForMeeting(consultationId, userId);
+}
+
+export async function listMeetingPersonLinks(
+  meetingId: string,
+  userId: string
+): Promise<Array<{ meeting_id: string; person_id: string }>> {
+  await requireOwnedMeeting(meetingId, userId);
 
   const rows = await db
-    .select({ person: people })
+    .select({
+      meetingId: consultationPeople.meetingId,
+      personId: consultationPeople.personId,
+    })
     .from(consultationPeople)
-    .innerJoin(people, eq(consultationPeople.personId, people.id))
-    .where(eq(consultationPeople.meetingId, consultationId))
-    .orderBy(desc(people.createdAt));
+    .where(eq(consultationPeople.meetingId, meetingId));
 
-  return rows.map(({ person }) => mapPersonRecord(person));
+  return rows.map((row) => ({
+    meeting_id: row.meetingId,
+    person_id: row.personId,
+  }));
 }
 
 export async function listConsultationPersonLinks(
   consultationId: string,
   userId: string
 ): Promise<Array<{ consultation_id: string; person_id: string }>> {
-  await requireOwnedMeeting(consultationId, userId);
-
-  const rows = await db
-    .select({
-      consultationId: consultationPeople.meetingId,
-      personId: consultationPeople.personId,
-    })
-    .from(consultationPeople)
-    .where(eq(consultationPeople.meetingId, consultationId));
+  const rows = await listMeetingPersonLinks(consultationId, userId);
 
   return rows.map((row) => ({
-    consultation_id: row.consultationId,
-    person_id: row.personId,
+    consultation_id: row.meeting_id,
+    person_id: row.person_id,
   }));
 }
 
@@ -432,12 +475,19 @@ export async function listEvidenceEmailsForConsultation(
   consultationId: string,
   userId: string
 ): Promise<EvidenceEmail[]> {
-  await requireOwnedMeeting(consultationId, userId);
+  return listEvidenceEmailsForMeeting(consultationId, userId);
+}
+
+export async function listEvidenceEmailsForMeeting(
+  meetingId: string,
+  userId: string
+): Promise<EvidenceEmail[]> {
+  await requireOwnedMeeting(meetingId, userId);
 
   const rows = await db
     .select()
     .from(evidenceEmails)
-    .where(eq(evidenceEmails.meetingId, consultationId))
+    .where(eq(evidenceEmails.meetingId, meetingId))
     .orderBy(desc(evidenceEmails.createdAt));
 
   return rows.map(mapEvidenceEmailRecord);
@@ -451,11 +501,26 @@ export async function getLatestEvidenceEmailForConsultation(
   return latest ?? null;
 }
 
+export async function getLatestEvidenceEmailForMeeting(
+  meetingId: string,
+  userId: string
+): Promise<EvidenceEmail | null> {
+  const [latest] = await listEvidenceEmailsForMeeting(meetingId, userId);
+  return latest ?? null;
+}
+
 export async function listEvidenceEmailsForConsultations(
   consultationIds: string[],
   userId: string
 ): Promise<EvidenceEmail[]> {
-  const ids = uniqueIds(consultationIds);
+  return listEvidenceEmailsForMeetings(consultationIds, userId);
+}
+
+export async function listEvidenceEmailsForMeetings(
+  meetingIds: string[],
+  userId: string
+): Promise<EvidenceEmail[]> {
+  const ids = uniqueIds(meetingIds);
   if (ids.length === 0) {
     return [];
   }

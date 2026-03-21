@@ -1,6 +1,11 @@
 services:
   db:
-    image: postgres:15-alpine
+    # pgvector/pgvector:pg15 is postgres:15 + the vector extension pre-installed.
+    # Required for analytics term embeddings (CREATE EXTENSION vector).
+    # When deploying to Coolify for the first time, or after a DB wipe, the
+    # extension is created automatically by the migration. On an existing DB
+    # run once: psql -U <user> -d <db> -c "CREATE EXTENSION IF NOT EXISTS vector;"
+    image: pgvector/pgvector:pg15
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DATABASE_USER:-postgres}

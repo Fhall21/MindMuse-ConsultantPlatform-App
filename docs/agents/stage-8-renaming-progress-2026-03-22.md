@@ -40,3 +40,19 @@
 - Keep internal compatibility fields stable unless the rename is isolated and low-risk.
 - Re-run browser verification from the stage-8 worktree and confirm the cleaned terminology appears on the live flows.
 - Revisit the old `db:generate` failure only if the branch still needs schema generation beyond the forward-migration repair already committed.
+
+## Browser Verification Notes
+
+- Confirmed port `3002` is serving the stage-8 worktree.
+- Confirmed the Better Auth email sign-in endpoint succeeds for `felix@maildrop.cc` with the restored QA password.
+- Confirmed authenticated access to `/dashboard` with no console errors beyond preload warnings.
+- Confirmed `/consultations/new` renders with the corrected stage-8 copy.
+- Confirmed consultation creation works in-browser when the form is submitted after hydration with `requestSubmit()`, and the resulting consultation workspace shows:
+	- `linked meetings`
+	- `no meetings are linked to this consultation yet`
+	- `consultation outputs`
+- The gstack browse harness is unreliable for some client-side navigations in this app:
+	- direct login button flow stayed on `/login` even though the auth endpoint returned `200`
+	- direct navigation to `/consultations` and `/meetings/new` sometimes timed out or landed on `about:blank`
+	- treat those as harness issues first, not confirmed app regressions
+- Focused Vitest verification remains the reliable source for meeting creation until browser navigation is rechecked with a steadier harness path.

@@ -18,14 +18,7 @@ import {
 import type { EvidenceEmail } from "@/types/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -394,27 +387,17 @@ export function EmailDraftPanel({ consultationId }: EmailDraftPanelProps) {
   return (
     <>
       <Card className="border-border/70">
-        <CardHeader>
-          <div>
-            <CardTitle>Evidence Email</CardTitle>
-            <CardDescription>
-              Generate a draft, refine it locally, and mark the official record
-              as accepted or sent.
-            </CardDescription>
-          </div>
+        <CardContent className="space-y-4">
           {currentDraft ? (
-            <CardAction>
+            <div className="flex justify-end">
               <Badge
                 variant={currentDraft.status === "draft" ? "secondary" : "outline"}
                 className={currentDraftPresentation.className}
               >
                 {currentDraftPresentation.label}
               </Badge>
-            </CardAction>
+            </div>
           ) : null}
-        </CardHeader>
-
-        <CardContent className="space-y-4">
           {consultationQuery.isPending ||
           evidenceEmailsQuery.isPending ||
           peopleQuery.isPending ? (

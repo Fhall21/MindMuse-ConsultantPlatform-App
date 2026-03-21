@@ -20,6 +20,11 @@ export async function GET(
     const data = await getRoundAnalyticsJobStatuses(roundId);
     return NextResponse.json(data);
   } catch (error) {
+    console.error("[analytics/rounds/jobs GET] error", {
+      roundId,
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return analyticsRouteError(error, "Failed to load round analytics job statuses");
   }
 }

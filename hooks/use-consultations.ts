@@ -4,21 +4,21 @@ import {
   getRoundDetail,
   type RoundDetail,
 } from "@/lib/actions/consultation-workflow";
-import type { ConsultationRound } from "@/types/db";
+import type { Consultation } from "@/types/db";
 import { fetchJson } from "@/hooks/api";
 
-export function useConsultationRounds() {
+export function useConsultations() {
   return useQuery({
-    queryKey: ["consultation_rounds"],
-    queryFn: () => fetchJson<ConsultationRound[]>("/api/client/rounds"),
+    queryKey: ["consultations"],
+    queryFn: () => fetchJson<Consultation[]>("/api/client/consultations"),
   });
 }
 
-export function useRoundDetail(roundId: string) {
+export function useConsultationDetail(consultationId: string) {
   return useQuery({
-    queryKey: ["consultation_rounds", roundId, "detail"],
-    queryFn: async () => getRoundDetail(roundId),
-    enabled: Boolean(roundId),
+    queryKey: ["consultations", consultationId, "detail"],
+    queryFn: async () => getRoundDetail(consultationId),
+    enabled: Boolean(consultationId),
   });
 }
 

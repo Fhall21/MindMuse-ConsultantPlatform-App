@@ -1,36 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import type {
-  Consultation,
-  ConsultationRound,
+  Meeting,
   EvidenceEmail,
   Insight,
 } from "@/types/db";
 import { fetchJson } from "@/hooks/api";
 
-export function useConsultations() {
+export function useMeetings() {
   return useQuery({
-    queryKey: ["consultations"],
-    queryFn: () => fetchJson<Consultation[]>("/api/client/consultations"),
+    queryKey: ["meetings"],
+    queryFn: () => fetchJson<Meeting[]>("/api/client/meetings"),
   });
 }
 
-export function useConsultation(id: string) {
+export function useMeeting(id: string) {
   return useQuery({
-    queryKey: ["consultations", id],
+    queryKey: ["meetings", id],
     queryFn: () =>
       fetchJson<{
-        consultation: Consultation;
+        meeting: Meeting;
         themes: Insight[];
         people: Array<{ person_id: string }>;
         latestEvidenceEmail: EvidenceEmail | null;
-      }>(`/api/client/consultations/${id}`),
+      }>(`/api/client/meetings/${id}`),
     enabled: !!id,
-  });
-}
-
-export function useConsultationRounds() {
-  return useQuery({
-    queryKey: ["consultation_rounds"],
-    queryFn: () => fetchJson<ConsultationRound[]>("/api/client/rounds"),
   });
 }

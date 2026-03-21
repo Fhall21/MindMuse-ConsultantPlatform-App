@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createConsultation } from "@/lib/actions/consultations";
-import { useConsultationRounds } from "@/hooks/use-meetings";
+import { useConsultations } from "@/hooks/use-consultations";
 
 const newConsultationSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
@@ -22,7 +22,7 @@ type NewConsultationFormData = z.infer<typeof newConsultationSchema>;
 export default function NewConsultationPage() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
-  const { data: rounds } = useConsultationRounds();
+  const { data: rounds } = useConsultations();
 
   const {
     register,

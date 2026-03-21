@@ -24,7 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fetchJson } from "@/hooks/api";
-import { useConsultationRounds, useConsultations } from "@/hooks/use-meetings";
+import { useConsultations } from "@/hooks/use-consultations";
 import type { Consultation } from "@/types/db";
 
 type StatusFilter = "all" | "draft" | "complete";
@@ -50,7 +50,6 @@ export default function ConsultationsPage() {
   ]);
 
   const consultationsQuery = useConsultations();
-  const roundsQuery = useConsultationRounds();
 
   const consultations = consultationsQuery.data;
 
@@ -73,19 +72,14 @@ export default function ConsultationsPage() {
   });
 
   const rows = useMemo<ConsultationListRow[]>(() => {
-    const roundLabelById = new Map(
-      (roundsQuery.data ?? []).map((round) => [round.id, round.label])
-    );
     const peopleCounts = peopleCountsQuery.data ?? {};
 
     return (consultations ?? []).slice(0, 200).map((consultation) => ({
       ...consultation,
-      roundLabel: consultation.round_id
-        ? (roundLabelById.get(consultation.round_id) ?? null)
-        : null,
+      roundLabel: null,
       peopleCount: peopleCounts[consultation.id] ?? 0,
     }));
-  }, [consultations, roundsQuery.data, peopleCountsQuery.data]);
+  }, [consultations, peopleCountsQuery.data]);
 
   const filteredRows = useMemo(() => {
     const normalizedSearch = titleFilter.trim().toLowerCase();
@@ -197,7 +191,7 @@ export default function ConsultationsPage() {
   });
 
   const isLoading =
-    consultationsQuery.isLoading || roundsQuery.isLoading || peopleCountsQuery.isLoading;
+    consultationsQuery.isLoading || peopleCountsQuery.isLoading;
   const hasNoConsultations = !isLoading && rows.length === 0;
   const hasNoFilteredRows = !isLoading && rows.length > 0 && filteredRows.length === 0;
 

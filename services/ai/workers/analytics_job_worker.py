@@ -21,8 +21,6 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from workers.neo4j_sync import build_database_url
-
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 10
@@ -142,12 +140,15 @@ class ClaimedJob:
 # ─── Engine ───────────────────────────────────────────────────────────────────
 
 def create_db_engine() -> Any:
-    database_url = build_database_url()
+    from core.config import settings
+    from sqlalchemy import create_engine
+
+    database_url = settings.build_database_url()
     if not database_url:
         raise ValueError(
-            "Analytics worker requires DATABASE_URL or DATABASE_HOST/PORT/NAME/USER/PASSWORD env vars."
+            "Analytics worker requires DATABASE_URL or DATABASE_HOST/PORT/NAME/USER/PASSWORD "
+            "env vars (read via .env or shell environment)."
         )
-    from sqlalchemy import create_engine
     return create_engine(database_url, future=True, pool_pre_ping=True)
 
 

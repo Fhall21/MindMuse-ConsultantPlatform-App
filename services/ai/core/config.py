@@ -19,6 +19,25 @@ class Settings(BaseSettings):
     openai_audio_model: str = "whisper-1"         # audio transcription
     allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
+    # Database — optional; required for the analytics job worker.
+    # Accepts either DATABASE_URL or the discrete DATABASE_HOST/PORT/NAME/USER/PASSWORD vars.
+    database_url: str | None = None
+    database_host: str | None = None
+    database_port: str = "5432"
+    database_name: str | None = None
+    database_user: str | None = None
+    database_password: str | None = None
+
+    def build_database_url(self) -> str | None:
+        if self.database_url:
+            return self.database_url
+        if all([self.database_host, self.database_name, self.database_user, self.database_password]):
+            return (
+                f"postgresql+psycopg://{self.database_user}:{self.database_password}"
+                f"@{self.database_host}:{self.database_port}/{self.database_name}"
+            )
+        return None
+
     @classmethod
     def settings_customise_sources(
         cls,

@@ -9,12 +9,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createConsultation } from "@/lib/actions/consultations";
-import { useConsultations } from "@/hooks/use-consultations";
+import { createRound } from "@/lib/actions/rounds";
 
 const newConsultationSchema = z.object({
-  title: z.string().min(1, "Title is required").max(255),
-  roundId: z.string().optional(),
+  label: z.string().min(1, "Consultation title is required").max(255),
+  description: z.string().max(2000).optional(),
 });
 
 type NewConsultationFormData = z.infer<typeof newConsultationSchema>;
@@ -22,7 +21,6 @@ type NewConsultationFormData = z.infer<typeof newConsultationSchema>;
 export default function NewConsultationPage() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
-  const { data: rounds } = useConsultations();
 
   const {
     register,
@@ -30,15 +28,15 @@ export default function NewConsultationPage() {
     formState: { errors },
   } = useForm<NewConsultationFormData>({
     resolver: zodResolver(newConsultationSchema),
-    defaultValues: { title: "", roundId: "" },
+    defaultValues: { label: "", description: "" },
   });
 
   async function onSubmit(data: NewConsultationFormData) {
     setSubmitting(true);
     try {
-      const id = await createConsultation({
-        title: data.title,
-        consultationId: data.roundId || undefined,
+      const id = await createRound({
+        label: data.label,
+        description: data.description?.trim() || undefined,
       });
       router.push(`/consultations/${id}`);
     } catch (err) {
@@ -51,44 +49,40 @@ export default function NewConsultationPage() {
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">New Meeting</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">New Consultation</h1>
         <p className="text-sm text-muted-foreground">
-          Create the record first. Add material after.
+          Create the consultation record first. Link meetings after.
         </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="title">Title</Label>
+          <Label htmlFor="label">Consultation title</Label>
           <Input
-            id="title"
-            placeholder="e.g. Session with Alex — March 2026"
-            {...register("title")}
+            id="label"
+            placeholder="e.g. R2 Wellbeing Follow-up"
+            {...register("label")}
           />
-          {errors.title && (
-            <p className="text-sm text-destructive">{errors.title.message}</p>
+          {errors.label && (
+            <p className="text-sm text-destructive">{errors.label.message}</p>
           )}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="roundId">Consultation (optional)</Label>
-          <select
-            id="roundId"
-            {...register("roundId")}
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">No consultation</option>
-            {rounds?.map((round) => (
-              <option key={round.id} value={round.id}>
-                {round.label}
-              </option>
-            ))}
-          </select>
+          <Label htmlFor="description">Description (optional)</Label>
+          <Input
+            id="description"
+            placeholder="Short note about what this consultation groups together"
+            {...register("description")}
+          />
+          {errors.description && (
+            <p className="text-sm text-destructive">{errors.description.message}</p>
+          )}
         </div>
 
         <div className="flex gap-3 pt-2">
           <Button type="submit" disabled={submitting}>
-            {submitting ? "Creating…" : "Create meeting"}
+            {submitting ? "Creating…" : "Create consultation"}
           </Button>
           <Button
             type="button"

@@ -103,6 +103,8 @@ export async function addAnalyticsClusterAsInsight(roundId: string, clusterId: n
     roundId,
     insightId: clusterInsight.id,
     sourceConsultationId: uniqueConsultationIds[0],
+    userId,
+    createdBy: userId,
   });
 
   // Emit audit events

@@ -7,19 +7,19 @@
  */
 
 export type {
-  ConsultationDetail,
-  ConsultationDetailMeeting,
+  RoundDetail as ConsultationDetail,
+  RoundDetailConsultation as ConsultationDetailMeeting,
   RoundSourceTheme,
   ThemeDetail,
   ThemeMemberDetail,
   ThemeDraftState,
-  ConsultationDecisionHistoryItem,
-  ConsultationOutputSummary,
-  ConsultationOutputCollection,
-  ConsultationHistoryEvent,
-  ConsultationAnalyticsSummary,
-  MeetingGroupDetail,
-  MeetingGroupMemberDetail,
+  RoundDecisionHistoryItem as ConsultationDecisionHistoryItem,
+  RoundOutputSummary as ConsultationOutputSummary,
+  RoundOutputCollection as ConsultationOutputCollection,
+  RoundHistoryEvent as ConsultationHistoryEvent,
+  RoundAnalyticsSummary as ConsultationAnalyticsSummary,
+  ConsultationGroupDetail as MeetingGroupDetail,
+  ConsultationGroupMemberDetail as MeetingGroupMemberDetail,
 } from "@/lib/actions/consultation-workflow";
 
 // Component-friendly aliases

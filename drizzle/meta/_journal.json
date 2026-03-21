@@ -41,7 +41,14 @@
       "idx": 5,
       "version": "7",
       "when": 1774189200000,
-      "tag": "0005_rename_consultation_round_to_meeting_consultation",
+      "tag": "0005_rename_insight_decision_log_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774189800000,
+      "tag": "0006_rename_consultation_round_to_meeting_consultation",
       "breakpoints": true
     }
   ]

@@ -1,3 +1,8 @@
+-- Stage 8 semantic rename, applied as a forward-only migration after the
+-- published origin/main chain. This preserves existing migration history while
+-- taking live data from the legacy consultation/round model to the new
+-- meeting/consultation model.
+
 -- Rename consultations → meetings
 ALTER TABLE consultations RENAME TO meetings;
 

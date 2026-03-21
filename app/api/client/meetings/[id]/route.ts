@@ -7,13 +7,13 @@ import {
 } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../_helpers";
 
-function logOptionalConsultationLoadFailure(
+function logOptionalMeetingLoadFailure(
   label: string,
-  consultationId: string,
+  meetingId: string,
   error: unknown
 ) {
   const detail = error instanceof Error ? error.message : String(error);
-  console.error(`[consultation-detail] failed to load ${label} for ${consultationId}: ${detail}`);
+  console.error(`[meeting-detail] failed to load ${label} for ${meetingId}: ${detail}`);
 }
 
 export async function GET(
@@ -27,10 +27,10 @@ export async function GET(
   }
 
   try {
-    const consultation = await getConsultationForUser(id, client.userId);
+    const meeting = await getConsultationForUser(id, client.userId);
 
-    if (!consultation) {
-      return jsonError("Consultation not found", 404);
+    if (!meeting) {
+      return jsonError("Meeting not found", 404);
     }
 
     const [themesResult, peopleResult, latestEvidenceEmailResult] = await Promise.allSettled([
@@ -42,15 +42,15 @@ export async function GET(
     const themes =
       themesResult.status === "fulfilled"
         ? themesResult.value
-        : (logOptionalConsultationLoadFailure("themes", id, themesResult.reason), []);
+        : (logOptionalMeetingLoadFailure("themes", id, themesResult.reason), []);
     const people =
       peopleResult.status === "fulfilled"
         ? peopleResult.value
-        : (logOptionalConsultationLoadFailure("people links", id, peopleResult.reason), []);
+        : (logOptionalMeetingLoadFailure("people links", id, peopleResult.reason), []);
     const latestEvidenceEmail =
       latestEvidenceEmailResult.status === "fulfilled"
         ? latestEvidenceEmailResult.value
-        : (logOptionalConsultationLoadFailure(
+        : (logOptionalMeetingLoadFailure(
             "latest evidence email",
             id,
             latestEvidenceEmailResult.reason
@@ -58,12 +58,12 @@ export async function GET(
           null);
 
     return NextResponse.json({
-      consultation,
+      meeting,
       themes,
       people,
       latestEvidenceEmail,
     });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Failed to load consultation");
+    return jsonError(error instanceof Error ? error.message : "Failed to load meeting");
   }
 }

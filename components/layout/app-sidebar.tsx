@@ -20,8 +20,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 const consultationsSubItems = [
-  { title: "All Consultations", href: "/consultations" },
-  { title: "Rounds", href: "/consultations/rounds" },
+  { title: "All Meetings", href: "/consultations" },
+  { title: "Consultations", href: "/consultations/rounds" },
 ];
 
 const settingsSubItems = [
@@ -59,7 +59,7 @@ export function AppSidebar() {
                   <Collapsible.Trigger asChild>
                     <SidebarMenuButton isActive={isInConsultations}>
                       <span className="flex w-full items-center justify-between">
-                        <span>Consultations</span>
+                        <span>Meetings</span>
                         <span className="text-xs text-muted-foreground" aria-hidden>▾</span>
                       </span>
                     </SidebarMenuButton>

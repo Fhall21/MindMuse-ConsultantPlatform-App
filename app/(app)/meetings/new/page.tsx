@@ -51,7 +51,7 @@ export default function NewConsultationPage() {
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">New Consultation</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">New Meeting</h1>
         <p className="text-sm text-muted-foreground">
           Create the record first. Add material after.
         </p>
@@ -71,13 +71,13 @@ export default function NewConsultationPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="roundId">Round (optional)</Label>
+          <Label htmlFor="roundId">Consultation (optional)</Label>
           <select
             id="roundId"
             {...register("roundId")}
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <option value="">No round</option>
+            <option value="">No consultation</option>
             {rounds?.map((round) => (
               <option key={round.id} value={round.id}>
                 {round.label}
@@ -88,7 +88,7 @@ export default function NewConsultationPage() {
 
         <div className="flex gap-3 pt-2">
           <Button type="submit" disabled={submitting}>
-            {submitting ? "Creating…" : "Create consultation"}
+            {submitting ? "Creating…" : "Create meeting"}
           </Button>
           <Button
             type="button"

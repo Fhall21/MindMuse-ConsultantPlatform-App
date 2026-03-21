@@ -127,7 +127,7 @@ export default function ConsultationDetailPage({
       <div className="space-y-4">
         <nav className="text-sm text-muted-foreground">
           <Link href="/consultations" className="hover:text-foreground">
-            Consultations
+            Meetings
           </Link>
           <span className="mx-2">/</span>
           <span className="text-foreground">{normalizedSavedTitle}</span>
@@ -204,7 +204,7 @@ export default function ConsultationDetailPage({
           <div className="space-y-4 border-t pt-4">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Round
+                Consultation
               </p>
               <RoundsPanel
                 consultationId={id}
@@ -217,7 +217,7 @@ export default function ConsultationDetailPage({
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" asChild>
                   <Link href={`/consultations/${consultation.round_id}`}>
-                    Open round workspace &rarr;
+                    Open consultation workspace &rarr;
                   </Link>
                 </Button>
                 <Button variant="outline" size="sm" asChild>

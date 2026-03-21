@@ -95,7 +95,7 @@ function EmptyState() {
     <div className="border border-dashed px-6 py-10 text-center">
       <p className="text-sm text-muted-foreground">No consultations yet.</p>
       <Button asChild size="sm" className="mt-4">
-        <Link href="/meetings/new">New Consultation</Link>
+        <Link href="/meetings/new">New Meeting</Link>
       </Button>
     </div>
   );
@@ -118,7 +118,7 @@ export default function DashboardPage() {
 
       <div className="flex flex-wrap gap-2">
         <Button asChild size="sm">
-          <Link href="/meetings/new">New Consultation</Link>
+          <Link href="/meetings/new">New Meeting</Link>
         </Button>
         <Button asChild variant="ghost" size="sm">
           <Link href="/people">People</Link>

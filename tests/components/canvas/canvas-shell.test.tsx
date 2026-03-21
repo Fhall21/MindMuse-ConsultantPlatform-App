@@ -26,7 +26,7 @@ const canvasData: CanvasData = {
       accepted: true,
       subgroup: null,
       sourceConsultationId: "consultation-1",
-      sourceConsultationTitle: "North depot interview",
+      sourceConsultationTitle: "North depot meeting",
       groupId: "theme-1",
       memberIds: [],
       isUserAdded: false,
@@ -132,7 +132,7 @@ function renderShell() {
     <QueryClientProvider client={queryClient}>
       <CanvasShell
         roundId="round-1"
-        roundLabel="North depot interview"
+        roundLabel="North depot meeting"
       />
     </QueryClientProvider>
   );

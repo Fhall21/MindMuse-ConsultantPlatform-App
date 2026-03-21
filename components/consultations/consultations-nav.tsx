@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const consultationSections = [
-  { title: "Consultations", href: "/consultations" },
-  { title: "Rounds", href: "/consultations/rounds" },
+  { title: "Meetings", href: "/consultations" },
+  { title: "Consultations", href: "/consultations/rounds" },
 ];
 
 export function ConsultationsNav() {

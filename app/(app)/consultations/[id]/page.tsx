@@ -115,7 +115,7 @@ export default function ConsultationDetailPage({
           Failed to load consultation. It may not exist or you may not have access.
         </p>
         <Button variant="ghost" asChild>
-          <Link href="/consultations">Back to consultations</Link>
+          <Link href="/consultations">Back to meetings</Link>
         </Button>
       </div>
     );
@@ -127,7 +127,7 @@ export default function ConsultationDetailPage({
       <div className="space-y-4">
         <nav className="text-sm text-muted-foreground">
           <Link href="/consultations" className="hover:text-foreground">
-            Consultations
+            Meetings
           </Link>
           <span className="mx-2">/</span>
           <span className="text-foreground">{normalizedSavedTitle}</span>
@@ -141,7 +141,7 @@ export default function ConsultationDetailPage({
                   htmlFor="consultation-title"
                   className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
                 >
-                  Consultation title
+                  Meeting title
                 </label>
                 <Input
                   id="consultation-title"
@@ -153,7 +153,7 @@ export default function ConsultationDetailPage({
                       void handleSaveTitle();
                     }
                   }}
-                  placeholder="Enter consultation title"
+                  placeholder="Enter meeting title"
                   className="h-11 text-base font-semibold sm:text-lg"
                 />
               </div>
@@ -204,7 +204,7 @@ export default function ConsultationDetailPage({
           <div className="space-y-4 border-t pt-4">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Round
+                Consultation
               </p>
               <RoundsPanel
                 consultationId={id}
@@ -217,7 +217,7 @@ export default function ConsultationDetailPage({
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" asChild>
                   <Link href={`/consultations/${consultation.round_id}`}>
-                    Open round workspace &rarr;
+                    Open consultation workspace &rarr;
                   </Link>
                 </Button>
                 <Button variant="outline" size="sm" asChild>
@@ -226,7 +226,7 @@ export default function ConsultationDetailPage({
                   </Link>
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  View theme grouping, synthesis, and round outputs
+                  View theme grouping, synthesis, and consultation outputs
                 </span>
               </div>
             ) : null}

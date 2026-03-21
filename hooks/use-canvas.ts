@@ -12,15 +12,23 @@ import type {
 } from "@/types/canvas";
 
 // ---------------------------------------------------------------------------
-// Response shape from GET /api/client/rounds/[roundId]/canvas
+// Response shape from GET /api/client/consultations/[id]/canvas
 // ---------------------------------------------------------------------------
 
 export interface CanvasData {
   consultation_id: string;
-  round_id: string;
+  round_id?: string;
+  meeting_id?: string;
   nodes: CanvasNode[];
   edges: CanvasEdge[];
   viewport: CanvasViewport;
+}
+
+function normalizeCanvasData(payload: CanvasData): CanvasData {
+  return {
+    ...payload,
+    consultation_id: payload.consultation_id ?? payload.round_id ?? "",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -73,8 +81,8 @@ export function useCanvas(roundId: string) {
   return useQuery<CanvasData>({
     queryKey: canvasKey(roundId),
     queryFn: () =>
-      fetchJson<CanvasData>(
-        `/api/client/rounds/${roundId}/canvas`
+      fetchJson<CanvasData>(`/api/client/consultations/${roundId}/canvas`).then(
+        normalizeCanvasData
       ),
     enabled: Boolean(roundId),
   });
@@ -85,7 +93,7 @@ export function useCreateEdge(roundId: string) {
   return useMutation<CanvasEdge, Error, CreateEdgePayload>({
     mutationFn: (payload) =>
       fetchJson<CanvasEdge>(
-        `/api/client/rounds/${roundId}/canvas/edges`,
+        `/api/client/consultations/${roundId}/canvas/edges`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -109,7 +117,7 @@ export function useUpdateEdge(roundId: string) {
   return useMutation<CanvasEdge, Error, UpdateEdgePayload, { previous?: CanvasData }>({
     mutationFn: ({ id, ...payload }) =>
       fetchJson<CanvasEdge>(
-        `/api/client/rounds/${roundId}/canvas/edges/${id}`,
+        `/api/client/consultations/${roundId}/canvas/edges/${id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -154,7 +162,7 @@ export function useDeleteEdge(roundId: string) {
   return useMutation<void, Error, string, { previous?: CanvasData }>({
     mutationFn: (edgeId) =>
       fetchJson<void>(
-        `/api/client/rounds/${roundId}/canvas/edges/${edgeId}`,
+        `/api/client/consultations/${roundId}/canvas/edges/${edgeId}`,
         { method: "DELETE" }
       ),
     onMutate: async (edgeId) => {
@@ -179,7 +187,7 @@ export function useSaveLayout(roundId: string) {
   return useMutation<void, Error, SaveLayoutPayload>({
     mutationFn: (payload) =>
       fetchJson<void>(
-        `/api/client/rounds/${roundId}/canvas/layout`,
+        `/api/client/consultations/${roundId}/canvas/layout`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -202,7 +210,7 @@ export function useCanvasSuggestions(roundId: string) {
     queryKey: suggestionsKey(roundId),
     queryFn: () =>
       fetchJson<AiConnectionSuggestion[]>(
-        `/api/client/rounds/${roundId}/canvas/suggestions`
+        `/api/client/consultations/${roundId}/canvas/suggestions`
       ),
     enabled: Boolean(roundId),
   });
@@ -213,7 +221,7 @@ export function useAcceptSuggestion(roundId: string) {
   return useMutation<CanvasEdge, Error, string>({
     mutationFn: (suggestionId) =>
       fetchJson<CanvasEdge>(
-        `/api/client/rounds/${roundId}/canvas/suggestions/${suggestionId}`,
+        `/api/client/consultations/${roundId}/canvas/suggestions/${suggestionId}`,
         { method: "POST" }
       ),
     onSuccess: () => {
@@ -228,7 +236,7 @@ export function useRejectSuggestion(roundId: string) {
   return useMutation<void, Error, string>({
     mutationFn: (suggestionId) =>
       fetchJson<void>(
-        `/api/client/rounds/${roundId}/canvas/suggestions/${suggestionId}`,
+        `/api/client/consultations/${roundId}/canvas/suggestions/${suggestionId}`,
         { method: "DELETE" }
       ),
     onSuccess: () => {
@@ -243,7 +251,7 @@ export function useGenerateSuggestions(roundId: string) {
   return useMutation<{ message: string }, Error, void>({
     mutationFn: () =>
       fetchJson<{ message: string }>(
-        `/api/client/rounds/${roundId}/canvas/suggestions`,
+        `/api/client/consultations/${roundId}/canvas/suggestions`,
         { method: "POST" }
       ),
     onSuccess: () => {

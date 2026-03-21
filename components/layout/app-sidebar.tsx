@@ -21,7 +21,7 @@ import { Separator } from "@/components/ui/separator";
 
 const consultationsSubItems = [
   { title: "All Meetings", href: "/meetings" },
-  { title: "Consultations", href: "/consultations/rounds" },
+  { title: "Consultations", href: "/consultations" },
 ];
 
 const settingsSubItems = [
@@ -75,9 +75,7 @@ export function AppSidebar() {
                               item.href === "/meetings"
                                 ? pathname === "/meetings" ||
                                   pathname.startsWith("/meetings/") ||
-                                  pathname === "/consultations" ||
-                                  (pathname.startsWith("/consultations/") &&
-                                    !pathname.startsWith("/consultations/rounds"))
+                                  false
                                 : pathname.startsWith(item.href)
                             }
                           >

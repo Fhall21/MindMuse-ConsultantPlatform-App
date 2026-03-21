@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const consultationSections = [
-  { title: "Meetings", href: "/consultations" },
-  { title: "Consultations", href: "/consultations/rounds" },
+  { title: "Meetings", href: "/meetings" },
+  { title: "Consultations", href: "/consultations" },
 ];
 
 export function ConsultationsNav() {
@@ -20,8 +20,8 @@ export function ConsultationsNav() {
       <ul className="flex min-w-max items-center gap-5 border-b border-border/80">
         {consultationSections.map((section) => {
           const isActive =
-            section.href === "/consultations"
-              ? pathname === section.href
+            section.href === "/meetings"
+              ? pathname === section.href || pathname.startsWith("/meetings/")
               : pathname.startsWith(section.href);
 
           return (

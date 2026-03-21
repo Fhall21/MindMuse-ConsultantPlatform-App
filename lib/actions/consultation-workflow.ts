@@ -302,7 +302,7 @@ function buildFallbackDraft(params: {
     .filter((value): value is string => Boolean(value));
   const label =
     cleanLabels.length === 0
-      ? "Round theme group"
+      ? "Theme group"
       : cleanLabels.length === 1
         ? cleanLabels[0]
         : cleanLabels.slice(0, 2).join(" + ");
@@ -453,20 +453,26 @@ async function loadOwnedRound(params: { userId: string; roundId: string }) {
   const { userId, roundId } = params;
   const [row] = await db
     .select()
-    .from(consultationRounds)
+    .from(consultations)
     .where(
       and(
-        eq(consultationRounds.id, roundId),
-        eq(consultationRounds.userId, userId)
+        eq(consultations.id, roundId),
+        eq(consultations.userId, userId)
       )
     )
     .limit(1);
 
   if (!row) {
-    throw new Error("Round not found");
+    throw new Error("Consultation not found");
   }
 
-  return mapConsultationRoundRecord(row);
+  const consultation = mapConsultationRecord(row);
+
+  return {
+    ...consultation,
+    title: consultation.label,
+    transcript_raw: consultation.description,
+  };
 }
 
 async function loadRoundConsultations(params: { userId: string; roundId: string }) {
@@ -644,7 +650,8 @@ async function loadRoundHistory(params: {
         return true;
       }
 
-      const payloadRoundId = trimToNull(entry.payload?.round_id);
+      const payloadRoundId =
+        trimToNull(entry.payload?.consultation_id) ?? trimToNull(entry.payload?.round_id);
       return payloadRoundId === roundId;
     })
     .map(
@@ -1207,7 +1214,7 @@ export async function createTheme(
   );
 
   const defaultLabel =
-    seedThemes.length === 1 ? seedThemes[0].label : "Round theme group";
+    seedThemes.length === 1 ? seedThemes[0].label : "Theme group";
   const [created] = await db
     .insert(themes)
     .values({
@@ -2268,11 +2275,10 @@ async function generateRoundOutput(
   }
 
   const inputSnapshot = {
-    roundId,
-    round_id: roundId,
-    consultations: requestPayload.consultations,
-    accepted_round_themes: acceptedRoundThemes,
-    supporting_consultation_themes: supportingConsultationThemes,
+    consultationId: roundId,
+    meetingTitles: requestPayload.consultations,
+    accepted_consultation_themes: acceptedRoundThemes,
+    supporting_meeting_themes: supportingConsultationThemes,
     graphNetwork: buildLegacyReportGraphSnapshot({
       roundId,
       snapshotAt: new Date().toISOString(),

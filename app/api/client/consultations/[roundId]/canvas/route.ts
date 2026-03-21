@@ -45,6 +45,10 @@ function buildFallbackPositions(nodes: CanvasNode[]) {
     });
 }
 
+function normalizeThemeLabel(label: string) {
+  return label === "Round theme group" ? "Theme group" : label;
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ roundId: string }> }
@@ -90,7 +94,7 @@ export async function GET(
     const themeNodes: CanvasNode[] = themeRows.map((theme) => ({
       id: theme.id,
       type: "theme",
-      label: theme.label,
+      label: normalizeThemeLabel(theme.label),
       description: theme.description,
       accepted: theme.status === "accepted",
       subgroup: null,
@@ -183,7 +187,6 @@ export async function GET(
 
     return NextResponse.json({
       consultation_id: consultationId,
-      round_id: consultationId,
       nodes: allNodes,
       edges,
       viewport: layout.viewport,

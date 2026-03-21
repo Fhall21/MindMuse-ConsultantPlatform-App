@@ -126,48 +126,54 @@ export function useConsultationGrouping({
     }
   }, []);
 
-  // ─── Group selected consultations ───────────────────────────────────────────
-
-  const handleGroupSelected = useCallback(
-    async (targetGroupId: string) => {
-      const ids = Array.from(selectedIds);
+  const handleAssignConsultationsToGroup = useCallback(
+    async (consultationIds: string[], targetGroupId: string, startPosition = 0) => {
+      const ids = [...new Set(consultationIds.filter(Boolean))];
       if (ids.length === 0) return;
 
-      // Guard in-flight
       if (ids.some((id) => inFlightIds.current.has(id))) return;
       ids.forEach((id) => inFlightIds.current.add(id));
 
-      // Optimistic: move each selected consultation to the target group
       setGroups((prev) => {
         const consultationMap = new Map(consultations.map((c) => [c.id, c]));
         return prev.map((g) => {
           if (g.id !== targetGroupId) {
-            // Remove these consultations from any other group
-            return { ...g, members: g.members.filter((m) => !selectedIds.has(m.consultationId)) };
+            return {
+              ...g,
+              members: g.members.filter(
+                (m) => !ids.includes(m.consultationId)
+              ),
+            };
           }
-          const existingIds = new Set(g.members.map((m) => m.consultationId));
+
+          const retainedMembers = g.members.filter(
+            (m) => !ids.includes(m.consultationId)
+          );
+          const existingIds = new Set(retainedMembers.map((m) => m.consultationId));
           const toAdd = ids
             .filter((id) => !existingIds.has(id))
-            .map((id, i): LocalGroupMember => {
-              const c = consultationMap.get(id);
+            .map((id, index): LocalGroupMember => {
+              const consultation = consultationMap.get(id);
               return {
-                id: `optimistic-${id}`,
+                id: `optimistic-${targetGroupId}-${id}`,
                 consultationId: id,
-                consultationTitle: c?.title ?? "",
-                consultationStatus: c?.status ?? "draft",
-                position: g.members.length + i,
+                consultationTitle: consultation?.title ?? "",
+                consultationStatus: consultation?.status ?? "draft",
+                position: startPosition + index,
               };
             });
-          return { ...g, members: [...g.members, ...toAdd] };
+
+          return {
+            ...g,
+            members: [...retainedMembers, ...toAdd],
+          };
         });
       });
 
-      clearSelection();
-
       try {
         await Promise.all(
-          ids.map((id, i) =>
-            assignConsultationToGroup(id, roundId, targetGroupId, i)
+          ids.map((id, index) =>
+            assignConsultationToGroup(id, roundId, targetGroupId, startPosition + index)
           )
         );
       } catch {
@@ -176,7 +182,21 @@ export function useConsultationGrouping({
         ids.forEach((id) => inFlightIds.current.delete(id));
       }
     },
-    [selectedIds, consultations, roundId, clearSelection]
+    [consultations, roundId]
+  );
+
+  // ─── Group selected consultations ───────────────────────────────────────────
+
+  const handleGroupSelected = useCallback(
+    async (targetGroupId: string) => {
+      const ids = Array.from(selectedIds);
+      if (ids.length === 0) return;
+
+      clearSelection();
+
+      await handleAssignConsultationsToGroup(ids, targetGroupId, 0);
+    },
+    [selectedIds, clearSelection, handleAssignConsultationsToGroup]
   );
 
   // ─── Drag and drop ──────────────────────────────────────────────────────────
@@ -348,6 +368,7 @@ export function useConsultationGrouping({
     handleCreateGroup,
     handleRenameGroup,
     handleDeleteGroup,
+    handleAssignConsultationsToGroup,
     handleGroupSelected,
     handleDragEnd,
   };

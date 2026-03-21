@@ -82,6 +82,7 @@ export function ConsultationGroupingSection({
     handleCreateGroup,
     handleRenameGroup,
     handleDeleteGroup,
+    handleAssignConsultationsToGroup,
     handleGroupSelected,
     handleDragEnd,
   } = useConsultationGrouping({ roundId, initialGroups, consultations });
@@ -104,20 +105,11 @@ export function ConsultationGroupingSection({
   const handleAcceptAiSuggestion = async (suggestion: SuggestedConsultationGroup) => {
     const groupId = await handleCreateGroup(suggestion.label);
     if (!groupId) return;
-    // Assign each consultation to the new group
-    for (let i = 0; i < suggestion.consultation_ids.length; i++) {
-      await handleGroupSelected_single(suggestion.consultation_ids[i], groupId, i);
-    }
-  };
-
-  // Helper: assign a single consultation to a group (without going through selectedIds)
-  const handleGroupSelected_single = async (
-    consultationId: string,
-    groupId: string,
-    position: number
-  ) => {
-    const { assignConsultationToGroup } = await import("@/lib/actions/consultation-groups");
-    await assignConsultationToGroup(consultationId, roundId, groupId, position);
+    await handleAssignConsultationsToGroup(
+      suggestion.consultation_ids,
+      groupId,
+      0
+    );
   };
 
   const hasSelection = selectedIds.size > 0;

@@ -228,7 +228,7 @@ export default function ConsultationDetailPage({
                   </Link>
                 </Button>
                 <Button variant="outline" size="sm" asChild>
-                  <Link href={`/canvas/${id}`}>
+                  <Link href={`/canvas/round/${consultation.consultation_id}`}>
                     Evidence canvas &rarr;
                   </Link>
                 </Button>

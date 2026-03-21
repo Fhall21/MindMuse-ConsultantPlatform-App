@@ -176,7 +176,7 @@ export default function RoundDetailPage({
       <div className="flex items-start justify-between gap-4">
         <RoundDetailHeader round={data.round} />
         <Button variant="outline" size="sm" asChild className="shrink-0">
-          <Link href={`/canvas/consultation/${id}`}>Evidence canvas →</Link>
+          <Link href={`/canvas/round/${id}`}>Evidence canvas →</Link>
         </Button>
       </div>
 

@@ -6,21 +6,41 @@
 
 import { requireEnv } from "@/lib/env";
 
-const AI_SERVICE_URL = requireEnv("AI_SERVICE_URL");
-
 export async function callAIService(
   endpoint: string,
   body: Record<string, unknown>
 ) {
-  const response = await fetch(`${AI_SERVICE_URL}${endpoint}`, {
+  const aiServiceUrl = requireEnv("AI_SERVICE_URL");
+  const response = await fetch(`${aiServiceUrl}${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 
   if (!response.ok) {
-    throw new Error(`AI service error: ${response.status}`);
+    const responseText = (await response.text()).trim();
+    const responseSnippet =
+      responseText.length > 500
+        ? `${responseText.slice(0, 500)}...`
+        : responseText;
+    console.error("[openai.callAIService] upstream request failed", {
+      endpoint,
+      status: response.status,
+      statusText: response.statusText,
+      responseSnippet,
+    });
+    throw new Error(
+      `AI service error: ${response.status}${responseSnippet ? ` - ${responseSnippet}` : ""}`
+    );
   }
 
-  return response.json();
+  try {
+    return await response.json();
+  } catch (error) {
+    console.error("[openai.callAIService] failed to parse JSON response", {
+      endpoint,
+      error,
+    });
+    throw error;
+  }
 }

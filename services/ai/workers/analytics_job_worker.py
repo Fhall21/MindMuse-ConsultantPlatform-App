@@ -71,7 +71,7 @@ INSERT INTO extraction_results (
     :consultation_id, :round_id, now(),
     :extractor, :model_version, :transcript_word_count,
     :duration_ms, :confidence, :fallback_used, :reduced_recall,
-    :error_messages::jsonb, :result_json::jsonb
+    CAST(:error_messages AS jsonb), CAST(:result_json AS jsonb)
 )
 RETURNING id
 """
@@ -86,13 +86,13 @@ INSERT INTO term_extraction_offsets (
     :extraction_result_id, :consultation_id,
     :term, :original, :entity_type, :confidence,
     :char_start, :char_end, :source_span,
-    :extraction_source, :pos_tags::jsonb, :negation_context
+    :extraction_source, CAST(:pos_tags AS jsonb), :negation_context
 )
 """
 
 UPSERT_TERM_EMBEDDING_QUERY = """
 INSERT INTO term_embeddings (consultation_id, term, entity_type, embedding)
-VALUES (:consultation_id, :term, :entity_type, :embedding::vector)
+VALUES (:consultation_id, :term, :entity_type, CAST(:embedding AS vector))
 ON CONFLICT (consultation_id, term, entity_type)
 DO UPDATE SET embedding = EXCLUDED.embedding
 """
@@ -111,7 +111,7 @@ INSERT INTO term_clusters (
     representative_terms, all_terms, consultation_count
 ) VALUES (
     :round_id, :cluster_id, :label,
-    :representative_terms::jsonb, :all_terms::jsonb, :consultation_count
+    CAST(:representative_terms AS jsonb), CAST(:all_terms AS jsonb), :consultation_count
 )
 """
 

@@ -1048,6 +1048,22 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
   const groupDetails = groups.map((group): ThemeDetail => {
     const groupMembers = members
       .filter((member) => member.theme_id === group.id)
+      .filter((member) => {
+        // Skip members with missing context (orphaned from failed operations)
+        const theme = insightById.get(member.insight_id);
+        const consultation = consultationById.get(member.source_consultation_id);
+        if (!theme || !consultation) {
+          console.warn("[getRoundDetail] skipping orphaned theme member", {
+            memberId: member.id,
+            insightId: member.insight_id,
+            consultationId: member.source_consultation_id,
+            foundTheme: Boolean(theme),
+            foundConsultation: Boolean(consultation),
+          });
+          return false;
+        }
+        return true;
+      })
       .map((member) => {
         const theme = insightById.get(member.insight_id);
         const consultation = consultationById.get(member.source_consultation_id);
@@ -1055,8 +1071,9 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
           ? consultationItems.find((item) => item.id === consultation.id)
           : null;
 
+        // Safe to assert now after filter above
         if (!theme || !consultation) {
-          throw new Error("Round theme group member is missing theme or consultation context");
+          throw new Error("Assertion failed: theme or consultation missing after filter");
         }
 
         return {

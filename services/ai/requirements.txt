@@ -39,6 +39,7 @@ pgvector==0.4.2
 preshed==3.0.12
 prompt_toolkit==3.0.52
 psycopg[binary]==3.3.3
+psycopg2-binary==2.9.11
 pydantic==2.12.5
 pydantic-settings==2.13.1
 pydantic_core==2.41.5

@@ -190,6 +190,20 @@ export default function RoundDetailPage({
 
       <Separator />
 
+      {/* Analytics */}
+      <section className="space-y-3">
+        <SectionHeading>Analytics</SectionHeading>
+        <AnalyticsPanel
+          roundId={id}
+          roundLabel={data.round.label}
+          consultations={data.consultations}
+          analytics={data.analytics}
+          decisionHistory={data.decisionHistory}
+        />
+      </section>
+
+      <Separator />
+
       {/* Theme Grouping Workspace — the primary synthesis canvas */}
       <section className="space-y-3">
         <SectionHeading>Theme Grouping</SectionHeading>
@@ -222,20 +236,6 @@ export default function RoundDetailPage({
       <section className="space-y-3">
         <SectionHeading>Decision History</SectionHeading>
         <DecisionHistorySection decisions={data.decisionHistory} />
-      </section>
-
-      <Separator />
-
-      {/* Analytics */}
-      <section className="space-y-3">
-        <SectionHeading>Analytics</SectionHeading>
-        <AnalyticsPanel
-          roundId={id}
-          roundLabel={data.round.label}
-          consultations={data.consultations}
-          analytics={data.analytics}
-          decisionHistory={data.decisionHistory}
-        />
       </section>
 
       <Separator />

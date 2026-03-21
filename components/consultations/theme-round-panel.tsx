@@ -143,6 +143,12 @@ export function ThemeRoundPanel({ roundId, roundLabel }: ThemeRoundPanelProps) {
       await acceptTheme(themeId, consultationId);
       await refreshRoundData();
     } catch (error) {
+      console.error("[theme-round-panel] failed to accept insight", {
+        themeId,
+        consultationId,
+        roundId,
+        error,
+      });
       setErrorMessage(getErrorMessage(error));
     } finally {
       setActiveThemeId(null);

@@ -337,6 +337,11 @@ export function ThemePanel({ consultationId }: ThemePanelProps) {
       await acceptTheme(themeId, consultationId);
       await refreshPanelData();
     } catch (error) {
+      console.error("[theme-panel] failed to accept insight", {
+        themeId,
+        consultationId,
+        error,
+      });
       setErrorMessage(getErrorMessage(error));
     } finally {
       setActiveThemeId(null);

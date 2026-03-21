@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Mapping, Protocol
+from typing import Any, Mapping, Protocol, Sequence
 
 EMBEDDING_DIMENSION = 1536
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
@@ -19,7 +19,7 @@ class TermExtraction:
 
 @dataclass
 class TermEmbedding:
-    consultation_id: str
+    meeting_id: str
     term: str
     entity_type: str
     embedding: list[float]
@@ -38,21 +38,19 @@ class OpenAIEmbeddingProvider:
         self.model = model
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        if not texts:
-            return []
-
-        from core.openai_client import get_client
-
-        response = get_client().embeddings.create(model=self.model, input=texts)
         embeddings: list[list[float]] = []
-        for item in response.data:
-            embeddings.append(_validate_embedding(item.embedding, model=self.model))
+        if texts:
+            from core.openai_client import get_client
+
+            response = get_client().embeddings.create(model=self.model, input=texts)
+            for item in response.data:
+                embeddings.append(_validate_embedding(item.embedding, model=self.model))
         return embeddings
 
 
 def embed_terms(
-    terms: list[TermExtraction | Mapping[str, Any]],
-    consultation_id: str,
+    terms: Sequence[TermExtraction | Mapping[str, Any]],
+    meeting_id: str,
     provider: EmbeddingProvider | None = None,
 ) -> list[TermEmbedding]:
     """Embed extracted terms and return rows ready for DB insert."""
@@ -70,7 +68,7 @@ def embed_terms(
     for term, vector in zip(prepared_terms, vectors):
         rows.append(
             TermEmbedding(
-                consultation_id=consultation_id,
+                meeting_id=meeting_id,
                 term=term.term,
                 entity_type=term.entity_type,
                 embedding=_validate_embedding(vector),
@@ -79,7 +77,7 @@ def embed_terms(
     return rows
 
 
-def _unique_terms(terms: list[TermExtraction | Mapping[str, Any]]) -> list[TermExtraction]:
+def _unique_terms(terms: Sequence[TermExtraction | Mapping[str, Any]]) -> list[TermExtraction]:
     unique_terms: dict[tuple[str, str], TermExtraction] = {}
     for item in terms:
         prepared = _coerce_term(item)

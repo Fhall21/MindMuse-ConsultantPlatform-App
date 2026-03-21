@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, TYPE_CHECKING
+from typing import Any, Iterable, Mapping, cast, TYPE_CHECKING
 
 import numpy as np
 
@@ -16,22 +16,22 @@ else:  # pragma: no cover - typing-only import
 
 ROUND_EMBEDDINGS_QUERY = """
 SELECT
-    te.consultation_id,
+    te.meeting_id,
     te.term,
     te.entity_type,
     te.embedding
 FROM term_embeddings AS te
-INNER JOIN consultations AS c
-    ON c.id = te.consultation_id
-WHERE c.round_id = :round_id
-ORDER BY te.consultation_id, te.term
+INNER JOIN meetings AS m
+    ON m.id = te.meeting_id
+WHERE m.consultation_id = :consultation_id
+ORDER BY te.meeting_id, te.term
 """
 
 
 @dataclass
 class TermClusterMembership:
     term: str
-    consultation_id: str
+    meeting_id: str
     cluster_id: int
     membership_probability: float
 
@@ -42,7 +42,7 @@ class TermCluster:
     label: str
     representative_terms: list[str]
     all_terms: list[str]
-    consultation_count: int
+    meeting_count: int
 
 
 @dataclass
@@ -51,17 +51,17 @@ class ClusterRoundResult:
     memberships: list[TermClusterMembership]
 
 
-def cluster_round(round_id: str, db: Session) -> list[TermCluster]:
+def cluster_round(consultation_id: str, db: Session) -> list[TermCluster]:
     """
-    Load all term embeddings for consultations in round_id,
+    Load all term embeddings for meetings in consultation_id,
     run HDBSCAN, return TermCluster[] matching types/analytics.ts.
     """
 
-    return cluster_round_result(round_id, db).clusters
+    return cluster_round_result(consultation_id, db).clusters
 
 
-def cluster_round_result(round_id: str, db: Session) -> ClusterRoundResult:
-    rows = _load_round_embeddings(round_id, db)
+def cluster_round_result(consultation_id: str, db: Session) -> ClusterRoundResult:
+    rows = _load_round_embeddings(consultation_id, db)
     return cluster_embeddings(rows)
 
 
@@ -100,7 +100,7 @@ def cluster_embeddings(
         memberships.append(
             TermClusterMembership(
                 term=row.term,
-                consultation_id=row.consultation_id,
+                meeting_id=row.meeting_id,
                 cluster_id=label,
                 membership_probability=probability,
             )
@@ -119,14 +119,14 @@ def cluster_embeddings(
                 label=_cluster_label(representative_terms),
                 representative_terms=representative_terms,
                 all_terms=ranked_terms,
-                consultation_count=len({row.consultation_id for row in cluster_rows}),
+                meeting_count=len({row.meeting_id for row in cluster_rows}),
             )
         )
 
     return ClusterRoundResult(clusters=clusters, memberships=memberships)
 
 
-def _load_round_embeddings(round_id: str, db: Session) -> list[TermEmbedding]:
+def _load_round_embeddings(consultation_id: str, db: Session) -> list[TermEmbedding]:
     try:
         from sqlalchemy import text
     except ModuleNotFoundError:
@@ -134,13 +134,13 @@ def _load_round_embeddings(round_id: str, db: Session) -> list[TermEmbedding]:
     else:
         query = text(ROUND_EMBEDDINGS_QUERY)
 
-    result = db.execute(query, {"round_id": round_id})
+    result = db.execute(cast(Any, query), {"consultation_id": consultation_id})
     records = _result_records(result)
     rows: list[TermEmbedding] = []
     for record in records:
         rows.append(
             TermEmbedding(
-                consultation_id=str(record["consultation_id"]),
+                meeting_id=str(record["meeting_id"]),
                 term=str(record["term"]),
                 entity_type=str(record["entity_type"]),
                 embedding=_coerce_embedding(record["embedding"]),
@@ -182,7 +182,7 @@ def _noise_memberships(rows: list[TermEmbedding]) -> list[TermClusterMembership]
     return [
         TermClusterMembership(
             term=row.term,
-            consultation_id=row.consultation_id,
+            meeting_id=row.meeting_id,
             cluster_id=-1,
             membership_probability=0.0,
         )
@@ -212,7 +212,6 @@ def _rank_cluster_terms(rows: list[TermEmbedding], indexes: list[int]) -> tuple[
     vectorizer = TfidfVectorizer(
         tokenizer=lambda term: [term],
         preprocessor=lambda term: term,
-        token_pattern=None,
         lowercase=False,
         norm=None,
     )
@@ -223,7 +222,7 @@ def _rank_cluster_terms(rows: list[TermEmbedding], indexes: list[int]) -> tuple[
     for row_index in indexes:
         term = rows[row_index].term
         column = feature_indexes[term]
-        scores[term] += float(matrix[row_index, column])
+        scores[term] += float(matrix.getrow(row_index).toarray()[0][column])
 
     ranked = [term for term, _score in sorted(scores.items(), key=lambda item: (-item[1], item[0]))]
     return ranked[:5], ranked

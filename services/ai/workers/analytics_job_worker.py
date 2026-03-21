@@ -44,11 +44,11 @@ SET phase       = 'extracting',
     updated_at  = now()
 FROM claimed
 WHERE analytics_jobs.id = claimed.id
-RETURNING analytics_jobs.id, analytics_jobs.consultation_id, analytics_jobs.round_id
+RETURNING analytics_jobs.id, analytics_jobs.meeting_id, analytics_jobs.consultation_id
 """
 
 FETCH_TRANSCRIPT_QUERY = """
-SELECT transcript_raw FROM consultations WHERE id = :consultation_id
+SELECT transcript_raw FROM meetings WHERE id = :meeting_id
 """
 
 UPDATE_JOB_QUERY = """
@@ -63,12 +63,12 @@ WHERE id = :job_id
 
 INSERT_EXTRACTION_RESULT_QUERY = """
 INSERT INTO extraction_results (
-    consultation_id, round_id, extracted_at,
+    meeting_id, consultation_id, extracted_at,
     extractor, model_version, transcript_word_count,
     duration_ms, confidence, fallback_used, reduced_recall,
     error_messages, result_json
 ) VALUES (
-    :consultation_id, :round_id, now(),
+    :meeting_id, :consultation_id, now(),
     :extractor, :model_version, :transcript_word_count,
     :duration_ms, :confidence, :fallback_used, :reduced_recall,
     CAST(:error_messages AS jsonb), CAST(:result_json AS jsonb)
@@ -78,12 +78,12 @@ RETURNING id
 
 INSERT_TERM_OFFSET_QUERY = """
 INSERT INTO term_extraction_offsets (
-    extraction_result_id, consultation_id,
+    extraction_result_id, meeting_id,
     term, original, entity_type, confidence,
     char_start, char_end, source_span,
     extraction_source, pos_tags, negation_context
 ) VALUES (
-    :extraction_result_id, :consultation_id,
+    :extraction_result_id, :meeting_id,
     :term, :original, :entity_type, :confidence,
     :char_start, :char_end, :source_span,
     :extraction_source, CAST(:pos_tags AS jsonb), :negation_context
@@ -91,37 +91,37 @@ INSERT INTO term_extraction_offsets (
 """
 
 UPSERT_TERM_EMBEDDING_QUERY = """
-INSERT INTO term_embeddings (consultation_id, term, entity_type, embedding)
-VALUES (:consultation_id, :term, :entity_type, CAST(:embedding AS vector))
-ON CONFLICT (consultation_id, term, entity_type)
+INSERT INTO term_embeddings (meeting_id, term, entity_type, embedding)
+VALUES (:meeting_id, :term, :entity_type, CAST(:embedding AS vector))
+ON CONFLICT (meeting_id, term, entity_type)
 DO UPDATE SET embedding = EXCLUDED.embedding
 """
 
-DELETE_ROUND_CLUSTERS_QUERY = """
-DELETE FROM term_clusters WHERE round_id = :round_id
+DELETE_CONSULTATION_CLUSTERS_QUERY = """
+DELETE FROM term_clusters WHERE consultation_id = :consultation_id
 """
 
-DELETE_ROUND_MEMBERSHIPS_QUERY = """
-DELETE FROM term_cluster_memberships WHERE round_id = :round_id
+DELETE_CONSULTATION_MEMBERSHIPS_QUERY = """
+DELETE FROM term_cluster_memberships WHERE consultation_id = :consultation_id
 """
 
 INSERT_TERM_CLUSTER_QUERY = """
 INSERT INTO term_clusters (
-    round_id, cluster_id, label,
-    representative_terms, all_terms, consultation_count
+    consultation_id, cluster_id, label,
+    representative_terms, all_terms, meeting_count
 ) VALUES (
-    :round_id, :cluster_id, :label,
-    CAST(:representative_terms AS jsonb), CAST(:all_terms AS jsonb), :consultation_count
+    :consultation_id, :cluster_id, :label,
+    CAST(:representative_terms AS jsonb), CAST(:all_terms AS jsonb), :meeting_count
 )
 """
 
 INSERT_TERM_MEMBERSHIP_QUERY = """
 INSERT INTO term_cluster_memberships (
-    round_id, consultation_id, term, cluster_id, membership_probability
+    consultation_id, meeting_id, term, cluster_id, membership_probability
 ) VALUES (
-    :round_id, :consultation_id, :term, :cluster_id, :membership_probability
+    :consultation_id, :meeting_id, :term, :cluster_id, :membership_probability
 )
-ON CONFLICT (round_id, consultation_id, term)
+ON CONFLICT (consultation_id, meeting_id, term)
 DO UPDATE SET
     cluster_id = EXCLUDED.cluster_id,
     membership_probability = EXCLUDED.membership_probability
@@ -133,8 +133,8 @@ DO UPDATE SET
 @dataclass
 class ClaimedJob:
     id: str
-    consultation_id: str
-    round_id: str | None
+    meeting_id: str
+    consultation_id: str | None
 
 
 # ─── Engine ───────────────────────────────────────────────────────────────────
@@ -174,8 +174,8 @@ def poll_once(engine: Any) -> int:
     row = rows[0]
     job = ClaimedJob(
         id=str(row["id"]),
-        consultation_id=str(row["consultation_id"]),
-        round_id=str(row["round_id"]) if row["round_id"] else None,
+        meeting_id=str(row["meeting_id"]),
+        consultation_id=str(row["consultation_id"]) if row["consultation_id"] else None,
     )
     _process_job(engine, job)
     return 1
@@ -186,12 +186,12 @@ def poll_once(engine: Any) -> int:
 def _process_job(engine: Any, job: ClaimedJob) -> None:
     logger.info("[analytics_worker] job started", extra={
         "job_id": job.id,
+        "meeting_id": job.meeting_id,
         "consultation_id": job.consultation_id,
-        "round_id": job.round_id,
     })
     try:
         # Extraction
-        transcript = _fetch_transcript(engine, job.consultation_id)
+        transcript = _fetch_transcript(engine, job.meeting_id)
         extraction_result = _run_extraction(transcript)
         _save_extraction_result(engine, job, extraction_result, transcript)
 
@@ -200,7 +200,7 @@ def _process_job(engine: Any, job: ClaimedJob) -> None:
         _run_embedding(engine, job, extraction_result)
 
         # Clustering (only when a round is set and we have enough data)
-        if job.round_id:
+        if job.consultation_id:
             _set_phase(engine, job.id, "clustering", 75)
             _run_clustering(engine, job)
 
@@ -236,13 +236,13 @@ def _set_phase(
 
 # ─── Extraction ───────────────────────────────────────────────────────────────
 
-def _fetch_transcript(engine: Any, consultation_id: str) -> str:
+def _fetch_transcript(engine: Any, meeting_id: str) -> str:
     with engine.begin() as conn:
-        result = conn.execute(_sql(FETCH_TRANSCRIPT_QUERY), {"consultation_id": consultation_id})
+        result = conn.execute(_sql(FETCH_TRANSCRIPT_QUERY), {"meeting_id": meeting_id})
         rows = list(result.mappings())
 
     if not rows:
-        raise ValueError(f"Consultation {consultation_id} not found.")
+        raise ValueError(f"Meeting {meeting_id} not found.")
     return str(rows[0]["transcript_raw"] or "")
 
 
@@ -270,8 +270,8 @@ def _save_extraction_result(
 
     with engine.begin() as conn:
         row = conn.execute(_sql(INSERT_EXTRACTION_RESULT_QUERY), {
+            "meeting_id": job.meeting_id,
             "consultation_id": job.consultation_id,
-            "round_id": job.round_id,
             "extractor": extractor,
             "model_version": settings.openai_model,
             "transcript_word_count": word_count,
@@ -291,7 +291,7 @@ def _save_extraction_result(
                     source_span = term.original or term.term
                 conn.execute(_sql(INSERT_TERM_OFFSET_QUERY), {
                     "extraction_result_id": extraction_result_id,
-                    "consultation_id": job.consultation_id,
+                    "meeting_id": job.meeting_id,
                     "term": term.term,
                     "original": term.original or term.term,
                     "entity_type": "OTHER",
@@ -318,13 +318,13 @@ def _run_embedding(engine: Any, job: ClaimedJob, extraction_result: Any) -> None
         logger.info("[analytics_worker] no terms to embed", extra={"job_id": job.id})
         return
 
-    embeddings = embed_terms(term_extractions, job.consultation_id)
+    embeddings = embed_terms(term_extractions, job.meeting_id)
 
     with engine.begin() as conn:
         for row in embeddings:
             embedding_str = "[" + ",".join(str(x) for x in row.embedding) + "]"
             conn.execute(_sql(UPSERT_TERM_EMBEDDING_QUERY), {
-                "consultation_id": row.consultation_id,
+                "meeting_id": row.meeting_id,
                 "term": row.term,
                 "entity_type": row.entity_type,
                 "embedding": embedding_str,
@@ -341,29 +341,33 @@ def _run_embedding(engine: Any, job: ClaimedJob, extraction_result: Any) -> None
 def _run_clustering(engine: Any, job: ClaimedJob) -> None:
     from clustering.service import cluster_round_result
 
+    if not job.consultation_id:
+        logger.info("[analytics_worker] skipping clustering without consultation scope", extra={"job_id": job.id})
+        return
+
     with engine.begin() as conn:
-        cluster_result = cluster_round_result(job.round_id, conn)
+        cluster_result = cluster_round_result(job.consultation_id, conn)
 
         cluster_count = len(cluster_result.clusters)
         membership_count = len(cluster_result.memberships)
 
-        conn.execute(_sql(DELETE_ROUND_CLUSTERS_QUERY), {"round_id": job.round_id})
-        conn.execute(_sql(DELETE_ROUND_MEMBERSHIPS_QUERY), {"round_id": job.round_id})
+        conn.execute(_sql(DELETE_CONSULTATION_CLUSTERS_QUERY), {"consultation_id": job.consultation_id})
+        conn.execute(_sql(DELETE_CONSULTATION_MEMBERSHIPS_QUERY), {"consultation_id": job.consultation_id})
 
         for cluster in cluster_result.clusters:
             conn.execute(_sql(INSERT_TERM_CLUSTER_QUERY), {
-                "round_id": job.round_id,
+                "consultation_id": job.consultation_id,
                 "cluster_id": cluster.cluster_id,
                 "label": cluster.label,
                 "representative_terms": json.dumps(cluster.representative_terms),
                 "all_terms": json.dumps(cluster.all_terms),
-                "consultation_count": cluster.consultation_count,
+                "meeting_count": cluster.meeting_count,
             })
 
         for membership in cluster_result.memberships:
             conn.execute(_sql(INSERT_TERM_MEMBERSHIP_QUERY), {
-                "round_id": job.round_id,
-                "consultation_id": membership.consultation_id,
+                "consultation_id": job.consultation_id,
+                "meeting_id": membership.meeting_id,
                 "term": membership.term,
                 "cluster_id": membership.cluster_id,
                 "membership_probability": round(float(membership.membership_probability), 3),
@@ -371,7 +375,7 @@ def _run_clustering(engine: Any, job: ClaimedJob) -> None:
 
     logger.info("[analytics_worker] clustering complete", extra={
         "job_id": job.id,
-        "round_id": job.round_id,
+        "consultation_id": job.consultation_id,
         "clusters": cluster_count,
         "memberships": membership_count,
     })

@@ -7,13 +7,7 @@ import { useOcrJobs } from "@/hooks/use-ingestion";
 import { saveOcrCorrections } from "@/lib/actions/ocr";
 import { createOcrJob, updateOcrJob } from "@/lib/actions/ingestion";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface OcrReviewPanelProps {
   consultationId: string;
@@ -183,10 +177,6 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
 
   return (
     <Card className="border-border/70">
-      <CardHeader>
-        <CardTitle>Handwritten notes photo</CardTitle>
-        <CardDescription>Upload a photo of your handwritten notes to extract the text.</CardDescription>
-      </CardHeader>
       <CardContent className="space-y-4">
 
         {/* Photo tips toggle */}

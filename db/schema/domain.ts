@@ -962,14 +962,14 @@ export const termClusters = pgTable(
       .default(sql`'[]'::jsonb`)
       .notNull(),
     allTerms: jsonb("all_terms").$type<string[]>().default(sql`'[]'::jsonb`).notNull(),
-    consultationCount: integer("consultation_count").notNull(),
+    meetingCount: integer("meeting_count").notNull(),
     clusteredAt: timestamp("clustered_at", { withTimezone: true }).defaultNow().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    consultationCountCheck: check(
-      "term_clusters_consultation_count_check",
-      sql`${table.consultationCount} >= 0`
+    meetingCountCheck: check(
+      "term_clusters_meeting_count_check",
+      sql`${table.meetingCount} >= 0`
     ),
     consultationClusterUnique: unique("term_clusters_consultation_cluster_key").on(
       table.consultationId,

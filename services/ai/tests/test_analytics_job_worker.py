@@ -182,7 +182,7 @@ def test_run_clustering_writes_consultation_and_meeting_memberships(monkeypatch)
 
     cluster_insert = calls[2][1]
     assert cluster_insert["consultation_id"] == "consultation-1"
-    assert cluster_insert["consultation_count"] == 1
+    assert cluster_insert["meeting_count"] == 1
 
     membership_insert = calls[3][1]
     assert membership_insert["consultation_id"] == "consultation-1"

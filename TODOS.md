@@ -19,3 +19,26 @@ Items explicitly deferred during engineering review. Each entry includes the mot
 **Depends on:** Having real (or credible synthetic) consultation data to build fixtures from. Do not build this with made-up data that doesn't reflect real consultation theme patterns.
 
 **Blocked by:** Nothing technical — blocked by availability of good fixture data.
+
+---
+
+## Phase 2: AI Inference on Transcript Upload
+
+**What:** When a user uploads a transcript to a meeting, automatically infer:
+- Meeting type (match against user's `meeting_types`)
+- Meeting date (extracted from transcript header or content)
+- People present (match against user's `people` list)
+
+**Why:** Deferred from the structured meeting creation work (Stage 9). The seam exists — `TranscriptIntakePanel` fires after upload — but the inference logic and confirmation UX are not built.
+
+**How to start:**
+- Add a `POST /api/client/meetings/:id/infer-from-transcript` route
+- The AI service extracts date, type hint, and speaker names from `transcript_raw`
+- Return a structured diff: `{ suggestedTypeCode, suggestedDate, suggestedPeople[] }`
+- Show the user a confirmation dialog before applying changes
+- Apply via `updateMeetingFields` and `linkPersonToMeeting`
+
+**Depends on:** `meeting_types` and `meetings.meeting_type_id` being populated (done). Transcript ingestion pipeline (done).
+
+**Blocked by:** Nothing — ready to build. Phase 2 scope.
+

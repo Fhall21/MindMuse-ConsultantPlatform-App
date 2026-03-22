@@ -9,12 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { createMeeting, updateTranscript } from "@/lib/actions/consultations";
 import { createPerson } from "@/lib/actions/people";
 import { useConsultations } from "@/hooks/use-consultations";
 import { useMeetingTypes } from "@/hooks/use-meeting-types";
 import { usePeople } from "@/hooks/use-people";
 import { buildMeetingTitle } from "@/lib/meeting-title";
+import { getDistinctCaseInsensitiveValues } from "@/lib/people-classifications";
 import {
   parseTranscriptFile,
   TRANSCRIPT_ACCEPTED_ATTR,
@@ -125,6 +127,15 @@ function PeopleField({
   const [creatingEmail, setCreatingEmail] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [creating, setCreatingState] = useState(false);
+
+  const workingGroupOptions = useMemo(
+    () => getDistinctCaseInsensitiveValues(allPeople.map((p) => p.working_group)),
+    [allPeople]
+  );
+  const workTypeOptions = useMemo(
+    () => getDistinctCaseInsensitiveValues(allPeople.map((p) => p.work_type)),
+    [allPeople]
+  );
 
   const filteredPeople = useMemo(() => {
     const selectedIds = new Set(selected.map((p) => p.id));
@@ -298,19 +309,31 @@ function PeopleField({
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Input
-              value={creatingWorkGroup}
-              onChange={(e) => setCreatingWorkGroup(e.target.value)}
-              placeholder="Work group (optional)"
-              className="h-8 text-sm"
-            />
-            <Input
-              value={creatingWorkType}
-              onChange={(e) => setCreatingWorkType(e.target.value)}
-              placeholder="Work type (optional)"
-              className="h-8 text-sm"
-            />
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <AutocompleteInput
+                value={creatingWorkGroup}
+                onChange={setCreatingWorkGroup}
+                options={workingGroupOptions}
+                placeholder="Work group (optional)"
+                className="h-8 text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Reuse an existing work group or type a new one.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <AutocompleteInput
+                value={creatingWorkType}
+                onChange={setCreatingWorkType}
+                options={workTypeOptions}
+                placeholder="Work type (optional)"
+                className="h-8 text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Reuse an existing work type or type a new one.
+              </p>
+            </div>
             <Input
               value={creatingRole}
               onChange={(e) => setCreatingRole(e.target.value)}

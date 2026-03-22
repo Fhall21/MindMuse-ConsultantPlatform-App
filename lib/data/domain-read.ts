@@ -286,7 +286,7 @@ export async function listConsultationPersonLinks(
 export async function listConsultationsForPerson(
   personId: string,
   userId: string
-): Promise<Consultation[]> {
+): Promise<ConsultationRound[]> {
   await requireOwnedPerson(personId, userId);
 
   const rows = await db
@@ -304,13 +304,7 @@ export async function listConsultationsForPerson(
     )
     .orderBy(desc(meetings.createdAt));
 
-  return rows.map(({ consultation }) => ({
-    id: consultation.id,
-    user_id: consultation.userId,
-    label: consultation.title,
-    description: consultation.transcriptRaw ?? null,
-    created_at: consultation.createdAt.toISOString(),
-  }));
+  return rows.map(({ consultation }) => mapConsultationRoundRecord(consultation));
 }
 
 export async function listConsultationIdsForPerson(

@@ -35,8 +35,8 @@ export async function GET(
       person,
       consultations: consultations.map((consultation) => ({
         id: consultation.id,
-        title: consultation.label,
-        status: "draft" as const,
+        title: consultation.title,
+        status: consultation.status,
         created_at: consultation.created_at,
       })),
     } satisfies PersonSheetResponse);

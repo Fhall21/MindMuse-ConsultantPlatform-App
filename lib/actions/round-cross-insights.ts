@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db/client";
-import { roundCrossInsights } from "@/db/schema";
+import { consultationCrossInsights as roundCrossInsights } from "@/db/schema";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
 import { requireOwnedConsultationGroup } from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";

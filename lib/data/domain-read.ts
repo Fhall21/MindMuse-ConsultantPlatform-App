@@ -14,14 +14,14 @@ import {
 import { db } from "@/db/client";
 import {
   auditLog,
-  consultationPeople,
-  consultationRounds,
+  meetingPeople as consultationPeople,
+  meetings as consultationRounds,
   consultations,
+  consultationOutputArtifacts as roundOutputArtifacts,
   evidenceEmails,
   insights,
   meetings,
   people,
-  roundOutputArtifacts,
   themes,
 } from "@/db/schema";
 import type {

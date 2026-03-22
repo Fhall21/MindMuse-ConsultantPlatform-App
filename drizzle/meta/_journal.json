@@ -29,6 +29,34 @@
       "when": 1774188000000,
       "tag": "0003_stage7_analytics",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774158987256,
+      "tag": "0004_ancient_lyja",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774159253910,
+      "tag": "0005_careless_secret_warriors",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774159447261,
+      "tag": "0006_careful_human_cannonball",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1774159714205,
+      "tag": "0007_volatile_revanche",
+      "breakpoints": true
     }
   ]
 }

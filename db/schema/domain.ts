@@ -743,6 +743,31 @@ export const consultationCrossInsights = pgTable(
   })
 );
 
+export const phases = pgTable(
+  "phases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    type: text("type")
+      .notNull()
+      .$type<"discovery" | "discussion" | "review_feedback">(),
+    label: text("label"),
+    position: integer("position").default(0).notNull(),
+    ...timestamps,
+  },
+  (table) => ({
+    typeCheck: check(
+      "phases_type_check",
+      sql`${table.type} in ('discovery', 'discussion', 'review_feedback')`
+    ),
+    positionCheck: check("phases_position_check", sql`${table.position} >= 0`),
+    meetingIdx: index("idx_phases_meeting_id").on(table.meetingId),
+    typeIdx: index("idx_phases_type").on(table.type),
+  })
+);
+
 type AnalyticsJobPhase =
   | "queued"
   | "extracting"
@@ -937,14 +962,14 @@ export const termClusters = pgTable(
       .default(sql`'[]'::jsonb`)
       .notNull(),
     allTerms: jsonb("all_terms").$type<string[]>().default(sql`'[]'::jsonb`).notNull(),
-    meetingCount: integer("meeting_count").notNull(),
+    consultationCount: integer("consultation_count").notNull(),
     clusteredAt: timestamp("clustered_at", { withTimezone: true }).defaultNow().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    meetingCountCheck: check(
-      "term_clusters_meeting_count_check",
-      sql`${table.meetingCount} >= 0`
+    consultationCountCheck: check(
+      "term_clusters_consultation_count_check",
+      sql`${table.consultationCount} >= 0`
     ),
     consultationClusterUnique: unique("term_clusters_consultation_cluster_key").on(
       table.consultationId,
@@ -1030,34 +1055,3 @@ export const analyticsOutbox = pgTable(
     ),
   })
 );
-
-export const phases = pgTable(
-  "phases",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    meetingId: uuid("meeting_id")
-      .notNull()
-      .references(() => meetings.id, { onDelete: "cascade" }),
-    type: text("type")
-      .notNull()
-      .$type<"discovery" | "discussion" | "review_feedback">(),
-    label: text("label"),
-    position: integer("position").default(0).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => ({
-    typeCheck: check(
-      "phases_type_check",
-      sql`${table.type} in ('discovery', 'discussion', 'review_feedback')`
-    ),
-    positionCheck: check("phases_position_check", sql`${table.position} >= 0`),
-    meetingIdx: index("idx_phases_meeting_id").on(table.meetingId),
-    typeIdx: index("idx_phases_type").on(table.type),
-  })
-);
-
-export const consultationRounds = meetings;
-export const consultationPeople = meetingPeople;
-export const roundOutputArtifacts = consultationOutputArtifacts;
-export const roundCrossInsights = consultationCrossInsights;

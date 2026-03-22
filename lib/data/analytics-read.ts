@@ -124,7 +124,7 @@ function mapClusterRow(row: TermClusterRow): TermCluster {
     label: row.label,
     representativeTerms: toStringArray(row.representativeTerms),
     allTerms: toStringArray(row.allTerms),
-    consultationCount: row.meetingCount,
+    consultationCount: row.consultationCount,
   };
 }
 

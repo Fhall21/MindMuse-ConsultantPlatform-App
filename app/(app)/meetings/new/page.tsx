@@ -106,6 +106,10 @@ function PeopleField({
   const { data: allPeople = [] } = usePeople();
   const [search, setSearch] = useState("");
   const [creatingName, setCreatingName] = useState("");
+  const [creatingWorkGroup, setCreatingWorkGroup] = useState("");
+  const [creatingWorkType, setCreatingWorkType] = useState("");
+  const [creatingRole, setCreatingRole] = useState("");
+  const [creatingEmail, setCreatingEmail] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [creating, setCreatingState] = useState(false);
 
@@ -126,19 +130,29 @@ function PeopleField({
     if (!name) return;
     setCreatingState(true);
     try {
-      const newId = await createPerson({ name });
+      const newId = await createPerson({
+        name,
+        working_group: creatingWorkGroup.trim() || undefined,
+        work_type: creatingWorkType.trim() || undefined,
+        role: creatingRole.trim() || undefined,
+        email: creatingEmail.trim() || undefined,
+      });
       const newPerson: Person = {
         id: newId,
         name,
-        working_group: null,
-        work_type: null,
-        role: null,
-        email: null,
+        working_group: creatingWorkGroup.trim() || null,
+        work_type: creatingWorkType.trim() || null,
+        role: creatingRole.trim() || null,
+        email: creatingEmail.trim() || null,
         created_at: new Date().toISOString(),
         user_id: "",
       };
       onAdd(newPerson);
       setCreatingName("");
+      setCreatingWorkGroup("");
+      setCreatingWorkType("");
+      setCreatingRole("");
+      setCreatingEmail("");
       setIsCreating(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create person");
@@ -171,45 +185,84 @@ function PeopleField({
       )}
 
       {isCreating ? (
-        <div className="flex items-center gap-2">
-          <Input
-            value={creatingName}
-            onChange={(e) => setCreatingName(e.target.value)}
-            placeholder="Full name"
-            className="h-8 flex-1 text-sm"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleCreateNew();
-              }
-              if (e.key === "Escape") {
+        <div className="space-y-2 rounded-md border border-border/60 bg-muted/30 p-3">
+          <div className="flex items-center gap-2">
+            <Input
+              value={creatingName}
+              onChange={(e) => setCreatingName(e.target.value)}
+              placeholder="Full name"
+              className="h-8 flex-1 text-sm"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleCreateNew();
+                }
+                if (e.key === "Escape") {
+                  setIsCreating(false);
+                  setCreatingName("");
+                  setCreatingWorkGroup("");
+                  setCreatingWorkType("");
+                  setCreatingRole("");
+                  setCreatingEmail("");
+                }
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2"
+              onClick={() => {
                 setIsCreating(false);
                 setCreatingName("");
-              }
-            }}
-          />
-          <Button
-            type="button"
-            size="sm"
-            disabled={!creatingName.trim() || creating}
-            onClick={handleCreateNew}
-            className="h-8 text-xs"
-          >
-            Add
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-8 px-2"
-            onClick={() => {
-              setIsCreating(false);
-              setCreatingName("");
-            }}
-          >
-            <X className="h-4 w-4" />
-          </Button>
+                setCreatingWorkGroup("");
+                setCreatingWorkType("");
+                setCreatingRole("");
+                setCreatingEmail("");
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              value={creatingWorkGroup}
+              onChange={(e) => setCreatingWorkGroup(e.target.value)}
+              placeholder="Work group (optional)"
+              className="h-8 text-sm"
+            />
+            <Input
+              value={creatingWorkType}
+              onChange={(e) => setCreatingWorkType(e.target.value)}
+              placeholder="Work type (optional)"
+              className="h-8 text-sm"
+            />
+            <Input
+              value={creatingRole}
+              onChange={(e) => setCreatingRole(e.target.value)}
+              placeholder="Role (optional)"
+              className="h-8 text-sm"
+            />
+            <Input
+              value={creatingEmail}
+              onChange={(e) => setCreatingEmail(e.target.value)}
+              placeholder="Email (optional)"
+              className="h-8 text-sm"
+              type="email"
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              disabled={!creatingName.trim() || creating}
+              onClick={handleCreateNew}
+              className="h-8 text-xs"
+            >
+              Add
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="flex items-center gap-2">

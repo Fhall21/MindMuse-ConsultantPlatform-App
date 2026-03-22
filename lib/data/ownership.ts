@@ -3,9 +3,9 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
-  consultations as consultationGroups,
   consultations as consultationRounds,
   consultations,
+  meetingGroups,
   meetings,
   insights,
   people,
@@ -101,9 +101,9 @@ export async function requireOwnedPerson(personId: string, userId: string) {
 export async function requireOwnedConsultationGroup(groupId: string, userId: string) {
   const [group] = await db
     .select()
-    .from(consultationGroups)
+    .from(meetingGroups)
     .where(
-      and(eq(consultationGroups.id, groupId), eq(consultationGroups.userId, userId))
+      and(eq(meetingGroups.id, groupId), eq(meetingGroups.userId, userId))
     )
     .limit(1);
 

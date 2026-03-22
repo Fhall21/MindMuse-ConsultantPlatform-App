@@ -124,7 +124,7 @@ function mapClusterRow(row: TermClusterRow): TermCluster {
     label: row.label,
     representativeTerms: toStringArray(row.representativeTerms),
     allTerms: toStringArray(row.allTerms),
-    consultationCount: row.consultationCount,
+    meetingCount: row.meetingCount,
   };
 }
 
@@ -183,7 +183,7 @@ export interface RoundAnalyticsSummary {
 }
 
 interface BuildRoundAnalyticsParams {
-  meetingIds: string[];
+  meetingIds?: string[];
   jobRows: AnalyticsJobRow[];
   extractionRows: ExtractionResultRow[];
   offsetRows: TermExtractionOffsetRow[];
@@ -192,7 +192,7 @@ interface BuildRoundAnalyticsParams {
 }
 
 export function buildRoundAnalyticsSummary({
-  meetingIds,
+  meetingIds = [],
   jobRows,
   extractionRows,
   offsetRows,

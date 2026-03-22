@@ -37,6 +37,8 @@ export interface SourceTheme {
   id: string; // = sourceThemeId
   sourceMeetingId: string; // = consultationId in the server payload
   sourceMeetingTitle: string; // = consultationTitle in the server payload
+  sourceMeetingIds: string[];
+  sourceMeetingTitles: string[];
   label: string;
   description: string | null;
   editableLabel: string;

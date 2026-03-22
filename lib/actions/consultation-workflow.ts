@@ -107,6 +107,8 @@ export interface ThemeMemberDetail {
   insightId: string;
   sourceConsultationId: string;
   sourceConsultationTitle: string;
+  sourceConsultationIds: string[];
+  sourceConsultationTitles: string[];
   label: string;
   description: string | null;
   lockedFromSource: boolean;
@@ -422,12 +424,16 @@ function mapThemeRecord(row: ThemeRow): Theme {
 function mapThemeMemberRecord(
   row: ThemeMemberRow
 ): ThemeMember {
+  const sourceMeetingIds =
+    row.sourceMeetingIds.length > 0 ? row.sourceMeetingIds : [row.sourceMeetingId];
+
   return {
     id: row.id,
     theme_id: row.themeId,
     consultation_id: row.consultationId,
     insight_id: row.insightId,
     source_meeting_id: row.sourceMeetingId,
+    source_meeting_ids: sourceMeetingIds,
     user_id: row.userId,
     position: row.position,
     created_by: row.createdBy,
@@ -1055,14 +1061,21 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
       .filter((member) => {
         // Skip members with missing context (orphaned from failed operations)
         const theme = insightById.get(member.insight_id);
-        const consultation = consultationById.get(member.source_meeting_id);
-        if (!theme || !consultation) {
+        const sourceConsultationIds =
+          member.source_meeting_ids.length > 0
+            ? member.source_meeting_ids
+            : [member.source_meeting_id];
+        const hasConsultation = sourceConsultationIds.some((consultationId) =>
+          consultationById.has(consultationId)
+        );
+
+        if (!theme || !hasConsultation) {
           console.warn("[getRoundDetail] skipping orphaned theme member", {
             memberId: member.id,
             insightId: member.insight_id,
-            consultationId: member.source_meeting_id,
+            consultationIds: sourceConsultationIds,
             foundTheme: Boolean(theme),
-            foundConsultation: Boolean(consultation),
+            foundConsultation: hasConsultation,
           });
           return false;
         }
@@ -1070,24 +1083,36 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
       })
       .map((member) => {
         const theme = insightById.get(member.insight_id);
-        const consultation = consultationById.get(member.source_meeting_id);
-        const consultationSummary = consultation
-          ? consultationItems.find((item) => item.id === consultation.id)
-          : null;
+        const sourceConsultationIds =
+          member.source_meeting_ids.length > 0
+            ? member.source_meeting_ids
+            : [member.source_meeting_id];
+        const consultations = sourceConsultationIds.flatMap((consultationId) => {
+          const consultation = consultationById.get(consultationId);
+          return consultation ? [consultation] : [];
+        });
+        const primaryConsultation =
+          consultations.find((consultation) => consultation.id === member.source_meeting_id) ??
+          consultations[0];
+        const consultationSummary = consultations
+          .map((consultation) => consultationItems.find((item) => item.id === consultation.id) ?? null)
+          .filter((item): item is RoundDetailConsultation => Boolean(item));
 
         // Safe to assert now after filter above
-        if (!theme || !consultation) {
+        if (!theme || !primaryConsultation) {
           throw new Error("Assertion failed: theme or consultation missing after filter");
         }
 
         return {
           id: member.id,
           insightId: theme.id,
-          sourceConsultationId: consultation.id,
-          sourceConsultationTitle: consultation.title,
+          sourceConsultationId: primaryConsultation.id,
+          sourceConsultationTitle: primaryConsultation.title,
+          sourceConsultationIds: consultations.map((consultation) => consultation.id),
+          sourceConsultationTitles: consultations.map((consultation) => consultation.title),
           label: theme.label,
           description: theme.description ?? null,
-          lockedFromSource: consultationSummary?.hasLockedEvidence ?? false,
+          lockedFromSource: consultationSummary.some((item) => item.hasLockedEvidence),
           isUserAdded: theme.is_user_added,
           position: member.position,
         } satisfies ThemeMemberDetail;
@@ -1239,6 +1264,7 @@ export async function createTheme(
         consultationId: roundId,
         insightId: theme.id,
         sourceMeetingId: theme.consultation.id,
+        sourceMeetingIds: [theme.consultation.id],
         userId,
         position: index,
         createdBy: userId,
@@ -1343,6 +1369,7 @@ export async function moveThemeToGroup(
       consultationId: roundId,
       insightId: theme.id,
       sourceMeetingId: theme.consultation.id,
+      sourceMeetingIds: [theme.consultation.id],
       userId,
       position: nextPosition,
       createdBy: userId,
@@ -2118,7 +2145,15 @@ async function groupHasLockedMembers(params: {
 }) {
   const { groupId } = params;
   const members = await loadGroupMembers({ groupId });
-  const consultationIds = Array.from(new Set(members.map((member) => member.source_meeting_id)));
+  const consultationIds = Array.from(
+    new Set(
+      members.flatMap((member) =>
+        member.source_meeting_ids.length > 0
+          ? member.source_meeting_ids
+          : [member.source_meeting_id]
+      )
+    )
+  );
 
   if (consultationIds.length === 0) {
     return false;
@@ -2281,6 +2316,8 @@ async function generateRoundOutput(
           insightId: member.insightId,
           sourceConsultationId: member.sourceConsultationId,
           sourceConsultationTitle: member.sourceConsultationTitle,
+          sourceConsultationIds: member.sourceConsultationIds,
+          sourceConsultationTitles: member.sourceConsultationTitles,
           label: member.label,
           description: member.description,
           isUserAdded: member.isUserAdded,

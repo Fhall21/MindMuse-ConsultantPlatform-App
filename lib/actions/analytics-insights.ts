@@ -103,6 +103,7 @@ export async function addAnalyticsClusterAsInsight(consultationId: string, clust
     consultationId,
     insightId: clusterInsight.id,
     sourceMeetingId: uniqueMeetingIds[0],
+    sourceMeetingIds: uniqueMeetingIds,
     userId,
     createdBy: userId,
   });

@@ -127,7 +127,7 @@ describe("lib/actions/analytics", () => {
           label: "Workload",
           representativeTerms: [],
           allTerms: [],
-          consultationCount: 2,
+          meetingCount: 2,
           clusteredAt: new Date("2026-03-19T12:00:00.000Z"),
           createdAt: new Date("2026-03-19T12:00:00.000Z"),
         },

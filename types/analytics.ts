@@ -127,8 +127,8 @@ export interface TermCluster {
   representativeTerms: string[];
   /** All canonical terms belonging to this cluster. */
   allTerms: string[];
-  /** Number of distinct consultations that contributed terms to this cluster. */
-  consultationCount: number;
+  /** Number of distinct meetings that contributed terms to this cluster. */
+  meetingCount: number;
 }
 
 // ─── UI-facing aggregates ─────────────────────────────────────────────────────

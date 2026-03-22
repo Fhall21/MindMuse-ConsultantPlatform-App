@@ -27,6 +27,11 @@ export function SourceThemeCard({
   dropTarget,
   compact,
 }: SourceThemeCardProps) {
+  const meetingTitles =
+    Array.isArray(theme.sourceMeetingTitles) && theme.sourceMeetingTitles.length > 0
+      ? theme.sourceMeetingTitles
+      : [theme.sourceMeetingTitle];
+
   return (
     <div
       draggable={!!onDragStart}
@@ -68,12 +73,15 @@ export function SourceThemeCard({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-1">
-          <Badge
-            variant="outline"
-            className="h-4 border-amber-200 bg-amber-50 px-1 text-[10px] text-amber-800"
-          >
-            {theme.sourceMeetingTitle}
-          </Badge>
+          {meetingTitles.map((meetingTitle) => (
+            <Badge
+              key={meetingTitle}
+              variant="outline"
+              className="h-4 border-amber-200 bg-amber-50 px-1 text-[10px] text-amber-800"
+            >
+              {meetingTitle}
+            </Badge>
+          ))}
           {theme.lockedFromSource ? (
             <Badge
               variant="outline"

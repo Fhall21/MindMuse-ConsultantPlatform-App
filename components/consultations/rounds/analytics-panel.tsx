@@ -445,8 +445,8 @@ export function AnalyticsPanel({
                       <DecisionBadge decision={decision} />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {cluster.consultationCount}{" "}
-                      {cluster.consultationCount !== 1
+                      {cluster.meetingCount}{" "}
+                      {cluster.meetingCount !== 1
                         ? "meetings"
                         : "meeting"}{" "}
                       · {terms.length} term{terms.length !== 1 ? "s" : ""}

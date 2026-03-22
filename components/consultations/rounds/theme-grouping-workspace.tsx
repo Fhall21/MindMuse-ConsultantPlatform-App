@@ -202,6 +202,8 @@ export function ThemeGroupingWorkspace({
                         insightId: theme.id,
                         sourceConsultationId: theme.sourceMeetingId,
                         sourceConsultationTitle: theme.sourceMeetingTitle,
+                        sourceConsultationIds: theme.sourceMeetingIds,
+                        sourceConsultationTitles: theme.sourceMeetingTitles,
                         label: theme.label,
                         description: theme.description,
                         lockedFromSource: theme.lockedFromSource,

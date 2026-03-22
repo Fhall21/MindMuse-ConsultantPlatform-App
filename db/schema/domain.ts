@@ -372,6 +372,10 @@ export const themeMembers = pgTable(
     sourceMeetingId: uuid("source_meeting_id")
       .notNull()
       .references(() => meetings.id, { onDelete: "cascade" }),
+    sourceMeetingIds: jsonb("source_meeting_ids")
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),

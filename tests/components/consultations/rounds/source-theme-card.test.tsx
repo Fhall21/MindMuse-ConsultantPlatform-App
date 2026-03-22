@@ -12,6 +12,8 @@ describe("SourceThemeCard", () => {
           id: "theme-1",
           sourceMeetingId: "consultation-1",
           sourceMeetingTitle: "North depot interview",
+          sourceMeetingIds: ["consultation-1", "consultation-2"],
+          sourceMeetingTitles: ["North depot interview", "Warehouse follow-up"],
           label: "Staff fatigue",
           description: "Repeated fatigue concerns across the shift.",
           editableLabel: "Staff fatigue",
@@ -25,6 +27,7 @@ describe("SourceThemeCard", () => {
     );
 
     expect(screen.getByText("North depot interview")).toBeInTheDocument();
+    expect(screen.getByText("Warehouse follow-up")).toBeInTheDocument();
     expect(screen.getByText("Staff fatigue")).toBeInTheDocument();
   });
 });

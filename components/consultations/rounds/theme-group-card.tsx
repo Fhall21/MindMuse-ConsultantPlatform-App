@@ -191,6 +191,8 @@ export function ThemeGroupCard({
                 id: member.insightId,
                 sourceMeetingId: member.sourceConsultationId,
                 sourceMeetingTitle: member.sourceConsultationTitle,
+                sourceMeetingIds: member.sourceConsultationIds,
+                sourceMeetingTitles: member.sourceConsultationTitles,
                 label: member.label,
                 description: member.description,
                 editableLabel: member.label,

@@ -46,6 +46,8 @@ interface SnapshotThemeGroupInput {
     insightId: string;
     sourceConsultationId: string;
     sourceConsultationTitle: string;
+    sourceConsultationIds?: string[];
+    sourceConsultationTitles?: string[];
     label: string;
     description: string | null;
     isUserAdded: boolean;

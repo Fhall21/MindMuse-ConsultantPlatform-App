@@ -55,6 +55,7 @@ export interface ThemeMember {
   consultation_id: string;
   insight_id: string;
   source_meeting_id: string;
+  source_meeting_ids: string[];
   user_id: string;
   position: number;
   created_by: string;

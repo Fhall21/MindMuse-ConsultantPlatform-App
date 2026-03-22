@@ -51,6 +51,8 @@ export default function RoundDetailPage({
         id: theme.sourceThemeId,
         sourceMeetingId: theme.consultationId,
         sourceMeetingTitle: theme.consultationTitle,
+        sourceMeetingIds: [theme.consultationId],
+        sourceMeetingTitles: [theme.consultationTitle],
         label: theme.label,
         description: theme.description,
         editableLabel: theme.editableLabel,

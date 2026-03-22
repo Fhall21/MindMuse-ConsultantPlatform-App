@@ -305,8 +305,8 @@ function AnalyseForm({ onDone }: { onDone: () => void }) {
       toast.success("Template saved and activated");
       onDone();
     },
-    onError: () => {
-      toast.error("Failed to save template");
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to save template");
     },
   });
 
@@ -446,6 +446,9 @@ export function ReportTemplatePanel() {
       queryClient.invalidateQueries({ queryKey: ["report-templates"] });
       toast.success("Template deactivated");
     },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to deactivate template");
+    },
   });
 
   const deleteMutation = useMutation({
@@ -453,6 +456,9 @@ export function ReportTemplatePanel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["report-templates"] });
       toast.success("Template deleted");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to delete template");
     },
   });
 
@@ -539,12 +545,18 @@ export function ReportTemplatePanel() {
                       size="sm"
                       variant="ghost"
                       className="text-xs"
-                      onClick={() =>
-                        updateReportTemplate({ id: t.id, isActive: true }).then(() => {
-                          queryClient.invalidateQueries({ queryKey: ["report-templates"] });
-                          toast.success("Template activated");
-                        })
-                      }
+                      onClick={() => {
+                        void updateReportTemplate({ id: t.id, isActive: true })
+                          .then(() => {
+                            queryClient.invalidateQueries({ queryKey: ["report-templates"] });
+                            toast.success("Template activated");
+                          })
+                          .catch((error) => {
+                            toast.error(
+                              error instanceof Error ? error.message : "Failed to activate template"
+                            );
+                          });
+                      }}
                     >
                       Activate
                     </Button>

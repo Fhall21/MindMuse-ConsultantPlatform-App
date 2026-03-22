@@ -1,5 +1,18 @@
 export type ConsultationStatus = "draft" | "complete";
 
+// Meeting type taxonomy managed in Settings → Meeting Types.
+// Code is a short user-defined string shown in generated titles (e.g. "FC", "1-1").
+// Use is_active=false to retire an option without breaking old records.
+export interface MeetingType {
+  id: string;
+  user_id: string;
+  label: string;
+  code: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Meeting {
   id: string;
   title: string;
@@ -13,6 +26,9 @@ export interface Meeting {
   user_id: string;
   status: ConsultationStatus;
   consultation_id: string | null;
+  // Structured fields used to generate the coded title (nullable for legacy records)
+  meeting_type_id: string | null;
+  meeting_date: string | null;
 }
 
 export interface Consultation {

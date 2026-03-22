@@ -129,6 +129,20 @@ def test_save_extraction_result_uses_meeting_scoped_columns(monkeypatch) -> None
     assert offset_params["source_span"] == "workload"
 
 
+def test_ensure_analytics_projection_refresh_compatibility_recreates_trigger(monkeypatch) -> None:
+    engine = FakeEngine()
+    monkeypatch.setattr(analytics_job_worker, "_sql", lambda query: query)
+
+    analytics_job_worker.ensure_analytics_projection_refresh_compatibility(engine)
+
+    assert len(engine.connection.calls) == 1
+    query, params = engine.connection.calls[0]
+    assert params is None
+    assert "CREATE OR REPLACE FUNCTION enqueue_analytics_projection_refresh()" in query
+    assert "DROP TRIGGER IF EXISTS trg_extraction_results_outbox ON extraction_results" in query
+    assert "CREATE TRIGGER trg_extraction_results_outbox" in query
+
+
 def test_run_clustering_writes_consultation_and_meeting_memberships(monkeypatch) -> None:
     engine = FakeEngine()
     job = ClaimedJob(id="job-1", meeting_id="meeting-1", consultation_id="consultation-1")

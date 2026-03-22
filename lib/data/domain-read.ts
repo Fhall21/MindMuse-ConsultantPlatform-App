@@ -148,7 +148,7 @@ export async function listMeetingsForConsultationGroup(
   consultationId: string,
   userId: string
 ): Promise<ConsultationRound[]> {
-  await requireOwnedConsultationGroup(consultationId, userId);
+  await requireOwnedRound(consultationId, userId);
 
   const rows = await db
     .select()
@@ -577,7 +577,7 @@ export async function listRoundOutputArtifactsForRound(
   userId: string,
   artifactType?: string
 ): Promise<RoundOutputArtifact[]> {
-  await requireOwnedConsultationGroup(roundId, userId);
+  await requireOwnedRound(roundId, userId);
 
   const conditions = [
     eq(roundOutputArtifacts.consultationId, roundId),
@@ -632,7 +632,7 @@ export async function listDraftThemesForRound(
   roundId: string,
   userId: string
 ): Promise<Theme[]> {
-  await requireOwnedConsultationGroup(roundId, userId);
+  await requireOwnedRound(roundId, userId);
 
   const rows = await db
     .select()

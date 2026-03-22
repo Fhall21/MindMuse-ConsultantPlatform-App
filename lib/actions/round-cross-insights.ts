@@ -3,7 +3,7 @@
 import { db } from "@/db/client";
 import { consultationCrossInsights as roundCrossInsights } from "@/db/schema";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
-import { requireOwnedConsultationGroup } from "@/lib/data/ownership";
+import { requireOwnedRound } from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";
 import { emitAuditEvent } from "@/lib/actions/audit";
 
@@ -14,7 +14,7 @@ export async function addRoundCrossInsight(
   description?: string
 ) {
   const userId = await requireCurrentUserId();
-  await requireOwnedConsultationGroup(roundId, userId);
+  await requireOwnedRound(roundId, userId);
 
   const [created] = await db
     .insert(roundCrossInsights)

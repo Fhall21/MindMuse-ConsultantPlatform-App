@@ -168,7 +168,7 @@ export async function listMeetingsForConsultation(
     eq(meetings.consultationId, consultationId),
     eq(meetings.userId, userId),
   ];
-  if (!options.includeArchived) {
+  if (!options.archivedOnly) {
     conditions.push(eq(meetings.isArchived, false));
   }
 

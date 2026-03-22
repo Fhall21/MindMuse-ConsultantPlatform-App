@@ -108,10 +108,10 @@ DELETE FROM term_cluster_memberships WHERE consultation_id = :consultation_id
 INSERT_TERM_CLUSTER_QUERY = """
 INSERT INTO term_clusters (
     consultation_id, cluster_id, label,
-    representative_terms, all_terms, meeting_count
+    representative_terms, all_terms, consultation_count
 ) VALUES (
     :consultation_id, :cluster_id, :label,
-    CAST(:representative_terms AS jsonb), CAST(:all_terms AS jsonb), :meeting_count
+    CAST(:representative_terms AS jsonb), CAST(:all_terms AS jsonb), :consultation_count
 )
 """
 
@@ -420,7 +420,7 @@ def _run_clustering(engine: Any, job: ClaimedJob) -> None:
                 "label": cluster.label,
                 "representative_terms": json.dumps(cluster.representative_terms),
                 "all_terms": json.dumps(cluster.all_terms),
-                "meeting_count": cluster.meeting_count,
+                "consultation_count": cluster.meeting_count,
             })
 
         for membership in cluster_result.memberships:

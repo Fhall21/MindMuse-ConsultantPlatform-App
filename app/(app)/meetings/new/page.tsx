@@ -1,19 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { X, Plus, ChevronDown } from "lucide-react";
+import { X, Plus, ChevronDown, FileText, PenLine, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { createMeeting } from "@/lib/actions/consultations";
+import { Textarea } from "@/components/ui/textarea";
+import { createMeeting, updateTranscript } from "@/lib/actions/consultations";
 import { createPerson } from "@/lib/actions/people";
 import { useConsultations } from "@/hooks/use-consultations";
 import { useMeetingTypes } from "@/hooks/use-meeting-types";
 import { usePeople } from "@/hooks/use-people";
 import { buildMeetingTitle } from "@/lib/meeting-title";
+import {
+  parseTranscriptFile,
+  TRANSCRIPT_ACCEPTED_ATTR,
+} from "@/lib/transcript-file-parser";
 import type { Person } from "@/types/db";
 
 // ─── Consultation combobox ────────────────────────────────────────────────────
@@ -309,9 +314,17 @@ function PeopleField({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+type Mode = "choose" | "transcript" | "manual";
+
 export default function NewMeetingPage() {
   const router = useRouter();
+  const [mode, setMode] = useState<Mode>("choose");
   const [submitting, setSubmitting] = useState(false);
+
+  // Transcript mode state
+  const [transcriptText, setTranscriptText] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: meetingTypes = [] } = useMeetingTypes();
 
@@ -338,6 +351,92 @@ export default function NewMeetingPage() {
     }
   }, [generatedTitle, titleManuallyEdited]);
 
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await parseTranscriptFile(file);
+      setTranscriptText(text);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not read file");
+    }
+    // Reset so the same file can be selected again
+    e.target.value = "";
+  }
+
+  async function handleExtract() {
+    if (!transcriptText.trim()) return;
+    setExtracting(true);
+    try {
+      const res = await fetch("/api/infer/meeting-metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript: transcriptText,
+          meeting_type_codes: meetingTypes.map((t) => t.code),
+        }),
+      });
+      if (!res.ok) throw new Error("Extraction failed");
+      const data = await res.json();
+
+      // Pre-fill meeting type
+      if (data.suggested_type_code) {
+        const matched = meetingTypes.find(
+          (t) => t.code === data.suggested_type_code
+        );
+        if (matched) setMeetingTypeId(matched.id);
+      }
+
+      // Pre-fill date
+      if (data.suggested_date) {
+        setMeetingDate(data.suggested_date);
+      }
+
+      // Pre-fill people — create each by name
+      if (data.suggested_people?.length) {
+        const names: string[] = data.suggested_people
+          .map((n: unknown) => (typeof n === "string" ? n.trim() : ""))
+          .filter(Boolean);
+
+        if (names.length > 0) {
+          try {
+            const created = await Promise.all(
+              names.map((name) => createPerson({ name }))
+            );
+            const newPeople: Person[] = names.map((name, i) => ({
+              id: created[i],
+              name,
+              working_group: null,
+              work_type: null,
+              role: null,
+              email: null,
+              created_at: new Date().toISOString(),
+              user_id: "",
+            }));
+            setSelectedPeople((prev) => {
+              const existingIds = new Set(prev.map((p) => p.id));
+              return [
+                ...prev,
+                ...newPeople.filter((p) => !existingIds.has(p.id)),
+              ];
+            });
+          } catch {
+            // Non-fatal — user can add people manually
+          }
+        }
+      }
+
+      setMode("manual");
+    } catch {
+      toast.error(
+        "Could not extract details from the transcript. You can fill them in manually."
+      );
+      setMode("manual");
+    } finally {
+      setExtracting(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) {
@@ -354,6 +453,16 @@ export default function NewMeetingPage() {
         meetingDate: meetingDate ? new Date(meetingDate + "T12:00:00") : undefined,
         personIds: selectedPeople.map((p) => p.id),
       });
+
+      // Save transcript text if we came from the transcript flow
+      if (transcriptText.trim()) {
+        try {
+          await updateTranscript({ id, transcriptRaw: transcriptText });
+        } catch {
+          // Non-fatal — transcript can be added later
+        }
+      }
+
       router.push(`/meetings/${id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create meeting");
@@ -361,13 +470,144 @@ export default function NewMeetingPage() {
     }
   }
 
+  // ── Mode: choose ────────────────────────────────────────────────────────────
+
+  if (mode === "choose") {
+    return (
+      <div className="mx-auto max-w-xl space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">New Meeting</h1>
+          <p className="text-sm text-muted-foreground">
+            How would you like to start?
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setMode("transcript")}
+            className="flex flex-col items-start gap-2 rounded-lg border border-border bg-card p-4 text-left transition-colors hover:bg-muted/50 hover:border-foreground/20"
+          >
+            <FileText className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="font-medium text-sm">Start from transcript</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Paste or upload — details extracted automatically
+              </p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMode("manual")}
+            className="flex flex-col items-start gap-2 rounded-lg border border-border bg-card p-4 text-left transition-colors hover:bg-muted/50 hover:border-foreground/20"
+          >
+            <PenLine className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="font-medium text-sm">Enter manually</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Fill in the form directly
+              </p>
+            </div>
+          </button>
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground"
+          onClick={() => router.push("/meetings")}
+        >
+          Cancel
+        </Button>
+      </div>
+    );
+  }
+
+  // ── Mode: transcript ─────────────────────────────────────────────────────────
+
+  if (mode === "transcript") {
+    return (
+      <div className="mx-auto max-w-xl space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">New Meeting</h1>
+          <p className="text-sm text-muted-foreground">
+            Paste your transcript or upload a file to extract meeting details.
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Transcript</Label>
+            <Textarea
+              value={transcriptText}
+              onChange={(e) => setTranscriptText(e.target.value)}
+              placeholder="Paste transcript text here…"
+              className="min-h-[200px] resize-y font-mono text-xs"
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={TRANSCRIPT_ACCEPTED_ATTR}
+              className="hidden"
+              onChange={handleFileSelected}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Upload file
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              .txt, .md, .vtt, .docx
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3 pt-1">
+            <Button
+              type="button"
+              disabled={!transcriptText.trim() || extracting}
+              onClick={handleExtract}
+            >
+              {extracting ? "Extracting…" : "Extract details"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => setMode("manual")}
+            >
+              Skip, enter manually
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Mode: manual ─────────────────────────────────────────────────────────────
+
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">New Meeting</h1>
-        <p className="text-sm text-muted-foreground">
-          Create the record first. Add material after.
-        </p>
+        {transcriptText ? (
+          <p className="text-sm text-muted-foreground">
+            Review the extracted details and adjust as needed.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Create the record first. Add material after.
+          </p>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">

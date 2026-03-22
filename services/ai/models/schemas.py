@@ -298,6 +298,20 @@ class ReportTemplateAnalyseRequest(BaseModel):
     prescriptiveness: str = "moderate"              # 'flexible' | 'moderate' | 'strict'
 
 
+# --- Meeting metadata inference ---
+
+
+class MeetingMetadataInferRequest(BaseModel):
+    transcript: str
+    meeting_type_codes: list[str] = []  # e.g. ["1-1", "FC"]; matched against for type suggestion
+
+
+class MeetingMetadataInferResponse(BaseModel):
+    suggested_type_code: str | None = None   # One of meeting_type_codes, or null
+    suggested_date: str | None = None        # ISO date YYYY-MM-DD, or null
+    suggested_people: list[str] = []         # Participant names (not the interviewer)
+
+
 class AnalysedTemplateSection(BaseModel):
     heading: str                    # Section heading, e.g. "Executive Summary"
     purpose: str                    # What this section achieves (1 sentence)

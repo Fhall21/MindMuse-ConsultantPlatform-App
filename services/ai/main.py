@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
-from routers import clarification, draft, ocr, rounds, shorthand, templates, themes, transcribe
+from routers import clarification, draft, infer, ocr, rounds, shorthand, templates, themes, transcribe
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,7 @@ app.include_router(rounds.router)
 app.include_router(transcribe.router)
 app.include_router(ocr.router)
 app.include_router(shorthand.router)
+app.include_router(infer.router)
 
 # Stage 5 endpoints
 app.include_router(templates.router)

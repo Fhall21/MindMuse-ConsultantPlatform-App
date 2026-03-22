@@ -228,6 +228,10 @@ export interface OcrJob {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Multi-photo batch: all pages in one upload share this UUID. Null for pre-batch single-page uploads. */
+  batch_id: string | null;
+  /** 0-based page sequence within a batch. Null for pre-batch single-page uploads. */
+  image_sequence: number | null;
 }
 
 export type ReportTemplatePrescriptiveness = "flexible" | "moderate" | "strict";

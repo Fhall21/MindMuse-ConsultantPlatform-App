@@ -84,6 +84,8 @@ function mapOcrRow(row: typeof ocrJobs.$inferSelect): DatabaseOcrJob {
     completed_at: toIsoString(row.completedAt),
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
+    batch_id: row.batchId ?? null,
+    image_sequence: row.imageSequence ?? null,
   };
 }
 
@@ -268,11 +270,17 @@ export async function getTranscriptionJobTimeline({
 interface CreateOcrJobParams {
   meetingId: string;
   imageFileKey: string;
+  /** Optional batch group ID — all pages in one multi-photo upload share this. */
+  batchId?: string;
+  /** 0-based page position within the batch. */
+  imageSequence?: number;
 }
 
 export async function createOcrJob({
   meetingId,
   imageFileKey,
+  batchId,
+  imageSequence,
 }: CreateOcrJobParams): Promise<string> {
   const [created] = await db
     .insert(ocrJobs)
@@ -280,6 +288,8 @@ export async function createOcrJob({
       meetingId,
       imageFileKey,
       status: "queued",
+      batchId: batchId ?? null,
+      imageSequence: imageSequence ?? null,
     })
     .returning({ id: ocrJobs.id });
 
@@ -288,7 +298,7 @@ export async function createOcrJob({
     action: AUDIT_ACTIONS.OCR_UPLOADED,
     entityType: "ocr_job",
     entityId: created.id,
-    metadata: { imageFileKey },
+    metadata: { imageFileKey, batchId: batchId ?? null, imageSequence: imageSequence ?? null },
   });
 
   await emitAuditEvent({
@@ -300,6 +310,65 @@ export async function createOcrJob({
   });
 
   return created.id;
+}
+
+/**
+ * Create one OCR job per page in a multi-photo batch.
+ * All pages share a randomly-generated batchId and are assigned imageSequence
+ * values matching the caller-supplied order (0-based). Each job emits its own
+ * audit trail; the batch itself emits a single OCR_BATCH_CREATED event.
+ * Returns { batchId, jobIds } where jobIds are ordered by imageSequence.
+ */
+export async function createOcrBatch({
+  meetingId,
+  imageFileKeys,
+}: {
+  meetingId: string;
+  imageFileKeys: string[];
+}): Promise<{ batchId: string; jobIds: string[] }> {
+  if (imageFileKeys.length === 0) {
+    throw new Error("createOcrBatch requires at least one image");
+  }
+
+  // Generate a UUID for the batch group. We use crypto.randomUUID() which is
+  // available in the Next.js server environment.
+  const batchId = crypto.randomUUID();
+
+  const jobIds: string[] = [];
+  for (let i = 0; i < imageFileKeys.length; i++) {
+    const jobId = await createOcrJob({
+      meetingId,
+      imageFileKey: imageFileKeys[i],
+      batchId,
+      imageSequence: i,
+    });
+    jobIds.push(jobId);
+  }
+
+  await emitAuditEvent({
+    consultationId: meetingId,
+    action: AUDIT_ACTIONS.OCR_BATCH_CREATED,
+    entityType: "ocr_batch",
+    entityId: batchId,
+    metadata: { pageCount: imageFileKeys.length, batchId },
+  });
+
+  return { batchId, jobIds };
+}
+
+/**
+ * Return all OCR jobs that belong to a specific batch, sorted by imageSequence.
+ */
+export async function getOcrJobsForBatch(
+  batchId: string
+): Promise<DatabaseOcrJob[]> {
+  const rows = await db
+    .select()
+    .from(ocrJobs)
+    .where(eq(ocrJobs.batchId, batchId))
+    .orderBy(ocrJobs.imageSequence);
+
+  return rows.map((job) => mapOcrJob(mapOcrRow(job)));
 }
 
 interface UpdateOcrJobParams {
@@ -373,6 +442,51 @@ export async function updateOcrJob({
   return mapOcrRow(updated);
 }
 
+/**
+ * Sort OCR jobs so that:
+ * - Batches and standalone jobs are ordered most-recent-first (by the earliest
+ *   job in each batch, i.e. the page_0 requestedAt).
+ * - Within a batch, pages are ordered by imageSequence ascending (page 0 first).
+ * This handles the case where sequential inserts give each page a slightly
+ * different requestedAt, which would cause a naive DESC sort to reverse the pages.
+ */
+function sortOcrJobsBatchAware(jobs: DatabaseOcrJob[]): DatabaseOcrJob[] {
+  const batchGroups = new Map<string, DatabaseOcrJob[]>();
+  const standalone: DatabaseOcrJob[] = [];
+
+  for (const job of jobs) {
+    if (job.batch_id) {
+      const group = batchGroups.get(job.batch_id) ?? [];
+      group.push(job);
+      batchGroups.set(job.batch_id, group);
+    } else {
+      standalone.push(job);
+    }
+  }
+
+  // Sort within each batch by imageSequence ascending
+  for (const group of batchGroups.values()) {
+    group.sort((a, b) => (a.image_sequence ?? 0) - (b.image_sequence ?? 0));
+  }
+
+  // Build timeline entries for batches (keyed by earliest requestedAt = page 0)
+  const timeline: { timestamp: number; jobs: DatabaseOcrJob[] }[] = [];
+
+  for (const group of batchGroups.values()) {
+    const earliest = Math.min(...group.map((j) => new Date(j.requested_at).getTime()));
+    timeline.push({ timestamp: earliest, jobs: group });
+  }
+
+  for (const job of standalone) {
+    timeline.push({ timestamp: new Date(job.requested_at).getTime(), jobs: [job] });
+  }
+
+  // Sort groups newest-first
+  timeline.sort((a, b) => b.timestamp - a.timestamp);
+
+  return timeline.flatMap((entry) => entry.jobs);
+}
+
 export async function getOcrJobsForMeeting(
   meetingId: string
 ): Promise<DatabaseOcrJob[]> {
@@ -382,7 +496,8 @@ export async function getOcrJobsForMeeting(
     .where(eq(ocrJobs.meetingId, meetingId))
     .orderBy(desc(ocrJobs.requestedAt));
 
-  return rows.map((job) => mapOcrJob(mapOcrRow(job)));
+  const mapped = rows.map((job) => mapOcrJob(mapOcrRow(job)));
+  return sortOcrJobsBatchAware(mapped);
 }
 
 export const getOcrJobsForConsultation = getOcrJobsForMeeting;

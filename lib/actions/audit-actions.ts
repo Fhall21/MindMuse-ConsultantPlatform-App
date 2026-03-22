@@ -64,5 +64,6 @@ export const AUDIT_ACTIONS = {
   MEETING_TYPE_DELETED: "meeting_type.deleted",
   OCR_REVIEW_REJECTED: "ocr.review_rejected",
   OCR_CORRECTIONS_SAVED: "ocr.corrections_saved",
+  OCR_BATCH_CREATED: "ocr.batch_created",
   ROUND_CROSS_INSIGHT_ADDED: "round.cross_insight_added",
 } as const;

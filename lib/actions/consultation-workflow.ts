@@ -36,6 +36,7 @@ import {
   loadRoundAnalyticsSummary,
   type RoundAnalyticsSummary,
 } from "@/lib/data/analytics-read";
+import { requireOwnedRound } from "@/lib/data/ownership";
 import { resolveDecisionTargetLabel } from "@/lib/decision-history";
 import type {
   Consultation,
@@ -630,6 +631,8 @@ async function loadRoundHistory(params: {
   consultationIds: string[];
 }) {
   const { userId, roundId, consultationIds } = params;
+  await requireOwnedRound(roundId, userId);
+
   const rows = await db
     .select()
     .from(auditLog)

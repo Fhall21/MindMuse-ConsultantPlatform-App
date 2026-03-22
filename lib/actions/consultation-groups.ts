@@ -125,6 +125,22 @@ export async function assignConsultationToGroup(
 
   await requireOwnedConsultationGroup(groupId, userId);
 
+  const [group] = await db
+    .select({ id: meetingGroups.id })
+    .from(meetingGroups)
+    .where(
+      and(
+        eq(meetingGroups.id, groupId),
+        eq(meetingGroups.consultationId, consultationId),
+        eq(meetingGroups.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (!group) {
+    throw new Error("Consultation group does not belong to this round");
+  }
+
   // Assign: upsert on (consultation_id, meeting_id)
   await db
     .insert(consultationGroupMembers)

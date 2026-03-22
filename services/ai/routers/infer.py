@@ -24,7 +24,6 @@ SYSTEM_PROMPT = (
     "Return only valid JSON with exactly these keys:\n"
     '{"suggested_type_code": string|null, "suggested_date": string|null, "suggested_people": string[]}'
 )
-)
 
 # Transcript is capped to avoid token blowout; first 12 000 chars covers ~3 000 words
 TRANSCRIPT_CHAR_LIMIT = 12_000

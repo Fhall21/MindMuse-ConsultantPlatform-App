@@ -78,6 +78,13 @@
       "when": 1774192200000,
       "tag": "0010_married_warbird",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1774179327688,
+      "tag": "0011_gifted_mister_fear",
+      "breakpoints": true
     }
   ]
 }

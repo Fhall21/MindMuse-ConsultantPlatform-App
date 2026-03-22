@@ -221,6 +221,11 @@ export const ocrJobs = pgTable(
     requestedAt: timestamp("requested_at", { withTimezone: true }).defaultNow().notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    // Multi-photo batch support: nullable so that single-photo uploads from
+    // before this migration are unaffected. All pages in one upload session
+    // share the same batchId; imageSequence (0-based) fixes their display order.
+    batchId: uuid("batch_id"),
+    imageSequence: integer("image_sequence"),
     ...timestamps,
   },
   (table) => ({
@@ -237,6 +242,10 @@ export const ocrJobs = pgTable(
       table.requestedAt
     ),
     statusIdx: index("idx_ocr_jobs_status").on(table.status),
+    batchSequenceIdx: index("idx_ocr_jobs_batch_sequence").on(
+      table.batchId,
+      table.imageSequence
+    ),
   })
 );
 

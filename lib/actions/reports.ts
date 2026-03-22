@@ -727,3 +727,5 @@ export async function getConsultationReportData(
     roundSummary,
   };
 }
+
+export const getMeetingReportData = getConsultationReportData;

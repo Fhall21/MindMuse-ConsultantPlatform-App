@@ -28,8 +28,8 @@ import { RoundsPanel } from "@/components/consultations/rounds-panel";
 import { useMeeting } from "@/hooks/use-meetings";
 import { useConsultations } from "@/hooks/use-consultations";
 import {
-  markConsultationComplete,
-  updateConsultationTitle,
+  markMeetingComplete,
+  updateMeetingTitle,
 } from "@/lib/actions/consultations";
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
@@ -40,7 +40,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function ConsultationDetailPage({
+export default function MeetingDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -55,44 +55,46 @@ export default function ConsultationDetailPage({
   const [titleDraft, setTitleDraft] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
 
-  const consultation = data?.meeting;
-  const isDraft = consultation?.status === "draft";
+  const meeting = data?.meeting;
+  const isDraft = meeting?.status === "draft";
 
-  const currentRound = rounds?.find((r) => r.id === consultation?.consultation_id) ?? null;
-  const normalizedSavedTitle = consultation?.title.trim() ?? "";
+  const currentConsultation = rounds?.find((consultation) => consultation.id === meeting?.consultation_id) ?? null;
+  const normalizedSavedTitle = meeting?.title.trim() ?? "";
   const normalizedDraftTitle = titleDraft.trim();
   const titleChanged = normalizedDraftTitle !== normalizedSavedTitle;
   const titleInvalid = normalizedDraftTitle.length === 0 || normalizedDraftTitle.length > 255;
 
   useEffect(() => {
-    setTitleDraft(consultation?.title ?? "");
-  }, [consultation?.title]);
+    setTitleDraft(meeting?.title ?? "");
+  }, [meeting?.title]);
 
   async function handleMarkComplete() {
     setCompleting(true);
     try {
-      await markConsultationComplete(id);
-      queryClient.invalidateQueries({ queryKey: ["consultations", id] });
+      await markMeetingComplete(id);
+      await queryClient.invalidateQueries({ queryKey: ["meetings", id] });
+      await queryClient.invalidateQueries({ queryKey: ["meetings"] });
       setConfirmCompleteOpen(false);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to mark consultation as complete.");
+      toast.error("Failed to mark meeting as complete.");
     } finally {
       setCompleting(false);
     }
   }
 
   async function handleSaveTitle() {
-    if (!consultation || savingTitle || !titleChanged || titleInvalid) return;
+    if (!meeting || savingTitle || !titleChanged || titleInvalid) return;
 
     setSavingTitle(true);
     try {
-      await updateConsultationTitle({ id, title: titleDraft });
-      await queryClient.invalidateQueries({ queryKey: ["consultations", id] });
-      toast.success("Consultation title updated.");
+      await updateMeetingTitle({ id, title: titleDraft });
+      await queryClient.invalidateQueries({ queryKey: ["meetings", id] });
+      await queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      toast.success("Meeting title updated.");
     } catch (err) {
       console.error(err);
-      const message = err instanceof Error ? err.message : "Failed to update consultation title.";
+      const message = err instanceof Error ? err.message : "Failed to update meeting title.";
       toast.error(message);
     } finally {
       setSavingTitle(false);
@@ -109,14 +111,14 @@ export default function ConsultationDetailPage({
     );
   }
 
-  if (error || !consultation) {
+  if (error || !meeting) {
     return (
       <div className="space-y-2">
         <p className="text-sm text-destructive">
-          Failed to load consultation. It may not exist or you may not have access.
+          Failed to load meeting. It may not exist or you may not have access.
         </p>
         <Button variant="ghost" asChild>
-          <Link href="/consultations">Back to consultations</Link>
+          <Link href="/meetings">Back to meetings</Link>
         </Button>
       </div>
     );
@@ -127,7 +129,7 @@ export default function ConsultationDetailPage({
       {/* Header */}
       <div className="space-y-4">
         <nav className="text-sm text-muted-foreground">
-          <Link href="/consultations" className="hover:text-foreground">
+          <Link href="/meetings" className="hover:text-foreground">
             Meetings
           </Link>
           <span className="mx-2">/</span>
@@ -139,13 +141,13 @@ export default function ConsultationDetailPage({
             <div className="min-w-0 flex-1 space-y-3">
               <div className="space-y-2">
                 <label
-                  htmlFor="consultation-title"
+                  htmlFor="meeting-title"
                   className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
                 >
-                  Consultation title
+                  Meeting title
                 </label>
                 <Input
-                  id="consultation-title"
+                  id="meeting-title"
                   value={titleDraft}
                   onChange={(event) => setTitleDraft(event.target.value)}
                   onKeyDown={(event) => {
@@ -154,7 +156,7 @@ export default function ConsultationDetailPage({
                       void handleSaveTitle();
                     }
                   }}
-                  placeholder="Enter consultation title"
+                  placeholder="Enter meeting title"
                   className="h-11 text-base font-semibold sm:text-lg"
                 />
               </div>
@@ -171,7 +173,7 @@ export default function ConsultationDetailPage({
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => setTitleDraft(consultation.title)}
+                  onClick={() => setTitleDraft(meeting.title)}
                   disabled={!titleChanged || savingTitle}
                 >
                   Reset
@@ -208,26 +210,26 @@ export default function ConsultationDetailPage({
                 Consultation
               </p>
               <RoundsPanel
-                consultationId={id}
-                currentRoundId={consultation.consultation_id}
-                currentRoundLabel={currentRound?.label ?? null}
+                meetingId={id}
+                currentRoundId={meeting.consultation_id}
+                currentRoundLabel={currentConsultation?.label ?? null}
               />
             </div>
 
-            {!isDraft && consultation.consultation_id ? (
+            {!isDraft && meeting.consultation_id ? (
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" asChild>
-                  <Link href={`/consultations/rounds/${consultation.consultation_id}`}>
+                  <Link href={`/consultations/${meeting.consultation_id}`}>
                     Open consultation workspace &rarr;
                   </Link>
                 </Button>
                 <Button variant="outline" size="sm" asChild>
-                  <Link href={`/canvas/round/${consultation.consultation_id}`}>
+                  <Link href={`/canvas/round/${meeting.consultation_id}`}>
                     Evidence canvas &rarr;
                   </Link>
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  View theme grouping, synthesis, and round outputs
+                  View theme grouping, synthesis, and consultation outputs
                 </span>
               </div>
             ) : null}
@@ -241,7 +243,7 @@ export default function ConsultationDetailPage({
                   Link people before audio transcription so the expected speaker count is clear.
                 </p>
               </div>
-              <PeoplePanel consultationId={id} />
+              <PeoplePanel meetingId={id} />
             </div>
           </div>
         </div>
@@ -253,8 +255,8 @@ export default function ConsultationDetailPage({
       <section className="space-y-3">
         <SectionHeading>Transcript</SectionHeading>
         <TranscriptIntakePanel
-          consultationId={id}
-          initialTranscript={consultation.transcript_raw}
+          meetingId={id}
+          initialTranscript={meeting.transcript_raw}
           readOnly={!isDraft}
         />
       </section>
@@ -264,7 +266,7 @@ export default function ConsultationDetailPage({
       {/* Handwritten notes OCR */}
       <section className="space-y-3">
         <SectionHeading>Handwritten notes photo</SectionHeading>
-        <OcrReviewPanel consultationId={id} />
+        <OcrReviewPanel meetingId={id} />
       </section>
 
       <Separator />
@@ -273,8 +275,8 @@ export default function ConsultationDetailPage({
       <section className="space-y-3">
         <SectionHeading>Notes</SectionHeading>
         <NotesEditor
-          consultationId={id}
-          initialValue={consultation.notes}
+          meetingId={id}
+          initialValue={meeting.notes}
           readOnly={!isDraft}
         />
       </section>
@@ -284,7 +286,7 @@ export default function ConsultationDetailPage({
       {/* Themes — Agent 4 slot */}
       <section className="space-y-3">
         <SectionHeading>Themes</SectionHeading>
-        <ThemePanel consultationId={id} />
+        <ThemePanel meetingId={id} />
       </section>
 
       <Separator />
@@ -292,7 +294,7 @@ export default function ConsultationDetailPage({
       {/* Evidence Email — Agent 4 slot */}
       <section className="space-y-3">
         <SectionHeading>Evidence Email</SectionHeading>
-        <EmailDraftPanel consultationId={id} />
+        <EmailDraftPanel meetingId={id} />
       </section>
 
       <Separator />
@@ -300,7 +302,7 @@ export default function ConsultationDetailPage({
       {/* Audit Trail — Agent 4 slot */}
       <section className="space-y-3">
         <SectionHeading>Audit Trail</SectionHeading>
-        <AuditTrail consultationId={id} />
+        <AuditTrail meetingId={id} />
       </section>
 
       {/* Mark Complete confirmation */}

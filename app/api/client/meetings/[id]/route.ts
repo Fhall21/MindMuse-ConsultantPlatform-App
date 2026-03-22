@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import {
+  getLatestEvidenceEmailForMeeting,
   getMeetingForUser,
-  getLatestEvidenceEmailForConsultation,
-  listConsultationPersonLinks,
-  listInsightsForConsultation,
+  listInsightsForMeeting,
+  listMeetingPersonLinks,
 } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../_helpers";
 
@@ -34,9 +34,9 @@ export async function GET(
     }
 
     const [themesResult, peopleResult, latestEvidenceEmailResult] = await Promise.allSettled([
-      listInsightsForConsultation(id, client.userId),
-      listConsultationPersonLinks(id, client.userId),
-      getLatestEvidenceEmailForConsultation(id, client.userId),
+      listInsightsForMeeting(id, client.userId),
+      listMeetingPersonLinks(id, client.userId),
+      getLatestEvidenceEmailForMeeting(id, client.userId),
     ]);
 
     const themes =

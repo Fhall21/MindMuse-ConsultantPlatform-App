@@ -224,7 +224,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     if (plan.type === "noop") return;
 
     if (plan.type === "create-group") {
-      await createTheme(canvasQuery.data.round_id, plan.seedInsightIds);
+      await createTheme(canvasQuery.data.consultation_id, plan.seedInsightIds);
     } else {
       await Promise.all(
         plan.insightIds.map((insightId, index) =>

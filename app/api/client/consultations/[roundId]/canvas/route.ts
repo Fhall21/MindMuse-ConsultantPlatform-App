@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { meetings, insights, themeMembers, themes } from "@/db/schema";
 import { loadCanvasConnections, loadCanvasLayout } from "@/lib/data/canvas";
 import { jsonError, requireRouteClient } from "../../../_helpers";
-import { requireOwnedConsultation } from "@/lib/data/ownership";
+import { requireOwnedRound } from "@/lib/data/ownership";
 import type { CanvasNode } from "@/types/canvas";
 
 function buildFallbackPositions(nodes: CanvasNode[]) {
@@ -45,6 +45,10 @@ function buildFallbackPositions(nodes: CanvasNode[]) {
     });
 }
 
+function normalizeThemeLabel(label: string) {
+  return label === "Round theme group" ? "Theme group" : label;
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ roundId: string }> }
@@ -58,7 +62,7 @@ export async function GET(
 
   try {
     // Verify consultation ownership
-    await requireOwnedConsultation(consultationId, client.userId);
+    await requireOwnedRound(consultationId, client.userId);
 
     const themeRows = await db
       .select()
@@ -90,7 +94,7 @@ export async function GET(
     const themeNodes: CanvasNode[] = themeRows.map((theme) => ({
       id: theme.id,
       type: "theme",
-      label: theme.label,
+      label: normalizeThemeLabel(theme.label),
       description: theme.description,
       accepted: theme.status === "accepted",
       subgroup: null,

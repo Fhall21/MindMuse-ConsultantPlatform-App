@@ -40,9 +40,9 @@ const MAJOR_EVENT_ACTIONS = new Set([
 const EVENT_LABELS: Record<string, string> = {
   "consultation.created": "Consultation created",
   "consultation.completed": "Consultation marked complete",
-  "consultation.round_assigned": "Assigned to round",
-  "round.created": "Round created",
-  "round.output_generated": "Round output generated",
+  "consultation.round_assigned": "Assigned to consultation",
+  "round.created": "Consultation created",
+  "round.output_generated": "Consultation output generated",
   "round.target_accepted": "Theme group accepted",
   "round.target_discarded": "Theme group discarded",
   "transcript.file_uploaded": "Transcript uploaded",

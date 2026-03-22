@@ -3,14 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { useOcrJobs } from "@/hooks/use-ingestion";
+import { useMeetingOcrJobs } from "@/hooks/use-ingestion";
 import { saveOcrCorrections } from "@/lib/actions/ocr";
 import { createOcrJob, updateOcrJob } from "@/lib/actions/ingestion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface OcrReviewPanelProps {
-  consultationId: string;
+  meetingId?: string;
+  consultationId?: string;
   ocrJobId?: string;
 }
 
@@ -40,10 +41,11 @@ async function loadHeic2Any() {
   return heicModule.default;
 }
 
-export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps) {
+export function OcrReviewPanel({ meetingId, consultationId, ocrJobId }: OcrReviewPanelProps) {
+  const resolvedMeetingId = meetingId ?? consultationId;
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { data: ocrJobs, isPending } = useOcrJobs(consultationId);
+  const { data: ocrJobs, isPending } = useMeetingOcrJobs(resolvedMeetingId ?? "");
 
   const [guideOpen, setGuideOpen] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -88,13 +90,13 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
 
     try {
       createdJobId = await createOcrJob({
-        meetingId: consultationId,
-        imageFileKey: `inline/${consultationId}/${Date.now()}-${file.name}`,
+        meetingId: resolvedMeetingId!,
+        imageFileKey: `inline/${resolvedMeetingId}/${Date.now()}-${file.name}`,
       });
 
       await updateOcrJob({
         jobId: createdJobId,
-        meetingId: consultationId,
+        meetingId: resolvedMeetingId!,
         status: "processing",
         startedAt: new Date().toISOString(),
       });
@@ -124,15 +126,15 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
 
       await updateOcrJob({
         jobId: createdJobId,
-        meetingId: consultationId,
+        meetingId: resolvedMeetingId!,
         status: "completed",
         extractedText: result.extracted_text,
         confidenceScore: result.confidence,
         completedAt: new Date().toISOString(),
       });
 
-      await queryClient.invalidateQueries({ queryKey: ["ocr_jobs", consultationId] });
-      await queryClient.invalidateQueries({ queryKey: ["audit_log", consultationId] });
+      await queryClient.invalidateQueries({ queryKey: ["ocr_jobs", "meeting", resolvedMeetingId] });
+      await queryClient.invalidateQueries({ queryKey: ["audit_log", "meeting", resolvedMeetingId] });
 
       // Seed textarea with fresh result
       setEditedText(result.extracted_text);
@@ -143,7 +145,7 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
       if (createdJobId) {
         await updateOcrJob({
           jobId: createdJobId,
-          meetingId: consultationId,
+          meetingId: resolvedMeetingId!,
           status: "failed",
           errorMessage: message,
           completedAt: new Date().toISOString(),
@@ -163,10 +165,10 @@ export function OcrReviewPanel({ consultationId, ocrJobId }: OcrReviewPanelProps
     setIsSaving(true);
 
     try {
-      await saveOcrCorrections(consultationId, job.id, editedText);
+      await saveOcrCorrections(resolvedMeetingId!, job.id, editedText);
       setIsDirty(false);
-      await queryClient.invalidateQueries({ queryKey: ["ocr_jobs", consultationId] });
-      await queryClient.invalidateQueries({ queryKey: ["audit_log", consultationId] });
+      await queryClient.invalidateQueries({ queryKey: ["ocr_jobs", "meeting", resolvedMeetingId] });
+      await queryClient.invalidateQueries({ queryKey: ["audit_log", "meeting", resolvedMeetingId] });
       toast.success("OCR corrections saved");
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Failed to save corrections. Please try again.");

@@ -2,11 +2,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getIngestionArtifactById,
   getIngestionArtifactsByType,
-  getIngestionArtifactsForConsultation,
+  getIngestionArtifactsForMeeting,
   getOcrJob,
-  getOcrJobsForConsultation,
+  getOcrJobsForMeeting,
   getTranscriptionJob,
-  getTranscriptionJobsForConsultation,
+  getTranscriptionJobsForMeeting,
 } from "@/lib/actions/ingestion";
 import type {
   TranscriptionJob,
@@ -24,11 +24,11 @@ const ACTIVE_STATUSES = new Set(["queued", "processing"]);
  * Updates in real-time as jobs are created or status changes
  * @param consultationId - The consultation ID to fetch jobs for
  */
-export function useTranscriptionJobs(consultationId: string) {
+export function useMeetingTranscriptionJobs(meetingId: string) {
   return useQuery({
-    queryKey: ["transcription_jobs", consultationId],
-    queryFn: () => getTranscriptionJobsForConsultation(consultationId),
-    enabled: !!consultationId,
+    queryKey: ["transcription_jobs", "meeting", meetingId],
+    queryFn: () => getTranscriptionJobsForMeeting(meetingId),
+    enabled: !!meetingId,
     refetchInterval: (query) => {
       const jobs = query.state.data as TranscriptionJob[] | undefined;
       const latestJob = jobs?.[0];
@@ -36,6 +36,8 @@ export function useTranscriptionJobs(consultationId: string) {
     },
   });
 }
+
+export const useTranscriptionJobs = useMeetingTranscriptionJobs;
 
 /**
  * Fetch a single transcription job by ID
@@ -76,11 +78,11 @@ export function useTranscriptionJob(jobId: string) {
  * Fetch all OCR jobs for a consultation
  * @param consultationId - The consultation ID to fetch jobs for
  */
-export function useOcrJobs(consultationId: string) {
+export function useMeetingOcrJobs(meetingId: string) {
   return useQuery({
-    queryKey: ["ocr_jobs", consultationId],
-    queryFn: () => getOcrJobsForConsultation(consultationId),
-    enabled: !!consultationId,
+    queryKey: ["ocr_jobs", "meeting", meetingId],
+    queryFn: () => getOcrJobsForMeeting(meetingId),
+    enabled: !!meetingId,
     refetchInterval: (query) => {
       const jobs = query.state.data as OcrJob[] | undefined;
       const latestJob = jobs?.[0];
@@ -88,6 +90,8 @@ export function useOcrJobs(consultationId: string) {
     },
   });
 }
+
+export const useOcrJobs = useMeetingOcrJobs;
 
 /**
  * Fetch a single OCR job by ID
@@ -113,13 +117,15 @@ export function useOcrJob(jobId: string) {
  * Fetch all ingestion artifacts for a consultation
  * @param consultationId - The consultation ID to fetch artifacts for
  */
-export function useIngestionArtifacts(consultationId: string) {
+export function useMeetingIngestionArtifacts(meetingId: string) {
   return useQuery({
-    queryKey: ["ingestion_artifacts", consultationId],
-    queryFn: () => getIngestionArtifactsForConsultation(consultationId),
-    enabled: !!consultationId,
+    queryKey: ["ingestion_artifacts", "meeting", meetingId],
+    queryFn: () => getIngestionArtifactsForMeeting(meetingId),
+    enabled: !!meetingId,
   });
 }
+
+export const useIngestionArtifacts = useMeetingIngestionArtifacts;
 
 /**
  * Fetch a single ingestion artifact by ID
@@ -139,13 +145,13 @@ export function useIngestionArtifact(artifactId: string) {
  * @param artifactType - The type of artifacts to fetch (e.g., 'ocr_image', 'audio')
  */
 export function useIngestionArtifactsByType(
-  consultationId: string,
+  meetingId: string,
   artifactType: string
 ) {
   return useQuery({
-    queryKey: ["ingestion_artifacts", consultationId, artifactType],
-    queryFn: () => getIngestionArtifactsByType(consultationId, artifactType),
-    enabled: !!consultationId && !!artifactType,
+    queryKey: ["ingestion_artifacts", "meeting", meetingId, artifactType],
+    queryFn: () => getIngestionArtifactsByType(meetingId, artifactType),
+    enabled: !!meetingId && !!artifactType,
   });
 }
 
@@ -162,30 +168,41 @@ export function useInvalidateIngestionCaches() {
   const queryClient = useQueryClient();
 
   return {
+    invalidateAllForMeeting: (meetingId: string) => {
+      queryClient.invalidateQueries({
+        queryKey: ["transcription_jobs", "meeting", meetingId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["ocr_jobs", "meeting", meetingId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["ingestion_artifacts", "meeting", meetingId],
+      });
+    },
     invalidateAllForConsultation: (consultationId: string) => {
       queryClient.invalidateQueries({
-        queryKey: ["transcription_jobs", consultationId],
+        queryKey: ["transcription_jobs", "meeting", consultationId],
       });
       queryClient.invalidateQueries({
-        queryKey: ["ocr_jobs", consultationId],
+        queryKey: ["ocr_jobs", "meeting", consultationId],
       });
       queryClient.invalidateQueries({
-        queryKey: ["ingestion_artifacts", consultationId],
-      });
-    },
-    invalidateTranscriptionJobs: (consultationId: string) => {
-      queryClient.invalidateQueries({
-        queryKey: ["transcription_jobs", consultationId],
+        queryKey: ["ingestion_artifacts", "meeting", consultationId],
       });
     },
-    invalidateOcrJobs: (consultationId: string) => {
+    invalidateTranscriptionJobs: (meetingId: string) => {
       queryClient.invalidateQueries({
-        queryKey: ["ocr_jobs", consultationId],
+        queryKey: ["transcription_jobs", "meeting", meetingId],
       });
     },
-    invalidateIngestionArtifacts: (consultationId: string) => {
+    invalidateOcrJobs: (meetingId: string) => {
       queryClient.invalidateQueries({
-        queryKey: ["ingestion_artifacts", consultationId],
+        queryKey: ["ocr_jobs", "meeting", meetingId],
+      });
+    },
+    invalidateIngestionArtifacts: (meetingId: string) => {
+      queryClient.invalidateQueries({
+        queryKey: ["ingestion_artifacts", "meeting", meetingId],
       });
     },
   };

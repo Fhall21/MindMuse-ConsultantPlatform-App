@@ -8,15 +8,15 @@ import { requireOwnedMeeting, requireOwnedConsultation } from "@/lib/data/owners
 import { AUDIT_ACTIONS } from "./audit-actions";
 import { emitAuditEvent } from "./audit";
 
-interface CreateConsultationParams {
+interface CreateMeetingParams {
   title: string;
   consultationId?: string;
 }
 
-export async function createConsultation({
+export async function createMeeting({
   title,
   consultationId,
-}: CreateConsultationParams) {
+}: CreateMeetingParams) {
   const userId = await requireCurrentUserId();
 
   if (consultationId) {
@@ -35,8 +35,8 @@ export async function createConsultation({
 
   await emitAuditEvent({
     consultationId: created.id,
-    action: AUDIT_ACTIONS.CONSULTATION_CREATED,
-    entityType: "consultation",
+    action: AUDIT_ACTIONS.MEETING_CREATED,
+    entityType: "meeting",
     entityId: created.id,
     metadata: { title, consultation_id: consultationId || null },
   });
@@ -44,12 +44,14 @@ export async function createConsultation({
   return created.id;
 }
 
+export const createConsultation = createMeeting;
+
 interface UpdateTranscriptParams {
   id: string;
   transcriptRaw: string;
 }
 
-export async function updateConsultationTitle({
+export async function updateMeetingTitle({
   id,
   title,
 }: {
@@ -76,12 +78,14 @@ export async function updateConsultationTitle({
 
   await emitAuditEvent({
     consultationId: id,
-    action: AUDIT_ACTIONS.CONSULTATION_TITLE_EDITED,
-    entityType: "consultation",
+    action: AUDIT_ACTIONS.MEETING_TITLE_EDITED,
+    entityType: "meeting",
     entityId: id,
     metadata: { title: trimmedTitle },
   });
 }
+
+export const updateConsultationTitle = updateMeetingTitle;
 
 export async function updateTranscript({
   id,
@@ -97,14 +101,14 @@ export async function updateTranscript({
 
   await emitAuditEvent({
     consultationId: id,
-    action: AUDIT_ACTIONS.CONSULTATION_TRANSCRIPT_EDITED,
-    entityType: "consultation",
+    action: AUDIT_ACTIONS.MEETING_TRANSCRIPT_EDITED,
+    entityType: "meeting",
     entityId: id,
     metadata: { transcriptLength: transcriptRaw.length },
   });
 }
 
-export async function setConsultationRound(
+export async function assignMeetingConsultation(
   id: string,
   consultationId: string | null
 ) {
@@ -121,12 +125,14 @@ export async function setConsultationRound(
 
   await emitAuditEvent({
     consultationId: id,
-    action: AUDIT_ACTIONS.CONSULTATION_ROUND_ASSIGNED,
-    entityType: "consultation",
+    action: AUDIT_ACTIONS.MEETING_CONSULTATION_ASSIGNED,
+    entityType: "meeting",
     entityId: id,
     metadata: { consultation_id: consultationId },
   });
 }
+
+export const setConsultationRound = assignMeetingConsultation;
 
 export async function updateNotes({
   id,
@@ -143,7 +149,7 @@ export async function updateNotes({
   );
 }
 
-export async function markConsultationComplete(id: string) {
+export async function markMeetingComplete(id: string) {
   const userId = await requireCurrentUserId();
   await requireOwnedMeeting(id, userId);
 
@@ -154,8 +160,10 @@ export async function markConsultationComplete(id: string) {
 
   await emitAuditEvent({
     consultationId: id,
-    action: AUDIT_ACTIONS.CONSULTATION_COMPLETED,
-    entityType: "consultation",
+    action: AUDIT_ACTIONS.MEETING_COMPLETED,
+    entityType: "meeting",
     entityId: id,
   });
 }
+
+export const markConsultationComplete = markMeetingComplete;

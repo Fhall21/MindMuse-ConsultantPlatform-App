@@ -35,7 +35,7 @@ export function RoundOutputCard({
   label,
   description,
   output,
-  emptyMessage = "This round output has not been generated yet.",
+  emptyMessage = "This consultation output has not been generated yet.",
 }: RoundOutputCardProps) {
   return (
     <Card className="border-border/70">

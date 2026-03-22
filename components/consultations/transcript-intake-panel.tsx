@@ -149,16 +149,19 @@ async function extractTranscriptFromDocx(file: File) {
 }
 
 interface TranscriptIntakePanelProps {
-  consultationId: string;
+  meetingId?: string;
+  consultationId?: string;
   initialTranscript: string | null;
   readOnly?: boolean;
 }
 
 export function TranscriptIntakePanel({
+  meetingId,
   consultationId,
   initialTranscript,
   readOnly = false,
 }: TranscriptIntakePanelProps) {
+  const resolvedMeetingId = meetingId ?? consultationId;
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>("paste");
   // transcriptValue seeds TranscriptEditor on (re)mount.
@@ -191,7 +194,7 @@ export function TranscriptIntakePanel({
     setTranscriptValue(text);
     setActiveTab("paste");
     queryClient.setQueryData<ConsultationCacheData>(
-      ["meetings", consultationId],
+      ["meetings", resolvedMeetingId],
       (current) => {
         if (!current?.meeting) {
           return current;
@@ -211,13 +214,10 @@ export function TranscriptIntakePanel({
   function handleTranscriptFromAudio(text: string) {
     applyLocalTranscript(text);
     // Auto-save so downstream panels respond immediately (same reason as file upload).
-    updateTranscript({ id: consultationId, transcriptRaw: text })
+    updateTranscript({ id: resolvedMeetingId!, transcriptRaw: text })
       .then(() => {
         pendingLocalRef.current = false;
-        return Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["meetings", consultationId] }),
-          queryClient.invalidateQueries({ queryKey: ["meetings"] }),
-        ]);
+        return queryClient.invalidateQueries({ queryKey: ["meetings", resolvedMeetingId] });
       })
       .catch(() => {
         // Optimistic update still in place; user can manually save.
@@ -272,12 +272,9 @@ export function TranscriptIntakePanel({
       // refetchOnWindowFocus triggered by the OS file picker closing can
       // overwrite the optimistic setQueryData patch with stale server data.
       try {
-        await updateTranscript({ id: consultationId, transcriptRaw: extractedText });
+        await updateTranscript({ id: resolvedMeetingId!, transcriptRaw: extractedText });
         pendingLocalRef.current = false;
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["meetings", consultationId] }),
-          queryClient.invalidateQueries({ queryKey: ["meetings"] }),
-        ]);
+        await queryClient.invalidateQueries({ queryKey: ["meetings", resolvedMeetingId] });
       } catch {
         // Auto-save failed — the optimistic update is still in place; the
         // user can manually save from the Paste tab.
@@ -292,7 +289,7 @@ export function TranscriptIntakePanel({
   if (readOnly) {
     return (
       <TranscriptEditor
-        consultationId={consultationId}
+        meetingId={resolvedMeetingId}
         initialValue={transcriptValue}
         readOnly
       />
@@ -322,7 +319,7 @@ export function TranscriptIntakePanel({
       {/* Paste tab */}
       {activeTab === "paste" && (
         <TranscriptEditor
-          consultationId={consultationId}
+          meetingId={resolvedMeetingId}
           initialValue={transcriptValue}
           readOnly={false}
           onSaved={handleTranscriptSaved}
@@ -382,7 +379,7 @@ export function TranscriptIntakePanel({
       {/* Audio tab */}
       {activeTab === "audio" && (
         <AudioUploadPanel
-          consultationId={consultationId}
+          meetingId={resolvedMeetingId}
           onTranscriptReady={handleTranscriptFromAudio}
         />
       )}

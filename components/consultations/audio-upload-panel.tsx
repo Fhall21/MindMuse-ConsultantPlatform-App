@@ -11,7 +11,8 @@ import {
 import type { TranscriptionJobStatus } from "@/lib/actions/ingestion";
 
 interface AudioUploadPanelProps {
-  consultationId: string;
+  meetingId?: string;
+  consultationId?: string;
   /** Called when transcription completes with the transcript text */
   onTranscriptReady: (transcript: string) => void;
 }
@@ -50,9 +51,11 @@ function formatUpdatedAt(iso: string): string {
 }
 
 export function AudioUploadPanel({
+  meetingId,
   consultationId,
   onTranscriptReady,
 }: AudioUploadPanelProps) {
+  const resolvedMeetingId = meetingId ?? consultationId;
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -90,7 +93,7 @@ export function AudioUploadPanel({
 
     try {
       const { jobId: newJobId } = await uploadAudioForTranscription({
-        meetingId: consultationId,
+        meetingId: resolvedMeetingId!,
         fileName: file.name,
         fileType: file.type,
         fileBase64: "",
@@ -101,7 +104,7 @@ export function AudioUploadPanel({
 
       await updateTranscriptionJob({
         jobId: newJobId,
-        meetingId: consultationId,
+        meetingId: resolvedMeetingId!,
         status: "processing",
         startedAt: new Date().toISOString(),
       });
@@ -123,14 +126,14 @@ export function AudioUploadPanel({
 
       await updateTranscriptionJob({
         jobId: newJobId,
-        meetingId: consultationId,
+        meetingId: resolvedMeetingId!,
         status: "completed",
         transcriptText: result.transcript,
         completedAt: new Date().toISOString(),
       });
 
-      await queryClient.invalidateQueries({ queryKey: ["transcription_jobs", consultationId] });
-      await queryClient.invalidateQueries({ queryKey: ["audit_log", consultationId] });
+      await queryClient.invalidateQueries({ queryKey: ["transcription_jobs", "meeting", resolvedMeetingId] });
+      await queryClient.invalidateQueries({ queryKey: ["audit_log", "meeting", resolvedMeetingId] });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Upload failed. Please try again.";
@@ -138,14 +141,14 @@ export function AudioUploadPanel({
       if (createdJobId) {
         await updateTranscriptionJob({
           jobId: createdJobId,
-          meetingId: consultationId,
+          meetingId: resolvedMeetingId!,
           status: "failed",
           errorMessage: message,
           completedAt: new Date().toISOString(),
         }).catch(() => undefined);
 
-        await queryClient.invalidateQueries({ queryKey: ["transcription_jobs", consultationId] });
-        await queryClient.invalidateQueries({ queryKey: ["audit_log", consultationId] });
+        await queryClient.invalidateQueries({ queryKey: ["transcription_jobs", "meeting", resolvedMeetingId] });
+        await queryClient.invalidateQueries({ queryKey: ["audit_log", "meeting", resolvedMeetingId] });
       }
 
       // Show user-friendly message for stub state

@@ -10,6 +10,8 @@ import type { ReportArtifactDetail } from "@/lib/actions/reports";
 import {
   buildReportGraphModel,
   formatConnectionTypeLabel,
+  getAcceptedConsultationThemes,
+  getSupportingMeetingThemes,
   type ReportGraphModel,
 } from "@/lib/report-graph";
 
@@ -338,7 +340,7 @@ const s = StyleSheet.create({
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const artifactTypeLabels: Record<string, string> = {
-  summary: "Round Summary",
+  summary: "Consultation Summary",
   report: "Board-Pack Report",
   email: "Evidence Email",
 };
@@ -615,17 +617,8 @@ export function ReportPrintLayout({
   const generatedDate = formatPdfDate(report.generatedAt);
   const graphModel = buildReportGraphModel(report.inputSnapshot);
 
-  const inputThemes = report.inputSnapshot.accepted_round_themes as
-    | Array<{ label: string; description?: string | null }>
-    | undefined;
-  const supportingThemes =
-    report.inputSnapshot.supporting_consultation_themes as
-      | Array<{
-          label: string;
-          description?: string | null;
-          consultation_title?: string | null;
-        }>
-      | undefined;
+  const inputThemes = getAcceptedConsultationThemes(report.inputSnapshot);
+  const supportingThemes = getSupportingMeetingThemes(report.inputSnapshot);
 
   const acceptedToShow =
     template === "executive" ? inputThemes?.slice(0, 3) : inputThemes;
@@ -679,7 +672,7 @@ export function ReportPrintLayout({
         {/* ─── Quick Stats ─── */}
         <View style={s.statsRow}>
           <View style={s.statBox}>
-            <Text style={s.statLabel}>Consultations</Text>
+            <Text style={s.statLabel}>Meetings</Text>
             <Text style={s.statValue}>
               {report.consultationTitles.length}
             </Text>

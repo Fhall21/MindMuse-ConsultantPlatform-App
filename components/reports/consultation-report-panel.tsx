@@ -79,7 +79,7 @@ export function ConsultationReportPanel({
       <CardHeader>
         <CardTitle>Consultation Report Context</CardTitle>
         <CardDescription>
-          Provenance-aware theme context used for round summaries, evidence
+          Provenance-aware theme context used for consultation summaries, evidence
           emails, and report surfaces.
         </CardDescription>
       </CardHeader>
@@ -99,10 +99,10 @@ export function ConsultationReportPanel({
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-medium">{theme.label}</p>
                     {theme.sourceKinds.includes("consultation") ? (
-                      <Badge variant="outline">Consultation</Badge>
+                      <Badge variant="outline">Meeting</Badge>
                     ) : null}
                     {theme.sourceKinds.includes("round") ? (
-                      <Badge variant="outline">Round</Badge>
+                      <Badge variant="outline">Consultation</Badge>
                     ) : null}
                     {theme.provenance.some((entry) => entry.isUserAdded) ? (
                       <Badge variant="outline">User added</Badge>
@@ -122,14 +122,14 @@ export function ConsultationReportPanel({
         </div>
 
         <ThemeSection
-          title="Consultation themes"
-          empty="No accepted consultation themes yet."
+          title="Meeting themes"
+          empty="No accepted meeting themes yet."
           themes={report.consultationThemes}
         />
 
         <ThemeSection
-          title={report.roundLabel ? `Round themes from ${report.roundLabel}` : "Round themes"}
-          empty="No accepted round themes are available yet."
+          title={report.roundLabel ? `Consultation themes from ${report.roundLabel}` : "Consultation themes"}
+          empty="No accepted consultation themes are available yet."
           themes={report.roundThemes}
         />
 

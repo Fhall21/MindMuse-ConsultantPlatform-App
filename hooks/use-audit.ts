@@ -2,26 +2,24 @@ import { useQuery } from "@tanstack/react-query";
 import type { AuditLogEntry } from "@/types/db";
 import { fetchJson } from "@/hooks/api";
 
-export function useAuditEvents(consultationId: string) {
+export function useMeetingAuditEvents(meetingId: string) {
   return useQuery({
-    queryKey: ["audit_log", consultationId],
+    queryKey: ["audit_log", "meeting", meetingId],
     queryFn: () =>
-      fetchJson<AuditLogEntry[]>(
-        `/api/client/audit/consultations/${consultationId}`
-      ),
+      fetchJson<AuditLogEntry[]>(`/api/client/audit/meetings/${meetingId}`),
+    enabled: !!meetingId,
+  });
+}
+
+export const useAuditEvents = useMeetingAuditEvents;
+
+export function useConsultationAuditEvents(consultationId: string) {
+  return useQuery({
+    queryKey: ["audit_log", "consultation", consultationId],
+    queryFn: () =>
+      fetchJson<AuditLogEntry[]>(`/api/client/audit/rounds/${consultationId}`),
     enabled: !!consultationId,
   });
 }
 
-export function useConsultationGroupAuditEvents(consultationGroupId: string) {
-  return useQuery({
-    queryKey: ["audit_log", "consultation_group", consultationGroupId],
-    queryFn: () =>
-      fetchJson<AuditLogEntry[]>(`/api/client/audit/consultation-groups/${consultationGroupId}`),
-    enabled: !!consultationGroupId,
-  });
-}
-
-export function useRoundAuditEvents(consultationGroupId: string) {
-  return useConsultationGroupAuditEvents(consultationGroupId);
-}
+export const useRoundAuditEvents = useConsultationAuditEvents;

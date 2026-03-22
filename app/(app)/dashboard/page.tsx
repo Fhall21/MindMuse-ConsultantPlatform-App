@@ -156,7 +156,7 @@ export default function DashboardPage() {
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold tracking-tight">Recent consultations</h2>
           <Button asChild variant="ghost" size="sm" className="text-xs">
-            <Link href="/consultations/">View all →</Link>
+            <Link href="/meetings">View all →</Link>
           </Button>
         </div>
 

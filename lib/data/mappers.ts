@@ -63,7 +63,9 @@ export function mapConsultationRoundRecord(
   return {
     id: row.id,
     title: row.title,
+    label: row.title,
     transcript_raw: row.transcriptRaw ?? null,
+    description: row.transcriptRaw ?? null,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
     user_id: row.userId,
@@ -76,7 +78,9 @@ export function mapMeetingRecord(row: MeetingRow): Meeting {
   return {
     id: row.id,
     title: row.title,
+    label: row.title,
     transcript_raw: row.transcriptRaw ?? null,
+    description: row.transcriptRaw ?? null,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
     user_id: row.userId,
@@ -152,6 +156,12 @@ export function mapAuditLogRecord(row: AuditLogRow): AuditLogEntry {
   return {
     id: row.id,
     meeting_id: row.meetingId,
+    consultation_id:
+      (typeof row.payload?.consultation_id === "string"
+        ? row.payload.consultation_id
+        : typeof row.payload?.consultationId === "string"
+          ? row.payload.consultationId
+          : null),
     action: row.action,
     entity_type: row.entityType,
     entity_id: row.entityId,

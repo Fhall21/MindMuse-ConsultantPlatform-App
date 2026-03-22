@@ -12,16 +12,19 @@ import { updateNotes } from "@/lib/actions/consultations";
 // Until then, saves will fail silently and show a "pending migration" notice.
 
 interface NotesEditorProps {
-  consultationId: string;
+  meetingId?: string;
+  consultationId?: string;
   initialValue: string | null | undefined;
   readOnly?: boolean;
 }
 
 export function NotesEditor({
+  meetingId,
   consultationId,
   initialValue,
   readOnly = false,
 }: NotesEditorProps) {
+  const resolvedMeetingId = meetingId ?? consultationId;
   const [text, setText] = useState(initialValue ?? "");
   const [savedText, setSavedText] = useState(initialValue ?? "");
   const [saving, setSaving] = useState(false);
@@ -43,12 +46,12 @@ export function NotesEditor({
     if (!isDirty || saving) return;
     setSaving(true);
     try {
-      await updateNotes({ id: consultationId, notes: text });
+      await updateNotes({ id: resolvedMeetingId!, notes: text });
       setSavedText(text);
       setSavedAt(new Date());
       setShowSavedConfirm(true);
       setMigrationPending(false);
-      queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] });
+      queryClient.invalidateQueries({ queryKey: ["meetings", resolvedMeetingId] });
       if (savedConfirmTimer.current) clearTimeout(savedConfirmTimer.current);
       savedConfirmTimer.current = setTimeout(() => setShowSavedConfirm(false), 3000);
     } catch (err) {

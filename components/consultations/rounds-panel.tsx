@@ -11,19 +11,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useConsultations } from "@/hooks/use-consultations";
-import { setConsultationRound } from "@/lib/actions/consultations";
+import { assignMeetingConsultation } from "@/lib/actions/consultations";
 
 interface RoundsPanelProps {
-  consultationId: string;
+  meetingId?: string;
+  consultationId?: string;
   currentRoundId: string | null;
   currentRoundLabel: string | null;
 }
 
 export function RoundsPanel({
+  meetingId,
   consultationId,
   currentRoundId,
   currentRoundLabel,
 }: RoundsPanelProps) {
+  const resolvedMeetingId = meetingId ?? consultationId;
   const queryClient = useQueryClient();
   const { data: rounds } = useConsultations();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -32,12 +35,12 @@ export function RoundsPanel({
   async function handleSelect(roundId: string | null) {
     setAssigning(roundId ?? "__clear__");
     try {
-      await setConsultationRound(consultationId, roundId);
-      queryClient.invalidateQueries({ queryKey: ["consultations", consultationId] });
+      await assignMeetingConsultation(resolvedMeetingId!, roundId);
+      queryClient.invalidateQueries({ queryKey: ["meetings", resolvedMeetingId] });
       setDialogOpen(false);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to update round.");
+      toast.error("Failed to update consultation.");
     } finally {
       setAssigning(null);
     }
@@ -46,7 +49,7 @@ export function RoundsPanel({
   return (
     <div className="flex flex-wrap items-center gap-4">
       <span className="text-sm text-muted-foreground">
-        {currentRoundLabel ?? "No round assigned"}
+        {currentRoundLabel ?? "No consultation linked"}
       </span>
 
       <Button
@@ -54,13 +57,13 @@ export function RoundsPanel({
         variant="outline"
         onClick={() => setDialogOpen(true)}
       >
-        {currentRoundId ? "Change round" : "Assign round"}
+        {currentRoundId ? "Change consultation" : "Link consultation"}
       </Button>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Assign round</DialogTitle>
+            <DialogTitle>Link consultation</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-1">
@@ -69,7 +72,7 @@ export function RoundsPanel({
               disabled={assigning === "__clear__"}
               className="flex w-full items-center justify-between rounded px-3 py-2 text-sm hover:bg-accent disabled:opacity-50"
             >
-              <span className="text-muted-foreground">No round</span>
+              <span className="text-muted-foreground">No consultation</span>
               {currentRoundId === null && (
                 <span className="text-xs text-muted-foreground">current</span>
               )}
@@ -91,7 +94,7 @@ export function RoundsPanel({
 
             {(!rounds || rounds.length === 0) && (
               <p className="py-2 text-center text-sm text-muted-foreground">
-                No rounds created yet. Add rounds in Settings.
+                No consultations created yet. Add consultations in Settings.
               </p>
             )}
           </div>

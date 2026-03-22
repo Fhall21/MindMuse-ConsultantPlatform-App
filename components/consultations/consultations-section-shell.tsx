@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { ConsultationsNav } from "@/components/consultations/consultations-nav";
 
-const consultationNavPaths = new Set(["/consultations", "/consultations/rounds"]);
+const consultationNavPaths = new Set(["/consultations"]);
 
 export function ConsultationsSectionShell({
   children,

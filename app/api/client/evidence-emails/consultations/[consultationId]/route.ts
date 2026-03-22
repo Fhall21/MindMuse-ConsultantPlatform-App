@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   getMeetingForUser,
-  listEvidenceEmailsForConsultation,
+  listEvidenceEmailsForMeeting,
 } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../../_helpers";
 
@@ -22,7 +22,7 @@ export async function GET(
       return jsonError("Consultation not found", 404);
     }
 
-    const evidenceEmails = await listEvidenceEmailsForConsultation(
+    const evidenceEmails = await listEvidenceEmailsForMeeting(
       consultationId,
       client.userId
     );

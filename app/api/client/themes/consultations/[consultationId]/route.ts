@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import {
+  deleteInsightsForMeeting,
   getMeetingForUser,
-  deleteInsightsForConsultation,
-  listInsightsForConsultation,
+  listInsightsForMeeting,
 } from "@/lib/data/domain-read";
 import { jsonError, requireRouteClient } from "../../../_helpers";
 
@@ -23,7 +23,7 @@ export async function GET(
       return jsonError("Consultation not found", 404);
     }
 
-    const themes = await listInsightsForConsultation(
+    const themes = await listInsightsForMeeting(
       consultationId,
       client.userId
     );
@@ -48,7 +48,7 @@ export async function DELETE(
   }
 
   try {
-    await deleteInsightsForConsultation(consultationId, client.userId);
+    await deleteInsightsForMeeting(consultationId, client.userId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Failed to delete themes");

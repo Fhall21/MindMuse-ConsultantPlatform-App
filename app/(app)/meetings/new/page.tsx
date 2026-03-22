@@ -9,41 +9,41 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createConsultation } from "@/lib/actions/consultations";
+import { createMeeting } from "@/lib/actions/consultations";
 import { useConsultations } from "@/hooks/use-consultations";
 
-const newConsultationSchema = z.object({
+const newMeetingSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
-  roundId: z.string().optional(),
+  consultationId: z.string().optional(),
 });
 
-type NewConsultationFormData = z.infer<typeof newConsultationSchema>;
+type NewMeetingFormData = z.infer<typeof newMeetingSchema>;
 
-export default function NewConsultationPage() {
+export default function NewMeetingPage() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
-  const { data: rounds } = useConsultations();
+  const { data: consultations } = useConsultations();
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<NewConsultationFormData>({
-    resolver: zodResolver(newConsultationSchema),
-    defaultValues: { title: "", roundId: "" },
+  } = useForm<NewMeetingFormData>({
+    resolver: zodResolver(newMeetingSchema),
+    defaultValues: { title: "", consultationId: "" },
   });
 
-  async function onSubmit(data: NewConsultationFormData) {
+  async function onSubmit(data: NewMeetingFormData) {
     setSubmitting(true);
     try {
-      const id = await createConsultation({
+      const id = await createMeeting({
         title: data.title,
-        consultationId: data.roundId || undefined,
+        consultationId: data.consultationId || undefined,
       });
-      router.push(`/consultations/${id}`);
+      router.push(`/meetings/${id}`);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to create consultation. Please try again.");
+      toast.error("Failed to create meeting. Please try again.");
       setSubmitting(false);
     }
   }
@@ -71,16 +71,16 @@ export default function NewConsultationPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="roundId">Consultation (optional)</Label>
+          <Label htmlFor="consultationId">Consultation (optional)</Label>
           <select
-            id="roundId"
-            {...register("roundId")}
+            id="consultationId"
+            {...register("consultationId")}
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="">No consultation</option>
-            {rounds?.map((round) => (
-              <option key={round.id} value={round.id}>
-                {round.label}
+            {consultations?.map((consultation) => (
+              <option key={consultation.id} value={consultation.id}>
+                {consultation.label}
               </option>
             ))}
           </select>
@@ -93,7 +93,7 @@ export default function NewConsultationPage() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.push("/consultations")}
+            onClick={() => router.push("/meetings")}
           >
             Cancel
           </Button>

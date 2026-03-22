@@ -22,9 +22,9 @@ interface RoundOutputsSectionProps {
 }
 
 const outputTypeLabels: Record<string, string> = {
-  summary: "Round Summary",
-  report: "Round Report",
-  email: "Round Email",
+  summary: "Consultation Summary",
+  report: "Consultation Report",
+  email: "Evidence Email",
 };
 
 const statusBadgeConfig: Record<string, { label: string; className: string }> = {
@@ -74,9 +74,9 @@ export function RoundOutputsSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Round Outputs</CardTitle>
+        <CardTitle className="text-base">Consultation Outputs</CardTitle>
         <CardDescription>
-          Generate summaries, reports, and emails from this round&apos;s accepted themes and groups.
+          Generate summaries, reports, and emails from this consultation&apos;s accepted themes and groups.
           Outputs are generated manually, not automatically.
         </CardDescription>
       </CardHeader>

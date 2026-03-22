@@ -17,8 +17,8 @@ export default async function CanvasRoundPage({ params }: CanvasRoundPageProps) 
   const { roundId } = await params;
 
   const userId = await requireCurrentUserId();
-  const round = await getConsultationForUser(roundId, userId);
-  if (!round) notFound();
+  const consultation = await getConsultationForUser(roundId, userId);
+  if (!consultation) notFound();
 
   return (
     <div className="-mx-4 -my-5 flex h-[calc(100vh-3rem)] flex-col overflow-hidden sm:-mx-6">
@@ -28,14 +28,14 @@ export default async function CanvasRoundPage({ params }: CanvasRoundPageProps) 
           href="/consultations/"
           className="text-sm text-muted-foreground hover:text-foreground"
         >
-          Rounds
+          Consultations
         </Link>
         <span className="text-sm text-muted-foreground">/</span>
         <Link
           href={`/consultations/rounds/${roundId}`}
           className="text-sm text-muted-foreground hover:text-foreground"
         >
-          {round.label}
+          {consultation.label}
         </Link>
         <span className="text-sm text-muted-foreground">/</span>
         <span className="text-sm font-medium">Canvas</span>
@@ -43,7 +43,7 @@ export default async function CanvasRoundPage({ params }: CanvasRoundPageProps) 
 
       {/* Canvas workspace — fills remaining height */}
       <div className="flex-1 overflow-hidden">
-        <CanvasShell roundId={roundId} roundLabel={round.label} />
+        <CanvasShell roundId={roundId} roundLabel={consultation.label} />
       </div>
     </div>
   );

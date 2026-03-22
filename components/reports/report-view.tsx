@@ -19,6 +19,8 @@ import {
 import {
   buildReportGraphModel,
   formatConnectionTypeLabel,
+  getAcceptedConsultationThemes,
+  getSupportingMeetingThemes,
   type ReportGraphModel,
 } from "@/lib/report-graph";
 import {
@@ -34,7 +36,7 @@ import { toast } from "sonner";
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const artifactTypeLabels: Record<string, string> = {
-  summary: "Round Summary",
+  summary: "Consultation Summary",
   report: "Board-Pack Report",
   email: "Evidence Email",
 };
@@ -86,7 +88,7 @@ function QuickStats({ report }: { report: ReportArtifactDetail }) {
 
   const stats = [
     {
-      label: "Consultations",
+      label: "Meetings",
       value: consultationCount,
     },
     {
@@ -335,17 +337,8 @@ function LegacyFindingsSection({
   report: ReportArtifactDetail;
   template: ReportTemplate;
 }) {
-  const inputThemes = report.inputSnapshot.accepted_round_themes as
-    | Array<{ label: string; description?: string | null }>
-    | undefined;
-  const supportingThemes =
-    report.inputSnapshot.supporting_consultation_themes as
-      | Array<{
-          label: string;
-          description?: string | null;
-          consultation_title?: string | null;
-        }>
-      | undefined;
+  const inputThemes = getAcceptedConsultationThemes(report.inputSnapshot);
+  const supportingThemes = getSupportingMeetingThemes(report.inputSnapshot);
 
   const acceptedToShow =
     template === "executive" ? inputThemes?.slice(0, 3) : inputThemes;
@@ -981,7 +974,7 @@ export function ReportView({ artifactId }: ReportViewProps) {
           <span>Generated {formatDate(report.generatedAt)}</span>
           {report.consultationTitles.length > 0 && (
             <span>
-              {report.consultationTitles.length} consultation
+              {report.consultationTitles.length} meeting
               {report.consultationTitles.length === 1 ? "" : "s"}
             </span>
           )}

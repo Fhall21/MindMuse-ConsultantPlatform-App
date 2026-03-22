@@ -31,11 +31,11 @@ function normalizeRequiredId(value: string, field: string) {
 }
 
 export async function saveThemes(
-  consultationId: string,
+  meetingId: string,
   themeItems: ThemeData[]
 ) {
   const userId = await requireCurrentUserId();
-  const meeting = await requireOwnedMeeting(consultationId, userId);
+  const meeting = await requireOwnedMeeting(meetingId, userId);
 
   const themesWithMeetingId = themeItems.map((theme) => ({
     meetingId: meeting.id,
@@ -51,7 +51,7 @@ export async function saveThemes(
     .returning({ id: insights.id });
 
   await emitAuditEvent({
-    consultationId,
+    consultationId: meeting.consultationId,
     action: AUDIT_ACTIONS.THEME_EXTRACTION_REQUESTED,
     entityType: "themes",
     metadata: { count: themeItems.length },
@@ -66,13 +66,13 @@ export async function saveThemes(
  */
 export async function acceptTheme(
   id: string,
-  consultationId: string,
+  meetingId: string,
   roundId?: string
 ) {
   try {
     const normalizedInsightId = normalizeRequiredId(id, "Insight ID");
     const normalizedMeetingId = normalizeRequiredId(
-      consultationId,
+      meetingId,
       "Meeting ID"
     );
     const userId = await requireCurrentUserId();
@@ -95,7 +95,7 @@ export async function acceptTheme(
         .returning({ id: insights.id });
 
       if (updated.length === 0) {
-        throw new Error("Theme no longer exists in this consultation.");
+        throw new Error("Theme no longer exists in this meeting.");
       }
 
       await tx.insert(insightDecisionLogs).values({
@@ -124,7 +124,7 @@ export async function acceptTheme(
   } catch (error) {
     console.error("[themes.acceptTheme] failed", {
       insightId: id,
-      consultationId,
+      meetingId,
       roundId: roundId ?? null,
       error,
     });
@@ -139,18 +139,18 @@ export async function acceptTheme(
  */
 export async function rejectTheme(
   id: string,
-  consultationId: string,
+  meetingId: string,
   rationale: string = "",
   roundId?: string
 ) {
   const trimmedRationale = trimToNull(rationale);
   const userId = await requireCurrentUserId();
-  const normalizedMeetingId = normalizeRequiredId(consultationId, "Meeting ID");
+  const normalizedMeetingId = normalizeRequiredId(meetingId, "Meeting ID");
   const { meeting, theme } = await requireOwnedTheme(id, normalizedMeetingId, userId);
 
   const requiresRationale = meeting.status !== "draft";
   if (requiresRationale && !trimmedRationale) {
-    throw new Error("A rejection rationale is required once the consultation is locked.");
+    throw new Error("A rejection rationale is required once the meeting is locked.");
   }
 
   const [logRecord] = await db
@@ -196,13 +196,13 @@ export async function rejectTheme(
  * User-added themes get higher weight for AI personalization
  */
 export async function addUserTheme(
-  consultationId: string,
+  meetingId: string,
   label: string,
   description?: string,
   roundId?: string
 ) {
   const userId = await requireCurrentUserId();
-  const meeting = await requireOwnedMeeting(consultationId, userId);
+  const meeting = await requireOwnedMeeting(meetingId, userId);
 
   // Insert the theme with user_added flag and higher weight
   const [themeData] = await db

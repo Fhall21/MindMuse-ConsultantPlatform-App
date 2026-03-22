@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { useAuditEvents, useConsultationGroupAuditEvents } from "@/hooks/use-audit";
+import { useConsultationAuditEvents, useMeetingAuditEvents } from "@/hooks/use-audit";
 import type { AuditLogEntry } from "@/types/db";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,8 @@ import { Card, CardContent } from "@/components/ui/card";
 const SEVEN_DAYS_IN_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface AuditTrailProps {
-  consultationId: string;
+  meetingId?: string;
+  consultationId?: string;
 }
 
 function getErrorMessage(error: unknown) {
@@ -51,18 +52,24 @@ function buildEventLabel(event: AuditLogEntry) {
 
   switch (event.action) {
     // Consultation events
+    case "meeting.created":
     case "consultation.created":
-      return "Consultation created";
+      return "Meeting created";
+    case "meeting.title_edited":
     case "consultation.title_edited":
-      return "Consultation title updated";
+      return "Meeting title updated";
+    case "meeting.transcript_edited":
     case "consultation.transcript_edited":
       return "Transcript updated";
+    case "meeting.notes_edited":
     case "consultation.notes_edited":
       return "Notes updated";
+    case "meeting.completed":
     case "consultation.completed":
-      return "Consultation marked complete";
+      return "Meeting marked complete";
+    case "meeting.consultation_assigned":
     case "consultation.round_assigned":
-      return "Assigned to round";
+      return "Assigned to consultation";
 
     // Person events
     case "person.linked":
@@ -126,11 +133,11 @@ function buildEventLabel(event: AuditLogEntry) {
 
     // Round lifecycle
     case "round.created":
-      return "Round created";
+      return "Consultation created";
     case "round.updated":
-      return "Round updated";
+      return "Consultation updated";
     case "round.deleted":
-      return "Round deleted";
+      return "Consultation deleted";
 
     // Round theme group events
     case "round.theme_group_created":
@@ -168,7 +175,7 @@ function buildEventLabel(event: AuditLogEntry) {
 
     // Round output
     case "round.output_generated":
-      return "Round output generated";
+      return "Consultation output generated";
 
     default:
       return humanizeAction(event.action);
@@ -219,7 +226,7 @@ function formatAbsoluteTime(value: string) {
 }
 
 function getDotClassName(action: string) {
-  if (action.startsWith("consultation.")) {
+  if (action.startsWith("meeting.") || action.startsWith("consultation.")) {
     return "bg-slate-400";
   }
 
@@ -271,7 +278,7 @@ function TimelineEvents({ events }: { events: AuditLogEntry[] }) {
 function AuditTrailCard({
   auditQuery,
 }: {
-  auditQuery: ReturnType<typeof useAuditEvents> | ReturnType<typeof useConsultationGroupAuditEvents>;
+  auditQuery: ReturnType<typeof useMeetingAuditEvents> | ReturnType<typeof useConsultationAuditEvents>;
 }) {
   const [showEarlier, setShowEarlier] = useState(false);
 
@@ -329,17 +336,20 @@ function AuditTrailCard({
   );
 }
 
-export function AuditTrail({ consultationId }: AuditTrailProps) {
-  const auditQuery = useAuditEvents(consultationId);
+export function AuditTrail({ meetingId, consultationId }: AuditTrailProps) {
+  const resolvedMeetingId = meetingId ?? consultationId;
+  const auditQuery = useMeetingAuditEvents(resolvedMeetingId ?? "");
   return <AuditTrailCard auditQuery={auditQuery} />;
 }
 
 interface RoundAuditTrailProps {
-  consultationGroupId: string;
+  consultationGroupId?: string;
+  roundId?: string;
 }
 
-export function RoundAuditTrail({ consultationGroupId }: RoundAuditTrailProps) {
-  const auditQuery = useConsultationGroupAuditEvents(consultationGroupId);
+export function RoundAuditTrail({ consultationGroupId, roundId }: RoundAuditTrailProps) {
+  const resolvedRoundId = roundId ?? consultationGroupId ?? "";
+  const auditQuery = useConsultationAuditEvents(resolvedRoundId);
   return (
     <AuditTrailCard
       auditQuery={auditQuery}

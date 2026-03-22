@@ -15,7 +15,6 @@ const { createThemeMock, moveThemeToGroupMock } = vi.hoisted(() => ({
 
 const canvasData: CanvasData = {
   consultation_id: "consultation-1",
-  round_id: "round-1",
   viewport: { x: 0, y: 0, zoom: 1 },
   nodes: [
     {

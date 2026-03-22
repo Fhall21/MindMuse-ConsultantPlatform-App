@@ -9,11 +9,13 @@ export function usePeople() {
   });
 }
 
-export function useConsultationPeople(consultationId: string) {
+export function useMeetingPeople(meetingId: string) {
   return useQuery({
-    queryKey: ["consultation_people", consultationId],
+    queryKey: ["meeting_people", meetingId],
     queryFn: () =>
-      fetchJson<Person[]>(`/api/client/meetings/${consultationId}/people`),
-    enabled: !!consultationId,
+      fetchJson<Person[]>(`/api/client/meetings/${meetingId}/people`),
+    enabled: !!meetingId,
   });
 }
+
+export const useConsultationPeople = useMeetingPeople;

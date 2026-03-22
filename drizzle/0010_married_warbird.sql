@@ -1,0 +1,1 @@
+ALTER TABLE "theme_members" ADD COLUMN "source_meeting_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;

@@ -71,6 +71,8 @@ export function mapConsultationRoundRecord(
     user_id: row.userId,
     status: row.status as ConsultationRound["status"],
     consultation_id: row.consultationId,
+    meeting_type_id: (row as { meetingTypeId?: string | null }).meetingTypeId ?? null,
+    meeting_date: (row as { meetingDate?: Date | null }).meetingDate?.toISOString() ?? null,
   };
 }
 
@@ -86,6 +88,8 @@ export function mapMeetingRecord(row: MeetingRow): Meeting {
     user_id: row.userId,
     status: row.status as Meeting["status"],
     consultation_id: row.consultationId,
+    meeting_type_id: (row as { meetingTypeId?: string | null }).meetingTypeId ?? null,
+    meeting_date: (row as { meetingDate?: Date | null }).meetingDate?.toISOString() ?? null,
   };
 }
 

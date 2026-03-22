@@ -39,6 +39,29 @@ export const consultations = pgTable(
   })
 );
 
+// User-managed meeting type taxonomy (e.g. "1-1 Interview" / code "1-1", "Focus Group" / code "FC")
+// Archive semantics: never hard-delete a type that may be referenced by existing meetings.
+// Use isActive=false to retire an option without breaking old records.
+export const meetingTypes = pgTable(
+  "meeting_types",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    code: text("code").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => ({
+    userIdx: index("idx_meeting_types_user_id").on(table.userId),
+    userCodeUnique: unique("meeting_types_user_code_key").on(table.userId, table.code),
+    userLabelUnique: unique("meeting_types_user_label_key").on(table.userId, table.label),
+    activeIdx: index("idx_meeting_types_active").on(table.userId, table.isActive),
+  })
+);
+
 export const meetings = pgTable(
   "meetings",
   {
@@ -50,6 +73,9 @@ export const meetings = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     status: text("status").default("draft").notNull(),
     consultationId: uuid("consultation_id").references(() => consultations.id, { onDelete: "set null" }),
+    // Structured meeting metadata — used to generate the coded title
+    meetingTypeId: uuid("meeting_type_id").references(() => meetingTypes.id, { onDelete: "set null" }),
+    meetingDate: timestamp("meeting_date", { withTimezone: true }),
     ...timestamps,
   },
   (table) => ({
@@ -60,6 +86,8 @@ export const meetings = pgTable(
     userIdx: index("idx_meetings_user_id").on(table.userId),
     statusIdx: index("idx_meetings_status").on(table.status),
     consultationIdx: index("idx_meetings_consultation_id").on(table.consultationId),
+    meetingTypeIdx: index("idx_meetings_meeting_type_id").on(table.meetingTypeId),
+    meetingDateIdx: index("idx_meetings_meeting_date").on(table.meetingDate),
   })
 );
 

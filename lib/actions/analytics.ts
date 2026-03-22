@@ -15,6 +15,7 @@ import {
   requireOwnedRound,
 } from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "./audit-actions";
+import { sanitizeAnalyticsErrorMessage } from "@/lib/analytics-error";
 import {
   getConsultationAnalytics,
   getRoundAnalytics,
@@ -64,7 +65,9 @@ function mapJobRow(row: AnalyticsJobRow): AnalyticsJobStatus {
     progress: row.progress,
     startedAt: toIsoString(row.startedAt),
     completedAt: toIsoString(row.completedAt),
-    errorMessage: row.errorMessage ?? null,
+    errorMessage: row.errorMessage
+      ? sanitizeAnalyticsErrorMessage(row.errorMessage)
+      : null,
   };
 }
 

@@ -36,6 +36,7 @@ import {
   loadRoundAnalyticsSummary,
   type RoundAnalyticsSummary,
 } from "@/lib/data/analytics-read";
+import { resolveDecisionTargetLabel } from "@/lib/decision-history";
 import type {
   Consultation,
   ConsultationRound,
@@ -1167,12 +1168,7 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
         id: decision.id,
         targetType: decision.target_type,
         targetId: decision.target_id,
-        targetLabel:
-          decision.target_type === "theme_group"
-            ? (groupLabelById.get(decision.target_id) ?? null)
-            : decision.target_type === "source_theme"
-              ? (themeLabelById.get(decision.target_id) ?? null)
-              : null,
+        targetLabel: resolveDecisionTargetLabel(decision, groupLabelById, themeLabelById),
         decisionType: decision.decision_type,
         rationale: decision.rationale ?? null,
         actor: decision.user_id,

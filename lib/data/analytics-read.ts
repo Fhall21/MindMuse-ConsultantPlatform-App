@@ -19,6 +19,7 @@ import type {
   TermClusterMembership,
   TermExtraction,
 } from "@/types/analytics";
+import { sanitizeAnalyticsErrorMessage } from "@/lib/analytics-error";
 import { requireOwnedMeeting, requireOwnedRound } from "./ownership";
 
 type AnalyticsJobRow = typeof analyticsJobs.$inferSelect;
@@ -78,7 +79,9 @@ function mapJobRow(row: AnalyticsJobRow): AnalyticsJobStatus {
     progress: row.progress,
     startedAt: toIsoString(row.startedAt),
     completedAt: toIsoString(row.completedAt),
-    errorMessage: row.errorMessage ?? null,
+    errorMessage: row.errorMessage
+      ? sanitizeAnalyticsErrorMessage(row.errorMessage)
+      : null,
   };
 }
 

@@ -39,4 +39,13 @@ describe("hooks/api", () => {
 
     await expect(fetchJson("/api/example")).rejects.toThrow("Request timed out");
   });
+
+  it("extracts the detail field from JSON error responses", async () => {
+    const response = new Response(JSON.stringify({ detail: "Analytics failed safely" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+
+    await expect(readErrorMessage(response)).resolves.toBe("Analytics failed safely");
+  });
 });

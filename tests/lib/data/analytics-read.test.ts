@@ -102,6 +102,33 @@ describe("lib/data/analytics-read", () => {
     expect(summary.latestJobStatus?.phase).toBe("extracting");
   });
 
+  it("sanitizes persisted technical job errors before returning them to the UI", () => {
+    const summary = buildRoundAnalyticsSummary(
+      buildInput({
+        meetingIds: ["consultation-1"],
+        jobRows: [
+          {
+            id: "job-1",
+            meetingId: "consultation-1",
+            consultationId: "round-1",
+            phase: "failed",
+            progress: 100,
+            startedAt: new Date("2026-03-19T11:00:00.000Z"),
+            completedAt: new Date("2026-03-19T11:02:00.000Z"),
+            errorMessage:
+              "(psycopg2.errors.InvalidColumnReference) there is no unique or exclusion constraint matching the ON CONFLICT specification [SQL: INSERT INTO term_embeddings ...]",
+            createdAt: new Date("2026-03-19T11:02:00.000Z"),
+            updatedAt: new Date("2026-03-19T11:02:00.000Z"),
+          },
+        ] as never,
+      })
+    );
+
+    expect(summary.latestJobStatus?.errorMessage).toBe(
+      "Analytics failed. Retry the run. If it keeps failing, check server logs."
+    );
+  });
+
   it("keeps outliers explicit and counts clustered terms separately", () => {
     const summary = buildRoundAnalyticsSummary(
       buildInput({

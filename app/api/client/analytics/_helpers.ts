@@ -1,4 +1,5 @@
 import { jsonError } from "../_helpers";
+import { sanitizeAnalyticsErrorMessage } from "@/lib/analytics-error";
 
 export function analyticsRouteError(error: unknown, fallbackMessage: string) {
   const message = error instanceof Error ? error.message : fallbackMessage;
@@ -23,5 +24,11 @@ export function analyticsRouteError(error: unknown, fallbackMessage: string) {
     return jsonError(message, 400);
   }
 
-  return jsonError(message, 500);
+  console.error("[analytics] request failed", {
+    fallbackMessage,
+    error: error instanceof Error ? error.message : error,
+    stack: error instanceof Error ? error.stack : undefined,
+  });
+
+  return jsonError(sanitizeAnalyticsErrorMessage(message, fallbackMessage), 500);
 }

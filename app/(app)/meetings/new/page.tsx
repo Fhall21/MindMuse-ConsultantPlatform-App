@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { X, Plus, ChevronDown, FileText, PenLine, Upload } from "lucide-react";
+import { X, Plus, Check, ChevronDown, FileText, PenLine, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -103,10 +103,18 @@ function PeopleField({
   selected,
   onAdd,
   onRemove,
+  suggestedExisting = [],
+  onDismissSuggestedExisting,
+  suggestedNewNames = [],
+  onDismissSuggestedNew,
 }: {
   selected: Person[];
   onAdd: (person: Person) => void;
   onRemove: (id: string) => void;
+  suggestedExisting?: Person[];
+  onDismissSuggestedExisting?: (id: string) => void;
+  suggestedNewNames?: string[];
+  onDismissSuggestedNew?: (name: string) => void;
 }) {
   const { data: allPeople = [] } = usePeople();
   const [search, setSearch] = useState("");
@@ -186,6 +194,66 @@ function PeopleField({
               </button>
             </Badge>
           ))}
+        </div>
+      )}
+
+      {/* Suggested existing people — user must confirm */}
+      {suggestedExisting.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">Found in your contacts — confirm to add</p>
+          <div className="flex flex-wrap gap-1.5">
+            {suggestedExisting.map((p) => (
+              <span
+                key={p.id}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border bg-muted/30 pl-2.5 pr-1.5 py-1 text-xs"
+              >
+                {p.name.split(/\s+/)[0]}
+                <button
+                  type="button"
+                  title="Add this person"
+                  onClick={() => {
+                    onAdd(p);
+                    onDismissSuggestedExisting?.(p.id);
+                  }}
+                  className="rounded p-0.5 hover:bg-green-100 dark:hover:bg-green-900/30"
+                >
+                  <Check className="h-3 w-3 text-green-600" />
+                </button>
+                <button
+                  type="button"
+                  title="Dismiss"
+                  onClick={() => onDismissSuggestedExisting?.(p.id)}
+                  className="rounded p-0.5 hover:bg-muted"
+                >
+                  <X className="h-3 w-3 text-muted-foreground" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Unmatched names from transcript — click to open create form */}
+      {suggestedNewNames.length > 0 && !isCreating && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">New people from transcript — click to add</p>
+          <div className="flex flex-wrap gap-1.5">
+            {suggestedNewNames.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => {
+                  onDismissSuggestedNew?.(name);
+                  setCreatingName(name);
+                  setIsCreating(true);
+                }}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-xs transition-colors hover:bg-muted/50"
+              >
+                <Plus className="h-3 w-3" />
+                {name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -327,6 +395,11 @@ export default function NewMeetingPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: meetingTypes = [] } = useMeetingTypes();
+  const { data: allPeople = [] } = usePeople();
+
+  // Suggestion state (populated after transcript extraction)
+  const [suggestedExistingPeople, setSuggestedExistingPeople] = useState<Person[]>([]);
+  const [suggestedNewNames, setSuggestedNewNames] = useState<string[]>([]);
 
   // Form state
   const [consultationId, setConsultationId] = useState("");
@@ -392,37 +465,27 @@ export default function NewMeetingPage() {
         setMeetingDate(data.suggested_date);
       }
 
-      // Pre-fill people — create each by name
+      // Match suggested people against existing ones
       if (data.suggested_people?.length) {
         const names: string[] = data.suggested_people
           .map((n: unknown) => (typeof n === "string" ? n.trim() : ""))
           .filter(Boolean);
 
         if (names.length > 0) {
-          try {
-            const created = await Promise.all(
-              names.map((name) => createPerson({ name }))
+          const matched: Person[] = [];
+          const unmatched: string[] = [];
+          for (const name of names) {
+            const existing = allPeople.find(
+              (p) => p.name.toLowerCase() === name.toLowerCase()
             );
-            const newPeople: Person[] = names.map((name, i) => ({
-              id: created[i],
-              name,
-              working_group: null,
-              work_type: null,
-              role: null,
-              email: null,
-              created_at: new Date().toISOString(),
-              user_id: "",
-            }));
-            setSelectedPeople((prev) => {
-              const existingIds = new Set(prev.map((p) => p.id));
-              return [
-                ...prev,
-                ...newPeople.filter((p) => !existingIds.has(p.id)),
-              ];
-            });
-          } catch {
-            // Non-fatal — user can add people manually
+            if (existing) {
+              matched.push(existing);
+            } else {
+              unmatched.push(name);
+            }
           }
+          setSuggestedExistingPeople(matched);
+          setSuggestedNewNames(unmatched);
         }
       }
 
@@ -668,6 +731,14 @@ export default function NewMeetingPage() {
             onAdd={(p) => setSelectedPeople((prev) => [...prev, p])}
             onRemove={(id) =>
               setSelectedPeople((prev) => prev.filter((p) => p.id !== id))
+            }
+            suggestedExisting={suggestedExistingPeople}
+            onDismissSuggestedExisting={(id) =>
+              setSuggestedExistingPeople((prev) => prev.filter((p) => p.id !== id))
+            }
+            suggestedNewNames={suggestedNewNames}
+            onDismissSuggestedNew={(name) =>
+              setSuggestedNewNames((prev) => prev.filter((n) => n !== name))
             }
           />
         </div>

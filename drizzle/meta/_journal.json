@@ -99,6 +99,13 @@
       "when": 1774211138768,
       "tag": "0013_sparkling_logan",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1774214738768,
+      "tag": "0014_fix_insight_decision_log_columns",
+      "breakpoints": true
     }
   ]
 }

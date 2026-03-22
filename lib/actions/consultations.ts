@@ -213,3 +213,40 @@ export async function markMeetingComplete(id: string) {
 }
 
 export const markConsultationComplete = markMeetingComplete;
+
+interface UpdateMeetingFieldsParams {
+  id: string;
+  meetingTypeId?: string | null;
+  meetingDate?: Date | null;
+}
+
+export async function updateMeetingFields({
+  id,
+  meetingTypeId,
+  meetingDate,
+}: UpdateMeetingFieldsParams) {
+  const userId = await requireCurrentUserId();
+  await requireOwnedMeeting(id, userId);
+
+  const updates: Partial<typeof meetings.$inferInsert> = {};
+  if (meetingTypeId !== undefined) updates.meetingTypeId = meetingTypeId;
+  if (meetingDate !== undefined) updates.meetingDate = meetingDate;
+
+  if (Object.keys(updates).length === 0) return;
+
+  await db
+    .update(meetings)
+    .set(updates)
+    .where(and(eq(meetings.id, id), eq(meetings.userId, userId)));
+
+  await emitAuditEvent({
+    consultationId: id,
+    action: AUDIT_ACTIONS.MEETING_TITLE_EDITED,
+    entityType: "meeting",
+    entityId: id,
+    metadata: {
+      meeting_type_id: meetingTypeId,
+      meeting_date: meetingDate?.toISOString() ?? null,
+    },
+  });
+}

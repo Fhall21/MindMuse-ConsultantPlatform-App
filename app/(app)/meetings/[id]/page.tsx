@@ -27,10 +27,13 @@ import { PeoplePanel } from "@/components/consultations/people-panel";
 import { RoundsPanel } from "@/components/consultations/rounds-panel";
 import { useMeeting } from "@/hooks/use-meetings";
 import { useConsultations } from "@/hooks/use-consultations";
+import { useMeetingTypes } from "@/hooks/use-meeting-types";
 import {
   markMeetingComplete,
   updateMeetingTitle,
+  updateMeetingFields,
 } from "@/lib/actions/consultations";
+import { buildMeetingTitle } from "@/lib/meeting-title";
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
@@ -49,11 +52,13 @@ export default function MeetingDetailPage({
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useMeeting(id);
   const { data: rounds } = useConsultations();
+  const { data: meetingTypes = [] } = useMeetingTypes();
 
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
+  const [savingFields, setSavingFields] = useState(false);
 
   const meeting = data?.meeting;
   const isDraft = meeting?.status === "draft";
@@ -99,6 +104,28 @@ export default function MeetingDetailPage({
     } finally {
       setSavingTitle(false);
     }
+  }
+
+  async function handleSaveFields(opts: { meetingTypeId?: string | null; meetingDate?: Date | null }) {
+    if (!meeting) return;
+    setSavingFields(true);
+    try {
+      await updateMeetingFields({ id, ...opts });
+      await queryClient.invalidateQueries({ queryKey: ["meetings", id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update meeting.");
+    } finally {
+      setSavingFields(false);
+    }
+  }
+
+  function handleRegenerateTitle() {
+    if (!meeting) return;
+    const selectedType = meetingTypes.find((t) => t.id === meeting.meeting_type_id);
+    // We don't have people's names readily here; use empty for now
+    const date = meeting.meeting_date ? new Date(meeting.meeting_date) : null;
+    const generated = buildMeetingTitle(selectedType?.code, [], date);
+    if (generated) setTitleDraft(generated);
   }
 
   if (isLoading) {
@@ -213,6 +240,63 @@ export default function MeetingDetailPage({
                 meetingId={id}
                 currentRoundId={meeting.consultation_id}
                 currentRoundLabel={currentConsultation?.label ?? null}
+              />
+            </div>
+
+            {/* Meeting type */}
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Meeting Type
+              </p>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 max-w-xs">
+                  <select
+                    value={meeting.meeting_type_id ?? ""}
+                    onChange={(e) =>
+                      handleSaveFields({ meetingTypeId: e.target.value || null })
+                    }
+                    disabled={savingFields}
+                    className="flex h-8 w-full appearance-none rounded-md border border-input bg-transparent px-3 py-1 pr-7 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                  >
+                    <option value="">Not set</option>
+                    {meetingTypes.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label} ({t.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 text-xs text-muted-foreground"
+                  title="Regenerate title from type and date"
+                  onClick={handleRegenerateTitle}
+                >
+                  Regenerate title
+                </Button>
+              </div>
+            </div>
+
+            {/* Meeting date */}
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Date
+              </p>
+              <Input
+                type="date"
+                defaultValue={
+                  meeting.meeting_date
+                    ? new Date(meeting.meeting_date).toISOString().slice(0, 10)
+                    : ""
+                }
+                onBlur={(e) =>
+                  handleSaveFields({
+                    meetingDate: e.target.value ? new Date(e.target.value + "T12:00:00") : null,
+                  })
+                }
+                disabled={savingFields}
+                className="h-8 w-48 text-sm"
               />
             </div>
 

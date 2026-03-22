@@ -43,7 +43,13 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async (user) => {
-          await db.insert(profiles).values({ userId: user.id }).onConflictDoNothing();
+          await db
+            .insert(profiles)
+            .values({
+              userId: user.id,
+              displayName: user.name ?? null,
+            })
+            .onConflictDoNothing();
         },
       },
     },

@@ -333,7 +333,7 @@ function PeopleField({
               onClick={handleCreateNew}
               className="h-8 text-xs"
             >
-              Add
+              Confirm
             </Button>
           </div>
         </div>
@@ -504,6 +504,10 @@ export default function NewMeetingPage() {
     e.preventDefault();
     if (!title.trim()) {
       toast.error("A meeting title is required");
+      return;
+    }
+    if (selectedPeople.length === 0) {
+      toast.error("At least one person is required");
       return;
     }
     setSubmitting(true);
@@ -741,6 +745,11 @@ export default function NewMeetingPage() {
               setSuggestedNewNames((prev) => prev.filter((n) => n !== name))
             }
           />
+          {selectedPeople.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              At least one person is required.
+            </p>
+          )}
         </div>
 
         {/* Title — derived but editable */}
@@ -778,7 +787,7 @@ export default function NewMeetingPage() {
         </div>
 
         <div className="flex gap-3 pt-1">
-          <Button type="submit" disabled={submitting || !title.trim()}>
+          <Button type="submit" disabled={submitting || !title.trim() || selectedPeople.length === 0}>
             {submitting ? "Creating…" : "Create meeting"}
           </Button>
           <Button

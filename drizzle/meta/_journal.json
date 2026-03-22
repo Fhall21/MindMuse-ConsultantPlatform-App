@@ -57,6 +57,13 @@
       "when": 1774190400000,
       "tag": "0007_volatile_revanche",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774191000000,
+      "tag": "0008_fix_analytics_projection_trigger",
+      "breakpoints": true
     }
   ]
 }

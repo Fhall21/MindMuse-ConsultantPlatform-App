@@ -14,7 +14,7 @@ else:  # pragma: no cover - typing-only import
 
 CONSULTATION_PROJECTION_QUERY = """
 WITH latest_extraction AS (
-    SELECT id, consultation_id, round_id
+    SELECT id, consultation_id
     FROM extraction_results
     WHERE consultation_id = :consultation_id
     ORDER BY extracted_at DESC, created_at DESC
@@ -22,7 +22,6 @@ WITH latest_extraction AS (
 )
 SELECT
     latest_extraction.consultation_id,
-    latest_extraction.round_id,
     teo.term,
     teo.entity_type,
     COUNT(*)::int AS occurrence_count,
@@ -39,7 +38,6 @@ JOIN term_extraction_offsets AS teo
     ON teo.extraction_result_id = latest_extraction.id
 GROUP BY
     latest_extraction.consultation_id,
-    latest_extraction.round_id,
     teo.term,
     teo.entity_type
 ORDER BY teo.term, teo.entity_type
@@ -56,9 +54,6 @@ MATCH (c:Consultation {id: $consultationId})
 OPTIONAL MATCH (t:Term)-[appears:APPEARS_IN]->(c)
 DELETE appears
 WITH c
-OPTIONAL MATCH (c)-[partOf:PART_OF]->(:Round)
-DELETE partOf
-WITH c
 DETACH DELETE c
 """
 
@@ -68,14 +63,6 @@ SET c.updatedAt = datetime($syncedAt)
 WITH c
 OPTIONAL MATCH (t:Term)-[stale:APPEARS_IN]->(c)
 DELETE stale
-WITH c
-OPTIONAL MATCH (c)-[staleRound:PART_OF]->(:Round)
-DELETE staleRound
-WITH c
-FOREACH (_ IN CASE WHEN $roundId IS NULL THEN [] ELSE [1] END |
-  MERGE (r:Round {id: $roundId})
-  MERGE (c)-[:PART_OF]->(r)
-)
 WITH c
 UNWIND $terms AS term
 MERGE (t:Term {value: term.term, entityType: term.entityType})
@@ -119,14 +106,12 @@ class ConsultationProjectionTerm:
 @dataclass
 class ConsultationProjection:
     consultation_id: str
-    round_id: str | None
     terms: list[ConsultationProjectionTerm]
     synced_at: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "consultationId": self.consultation_id,
-            "roundId": self.round_id,
             "terms": [term.to_dict() for term in self.terms],
             "syncedAt": self.synced_at,
         }
@@ -213,7 +198,6 @@ def load_consultation_projection(db: Connection, consultation_id: str) -> Consul
 
     return ConsultationProjection(
         consultation_id=str(first_row["consultation_id"]),
-        round_id=_optional_str(first_row.get("round_id")),
         terms=terms,
         synced_at=_utc_now_iso(),
     )

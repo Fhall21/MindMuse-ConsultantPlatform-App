@@ -69,7 +69,6 @@ def test_load_consultation_projection_shapes_term_payload() -> None:
         [
             {
                 "consultation_id": "consultation-1",
-                "round_id": "round-1",
                 "term": "burnout",
                 "entity_type": "ISSUE",
                 "occurrence_count": 2,
@@ -80,7 +79,6 @@ def test_load_consultation_projection_shapes_term_payload() -> None:
             },
             {
                 "consultation_id": "consultation-1",
-                "round_id": "round-1",
                 "term": "housing",
                 "entity_type": "ISSUE",
                 "occurrence_count": 1,
@@ -93,7 +91,6 @@ def test_load_consultation_projection_shapes_term_payload() -> None:
 
     assert projection is not None
     assert projection.consultation_id == "consultation-1"
-    assert projection.round_id == "round-1"
     assert [term.term for term in projection.terms] == ["burnout", "housing"]
     assert projection.terms[0].to_dict()["offsets"][0]["charStart"] == 12
     assert db.calls[0][1] == {"consultation_id": "consultation-1"}
@@ -107,7 +104,6 @@ def test_projector_is_safe_noop_without_env() -> None:
         projector.project_consultation(
             ConsultationProjection(
                 consultation_id="consultation-1",
-                round_id=None,
                 terms=[ConsultationProjectionTerm("burnout", "ISSUE", 1)],
                 synced_at="2026-03-20T00:00:00+00:00",
             )
@@ -123,7 +119,6 @@ def test_projector_writes_cypher_when_driver_is_available() -> None:
 
     projection = ConsultationProjection(
         consultation_id="consultation-1",
-        round_id="round-1",
         terms=[
             ConsultationProjectionTerm(
                 term="burnout",
@@ -139,5 +134,6 @@ def test_projector_writes_cypher_when_driver_is_available() -> None:
     assert projector.delete_consultation_projection("consultation-1") is True
     assert len(driver.calls) == 2
     assert driver.calls[0][1]["consultationId"] == "consultation-1"
+    assert "roundId" not in driver.calls[0][1]
     assert driver.calls[0][1]["terms"][0]["occurrenceCount"] == 2
     assert driver.calls[1][1] == {"consultationId": "consultation-1"}

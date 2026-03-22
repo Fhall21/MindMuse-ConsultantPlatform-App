@@ -25,16 +25,39 @@ class EnabledProjector(Neo4jGraphProjector):
         self.enabled = True
 
 
+def test_coerce_outbox_event_uses_meeting_and_consultation_ids() -> None:
+    event = coerce_outbox_event(
+        {
+            "id": 7,
+            "meeting_id": "meeting-1",
+            "consultation_id": "consultation-1",
+            "event_type": "consultation_projection_refresh",
+            "source_table": "extraction_results",
+            "source_id": "result-1",
+            "payload": {"meetingId": "meeting-1", "consultationId": "consultation-1"},
+            "attempt_count": 2,
+            "last_error": None,
+            "processed_at": None,
+            "created_at": None,
+        }
+    )
+
+    assert event.id == 7
+    assert event.meeting_id == "meeting-1"
+    assert event.consultation_id == "consultation-1"
+    assert event.payload["meetingId"] == "meeting-1"
+
+
 def test_coerce_outbox_event_parses_json_payload() -> None:
     event = coerce_outbox_event(
         {
             "id": 7,
+            "meeting_id": "meeting-1",
             "consultation_id": "consultation-1",
-            "round_id": "round-1",
             "event_type": "consultation_projection_refresh",
             "source_table": "extraction_results",
             "source_id": "result-1",
-            "payload": json.dumps({"consultationId": "consultation-1"}),
+            "payload": json.dumps({"meetingId": "meeting-1", "consultationId": "consultation-1"}),
             "attempt_count": 2,
             "last_error": None,
             "processed_at": None,
@@ -43,6 +66,7 @@ def test_coerce_outbox_event_parses_json_payload() -> None:
     )
 
     assert isinstance(event, AnalyticsOutboxEvent)
+    assert event.meeting_id == "meeting-1"
     assert event.payload["consultationId"] == "consultation-1"
     assert event.attempt_count == 2
 
@@ -60,12 +84,12 @@ def test_process_pending_events_marks_rows_processed(monkeypatch) -> None:
         rows=[
             {
                 "id": 7,
+                "meeting_id": "meeting-1",
                 "consultation_id": "consultation-1",
-                "round_id": "round-1",
                 "event_type": "consultation_projection_refresh",
                 "source_table": "extraction_results",
                 "source_id": "result-1",
-                "payload": {"consultationId": "consultation-1"},
+                "payload": {"meetingId": "meeting-1", "consultationId": "consultation-1"},
                 "attempt_count": 0,
                 "last_error": None,
                 "processed_at": None,
@@ -94,12 +118,12 @@ def test_process_pending_events_marks_failures(monkeypatch) -> None:
         rows=[
             {
                 "id": 9,
+                "meeting_id": "meeting-9",
                 "consultation_id": "consultation-9",
-                "round_id": None,
                 "event_type": "consultation_projection_refresh",
                 "source_table": "extraction_results",
                 "source_id": "result-9",
-                "payload": {"consultationId": "consultation-9"},
+                "payload": {"meetingId": "meeting-9", "consultationId": "consultation-9"},
                 "attempt_count": 0,
                 "last_error": None,
                 "processed_at": None,

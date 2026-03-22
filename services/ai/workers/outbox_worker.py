@@ -9,8 +9,8 @@ from workers.neo4j_sync import Neo4jGraphProjector, build_database_url, refresh_
 PENDING_OUTBOX_EVENTS_QUERY = """
 SELECT
     id,
+    meeting_id,
     consultation_id,
-    round_id,
     event_type,
     source_table,
     source_id,
@@ -44,8 +44,8 @@ WHERE id = :id
 @dataclass
 class AnalyticsOutboxEvent:
     id: int
+    meeting_id: str
     consultation_id: str
-    round_id: str | None
     event_type: str
     source_table: str
     source_id: str
@@ -74,8 +74,8 @@ def load_pending_events(db: Any, batch_size: int = 100) -> list[AnalyticsOutboxE
 def coerce_outbox_event(row: Mapping[str, Any]) -> AnalyticsOutboxEvent:
     return AnalyticsOutboxEvent(
         id=int(row["id"]),
+        meeting_id=str(row["meeting_id"]),
         consultation_id=str(row["consultation_id"]),
-        round_id=_optional_str(row.get("round_id")),
         event_type=str(row["event_type"]),
         source_table=str(row["source_table"]),
         source_id=str(row["source_id"]),

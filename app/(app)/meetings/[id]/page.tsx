@@ -10,6 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -245,7 +251,7 @@ export default function MeetingDetailPage({
               </div>
             </div>
 
-            <div className="flex items-center gap-6 shrink-0">
+            <div className="flex items-center gap-3 shrink-0">
               {isArchived ? <Badge variant="outline">Archived</Badge> : null}
               <Badge variant={isDraft ? "outline" : "secondary"}>
                 {isDraft ? "Draft" : "Complete"}
@@ -259,17 +265,37 @@ export default function MeetingDetailPage({
                   Mark complete
                 </Button>
               )}
-              <div className="ml-3 border-l pl-3">
-                {isArchived ? (
-                  <Button size="sm" variant="outline" onClick={handleRestore}>
-                    Restore
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 px-0">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4"
+                    >
+                      <circle cx="12" cy="5" r="1" />
+                      <circle cx="12" cy="12" r="1" />
+                      <circle cx="12" cy="19" r="1" />
+                    </svg>
                   </Button>
-                ) : (
-                  <Button size="sm" variant="outline" onClick={handleArchive}>
-                    Archive
-                  </Button>
-                )}
-              </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {isArchived ? (
+                    <DropdownMenuItem onClick={handleRestore}>
+                      Restore
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={handleArchive}>
+                      Archive
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 

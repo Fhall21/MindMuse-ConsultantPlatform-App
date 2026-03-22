@@ -2,7 +2,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { meetings } from "@/db/schema";
+import { consultations, meetings, meetingPeople, people } from "@/db/schema";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
 import { requireOwnedMeeting, requireOwnedConsultation } from "@/lib/data/ownership";
 import { AUDIT_ACTIONS } from "./audit-actions";
@@ -11,16 +11,37 @@ import { emitAuditEvent } from "./audit";
 interface CreateMeetingParams {
   title: string;
   consultationId?: string;
+  /** Pass this instead of consultationId to create a new consultation inline */
+  newConsultationLabel?: string;
+  meetingTypeId?: string;
+  meetingDate?: Date;
+  /** IDs of existing people to link immediately */
+  personIds?: string[];
 }
 
 export async function createMeeting({
   title,
   consultationId,
+  newConsultationLabel,
+  meetingTypeId,
+  meetingDate,
+  personIds = [],
 }: CreateMeetingParams) {
   const userId = await requireCurrentUserId();
 
-  if (consultationId) {
-    await requireOwnedConsultation(consultationId, userId);
+  let resolvedConsultationId = consultationId || null;
+
+  // Inline consultation create
+  if (!resolvedConsultationId && newConsultationLabel?.trim()) {
+    const [newConsultation] = await db
+      .insert(consultations)
+      .values({ userId, label: newConsultationLabel.trim() })
+      .returning({ id: consultations.id });
+    resolvedConsultationId = newConsultation.id;
+  }
+
+  if (resolvedConsultationId) {
+    await requireOwnedConsultation(resolvedConsultationId, userId);
   }
 
   const [created] = await db
@@ -28,17 +49,42 @@ export async function createMeeting({
     .values({
       userId,
       title,
-      consultationId: consultationId || null,
+      consultationId: resolvedConsultationId,
+      meetingTypeId: meetingTypeId || null,
+      meetingDate: meetingDate || null,
       status: "draft",
     })
     .returning({ id: meetings.id });
+
+  // Link people atomically
+  if (personIds.length > 0) {
+    // Verify all people belong to this user
+    const ownedPeople = await db
+      .select({ id: people.id })
+      .from(people)
+      .where(and(eq(people.userId, userId)));
+    const ownedIds = new Set(ownedPeople.map((p) => p.id));
+    const validIds = personIds.filter((id) => ownedIds.has(id));
+
+    if (validIds.length > 0) {
+      await db
+        .insert(meetingPeople)
+        .values(validIds.map((personId) => ({ meetingId: created.id, personId })))
+        .onConflictDoNothing();
+    }
+  }
 
   await emitAuditEvent({
     consultationId: created.id,
     action: AUDIT_ACTIONS.MEETING_CREATED,
     entityType: "meeting",
     entityId: created.id,
-    metadata: { title, consultation_id: consultationId || null },
+    metadata: {
+      title,
+      consultation_id: resolvedConsultationId,
+      meeting_type_id: meetingTypeId || null,
+      person_count: personIds.length,
+    },
   });
 
   return created.id;

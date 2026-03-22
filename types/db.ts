@@ -48,6 +48,7 @@ export type {
   IngestionStatus,
   IngestionArtifactType,
   UserAIPreferences,
+  MeetingType,
 } from "./database";
 export type {
   AuditExportArtifactSummary,

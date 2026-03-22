@@ -23,6 +23,11 @@ const settingsSections = [
     href: "/settings/ai-personalisation",
   },
   {
+    title: "Meeting Types",
+    description: "Manage the types used to classify and code your meetings.",
+    href: "/settings/meeting-types",
+  },
+  {
     title: "Report Template",
     description: "Customise the structure and style of generated reports.",
     href: "/settings/report-template",

@@ -64,6 +64,13 @@
       "when": 1774191000000,
       "tag": "0008_fix_analytics_projection_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1774191600000,
+      "tag": "0009_curvy_lethal_legion",
+      "breakpoints": true
     }
   ]
 }

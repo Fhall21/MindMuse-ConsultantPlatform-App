@@ -32,6 +32,8 @@ import {
   markMeetingComplete,
   updateMeetingTitle,
   updateMeetingFields,
+  archiveMeeting,
+  restoreMeeting,
 } from "@/lib/actions/consultations";
 import { buildMeetingTitle } from "@/lib/meeting-title";
 
@@ -62,6 +64,8 @@ export default function MeetingDetailPage({
 
   const meeting = data?.meeting;
   const isDraft = meeting?.status === "draft";
+  const isArchived = meeting?.is_archived ?? false;
+  const isEditable = Boolean(meeting && isDraft && !isArchived);
 
   const currentConsultation = rounds?.find((consultation) => consultation.id === meeting?.consultation_id) ?? null;
   const normalizedSavedTitle = meeting?.title.trim() ?? "";
@@ -89,7 +93,7 @@ export default function MeetingDetailPage({
   }
 
   async function handleSaveTitle() {
-    if (!meeting || savingTitle || !titleChanged || titleInvalid) return;
+    if (!meeting || savingTitle || !titleChanged || titleInvalid || isArchived) return;
 
     setSavingTitle(true);
     try {
@@ -107,7 +111,7 @@ export default function MeetingDetailPage({
   }
 
   async function handleSaveFields(opts: { meetingTypeId?: string | null; meetingDate?: Date | null }) {
-    if (!meeting) return;
+    if (!meeting || isArchived) return;
     setSavingFields(true);
     try {
       await updateMeetingFields({ id, ...opts });
@@ -120,12 +124,38 @@ export default function MeetingDetailPage({
   }
 
   function handleRegenerateTitle() {
-    if (!meeting) return;
+    if (!meeting || isArchived) return;
     const selectedType = meetingTypes.find((t) => t.id === meeting.meeting_type_id);
     // We don't have people's names readily here; use empty for now
     const date = meeting.meeting_date ? new Date(meeting.meeting_date) : null;
     const generated = buildMeetingTitle(selectedType?.code, [], date);
     if (generated) setTitleDraft(generated);
+  }
+
+  async function handleArchive() {
+    if (!meeting) return;
+    try {
+      await archiveMeeting(id);
+      await queryClient.invalidateQueries({ queryKey: ["meetings", id] });
+      await queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      toast.success("Meeting archived.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to archive meeting.");
+    }
+  }
+
+  async function handleRestore() {
+    if (!meeting) return;
+    try {
+      await restoreMeeting(id);
+      await queryClient.invalidateQueries({ queryKey: ["meetings", id] });
+      await queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      toast.success("Meeting restored.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to restore meeting.");
+    }
   }
 
   if (isLoading) {
@@ -193,7 +223,7 @@ export default function MeetingDetailPage({
                   size="sm"
                   variant="outline"
                   onClick={handleSaveTitle}
-                  disabled={!titleChanged || titleInvalid || savingTitle}
+                  disabled={!titleChanged || titleInvalid || savingTitle || !isEditable}
                 >
                   {savingTitle ? "Saving…" : "Save title"}
                 </Button>
@@ -201,7 +231,7 @@ export default function MeetingDetailPage({
                   size="sm"
                   variant="ghost"
                   onClick={() => setTitleDraft(meeting.title)}
-                  disabled={!titleChanged || savingTitle}
+                  disabled={!titleChanged || savingTitle || !isEditable}
                 >
                   Reset
                 </Button>
@@ -216,16 +246,26 @@ export default function MeetingDetailPage({
             </div>
 
             <div className="flex items-center gap-3 shrink-0">
+              {isArchived ? <Badge variant="outline">Archived</Badge> : null}
               <Badge variant={isDraft ? "outline" : "secondary"}>
                 {isDraft ? "Draft" : "Complete"}
               </Badge>
-              {isDraft && (
+              {isDraft && !isArchived && (
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => setConfirmCompleteOpen(true)}
                 >
                   Mark complete
+                </Button>
+              )}
+              {isArchived ? (
+                <Button size="sm" variant="outline" onClick={handleRestore}>
+                  Restore
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={handleArchive}>
+                  Archive
                 </Button>
               )}
             </div>
@@ -272,6 +312,7 @@ export default function MeetingDetailPage({
                   className="h-8 text-xs text-muted-foreground"
                   title="Regenerate title from type and date"
                   onClick={handleRegenerateTitle}
+                  disabled={!isEditable}
                 >
                   Regenerate title
                 </Button>
@@ -295,7 +336,7 @@ export default function MeetingDetailPage({
                     meetingDate: e.target.value ? new Date(e.target.value + "T12:00:00") : null,
                   })
                 }
-                disabled={savingFields}
+                disabled={savingFields || !isEditable}
                 className="h-8 w-48 text-sm"
               />
             </div>

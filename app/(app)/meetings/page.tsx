@@ -24,10 +24,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fetchJson } from "@/hooks/api";
-import { useMeetings } from "@/hooks/use-meetings";
+import {
+  useArchiveMeeting,
+  useMeetings,
+  useRestoreMeeting,
+} from "@/hooks/use-meetings";
 import type { Meeting } from "@/types/db";
+import { toast } from "sonner";
 
 type StatusFilter = "all" | "draft" | "complete";
+type MeetingView = "active" | "archived";
 
 interface MeetingListRow extends Meeting {
   consultationLabel: string | null;
@@ -43,15 +49,19 @@ function formatDate(value: string) {
 }
 
 export default function MeetingsPage() {
+  const [view, setView] = useState<MeetingView>("active");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [titleFilter, setTitleFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([
     { id: "created_at", desc: true },
   ]);
 
-  const meetingsQuery = useMeetings();
+  const activeMeetingsQuery = useMeetings();
+  const archivedMeetingsQuery = useMeetings({ includeArchived: true });
+  const archiveMeeting = useArchiveMeeting();
+  const restoreMeeting = useRestoreMeeting();
 
-  const meetings = meetingsQuery.data;
+  const meetings = view === "active" ? activeMeetingsQuery.data : archivedMeetingsQuery.data;
 
   const meetingIds = useMemo(
     () => (meetings ?? []).map((meeting) => meeting.id),
@@ -122,6 +132,10 @@ export default function MeetingsPage() {
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => {
+          if (row.original.is_archived) {
+            return <Badge variant="outline">Archived</Badge>;
+          }
+
           if (row.original.status === "complete") {
             return (
               <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
@@ -171,13 +185,50 @@ export default function MeetingsPage() {
         header: "Actions",
         enableSorting: false,
         cell: ({ row }) => (
-          <Button variant="link" className="h-auto p-0" asChild>
-            <Link href={`/meetings/${row.original.id}`}>Open</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="link" className="h-auto p-0" asChild>
+              <Link href={`/meetings/${row.original.id}`}>Open</Link>
+            </Button>
+            {row.original.is_archived ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={restoreMeeting.isPending}
+                onClick={() => {
+                  restoreMeeting.mutate(row.original.id, {
+                    onSuccess: () => {
+                      toast.success("Meeting restored");
+                    },
+                    onError: (error) => toast.error(error.message),
+                  });
+                }}
+              >
+                Restore
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={archiveMeeting.isPending}
+                onClick={() => {
+                  archiveMeeting.mutate(row.original.id, {
+                    onSuccess: () => {
+                      toast.success("Meeting archived");
+                    },
+                    onError: (error) => toast.error(error.message),
+                  });
+                }}
+              >
+                Archive
+              </Button>
+            )}
+          </div>
         ),
       },
     ],
-    []
+    [archiveMeeting, restoreMeeting]
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -190,7 +241,8 @@ export default function MeetingsPage() {
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const isLoading = meetingsQuery.isLoading || peopleCountsQuery.isLoading;
+  const isLoading =
+    activeMeetingsQuery.isLoading || archivedMeetingsQuery.isLoading || peopleCountsQuery.isLoading;
   const hasNoMeetings = !isLoading && rows.length === 0;
   const hasNoFilteredRows = !isLoading && rows.length > 0 && filteredRows.length === 0;
 
@@ -199,10 +251,29 @@ export default function MeetingsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h2 className="text-lg font-semibold tracking-tight">Meetings</h2>
-          <p className="text-sm text-muted-foreground">Open or create a meeting.</p>
+          <p className="text-sm text-muted-foreground">Open, archive, or restore meetings.</p>
         </div>
         <Button asChild>
           <Link href="/meetings/new">New Meeting</Link>
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={view === "active" ? "default" : "outline"}
+          onClick={() => setView("active")}
+        >
+          Active ({activeMeetingsQuery.data?.length ?? 0})
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={view === "archived" ? "default" : "outline"}
+          onClick={() => setView("archived")}
+        >
+          Archived ({archivedMeetingsQuery.data?.length ?? 0})
         </Button>
       </div>
 
@@ -226,10 +297,14 @@ export default function MeetingsPage() {
 
       {hasNoMeetings ? (
         <div className="space-y-3 border-t border-border/80 pt-4">
-          <p className="text-sm text-muted-foreground">No meetings yet.</p>
-          <Button asChild>
-            <Link href="/meetings/new">New Meeting</Link>
-          </Button>
+          <p className="text-sm text-muted-foreground">
+            {view === "active" ? "No meetings yet." : "No archived meetings."}
+          </p>
+          {view === "active" ? (
+            <Button asChild>
+              <Link href="/meetings/new">New Meeting</Link>
+            </Button>
+          ) : null}
         </div>
       ) : hasNoFilteredRows ? (
         <div className="border-t border-border/80 pt-4 text-sm text-muted-foreground">

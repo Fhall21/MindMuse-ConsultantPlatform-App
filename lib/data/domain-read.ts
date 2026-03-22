@@ -120,11 +120,23 @@ export async function getConsultationForUser(
   return row ? mapConsultationRecord(row) : null;
 }
 
-export async function listMeetingsForUser(userId: string): Promise<Meeting[]> {
+interface MeetingReadOptions {
+  includeArchived?: boolean;
+}
+
+export async function listMeetingsForUser(
+  userId: string,
+  options: MeetingReadOptions = {}
+): Promise<Meeting[]> {
+  const conditions = [eq(meetings.userId, userId)];
+  if (!options.includeArchived) {
+    conditions.push(eq(meetings.isArchived, false));
+  }
+
   const rows = await db
     .select()
     .from(meetings)
-    .where(eq(meetings.userId, userId))
+    .where(and(...conditions))
     .orderBy(desc(meetings.createdAt));
 
   return rows.map(mapMeetingRecord);
@@ -145,16 +157,23 @@ export async function getMeetingForUser(
 
 export async function listMeetingsForConsultation(
   consultationId: string,
-  userId: string
+  userId: string,
+  options: MeetingReadOptions = {}
 ): Promise<Meeting[]> {
   await requireOwnedConsultation(consultationId, userId);
+
+  const conditions = [
+    eq(meetings.consultationId, consultationId),
+    eq(meetings.userId, userId),
+  ];
+  if (!options.includeArchived) {
+    conditions.push(eq(meetings.isArchived, false));
+  }
 
   const rows = await db
     .select()
     .from(meetings)
-    .where(
-      and(eq(meetings.consultationId, consultationId), eq(meetings.userId, userId))
-    )
+    .where(and(...conditions))
     .orderBy(asc(meetings.createdAt));
 
   return rows.map(mapMeetingRecord);

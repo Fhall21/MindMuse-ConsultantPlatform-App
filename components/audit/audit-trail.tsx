@@ -70,6 +70,10 @@ function buildEventLabel(event: AuditLogEntry) {
     case "meeting.consultation_assigned":
     case "consultation.round_assigned":
       return "Assigned to consultation";
+    case "meeting.archived":
+      return "Meeting archived";
+    case "meeting.restored":
+      return "Meeting restored";
 
     // Person events
     case "person.linked":

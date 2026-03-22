@@ -87,6 +87,7 @@ export function mapMeetingRecord(row: MeetingRow): Meeting {
     updated_at: row.updatedAt.toISOString(),
     user_id: row.userId,
     status: row.status as Meeting["status"],
+    is_archived: row.isArchived ?? false,
     consultation_id: row.consultationId,
     meeting_type_id: (row as { meetingTypeId?: string | null }).meetingTypeId ?? null,
     meeting_date: (row as { meetingDate?: Date | null }).meetingDate?.toISOString() ?? null,

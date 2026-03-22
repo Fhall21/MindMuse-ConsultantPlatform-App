@@ -5,6 +5,8 @@ export const AUDIT_ACTIONS = {
   MEETING_COMPLETED: "meeting.completed",
   MEETING_CONSULTATION_ASSIGNED: "meeting.consultation_assigned",
   MEETING_NOTES_EDITED: "meeting.notes_edited",
+  MEETING_ARCHIVED: "meeting.archived",
+  MEETING_RESTORED: "meeting.restored",
   CONSULTATION_CREATED: "meeting.created",
   CONSULTATION_TITLE_EDITED: "meeting.title_edited",
   CONSULTATION_TRANSCRIPT_EDITED: "meeting.transcript_edited",

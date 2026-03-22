@@ -53,6 +53,7 @@ export async function createMeeting({
       meetingTypeId: meetingTypeId || null,
       meetingDate: meetingDate || null,
       status: "draft",
+      isArchived: false,
     })
     .returning({ id: meetings.id });
 
@@ -92,6 +93,12 @@ export async function createMeeting({
 
 export const createConsultation = createMeeting;
 
+function ensureMeetingIsEditable(meeting: { isArchived: boolean }) {
+  if (meeting.isArchived) {
+    throw new Error("Meeting is archived");
+  }
+}
+
 interface UpdateTranscriptParams {
   id: string;
   transcriptRaw: string;
@@ -115,7 +122,8 @@ export async function updateMeetingTitle({
   }
 
   const userId = await requireCurrentUserId();
-  await requireOwnedMeeting(id, userId);
+  const meeting = await requireOwnedMeeting(id, userId);
+  ensureMeetingIsEditable(meeting);
 
   await db
     .update(meetings)
@@ -138,7 +146,8 @@ export async function updateTranscript({
   transcriptRaw,
 }: UpdateTranscriptParams) {
   const userId = await requireCurrentUserId();
-  await requireOwnedMeeting(id, userId);
+  const meeting = await requireOwnedMeeting(id, userId);
+  ensureMeetingIsEditable(meeting);
 
   await db
     .update(meetings)
@@ -159,7 +168,8 @@ export async function assignMeetingConsultation(
   consultationId: string | null
 ) {
   const userId = await requireCurrentUserId();
-  await requireOwnedMeeting(id, userId);
+  const meeting = await requireOwnedMeeting(id, userId);
+  ensureMeetingIsEditable(meeting);
   if (consultationId) {
     await requireOwnedConsultation(consultationId, userId);
   }
@@ -197,7 +207,8 @@ export async function updateNotes({
 
 export async function markMeetingComplete(id: string) {
   const userId = await requireCurrentUserId();
-  await requireOwnedMeeting(id, userId);
+  const meeting = await requireOwnedMeeting(id, userId);
+  ensureMeetingIsEditable(meeting);
 
   await db
     .update(meetings)
@@ -226,7 +237,8 @@ export async function updateMeetingFields({
   meetingDate,
 }: UpdateMeetingFieldsParams) {
   const userId = await requireCurrentUserId();
-  await requireOwnedMeeting(id, userId);
+  const meeting = await requireOwnedMeeting(id, userId);
+  ensureMeetingIsEditable(meeting);
 
   const updates: Partial<typeof meetings.$inferInsert> = {};
   if (meetingTypeId !== undefined) updates.meetingTypeId = meetingTypeId;
@@ -248,5 +260,49 @@ export async function updateMeetingFields({
       meeting_type_id: meetingTypeId,
       meeting_date: meetingDate?.toISOString() ?? null,
     },
+  });
+}
+
+export async function archiveMeeting(id: string) {
+  const userId = await requireCurrentUserId();
+  const meeting = await requireOwnedMeeting(id, userId);
+
+  if (meeting.isArchived) {
+    return;
+  }
+
+  await db
+    .update(meetings)
+    .set({ isArchived: true })
+    .where(and(eq(meetings.id, id), eq(meetings.userId, userId)));
+
+  await emitAuditEvent({
+    consultationId: id,
+    action: AUDIT_ACTIONS.MEETING_ARCHIVED,
+    entityType: "meeting",
+    entityId: id,
+    metadata: { title: meeting.title, status: meeting.status },
+  });
+}
+
+export async function restoreMeeting(id: string) {
+  const userId = await requireCurrentUserId();
+  const meeting = await requireOwnedMeeting(id, userId);
+
+  if (!meeting.isArchived) {
+    return;
+  }
+
+  await db
+    .update(meetings)
+    .set({ isArchived: false })
+    .where(and(eq(meetings.id, id), eq(meetings.userId, userId)));
+
+  await emitAuditEvent({
+    consultationId: id,
+    action: AUDIT_ACTIONS.MEETING_RESTORED,
+    entityType: "meeting",
+    entityId: id,
+    metadata: { title: meeting.title, status: meeting.status },
   });
 }

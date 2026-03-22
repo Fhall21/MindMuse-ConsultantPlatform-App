@@ -72,6 +72,7 @@ export const meetings = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     status: text("status").default("draft").notNull(),
+    isArchived: boolean("is_archived").default(false).notNull(),
     consultationId: uuid("consultation_id").references(() => consultations.id, { onDelete: "set null" }),
     // Structured meeting metadata — used to generate the coded title
     meetingTypeId: uuid("meeting_type_id").references(() => meetingTypes.id, { onDelete: "set null" }),
@@ -84,6 +85,7 @@ export const meetings = pgTable(
       sql`${table.status} in ('draft', 'complete')`
     ),
     userIdx: index("idx_meetings_user_id").on(table.userId),
+    archiveIdx: index("idx_meetings_user_id_archived").on(table.userId, table.isArchived),
     statusIdx: index("idx_meetings_status").on(table.status),
     consultationIdx: index("idx_meetings_consultation_id").on(table.consultationId),
     meetingTypeIdx: index("idx_meetings_meeting_type_id").on(table.meetingTypeId),

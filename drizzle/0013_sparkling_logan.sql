@@ -1,0 +1,2 @@
+ALTER TABLE "meetings" ADD COLUMN "is_archived" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_meetings_user_id_archived" ON "meetings" USING btree ("user_id","is_archived");

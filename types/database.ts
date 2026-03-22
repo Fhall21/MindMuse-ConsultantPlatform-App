@@ -25,6 +25,7 @@ export interface Meeting {
   updated_at: string;
   user_id: string;
   status: ConsultationStatus;
+  is_archived: boolean;
   consultation_id: string | null;
   // Structured fields used to generate the coded title (nullable for legacy records)
   meeting_type_id: string | null;

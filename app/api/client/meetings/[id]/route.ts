@@ -5,6 +5,7 @@ import {
   listInsightsForMeeting,
   listMeetingPersonLinks,
 } from "@/lib/data/domain-read";
+import { archiveMeeting, restoreMeeting } from "@/lib/actions/consultations";
 import { jsonError, requireRouteClient } from "../../_helpers";
 
 function logOptionalMeetingLoadFailure(
@@ -65,5 +66,32 @@ export async function GET(
     });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Failed to load meeting");
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const client = await requireRouteClient();
+  if ("response" in client) {
+    return client.response;
+  }
+
+  try {
+    const body = (await request.json()) as { archived?: boolean };
+
+    if (body.archived === true) {
+      await archiveMeeting(id);
+    } else if (body.archived === false) {
+      await restoreMeeting(id);
+    } else {
+      return jsonError("Invalid archive request", 400);
+    }
+
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    return jsonError(error instanceof Error ? error.message : "Failed to update meeting archive state");
   }
 }

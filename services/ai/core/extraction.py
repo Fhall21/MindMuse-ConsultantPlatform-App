@@ -88,6 +88,8 @@ class OpenAILangExtractAdapter:
                     "role": "system",
                     "content": (
                         "Extract clinically or legally meaningful terms and short phrases from the transcript. "
+                        "Write all output in Australian English (e.g., 'organisation' not 'organization', "
+                        "'analyse' not 'analyze', 'colour' not 'color'). "
                         "Return strict JSON with key 'terms' where each item has keys: "
                         "term (string), confidence (0-1 float), phrase (boolean)."
                     ),

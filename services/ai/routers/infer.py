@@ -19,8 +19,11 @@ SYSTEM_PROMPT = (
     "3. suggested_people — a list of participant names (interviewees, group members, speakers). "
     "Exclude the consultant/interviewer if their role is clear. Return an empty list if "
     "no names can be reliably identified.\n\n"
+    "Write all output in Australian English (e.g., 'organisation' not 'organization', "
+    "'analyse' not 'analyze', 'colour' not 'color').\n\n"
     "Return only valid JSON with exactly these keys:\n"
     '{"suggested_type_code": string|null, "suggested_date": string|null, "suggested_people": string[]}'
+)
 )
 
 # Transcript is capped to avoid token blowout; first 12 000 chars covers ~3 000 words

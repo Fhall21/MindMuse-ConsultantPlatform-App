@@ -70,6 +70,8 @@ async def refine_group_draft(request: RoundThemeGroupDraftRequest):
         "- If the member themes are narrow, keep the group specific.\n"
         "- If the member themes are diverse, name the shared concern without flattening meaningful nuance.\n"
         "- Mention locked or user-added themes only if it materially explains the grouping.\n\n"
+        "Write all output in Australian English (e.g., 'organisation' not 'organization', "
+        "'analyse' not 'analyze', 'colour' not 'color').\n\n"
         "Return JSON with:\n"
         "- draft_label\n"
         "- draft_description\n"
@@ -171,6 +173,8 @@ def _round_output_prompt(artifact_type: str, template=None):
             "- groups the round-level themes into a short structured summary\n"
             "- cites supporting consultation-level nuance without reproducing raw transcripts\n"
             "- avoids claims not grounded in the provided themes\n\n"
+            "Write all output in Australian English (e.g., 'organisation' not 'organization', "
+            "'analyse' not 'analyze', 'colour' not 'color').\n\n"
             "Return JSON with 'title' and 'content'. The content should be plain text."
         ),
         "report": (
@@ -181,6 +185,8 @@ def _round_output_prompt(artifact_type: str, template=None):
             "- Supporting consultation-level evidence themes\n"
             "- Key follow-up or monitoring considerations if they are implied by the themes\n\n"
             "Do not invent recommendations that are not grounded in the inputs.\n"
+            "Write all output in Australian English (e.g., 'organisation' not 'organization', "
+            "'analyse' not 'analyze', 'colour' not 'color').\n\n"
             "Return JSON with 'title' and 'content'. The content should be plain text."
         ),
         "email": (
@@ -190,6 +196,8 @@ def _round_output_prompt(artifact_type: str, template=None):
             "- summarizes the accepted round themes first\n"
             "- briefly notes supporting consultation-level evidence\n"
             "- keeps a professional, auditable tone\n\n"
+            "Write all output in Australian English (e.g., 'organisation' not 'organization', "
+            "'analyse' not 'analyze', 'colour' not 'color').\n\n"
             "Return JSON with 'title' and 'content'. The 'title' should be the email subject."
         ),
     }

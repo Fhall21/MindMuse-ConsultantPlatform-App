@@ -104,6 +104,8 @@ async def analyse_example_reports(request: ReportTemplateAnalyseRequest):
         "- 'person': The grammatical person used (e.g. 'third person', 'first person plural')\n"
         "- 'formatting_notes': Any notable formatting patterns (e.g. 'uses bullet lists extensively', "
         "'numbered recommendations', 'bold key terms')\n\n"
+        "Write all output in Australian English (e.g., 'organisation' not 'organization', "
+        "'analyse' not 'analyze', 'colour' not 'color').\n\n"
         "Return JSON with:\n"
         "- 'name': A suggested template name (e.g. 'Board Report Template', 'Clinical Summary Format')\n"
         "- 'description': 1-2 sentence description of what this template is for\n"

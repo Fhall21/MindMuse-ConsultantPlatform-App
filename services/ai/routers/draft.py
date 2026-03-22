@@ -51,6 +51,8 @@ async def draft_email(request: EmailDraftRequest):
         "Get to substance quickly.\n\n"
         "The email body should use plain text with bullet points (• for theme "
         "headings, – for sub-points). Do not use markdown formatting.\n\n"
+        "Write all output in Australian English (e.g., 'organisation' not "
+        "'organization', 'analyse' not 'analyze', 'colour' not 'color').\n\n"
         "Return a JSON object with:\n"
         "- 'subject': a concise subject line referencing the consultation topic "
         "and date if available\n"

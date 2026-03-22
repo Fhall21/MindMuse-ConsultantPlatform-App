@@ -46,6 +46,8 @@ async def generate_clarification_questions(request: ClarificationRequest):
         "- Grounded in what the transcript says or notably omits\n"
         "- Useful for strengthening the evidence quality of the record\n"
         "- Not redundant with what is already clearly stated\n\n"
+        "Write all output in Australian English (e.g., 'organisation' not "
+        "'organization', 'analyse' not 'analyze', 'colour' not 'color').\n\n"
         "Return a JSON object with a 'questions' array. Each question has:\n"
         "- 'question': the question text\n"
         "- 'type': one of 'confirm', 'expand', or 'missing'\n"

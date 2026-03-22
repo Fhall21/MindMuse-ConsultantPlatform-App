@@ -38,6 +38,8 @@ async def extract_themes(request: ThemeExtractRequest):
         "Return between 3 and 8 themes. If the transcript is very short or "
         "ambiguous, return fewer themes with lower confidence rather than "
         "inventing content.\n\n"
+        "Write all output in Australian English (e.g., 'organisation' not "
+        "'organization', 'analyse' not 'analyze', 'colour' not 'color').\n\n"
         "Return a JSON object with a 'themes' array. Each theme has:\n"
         "- 'label': a short descriptive label (2–6 words, e.g. 'Workplace stress and sources')\n"
         "- 'description': one sentence explaining why this is a theme — what was discussed\n"

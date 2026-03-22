@@ -24,6 +24,8 @@ SYSTEM_PROMPT = (
     "Programme, 'RTW' = return to work, 'OHS' = occupational health and safety)\n"
     "- Symbols (e.g. '→' = leads to/results in, '↑' = increased, '↓' = decreased, "
     "'~' = approximately, '+' = and/also, '?' = uncertain/queried)\n\n"
+    "Write all output in Australian English (e.g., 'organisation' not 'organization', "
+    "'analyse' not 'analyze', 'colour' not 'color').\n\n"
     "Return a JSON object with exactly these fields:\n"
     "- 'expanded_text' (string): the full expanded text, preserving paragraph structure\n"
     "- 'changes' (array): each change made, with:\n"

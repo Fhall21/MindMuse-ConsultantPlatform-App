@@ -26,6 +26,8 @@ SYSTEM_PROMPT = (
     "- Use [?] for any character or word you cannot read with reasonable confidence.\n"
     "- Maintain reading order (top to bottom, left to right unless clearly otherwise).\n"
     "- Distinguish between headings, list items, and body text where evident.\n\n"
+    "Write all output in Australian English (e.g., 'organisation' not 'organization', "
+    "'analyse' not 'analyze', 'colour' not 'color').\n\n"
     "Return a JSON object with exactly these fields:\n"
     "- 'extracted_text' (string): all text in reading order, newline-separated between segments\n"
     "- 'confidence' (float 0.0–1.0): overall legibility of the image "

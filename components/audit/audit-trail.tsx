@@ -130,6 +130,8 @@ function buildEventLabel(event: AuditLogEntry) {
       return "OCR review rejected";
     case "ocr.corrections_saved":
       return "OCR corrections saved";
+    case "ocr.batch_created":
+      return "Multi-page OCR batch started";
 
     // Round lifecycle
     case "round.created":

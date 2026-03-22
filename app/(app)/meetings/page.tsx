@@ -32,8 +32,7 @@ import {
 import type { Meeting } from "@/types/db";
 import { toast } from "sonner";
 
-type StatusFilter = "all" | "draft" | "complete";
-type MeetingView = "active" | "archived";
+type MeetingView = "draft" | "complete" | "archived";
 
 interface MeetingListRow extends Meeting {
   consultationLabel: string | null;
@@ -49,19 +48,31 @@ function formatDate(value: string) {
 }
 
 export default function MeetingsPage() {
-  const [view, setView] = useState<MeetingView>("active");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [view, setView] = useState<MeetingView>("draft");
   const [titleFilter, setTitleFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([
     { id: "created_at", desc: true },
   ]);
 
   const activeMeetingsQuery = useMeetings();
-  const archivedMeetingsQuery = useMeetings({ includeArchived: true });
+  const archivedMeetingsQuery = useMeetings({ archivedOnly: true });
   const archiveMeeting = useArchiveMeeting();
   const restoreMeeting = useRestoreMeeting();
 
-  const meetings = view === "active" ? activeMeetingsQuery.data : archivedMeetingsQuery.data;
+  const draftCount = useMemo(
+    () => (activeMeetingsQuery.data ?? []).filter((m) => m.status === "draft").length,
+    [activeMeetingsQuery.data]
+  );
+  const completeCount = useMemo(
+    () => (activeMeetingsQuery.data ?? []).filter((m) => m.status === "complete").length,
+    [activeMeetingsQuery.data]
+  );
+  const archivedCount = archivedMeetingsQuery.data?.length ?? 0;
+
+  const meetings = useMemo(() => {
+    if (view === "archived") return archivedMeetingsQuery.data ?? [];
+    return (activeMeetingsQuery.data ?? []).filter((m) => m.status === view);
+  }, [view, activeMeetingsQuery.data, archivedMeetingsQuery.data]);
 
   const meetingIds = useMemo(
     () => (meetings ?? []).map((meeting) => meeting.id),
@@ -93,16 +104,11 @@ export default function MeetingsPage() {
 
   const filteredRows = useMemo(() => {
     const normalizedSearch = titleFilter.trim().toLowerCase();
-
-    return rows.filter((row) => {
-      const statusMatch = statusFilter === "all" || row.status === statusFilter;
-      const titleMatch =
-        normalizedSearch.length === 0 ||
-        row.title.toLowerCase().includes(normalizedSearch);
-
-      return statusMatch && titleMatch;
-    });
-  }, [rows, statusFilter, titleFilter]);
+    if (!normalizedSearch) return rows;
+    return rows.filter((row) =>
+      row.title.toLowerCase().includes(normalizedSearch)
+    );
+  }, [rows, titleFilter]);
 
   const columns = useMemo<ColumnDef<MeetingListRow>[]>(
     () => [
@@ -242,7 +248,8 @@ export default function MeetingsPage() {
   });
 
   const isLoading =
-    activeMeetingsQuery.isLoading || archivedMeetingsQuery.isLoading || peopleCountsQuery.isLoading;
+    (view === "archived" ? archivedMeetingsQuery.isLoading : activeMeetingsQuery.isLoading) ||
+    peopleCountsQuery.isLoading;
   const hasNoMeetings = !isLoading && rows.length === 0;
   const hasNoFilteredRows = !isLoading && rows.length > 0 && filteredRows.length === 0;
 
@@ -262,10 +269,18 @@ export default function MeetingsPage() {
         <Button
           type="button"
           size="sm"
-          variant={view === "active" ? "default" : "outline"}
-          onClick={() => setView("active")}
+          variant={view === "draft" ? "default" : "outline"}
+          onClick={() => setView("draft")}
         >
-          Active ({activeMeetingsQuery.data?.length ?? 0})
+          Draft ({draftCount})
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={view === "complete" ? "default" : "outline"}
+          onClick={() => setView("complete")}
+        >
+          Complete ({completeCount})
         </Button>
         <Button
           type="button"
@@ -273,20 +288,11 @@ export default function MeetingsPage() {
           variant={view === "archived" ? "default" : "outline"}
           onClick={() => setView("archived")}
         >
-          Archived ({archivedMeetingsQuery.data?.length ?? 0})
+          Archived ({archivedCount})
         </Button>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <select
-          value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-        >
-          <option value="all">All</option>
-          <option value="draft">Draft</option>
-          <option value="complete">Complete</option>
-        </select>
         <Input
           value={titleFilter}
           onChange={(event) => setTitleFilter(event.target.value)}
@@ -298,9 +304,9 @@ export default function MeetingsPage() {
       {hasNoMeetings ? (
         <div className="space-y-3 border-t border-border/80 pt-4">
           <p className="text-sm text-muted-foreground">
-            {view === "active" ? "No meetings yet." : "No archived meetings."}
+            {view === "draft" ? "No draft meetings." : view === "complete" ? "No completed meetings yet." : "No archived meetings."}
           </p>
-          {view === "active" ? (
+          {view === "draft" ? (
             <Button asChild>
               <Link href="/meetings/new">New Meeting</Link>
             </Button>

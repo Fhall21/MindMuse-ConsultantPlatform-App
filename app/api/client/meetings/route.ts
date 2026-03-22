@@ -10,8 +10,8 @@ export async function GET(request: Request) {
 
   try {
     const url = new URL(request.url);
-    const includeArchived = url.searchParams.get("archived") === "true";
-    const meetings = await listMeetingsForUser(client.userId, { includeArchived });
+    const archivedOnly = url.searchParams.get("archived") === "true";
+    const meetings = await listMeetingsForUser(client.userId, { archivedOnly });
     return NextResponse.json(meetings);
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Failed to load meetings");

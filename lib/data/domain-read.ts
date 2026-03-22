@@ -121,7 +121,7 @@ export async function getConsultationForUser(
 }
 
 interface MeetingReadOptions {
-  includeArchived?: boolean;
+  archivedOnly?: boolean;
 }
 
 export async function listMeetingsForUser(
@@ -129,7 +129,9 @@ export async function listMeetingsForUser(
   options: MeetingReadOptions = {}
 ): Promise<Meeting[]> {
   const conditions = [eq(meetings.userId, userId)];
-  if (!options.includeArchived) {
+  if (options.archivedOnly) {
+    conditions.push(eq(meetings.isArchived, true));
+  } else {
     conditions.push(eq(meetings.isArchived, false));
   }
 

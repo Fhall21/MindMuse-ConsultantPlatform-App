@@ -9,16 +9,16 @@ import { fetchJson } from "@/hooks/api";
 export const MEETINGS_QUERY_KEY = ["meetings"] as const;
 
 interface UseMeetingsOptions {
-  includeArchived?: boolean;
+  archivedOnly?: boolean;
 }
 
 export function useMeetings(options: UseMeetingsOptions = {}) {
-  const includeArchived = options.includeArchived ?? false;
+  const archivedOnly = options.archivedOnly ?? false;
   return useQuery({
-    queryKey: ["meetings", includeArchived ? "archived" : "active"],
+    queryKey: ["meetings", archivedOnly ? "archived" : "active"],
     queryFn: () =>
       fetchJson<Meeting[]>(
-        `/api/client/meetings${includeArchived ? "?archived=true" : ""}`
+        `/api/client/meetings${archivedOnly ? "?archived=true" : ""}`
       ),
   });
 }

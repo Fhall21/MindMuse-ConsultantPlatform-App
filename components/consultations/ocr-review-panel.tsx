@@ -87,6 +87,7 @@ export function OcrReviewPanel({ meetingId, consultationId, ocrJobId }: OcrRevie
   const resolvedMeetingId = meetingId ?? consultationId;
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
+  const storedBlobs = useRef<Map<string, { blob: Blob; name: string }>>(new Map());
   const { data: ocrJobs, isPending } = useMeetingOcrJobs(resolvedMeetingId ?? "");
 
   const [guideOpen, setGuideOpen] = useState(false);
@@ -229,6 +230,7 @@ export function OcrReviewPanel({ meetingId, consultationId, ocrJobId }: OcrRevie
         });
 
         const { blob, name } = await prepareImageBlob(sf.file);
+        storedBlobs.current.set(jobId, { blob, name });
         const formData = new FormData();
         formData.append("image_file", blob, name);
 
@@ -273,6 +275,61 @@ export function OcrReviewPanel({ meetingId, consultationId, ocrJobId }: OcrRevie
       queryKey: ["audit_log", "meeting", resolvedMeetingId],
     });
     setIsProcessingBatch(false);
+  }
+
+  async function handleRetryPage(jobId: string) {
+    if (!resolvedMeetingId) return;
+    const stored = storedBlobs.current.get(jobId);
+    if (!stored) return;
+
+    setPageProgress((prev) => ({ ...prev, [jobId]: { status: "processing" } }));
+    try {
+      await updateOcrJob({
+        jobId,
+        meetingId: resolvedMeetingId,
+        status: "processing",
+        startedAt: new Date().toISOString(),
+      });
+
+      const formData = new FormData();
+      formData.append("image_file", stored.blob, stored.name);
+
+      const response = await fetch("/api/ocr/extract", { method: "POST", body: formData });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(body.detail ?? `OCR request failed (${response.status})`);
+      }
+
+      const result = (await response.json()) as {
+        extracted_text: string;
+        confidence: number;
+      };
+
+      await updateOcrJob({
+        jobId,
+        meetingId: resolvedMeetingId,
+        status: "completed",
+        extractedText: result.extracted_text,
+        confidenceScore: result.confidence,
+        completedAt: new Date().toISOString(),
+      });
+
+      setPageProgress((prev) => ({ ...prev, [jobId]: { status: "completed" } }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "OCR extraction failed";
+      await updateOcrJob({
+        jobId,
+        meetingId: resolvedMeetingId,
+        status: "failed",
+        errorMessage: message,
+        completedAt: new Date().toISOString(),
+      }).catch(() => undefined);
+      setPageProgress((prev) => ({ ...prev, [jobId]: { status: "failed", error: message } }));
+    }
+
+    await queryClient.invalidateQueries({
+      queryKey: ["ocr_jobs", "meeting", resolvedMeetingId],
+    });
   }
 
   async function handleSavePage(jobId: string) {
@@ -539,9 +596,25 @@ export function OcrReviewPanel({ meetingId, consultationId, ocrJobId }: OcrRevie
                   </div>
 
                   {isFailed ? (
-                    <p className="text-sm text-destructive">
-                      {job.error_message ?? "Extraction failed"}
-                    </p>
+                    <div className="space-y-2">
+                      <p className="text-sm text-destructive">
+                        {job.error_message ?? "Extraction failed"}
+                      </p>
+                      {storedBlobs.current.has(job.id) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={pageProgress[job.id]?.status === "processing"}
+                          onClick={() => void handleRetryPage(job.id)}
+                        >
+                          {pageProgress[job.id]?.status === "processing" ? (
+                            <><LoadingSpinner />Retrying…</>
+                          ) : (
+                            "Retry"
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   ) : (
                     <>
                       <textarea

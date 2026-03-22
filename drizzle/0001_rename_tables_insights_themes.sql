@@ -4,6 +4,10 @@ ALTER TABLE "themes" RENAME TO "insights";
 -- Rename theme_decision_logs to insight_decision_logs
 ALTER TABLE "theme_decision_logs" RENAME TO "insight_decision_logs";
 
+-- Rename columns in insight_decision_logs to match new semantic meaning
+ALTER TABLE "insight_decision_logs" RENAME COLUMN "theme_id" TO "insight_id";
+ALTER TABLE "insight_decision_logs" RENAME COLUMN "theme_label" TO "insight_label";
+
 -- Rename round_theme_groups to themes
 ALTER TABLE "round_theme_groups" RENAME TO "themes";
 

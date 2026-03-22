@@ -245,7 +245,7 @@ export default function MeetingDetailPage({
               </div>
             </div>
 
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-6 shrink-0">
               {isArchived ? <Badge variant="outline">Archived</Badge> : null}
               <Badge variant={isDraft ? "outline" : "secondary"}>
                 {isDraft ? "Draft" : "Complete"}
@@ -259,15 +259,17 @@ export default function MeetingDetailPage({
                   Mark complete
                 </Button>
               )}
-              {isArchived ? (
-                <Button size="sm" variant="outline" onClick={handleRestore}>
-                  Restore
-                </Button>
-              ) : (
-                <Button size="sm" variant="outline" onClick={handleArchive}>
-                  Archive
-                </Button>
-              )}
+              <div className="ml-3 border-l pl-3">
+                {isArchived ? (
+                  <Button size="sm" variant="outline" onClick={handleRestore}>
+                    Restore
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={handleArchive}>
+                    Archive
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
 

@@ -110,7 +110,7 @@ export function RoundOutputsSection({
           return (
             <div
               key={type}
-              className="flex items-center justify-between rounded-md border px-3 py-2.5 gap-3"
+              className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-muted/5 px-3 py-2.5"
             >
               <div className="min-w-0 flex-1 space-y-0.5">
                 <p className="text-sm font-medium">{outputTypeLabels[type]}</p>
@@ -131,7 +131,7 @@ export function RoundOutputsSection({
                     setReportTemplateId(val === "__none__" ? null : val)
                   }
                 >
-                  <SelectTrigger className="h-7 w-44 text-xs">
+                  <SelectTrigger className="h-8 w-44 text-xs">
                     <SelectValue placeholder="No template" />
                   </SelectTrigger>
                   <SelectContent>
@@ -158,7 +158,7 @@ export function RoundOutputsSection({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-xs"
+                    className="h-8 text-xs"
                     asChild
                   >
                     <Link href={`/reports/${output.id}`}>View</Link>
@@ -167,7 +167,7 @@ export function RoundOutputsSection({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs"
+                  className="h-8 text-xs"
                   disabled={generating !== null}
                   onClick={() => {
                     void handleGenerate(type, () => {

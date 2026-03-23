@@ -144,7 +144,7 @@ export default function MeetingsPage() {
 
           if (row.original.status === "complete") {
             return (
-              <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+              <Badge variant="default">
                 Complete
               </Badge>
             );
@@ -199,7 +199,7 @@ export default function MeetingsPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-xs"
+                className="h-8 px-2 text-xs"
                 disabled={restoreMeeting.isPending}
                 onClick={() => {
                   restoreMeeting.mutate(row.original.id, {
@@ -216,7 +216,7 @@ export default function MeetingsPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-xs"
+                className="h-8 px-2 text-xs"
                 disabled={archiveMeeting.isPending}
                 onClick={() => {
                   archiveMeeting.mutate(row.original.id, {

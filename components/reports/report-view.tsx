@@ -111,7 +111,7 @@ function QuickStats({ report }: { report: ReportArtifactDetail }) {
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="rounded-lg border border-border/60 bg-gradient-to-br from-muted/30 to-background px-4 py-3"
+          className="rounded-lg border border-border/50 bg-muted/10 px-4 py-3"
         >
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {stat.label}
@@ -143,7 +143,7 @@ function GraphOverviewSection({
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="rounded-lg border border-border/60 bg-gradient-to-br from-muted/30 to-background px-4 py-3">
+        <div className="rounded-lg border border-border/50 bg-muted/10 px-4 py-3">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Nodes
           </p>
@@ -154,7 +154,7 @@ function GraphOverviewSection({
             {graphModel.acceptedThemeCount} groups · {graphModel.supportingThemeCount} source themes
           </p>
         </div>
-        <div className="rounded-lg border border-border/60 bg-gradient-to-br from-muted/30 to-background px-4 py-3">
+        <div className="rounded-lg border border-border/50 bg-muted/10 px-4 py-3">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Connections
           </p>
@@ -166,7 +166,7 @@ function GraphOverviewSection({
             {graphModel.connectionsByType.length === 1 ? "" : "s"}
           </p>
         </div>
-        <div className="rounded-lg border border-border/60 bg-gradient-to-br from-muted/30 to-background px-4 py-3">
+        <div className="rounded-lg border border-border/50 bg-muted/10 px-4 py-3">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Layout
           </p>

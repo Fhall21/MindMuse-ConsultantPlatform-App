@@ -61,7 +61,7 @@ export function DecisionHistorySection({
           {decisions.map((d) => {
             const config = decisionTypeConfig[d.decisionType] ?? decisionTypeConfig.accept;
             return (
-              <div key={d.id} className="flex items-start gap-3 rounded-md border px-3 py-2">
+              <div key={d.id} className="flex items-start gap-3 rounded-md border border-border/50 bg-muted/5 px-3 py-2.5">
                 <Badge variant="outline" className={config.className}>
                   {config.label}
                 </Badge>

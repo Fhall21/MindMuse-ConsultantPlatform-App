@@ -38,14 +38,14 @@ function ThemeSection(props: {
   const { title, empty, themes } = props;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <p className="text-sm font-medium text-foreground/85">{title}</p>
       {themes.length > 0 ? (
         <div className="space-y-2">
           {themes.map((theme) => (
             <div
               key={theme.key}
-              className="rounded-md border border-border/70 bg-background p-3"
+              className="rounded-md border border-border/50 bg-muted/5 px-3 py-2.5"
             >
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm font-medium">{theme.label}</p>
@@ -63,7 +63,7 @@ function ThemeSection(props: {
           ))}
         </div>
       ) : (
-        <p className="rounded-md border border-dashed border-border/70 bg-background/60 p-3 text-sm text-muted-foreground">
+        <p className="rounded-md border border-dashed border-border/50 bg-muted/10 px-3 py-2.5 text-sm text-muted-foreground">
           {empty}
         </p>
       )}
@@ -75,7 +75,7 @@ export function ConsultationReportPanel({
   report,
 }: ConsultationReportPanelProps) {
   return (
-    <Card className="border-border/70 bg-muted/10">
+    <Card className="border-border/60 bg-muted/5">
       <CardHeader>
         <CardTitle>Consultation Report Context</CardTitle>
         <CardDescription>
@@ -85,7 +85,7 @@ export function ConsultationReportPanel({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="space-y-2">
+        <div className="space-y-3">
           <p className="text-sm font-medium text-foreground/85">
             Included in next draft
           </p>
@@ -94,7 +94,7 @@ export function ConsultationReportPanel({
               {report.includedThemes.map((theme) => (
                 <div
                   key={theme.label}
-                  className="rounded-md border border-border/70 bg-background p-3"
+                  className="rounded-md border border-border/50 bg-muted/5 px-3 py-2.5"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-medium">{theme.label}</p>
@@ -115,7 +115,7 @@ export function ConsultationReportPanel({
               ))}
             </div>
           ) : (
-            <p className="rounded-md border border-dashed border-border/70 bg-background/60 p-3 text-sm text-muted-foreground">
+            <p className="rounded-md border border-dashed border-border/50 bg-muted/10 px-3 py-2.5 text-sm text-muted-foreground">
               No accepted themes are available for the next draft yet.
             </p>
           )}
@@ -142,7 +142,7 @@ export function ConsultationReportPanel({
               {report.rejectedThemes.map((theme) => (
                 <div
                   key={theme.key}
-                  className="rounded-md border border-destructive/20 bg-background/80 p-3"
+                  className="rounded-md border border-destructive/20 bg-muted/5 px-3 py-2.5"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-medium">{theme.label}</p>

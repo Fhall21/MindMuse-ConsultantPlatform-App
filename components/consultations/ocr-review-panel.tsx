@@ -388,8 +388,8 @@ export function OcrReviewPanel({ meetingId, consultationId, ocrJobId }: OcrRevie
     displayJobs.some((j) => j.status === "completed");
 
   return (
-    <Card className="border-border/70">
-      <CardContent className="space-y-4">
+    <Card className="rounded-lg border border-border/60 bg-card/40">
+      <CardContent className="space-y-4 p-4">
 
         {/* Photo tips toggle */}
         <div>
@@ -442,7 +442,7 @@ export function OcrReviewPanel({ meetingId, consultationId, ocrJobId }: OcrRevie
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs"
+                className="h-8 text-xs"
                 onClick={() => inputRef.current?.click()}
               >
                 + Add more
@@ -573,7 +573,7 @@ export function OcrReviewPanel({ meetingId, consultationId, ocrJobId }: OcrRevie
               const pageLabel = displayJobs.length > 1 ? `Page ${idx + 1}` : "Extracted text";
 
               return (
-                <div key={job.id} className="rounded-md border border-border/70 p-3 space-y-2">
+                <div key={job.id} className="space-y-2 rounded-md border border-border/60 bg-muted/5 p-3">
                   <div className="flex flex-wrap items-center gap-3">
                     {displayJobs.length > 1 && (
                       <span className="text-sm font-medium">{pageLabel}</span>

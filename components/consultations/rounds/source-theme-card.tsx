@@ -51,7 +51,7 @@ export function SourceThemeCard({
       }}
       onClick={() => onSelect?.(theme.id)}
       className={cn(
-        "rounded-md border px-3 py-2 transition-colors",
+        "rounded-md border border-border/60 bg-muted/5 px-3 py-2.5 transition-colors",
         "cursor-grab active:cursor-grabbing",
         selected && "border-primary bg-primary/5 ring-1 ring-primary/20",
         !selected && "hover:bg-accent/50",
@@ -61,12 +61,12 @@ export function SourceThemeCard({
       data-testid="source-theme-card"
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <p className={cn("text-sm font-medium", compact && "text-xs")}>
             {theme.label}
           </p>
           {!compact && theme.description ? (
-            <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+            <p className="text-xs text-muted-foreground line-clamp-2">
               {theme.description}
             </p>
           ) : null}
@@ -77,7 +77,7 @@ export function SourceThemeCard({
             <Badge
               key={meetingTitle}
               variant="outline"
-              className="h-4 border-amber-200 bg-amber-50 px-1 text-[10px] text-amber-800"
+              className="h-5 border-amber-200 bg-amber-50 px-1.5 text-[10px] text-amber-800"
             >
               {meetingTitle}
             </Badge>
@@ -85,7 +85,7 @@ export function SourceThemeCard({
           {theme.lockedFromSource ? (
             <Badge
               variant="outline"
-              className="h-4 border-amber-200 bg-amber-50 px-1 text-[10px] text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
+              className="h-5 border-amber-200 bg-amber-50 px-1.5 text-[10px] text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
               title="This theme was accepted at the consultation level and is locked. It must remain represented in the round."
             >
               Locked
@@ -94,7 +94,7 @@ export function SourceThemeCard({
           {theme.isUserAdded ? (
             <Badge
               variant="outline"
-              className="h-4 border-blue-200 bg-blue-50 px-1 text-[10px] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300"
+              className="h-5 border-blue-200 bg-blue-50 px-1.5 text-[10px] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300"
             >
               User
             </Badge>

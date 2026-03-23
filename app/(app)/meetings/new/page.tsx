@@ -217,7 +217,7 @@ function PeopleField({
             {suggestedExisting.map((p) => (
               <span
                 key={p.id}
-                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border bg-muted/30 pl-2.5 pr-1.5 py-1 text-xs"
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border bg-muted/20 pl-2.5 pr-1.5 py-1 text-xs"
               >
                 {p.name.split(/\s+/)[0]}
                 <button
@@ -227,7 +227,7 @@ function PeopleField({
                     onAdd(p);
                     onDismissSuggestedExisting?.(p.id);
                   }}
-                  className="rounded p-0.5 hover:bg-green-100 dark:hover:bg-green-900/30"
+                  className="rounded p-0.5 transition-colors hover:bg-green-100 dark:hover:bg-green-900/30"
                 >
                   <Check className="h-3 w-3 text-green-600" />
                 </button>
@@ -235,7 +235,7 @@ function PeopleField({
                   type="button"
                   title="Dismiss"
                   onClick={() => onDismissSuggestedExisting?.(p.id)}
-                  className="rounded p-0.5 hover:bg-muted"
+                  className="rounded p-0.5 transition-colors hover:bg-muted"
                 >
                   <X className="h-3 w-3 text-muted-foreground" />
                 </button>
@@ -270,7 +270,7 @@ function PeopleField({
       )}
 
       {isCreating ? (
-        <div className="space-y-2 rounded-md border border-border/60 bg-muted/30 p-3">
+        <div className="space-y-3 rounded-lg border border-border/50 bg-muted/20 p-3">
           <div className="flex items-center gap-2">
             <Input
               value={creatingName}

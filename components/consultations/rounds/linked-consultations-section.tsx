@@ -57,9 +57,9 @@ export function LinkedConsultationsSection({
           const emailLabel = emailStatusLabel(meeting.evidenceEmailStatus);
 
           return (
-            <div key={meeting.id} className="rounded-md border">
+            <div key={meeting.id} className="rounded-md border border-border/50 bg-muted/5">
               {/* Row */}
-              <div className="flex items-center justify-between px-3 py-2.5 gap-2">
+              <div className="flex items-center justify-between gap-3 px-3 py-2.5">
                 {/* Left: name pill + meta */}
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <div className="flex items-center gap-2 flex-wrap">

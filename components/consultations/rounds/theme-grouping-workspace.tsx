@@ -365,7 +365,7 @@ export function ThemeGroupingWorkspace({
       toast.error("Suggestion contains fewer than 2 valid themes — skipping");
       return;
     }
-    await createTheme(roundId, validThemeIds);
+    await createTheme(roundId, validThemeIds, true);
     queryClient.invalidateQueries({
       queryKey: ["consultation_rounds", roundId, "detail"],
     });

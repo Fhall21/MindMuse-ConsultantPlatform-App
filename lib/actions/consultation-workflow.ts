@@ -836,8 +836,9 @@ async function writeGroupDraftSuggestion(params: {
   memberThemes: InsightWithConsultation[];
   userId: string;
   structuralChange: string;
+  applyDirectly?: boolean;
 }) {
-  const { group, round, memberThemes, userId, structuralChange } = params;
+  const { group, round, memberThemes, userId, structuralChange, applyDirectly = false } = params;
   const timestamp = new Date();
 
   if (memberThemes.length === 0) {
@@ -890,19 +891,38 @@ async function writeGroupDraftSuggestion(params: {
     draft = fallback;
   }
 
-  await db
-    .update(themes)
-    .set({
-      aiDraftLabel: draft.draftLabel,
-      aiDraftDescription: draft.draftDescription,
-      aiDraftExplanation: draft.draftExplanation,
-      aiDraftCreatedAt: timestamp,
-      aiDraftCreatedBy: userId,
-      lastStructuralChangeAt: timestamp,
-      lastStructuralChangeBy: userId,
-      updatedAt: timestamp,
-    })
-    .where(eq(themes.id, group.id));
+  // Apply directly (used for AI suggestions) or save as draft (user can review/accept)
+  if (applyDirectly) {
+    await db
+      .update(themes)
+      .set({
+        label: draft.draftLabel,
+        description: draft.draftDescription,
+        aiDraftLabel: null,
+        aiDraftDescription: null,
+        aiDraftExplanation: null,
+        aiDraftCreatedAt: null,
+        aiDraftCreatedBy: null,
+        lastStructuralChangeAt: timestamp,
+        lastStructuralChangeBy: userId,
+        updatedAt: timestamp,
+      })
+      .where(eq(themes.id, group.id));
+  } else {
+    await db
+      .update(themes)
+      .set({
+        aiDraftLabel: draft.draftLabel,
+        aiDraftDescription: draft.draftDescription,
+        aiDraftExplanation: draft.draftExplanation,
+        aiDraftCreatedAt: timestamp,
+        aiDraftCreatedBy: userId,
+        lastStructuralChangeAt: timestamp,
+        lastStructuralChangeBy: userId,
+        updatedAt: timestamp,
+      })
+      .where(eq(themes.id, group.id));
+  }
 
   await emitAuditEvent({
     action: AUDIT_ACTIONS.ROUND_THEME_GROUP_DRAFT_CREATED,
@@ -1249,7 +1269,8 @@ export async function getRoundDetail(roundId: string): Promise<RoundDetail | nul
 
 export async function createTheme(
   roundId: string,
-  seedThemeIds: string[] = []
+  seedThemeIds: string[] = [],
+  skipDraft?: boolean
 ) {
   const { userId } = await requireAuthenticatedContext();
   const round = await loadOwnedRound({ userId, roundId });
@@ -1317,6 +1338,7 @@ export async function createTheme(
       memberThemes: seedThemes,
       userId,
       structuralChange: "create_group",
+      applyDirectly: skipDraft,
     });
 
     for (const previousGroupId of previousGroupIds) {

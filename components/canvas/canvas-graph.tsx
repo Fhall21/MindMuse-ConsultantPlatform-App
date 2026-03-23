@@ -241,7 +241,39 @@ function buildFlowNodes(nodes: CanvasNode[], aiGeneratedGroupIds: Set<string>): 
       } satisfies Node;
     });
 
-  return [...themeNodes, ...insightNodes];
+  return orderNodesParentFirst([...themeNodes, ...insightNodes]);
+}
+
+function orderNodesParentFirst(nodes: Node[]) {
+  const nodeById = new Map(nodes.map((node) => [node.id, node] as const));
+  const orderedNodes: Node[] = [];
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+
+  function visit(node: Node) {
+    if (visited.has(node.id) || visiting.has(node.id)) {
+      return;
+    }
+
+    visiting.add(node.id);
+
+    if (node.parentId) {
+      const parentNode = nodeById.get(node.parentId);
+      if (parentNode) {
+        visit(parentNode);
+      }
+    }
+
+    visiting.delete(node.id);
+    visited.add(node.id);
+    orderedNodes.push(node);
+  }
+
+  for (const node of nodes) {
+    visit(node);
+  }
+
+  return orderedNodes;
 }
 
 function buildFlowEdges(edges: CanvasEdge[]): Edge[] {
@@ -262,19 +294,21 @@ function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds:
   const currentById = new Map(currentNodes.map((node) => [node.id, node] as const));
   const selectedSet = new Set(selectedNodeIds);
 
-  return nextNodes.map((nextNode) => {
-    const currentNode = currentById.get(nextNode.id);
-    const shouldPreservePosition =
-      currentNode &&
-      currentNode.type === nextNode.type &&
-      currentNode.parentId === nextNode.parentId;
+  return orderNodesParentFirst(
+    nextNodes.map((nextNode) => {
+      const currentNode = currentById.get(nextNode.id);
+      const shouldPreservePosition =
+        currentNode &&
+        currentNode.type === nextNode.type &&
+        currentNode.parentId === nextNode.parentId;
 
-    return {
-      ...nextNode,
-      position: shouldPreservePosition ? currentNode.position : nextNode.position,
-      selected: selectedSet.has(nextNode.id),
-    } satisfies Node;
-  });
+      return {
+        ...nextNode,
+        position: shouldPreservePosition ? currentNode.position : nextNode.position,
+        selected: selectedSet.has(nextNode.id),
+      } satisfies Node;
+    })
+  );
 }
 
 function syncFlowEdges(currentEdges: Edge[], nextEdges: Edge[], selectedEdgeId: string | null) {
@@ -708,10 +742,10 @@ function CanvasGraphInner({
             : allNodes;
 
       if (settledNodes !== allNodes) {
-        setFlowNodes(settledNodes);
+        setFlowNodes(orderNodesParentFirst(settledNodes));
       }
 
-      persistLayout(settledNodes);
+      persistLayout(orderNodesParentFirst(settledNodes));
       dragRef.current = null;
       dragSelectionRef.current = false;
 

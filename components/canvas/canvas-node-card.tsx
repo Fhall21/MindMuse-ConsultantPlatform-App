@@ -92,18 +92,21 @@ function ThemeCard({
   node,
   selected,
   aiGenerated,
+  dragging,
 }: {
   node: CanvasNode;
   selected: boolean;
   aiGenerated?: boolean;
+  dragging?: boolean;
 }) {
   const memberCount = node.memberIds.length;
 
   return (
     <div
       className={cn(
-        "group relative h-full w-full overflow-hidden rounded-[24px] border bg-card shadow-sm",
+        "group relative h-full w-full overflow-hidden rounded-[24px] border bg-card shadow-sm transition-opacity",
         "border-border/80",
+        dragging && "opacity-45",
         selected && "border-foreground/20 ring-2 ring-foreground/10 shadow-lg"
       )}
       data-testid="canvas-group-card"
@@ -166,7 +169,7 @@ function ThemeCard({
 
 // ─── Unified node card ─────────────────────────────────────────────────────────
 
-function CanvasNodeCardComponent({ data, selected }: NodeProps) {
+function CanvasNodeCardComponent({ data, selected, dragging }: NodeProps) {
   const typedData = data as unknown as CanvasNodeCardData;
   const node = typedData.node;
 
@@ -185,6 +188,7 @@ function CanvasNodeCardComponent({ data, selected }: NodeProps) {
       node={node}
       selected={Boolean(selected)}
       aiGenerated={typedData.aiGenerated}
+      dragging={Boolean(dragging)}
     />
   );
 }

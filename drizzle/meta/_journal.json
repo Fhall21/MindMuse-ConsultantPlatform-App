@@ -113,6 +113,20 @@
       "when": 1774230046123,
       "tag": "0015_add_missing_report_and_ai_pref_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1774235377053,
+      "tag": "0016_late_hellfire_club",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1774252881937,
+      "tag": "0017_steady_the_stranger",
+      "breakpoints": true
     }
   ]
 }

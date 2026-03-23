@@ -3,6 +3,10 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { insightDecisionLogs, insights } from "@/db/schema";
+import {
+  scheduleLearningAnalysis,
+  getThemeLearningSignalCountForUser,
+} from "@/lib/data/ai-learnings";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
 import {
   requireOwnedMeeting,
@@ -17,6 +21,8 @@ interface ThemeData {
   description?: string | null;
 }
 
+const MIN_SIGNALS_FOR_LEARNING_ANALYSIS = 5;
+
 function trimToNull(value?: string | null) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -28,6 +34,41 @@ function normalizeRequiredId(value: string, field: string) {
     throw new Error(`${field} is required.`);
   }
   return normalized;
+}
+
+async function triggerLearningAnalysisIfReady(userId: string) {
+  try {
+    const signalCount = await getThemeLearningSignalCountForUser(userId);
+    console.info("[themes.learning-analysis] evaluated", {
+      userId,
+      signalCount,
+      threshold: MIN_SIGNALS_FOR_LEARNING_ANALYSIS,
+    });
+    if (signalCount < MIN_SIGNALS_FOR_LEARNING_ANALYSIS) {
+      console.info("[themes.learning-analysis] skipped", {
+        userId,
+        signalCount,
+        threshold: MIN_SIGNALS_FOR_LEARNING_ANALYSIS,
+      });
+      return;
+    }
+
+    console.info("[themes.learning-analysis] scheduling", {
+      userId,
+      signalCount,
+      threshold: MIN_SIGNALS_FOR_LEARNING_ANALYSIS,
+    });
+    await scheduleLearningAnalysis(userId);
+    console.info("[themes.learning-analysis] scheduled", {
+      userId,
+      signalCount,
+    });
+  } catch (error) {
+    console.warn("[themes.learning-analysis] schedule failed", {
+      userId,
+      error,
+    });
+  }
 }
 
 export async function saveThemes(
@@ -121,6 +162,8 @@ export async function acceptTheme(
         consultation_id: meeting.consultationId,
       },
     });
+
+    await triggerLearningAnalysisIfReady(userId);
   } catch (error) {
     console.error("[themes.acceptTheme] failed", {
       insightId: id,
@@ -189,6 +232,8 @@ export async function rejectTheme(
       consultation_id: meeting.consultationId,
     },
   });
+
+  await triggerLearningAnalysisIfReady(userId);
 }
 
 /**
@@ -242,6 +287,8 @@ export async function addUserTheme(
       consultation_id: meeting.consultationId,
     },
   });
+
+  await triggerLearningAnalysisIfReady(userId);
 
   return themeData;
 }

@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel
 
 
@@ -14,8 +18,27 @@ class LearningSignal(BaseModel):
     """
     label: str                                    # Theme label the decision applies to
     decision_type: str                            # 'accept' | 'reject' | 'user_added'
-    rationale: str | None = None                  # Optional context for why the decision was made
+    rationale: Optional[str] = None               # Optional context for why the decision was made
     weight: float = 1.0                           # 0.0–2.0; user_added defaults higher at call site
+
+
+class UserPreferences(BaseModel):
+    consultation_types: List[str] = []
+    focus_areas: List[str] = []
+    excluded_topics: List[str] = []
+
+
+class AIInsightLearning(BaseModel):
+    id: str
+    user_id: str
+    topic_type: str
+    learning_type: str
+    label: str
+    description: str
+    supporting_metrics: Dict[str, Any] = {}
+    created_at: str
+    expires_at: Optional[str] = None
+    version: int = 1
 
 
 # --- Theme extraction ---
@@ -23,7 +46,9 @@ class LearningSignal(BaseModel):
 
 class ThemeExtractRequest(BaseModel):
     transcript: str
-    learning_signals: list[LearningSignal] = []   # Optional: user-scoped learning history
+    learning_signals: List[LearningSignal] = []   # Optional: user-scoped learning history
+    ai_learnings: List[AIInsightLearning] = []
+    user_preferences: Optional[UserPreferences] = None
 
 
 class ExtractedTheme(BaseModel):
@@ -33,15 +58,15 @@ class ExtractedTheme(BaseModel):
 
 
 class ThemeExtractResponse(BaseModel):
-    themes: list[ExtractedTheme]
+    themes: List[ExtractedTheme]
 
 
 # --- Stage 7 extraction pipeline ---
 
 
 class SourceOffset(BaseModel):
-    consultation_id: int | None = None
-    round_number: int | None = None
+    consultation_id: Optional[int] = None
+    round_number: Optional[int] = None
     start: int
     end: int
 
@@ -51,9 +76,9 @@ class ExtractedTerm(BaseModel):
     original: str
     confidence: float
     extraction_source: str
-    pos_tags: list[str] = []
+    pos_tags: List[str] = []
     negation_context: bool = False
-    offsets: list[SourceOffset]
+    offsets: List[SourceOffset]
 
 
 class ExtractionMetadataResponse(BaseModel):
@@ -62,17 +87,17 @@ class ExtractionMetadataResponse(BaseModel):
     reduced_recall: bool
     confidence: float
     duration_ms: int
-    errors: list[str] = []
+    errors: List[str] = []
 
 
 class ExtractionRequest(BaseModel):
-    consultation_id: int | None = None
-    round_number: int | None = None
+    consultation_id: Optional[int] = None
+    round_number: Optional[int] = None
     transcript: str
 
 
 class ExtractionResponse(BaseModel):
-    terms: list[ExtractedTerm]
+    terms: List[ExtractedTerm]
     metadata: ExtractionMetadataResponse
 
 
@@ -81,10 +106,10 @@ class ExtractionResponse(BaseModel):
 
 class EmailDraftRequest(BaseModel):
     transcript: str
-    themes: list[str]
-    people: list[str]
-    consultation_title: str | None = None
-    consultation_date: str | None = None  # ISO date, e.g. "2026-03-18"
+    themes: List[str]
+    people: List[str]
+    consultation_title: Optional[str] = None
+    consultation_date: Optional[str] = None  # ISO date, e.g. "2026-03-18"
 
 
 class EmailDraftResponse(BaseModel):
@@ -97,49 +122,49 @@ class EmailDraftResponse(BaseModel):
 
 class RoundThemeSeed(BaseModel):
     label: str
-    description: str | None = None
-    consultation_title: str | None = None
+    description: Optional[str] = None
+    consultation_title: Optional[str] = None
     is_user_added: bool = False
     locked_from_source: bool = False
 
 
 class RoundThemeGroupDraftRequest(BaseModel):
-    round_label: str | None = None
-    current_label: str | None = None
-    current_description: str | None = None
+    round_label: Optional[str] = None
+    current_label: Optional[str] = None
+    current_description: Optional[str] = None
     structural_change: str
-    member_themes: list[RoundThemeSeed]
+    member_themes: List[RoundThemeSeed]
 
 
 class RoundThemeGroupDraftResponse(BaseModel):
     draft_label: str
     draft_description: str
-    explanation: str | None = None
+    explanation: Optional[str] = None
 
 
 class RoundOutputTheme(BaseModel):
     label: str
-    description: str | None = None
+    description: Optional[str] = None
     source_kind: str
-    consultation_title: str | None = None
-    grouped_under: str | None = None
+    consultation_title: Optional[str] = None
+    grouped_under: Optional[str] = None
     is_user_added: bool = False
 
 
 class ReportTemplateOverride(BaseModel):
     """Optional user-defined template that overrides the default report structure."""
-    sections: list[dict] = []          # [{heading, purpose, prose_guidance, example_excerpt}]
-    style_notes: dict = {}             # {tone, person, formatting_notes}
+    sections: List[Dict] = []          # [{heading, purpose, prose_guidance, example_excerpt}]
+    style_notes: Dict = {}             # {tone, person, formatting_notes}
     prescriptiveness: str = "moderate" # 'flexible' | 'moderate' | 'strict'
 
 
 class RoundOutputRequest(BaseModel):
     round_label: str
-    round_description: str | None = None
-    consultations: list[str] = []
-    accepted_round_themes: list[RoundOutputTheme] = []
-    supporting_consultation_themes: list[RoundOutputTheme] = []
-    report_template: ReportTemplateOverride | None = None
+    round_description: Optional[str] = None
+    consultations: List[str] = []
+    accepted_round_themes: List[RoundOutputTheme] = []
+    supporting_consultation_themes: List[RoundOutputTheme] = []
+    report_template: Optional[ReportTemplateOverride] = None
 
 
 class RoundOutputResponse(BaseModel):
@@ -152,19 +177,19 @@ class RoundOutputResponse(BaseModel):
 
 class ClarificationRequest(BaseModel):
     transcript: str
-    themes: list[str]             # Accepted themes so far
-    context_notes: str | None = None  # Optional: anything the consultant already added
-    ocr_text: str | None = None   # Optional: extracted handwritten note text to include
+    themes: List[str]             # Accepted themes so far
+    context_notes: Optional[str] = None  # Optional: anything the consultant already added
+    ocr_text: Optional[str] = None   # Optional: extracted handwritten note text to include
 
 
 class ClarificationQuestion(BaseModel):
     question: str               # The question itself
     type: str                   # 'confirm' | 'expand' | 'missing'
-    theme_label: str | None     # Which theme it relates to, if any
+    theme_label: Optional[str] = None     # Which theme it relates to, if any
 
 
 class ClarificationResponse(BaseModel):
-    questions: list[ClarificationQuestion]
+    questions: List[ClarificationQuestion]
 
 
 # --- Audio transcription ---
@@ -172,8 +197,8 @@ class ClarificationResponse(BaseModel):
 
 class TranscriptionResponse(BaseModel):
     transcript: str
-    language: str | None = None
-    duration_seconds: float | None = None
+    language: Optional[str] = None
+    duration_seconds: Optional[float] = None
     word_count: int
 
 
@@ -189,7 +214,7 @@ class OcrSegment(BaseModel):
 class OcrExtractResponse(BaseModel):
     extracted_text: str             # Full text in reading order
     confidence: float               # 0.0–1.0 overall legibility
-    segments: list[OcrSegment]
+    segments: List[OcrSegment]
 
 
 # --- Theme grouping (AI-suggested round_theme_groups) ---
@@ -199,25 +224,25 @@ class ThemeGroupSuggestionInput(BaseModel):
     """A single source theme, for theme group suggestion input."""
     theme_id: str
     label: str
-    description: str | None = None
-    consultation_title: str | None = None
+    description: Optional[str] = None
+    consultation_title: Optional[str] = None
     is_user_added: bool = False
 
 
 class ThemeGroupSuggestionRequest(BaseModel):
-    round_label: str | None = None
-    focus_theme_labels: list[str]       # 2+ themes the user selected as focus
-    source_themes: list[ThemeGroupSuggestionInput]
+    round_label: Optional[str] = None
+    focus_theme_labels: List[str]       # 2+ themes the user selected as focus
+    source_themes: List[ThemeGroupSuggestionInput]
 
 
 class SuggestedThemeGroup(BaseModel):
     label: str                          # Short group name, e.g. "Workplace Stress"
-    theme_ids: list[str]                # IDs of themes to include in this group
+    theme_ids: List[str]                # IDs of themes to include in this group
     explanation: str                    # Brief rationale (1-2 sentences)
 
 
 class ThemeGroupSuggestionResponse(BaseModel):
-    groups: list[SuggestedThemeGroup]
+    groups: List[SuggestedThemeGroup]
 
 
 # --- Consultation grouping (PARKED — future feature) ---
@@ -227,37 +252,37 @@ class ConsultationThemeSeed(BaseModel):
     """A single consultation with its accepted themes, for group suggestion input."""
     consultation_id: str
     consultation_title: str
-    theme_labels: list[str]           # Accepted theme labels from this consultation
-    theme_descriptions: list[str]     # Parallel list of theme descriptions (empty string if none)
+    theme_labels: List[str]           # Accepted theme labels from this consultation
+    theme_descriptions: List[str]     # Parallel list of theme descriptions (empty string if none)
 
 
 class ConsultationGroupSuggestionRequest(BaseModel):
-    round_label: str | None = None
-    selected_theme_labels: list[str]  # 2+ themes the user wants to cluster around
-    consultations: list[ConsultationThemeSeed]
+    round_label: Optional[str] = None
+    selected_theme_labels: List[str]  # 2+ themes the user wants to cluster around
+    consultations: List[ConsultationThemeSeed]
 
 
 class SuggestedConsultationGroup(BaseModel):
     label: str                        # Short group name, e.g. "Workplace Stress Cluster"
-    consultation_ids: list[str]       # IDs of consultations to include
+    consultation_ids: List[str]       # IDs of consultations to include
     explanation: str                  # Brief rationale (1-2 sentences)
 
 
 class ConsultationGroupSuggestionResponse(BaseModel):
-    groups: list[SuggestedConsultationGroup]
+    groups: List[SuggestedConsultationGroup]
 
 
 class ConsultationGroupSummaryConsultation(BaseModel):
     consultation_id: str
     consultation_title: str
-    theme_labels: list[str]
-    theme_descriptions: list[str]
+    theme_labels: List[str]
+    theme_descriptions: List[str]
 
 
 class ConsultationGroupSummaryRequest(BaseModel):
-    round_label: str | None = None
+    round_label: Optional[str] = None
     group_label: str
-    consultations: list[ConsultationGroupSummaryConsultation]
+    consultations: List[ConsultationGroupSummaryConsultation]
 
 
 class ConsultationGroupSummaryResponse(BaseModel):
@@ -270,7 +295,7 @@ class ConsultationGroupSummaryResponse(BaseModel):
 
 class ShorthandExpandRequest(BaseModel):
     raw_text: str                   # Raw OCR/shorthand text to expand
-    context: str | None = None      # Brief description of consultation context (helps with domain terms)
+    context: Optional[str] = None      # Brief description of consultation context (helps with domain terms)
 
 
 class ShorthandChange(BaseModel):
@@ -281,7 +306,7 @@ class ShorthandChange(BaseModel):
 
 class ShorthandExpandResponse(BaseModel):
     expanded_text: str              # Full expanded text
-    changes: list[ShorthandChange]  # Log of what was changed and why
+    changes: List[ShorthandChange]  # Log of what was changed and why
 
 
 # --- Report template analysis ---
@@ -294,7 +319,7 @@ class ReportExampleDocument(BaseModel):
 
 
 class ReportTemplateAnalyseRequest(BaseModel):
-    example_documents: list[ReportExampleDocument]  # 1-3 example reports
+    example_documents: List[ReportExampleDocument]  # 1-3 example reports
     prescriptiveness: str = "moderate"              # 'flexible' | 'moderate' | 'strict'
 
 
@@ -303,30 +328,30 @@ class ReportTemplateAnalyseRequest(BaseModel):
 
 class MeetingMetadataInferRequest(BaseModel):
     transcript: str
-    meeting_type_codes: list[str] = []  # e.g. ["1-1", "FC"]; matched against for type suggestion
+    meeting_type_codes: List[str] = []  # e.g. ["1-1", "FC"]; matched against for type suggestion
 
 
 class MeetingMetadataInferResponse(BaseModel):
-    suggested_type_code: str | None = None   # One of meeting_type_codes, or null
-    suggested_date: str | None = None        # ISO date YYYY-MM-DD, or null
-    suggested_people: list[str] = []         # Participant names (not the interviewer)
+    suggested_type_code: Optional[str] = None   # One of meeting_type_codes, or null
+    suggested_date: Optional[str] = None        # ISO date YYYY-MM-DD, or null
+    suggested_people: List[str] = []         # Participant names (not the interviewer)
 
 
 class AnalysedTemplateSection(BaseModel):
     heading: str                    # Section heading, e.g. "Executive Summary"
     purpose: str                    # What this section achieves (1 sentence)
     prose_guidance: str             # AI guidance for filling in this section
-    example_excerpt: str | None = None  # Short representative excerpt from examples
+    example_excerpt: Optional[str] = None  # Short representative excerpt from examples
 
 
 class AnalysedStyleNotes(BaseModel):
-    tone: str | None = None         # e.g. "formal", "conversational", "clinical"
-    person: str | None = None       # e.g. "third person", "first person plural"
-    formatting_notes: str | None = None  # e.g. "uses bullet lists extensively"
+    tone: Optional[str] = None         # e.g. "formal", "conversational", "clinical"
+    person: Optional[str] = None       # e.g. "third person", "first person plural"
+    formatting_notes: Optional[str] = None  # e.g. "uses bullet lists extensively"
 
 
 class ReportTemplateAnalyseResponse(BaseModel):
     name: str                       # Suggested template name
     description: str                # 1-2 sentence summary of what this template is for
-    sections: list[AnalysedTemplateSection]
+    sections: List[AnalysedTemplateSection]
     style_notes: AnalysedStyleNotes

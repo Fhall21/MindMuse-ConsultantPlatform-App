@@ -73,3 +73,4 @@ supabase/.temp/
 # Git worktrees
 worktrees/
 .claude/worktrees/
+drizzle/0017_learning_analysis_debounce.sql

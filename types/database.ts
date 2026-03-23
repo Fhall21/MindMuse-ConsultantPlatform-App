@@ -287,6 +287,39 @@ export interface UserAIPreferences {
   updated_at: string;
 }
 
+export type AILearningTopicType = "theme_generation";
+
+export type AILearningType =
+  | "process_pattern"
+  | "trend"
+  | "rejection_signal"
+  | "preference_alignment";
+
+export interface AIInsightLearningSupportingMetrics {
+  accepted_count?: number;
+  alignment_count?: number;
+  confidence_score?: number;
+  example_labels?: string[];
+  percentage?: number;
+  preference_labels?: string[];
+  rejection_count?: number;
+  rejection_reasons?: Record<string, number>;
+  [key: string]: unknown;
+}
+
+export interface AIInsightLearning {
+  id: string;
+  user_id: string;
+  topic_type: AILearningTopicType;
+  learning_type: AILearningType;
+  label: string;
+  description: string;
+  supporting_metrics: AIInsightLearningSupportingMetrics;
+  created_at: string;
+  expires_at: string | null;
+  version: number;
+}
+
 export type PhaseType = "discovery" | "discussion" | "review_feedback";
 
 export interface Phase {

@@ -48,7 +48,11 @@ async def extract_themes(request: ThemeExtractRequest):
     )
 
     # Stage 4: inject user-scoped learning context if signals are provided
-    personalization = build_personalization_prompt(request.learning_signals)
+    personalization = build_personalization_prompt(
+        request.learning_signals,
+        request.user_preferences,
+        request.ai_learnings,
+    )
     if personalization:
         system_prompt += personalization
 

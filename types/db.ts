@@ -25,6 +25,10 @@ export type RoundOutputArtifactStatus = "generated";
 export type ReportTemplatePrescriptiveness = "flexible" | "moderate" | "strict";
 
 export type {
+  AIInsightLearning,
+  AIInsightLearningSupportingMetrics,
+  AILearningTopicType,
+  AILearningType,
   Consultation,
   Meeting,
   Meeting as ConsultationRound,

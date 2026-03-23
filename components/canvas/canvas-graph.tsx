@@ -422,6 +422,8 @@ function CanvasGraphInner({
   const clickHandlingRef = useRef(false);
   const initialSeedSaveRef = useRef<string | null>(null);
   const [hasQueuedSave, setHasQueuedSave] = useState(false);
+  const [hasHydratedGraph, setHasHydratedGraph] = useState(false);
+  const lastViewportRef = useRef(data?.viewport ?? { x: 0, y: 0, zoom: 1 });
 
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   selectedNodeIdsRef.current = selectedNodeIds;
@@ -491,6 +493,13 @@ function CanvasGraphInner({
       syncFlowEdges(currentEdges, nextFlowEdges, selectedEdgeId)
     );
   }, [nextFlowEdges, selectedEdgeId, setFlowEdges]);
+
+  useEffect(() => {
+    if (data) {
+      setHasHydratedGraph(true);
+      lastViewportRef.current = data.viewport;
+    }
+  }, [data]);
 
   const saveLayoutNow = useCallback(
     (positions: Record<string, { nodeType: CanvasNode["type"]; x: number; y: number }>, viewport: { x: number; y: number; zoom: number }) => {
@@ -720,7 +729,7 @@ function CanvasGraphInner({
     [getIntersectingNodes, onGroupDrop, persistLayout, setFlowNodes]
   );
 
-  if (isLoading || !data) {
+  if (!hasHydratedGraph && (isLoading || !data)) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
         Loading evidence network…
@@ -733,7 +742,7 @@ function CanvasGraphInner({
       nodes={flowNodes}
       edges={flowEdges}
       nodeTypes={nodeTypes}
-      defaultViewport={data.viewport}
+      defaultViewport={data?.viewport ?? lastViewportRef.current}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onNodeClick={handleNodeClick}

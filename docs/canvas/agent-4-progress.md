@@ -3,6 +3,13 @@
 **Branch:** `worktree-sprint-6-agent-4-alongside-sprint-stub`
 **Last updated:** 2026-03-20
 
+## 2026-03-23 Implementation Notes
+
+- Canvas route is now restored from the round detail page via `/canvas/round/[roundId]`.
+- Drag responsiveness was fixed by moving React Flow nodes into local `useNodesState` / `useEdgesState` state. Do not revert this to a server-driven `nodes={buildFlowNodes(...)}` render loop or drag lag/snap-back will return.
+- Group containers now use parent-child React Flow positioning. Child insight cards render relative to the parent theme container, but saved layout positions remain absolute when persisted. Do not switch persistence to relative coordinates unless the API contract changes everywhere.
+- Theme group containers are expected to visually encompass their children with generous spacing and room for descriptions, rather than acting as small preview cards.
+
 ---
 
 ## Completed

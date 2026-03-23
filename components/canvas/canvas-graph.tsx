@@ -48,14 +48,21 @@ const CONNECTION_COLORS: Record<ConnectionType, string> = {
   related_to: "#6b7280",
 };
 
-const GROUP_WIDTH = 360;
-const GROUP_HEADER_HEIGHT = 76;
-const GROUP_PADDING_X = 24;
-const GROUP_PADDING_TOP = 20;
-const GROUP_PADDING_BOTTOM = 24;
-const GROUP_GAP_Y = 18;
-const INSIGHT_WIDTH = 236;
-const INSIGHT_HEIGHT = 56;
+// Canvas interaction contract:
+// 1. Use React Flow local node state so drag stays locked to the cursor.
+// 2. Keep persisted DB positions absolute, even when grouped child nodes render
+//    relative to a parent container. This avoids regressions if future work swaps
+//    between grouped and ungrouped layouts.
+const GROUP_COLUMNS = 2;
+const GROUP_WIDTH = 596;
+const GROUP_HEADER_HEIGHT = 118;
+const GROUP_PADDING_X = 28;
+const GROUP_PADDING_TOP = 24;
+const GROUP_PADDING_BOTTOM = 28;
+const GROUP_GAP_X = 24;
+const GROUP_GAP_Y = 22;
+const INSIGHT_WIDTH = 258;
+const INSIGHT_HEIGHT = 110;
 
 const nodeTypes = {
   canvasNode: CanvasNodeCard,
@@ -94,20 +101,25 @@ function applyFilters(nodes: CanvasNode[], edges: CanvasEdge[], filters: CanvasF
 
 function getGroupHeight(memberCount: number) {
   const visibleCount = Math.max(memberCount, 1);
+  const rowCount = Math.max(1, Math.ceil(visibleCount / GROUP_COLUMNS));
+
   return Math.max(
-    176,
+    246,
     GROUP_HEADER_HEIGHT +
       GROUP_PADDING_TOP +
       GROUP_PADDING_BOTTOM +
-      visibleCount * INSIGHT_HEIGHT +
-      Math.max(0, visibleCount - 1) * GROUP_GAP_Y
+      rowCount * INSIGHT_HEIGHT +
+      Math.max(0, rowCount - 1) * GROUP_GAP_Y
   );
 }
 
 function getDefaultGroupedPosition(index: number) {
+  const row = Math.floor(index / GROUP_COLUMNS);
+  const column = index % GROUP_COLUMNS;
+
   return {
-    x: GROUP_PADDING_X,
-    y: GROUP_HEADER_HEIGHT + GROUP_PADDING_TOP + index * (INSIGHT_HEIGHT + GROUP_GAP_Y),
+    x: GROUP_PADDING_X + column * (INSIGHT_WIDTH + GROUP_GAP_X),
+    y: GROUP_HEADER_HEIGHT + GROUP_PADDING_TOP + row * (INSIGHT_HEIGHT + GROUP_GAP_Y),
   };
 }
 
@@ -319,6 +331,8 @@ function CanvasGraphInner({
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(nextFlowNodes);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(nextFlowEdges);
 
+  // Preserve runtime positions while dragging/selecting. Recomputing from server
+  // data on every render reintroduces cursor lag and snap-back.
   useEffect(() => {
     setFlowNodes((currentNodes) =>
       syncFlowNodes(currentNodes, nextFlowNodes, selectedNodeIds)
@@ -438,6 +452,8 @@ function CanvasGraphInner({
               }
 
               const parentNode = node.parentId ? nodesByRuntimeId.get(node.parentId) : null;
+              // Child nodes render relative to the group container but persist
+              // absolute positions so regroup/ungroup actions round-trip cleanly.
               const absolutePosition = parentNode
                 ? {
                     x: parentNode.position.x + node.position.x,

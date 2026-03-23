@@ -1,9 +1,17 @@
 import asyncio
 import logging
 import sys
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
+
+# Configure logging early - respect LOGLEVEL env var, default to DEBUG for troubleshooting
+log_level = os.getenv("LOGLEVEL", "DEBUG").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 SERVICE_ROOT = Path(__file__).resolve().parent
 if str(SERVICE_ROOT) not in sys.path:

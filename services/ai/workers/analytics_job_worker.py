@@ -95,7 +95,9 @@ WHERE id IN (
 """
 
 # Reset failed jobs that are eligible for a retry (below max attempts, past backoff window).
-# Only reset jobs that don't have another active job for the same meeting (avoids constraint violation).
+# Uses DISTINCT ON (meeting_id) to update at most ONE failed job per meeting per cycle.
+# This prevents the case where two failed jobs for the same meeting both pass the NOT EXISTS
+# check, then violate the unique constraint when both are updated to 'queued' in one statement.
 RESET_RETRYABLE_FAILED_JOBS_QUERY = f"""
 UPDATE analytics_jobs
 SET phase         = 'queued',
@@ -103,15 +105,19 @@ SET phase         = 'queued',
     error_message = NULL,
     completed_at  = NULL,
     updated_at    = now()
-WHERE phase        = 'failed'
-  AND attempt_count < {MAX_JOB_ATTEMPTS}
-  AND completed_at < now() - interval '{RETRY_BACKOFF_MINUTES} minutes'
-  AND NOT EXISTS (
-    SELECT 1 FROM analytics_jobs AS active
-    WHERE active.meeting_id = analytics_jobs.meeting_id
-      AND active.phase IN ('queued', 'extracting', 'embedding', 'clustering', 'syncing')
-      AND active.id != analytics_jobs.id
-  )
+WHERE id IN (
+    SELECT DISTINCT ON (meeting_id) id
+    FROM analytics_jobs
+    WHERE phase        = 'failed'
+      AND attempt_count < {MAX_JOB_ATTEMPTS}
+      AND completed_at < now() - interval '{RETRY_BACKOFF_MINUTES} minutes'
+      AND NOT EXISTS (
+        SELECT 1 FROM analytics_jobs AS active
+        WHERE active.meeting_id = analytics_jobs.meeting_id
+          AND active.phase IN ('queued', 'extracting', 'embedding', 'clustering', 'syncing')
+      )
+    ORDER BY meeting_id, created_at DESC
+)
 """
 
 FETCH_TRANSCRIPT_QUERY = """

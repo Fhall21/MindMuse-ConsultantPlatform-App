@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -42,14 +43,24 @@ import {
   restoreMeeting,
 } from "@/lib/actions/consultations";
 import { buildMeetingTitle } from "@/lib/meeting-title";
+import { cn } from "@/lib/utils";
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+    <h2 className="text-base font-semibold tracking-tight text-foreground">
       {children}
     </h2>
   );
 }
+
+const SECTION_LINKS = [
+  { id: "transcript", label: "Transcript" },
+  { id: "handwritten-notes", label: "Notes Photo" },
+  { id: "notes", label: "Notes" },
+  { id: "themes", label: "Themes" },
+  { id: "evidence-email", label: "Evidence Email" },
+  { id: "audit-trail", label: "Audit" },
+] as const;
 
 export default function MeetingDetailPage({
   params,
@@ -67,6 +78,8 @@ export default function MeetingDetailPage({
   const [titleDraft, setTitleDraft] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
   const [savingFields, setSavingFields] = useState(false);
+  const [transcriptExpanded, setTranscriptExpanded] = useState(false);
+  const [auditExpanded, setAuditExpanded] = useState(false);
 
   const meeting = data?.meeting;
   const isDraft = meeting?.status === "draft";
@@ -300,31 +313,42 @@ export default function MeetingDetailPage({
           </div>
 
           <div className="space-y-4 border-t pt-4">
-            <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Consultation
-              </p>
-              <RoundsPanel
-                meetingId={id}
-                currentRoundId={meeting.consultation_id}
-                currentRoundLabel={currentConsultation?.label ?? null}
-              />
-            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/5 p-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Consultation
+                </p>
+                <RoundsPanel
+                  meetingId={id}
+                  currentRoundId={meeting.consultation_id}
+                  currentRoundLabel={currentConsultation?.label ?? null}
+                />
+              </div>
 
-            {/* Meeting type */}
-            <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Meeting Type
-              </p>
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1 max-w-xs">
+              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/5 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    Meeting Type
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    title="Regenerate title from type and date"
+                    onClick={handleRegenerateTitle}
+                    disabled={!isEditable}
+                  >
+                    Regenerate
+                  </Button>
+                </div>
+                <div className="relative">
                   <select
                     value={meeting.meeting_type_id ?? ""}
                     onChange={(e) =>
                       handleSaveFields({ meetingTypeId: e.target.value || null })
                     }
                     disabled={savingFields}
-                    className="flex h-8 w-full appearance-none rounded-md border border-input bg-transparent px-3 py-1 pr-7 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                    className="flex h-9 w-full appearance-none rounded-md border border-input bg-transparent px-3 py-1 pr-7 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
                   >
                     <option value="">Not set</option>
                     {meetingTypes.map((t) => (
@@ -334,39 +358,40 @@ export default function MeetingDetailPage({
                     ))}
                   </select>
                 </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 text-xs text-muted-foreground"
-                  title="Regenerate title from type and date"
-                  onClick={handleRegenerateTitle}
-                  disabled={!isEditable}
-                >
-                  Regenerate title
-                </Button>
               </div>
-            </div>
 
-            {/* Meeting date */}
-            <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Date
-              </p>
-              <Input
-                type="date"
-                defaultValue={
-                  meeting.meeting_date
-                    ? new Date(meeting.meeting_date).toISOString().slice(0, 10)
-                    : ""
-                }
-                onBlur={(e) =>
-                  handleSaveFields({
-                    meetingDate: e.target.value ? new Date(e.target.value + "T12:00:00") : null,
-                  })
-                }
-                disabled={savingFields || !isEditable}
-                className="h-8 w-48 text-sm"
-              />
+              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/5 p-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Date
+                </p>
+                <Input
+                  type="date"
+                  defaultValue={
+                    meeting.meeting_date
+                      ? new Date(meeting.meeting_date).toISOString().slice(0, 10)
+                      : ""
+                  }
+                  onBlur={(e) =>
+                    handleSaveFields({
+                      meetingDate: e.target.value ? new Date(e.target.value + "T12:00:00") : null,
+                    })
+                  }
+                  disabled={savingFields || !isEditable}
+                  className="h-9 w-full text-sm"
+                />
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/5 p-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Status
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {isArchived ? <Badge variant="outline">Archived</Badge> : null}
+                  <Badge variant={isDraft ? "outline" : "secondary"}>
+                    {isDraft ? "Draft" : "Complete"}
+                  </Badge>
+                </div>
+              </div>
             </div>
 
             {!isDraft && meeting.consultation_id ? (
@@ -387,37 +412,79 @@ export default function MeetingDetailPage({
               </div>
             ) : null}
 
-            <div className="space-y-2 border-t pt-4">
+            <div className="space-y-3 border-t pt-4">
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  People
+                  Participants
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Link people before audio transcription so the expected speaker count is clear.
+                <p className="text-sm text-muted-foreground">
+                  Keep participant linking explicit before transcription and theme work so speaker context stays trustworthy.
                 </p>
               </div>
-              <PeoplePanel meetingId={id} />
+              <div className="rounded-lg border border-border/60 bg-muted/5 p-3">
+                <PeoplePanel meetingId={id} />
+              </div>
             </div>
           </div>
         </div>
       </div>
 
+      <div className="sticky top-3 z-30 -mx-1 overflow-x-auto rounded-xl border border-border/60 bg-background/90 p-2 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+        <nav className="flex min-w-max items-center gap-2">
+          {SECTION_LINKS.map((section) => (
+            <a
+              key={section.id}
+              href={`#${section.id}`}
+              className="rounded-full border border-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border/60 hover:bg-muted/40 hover:text-foreground"
+            >
+              {section.label}
+            </a>
+          ))}
+        </nav>
+      </div>
+
       <Separator />
 
       {/* Transcript intake — paste, file upload, or audio transcription */}
-      <section className="space-y-3">
+      <section id="transcript" className="scroll-mt-20 space-y-3">
         <SectionHeading>Transcript</SectionHeading>
-        <TranscriptIntakePanel
-          meetingId={id}
-          initialTranscript={meeting.transcript_raw}
-          readOnly={!isDraft}
-        />
+        <div className="space-y-3">
+          <div
+            className={cn(
+              "relative overflow-hidden rounded-xl border border-border/60 bg-card/40 transition-[max-height] duration-300 ease-in-out",
+              transcriptExpanded ? "max-h-[240rem]" : "max-h-[34rem]"
+            )}
+          >
+            <div className="p-4">
+              <TranscriptIntakePanel
+                meetingId={id}
+                initialTranscript={meeting.transcript_raw}
+                readOnly={!isDraft}
+              />
+            </div>
+            {!transcriptExpanded ? (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background via-background/95 to-transparent" />
+            ) : null}
+          </div>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1.5 text-xs text-muted-foreground"
+              onClick={() => setTranscriptExpanded((current) => !current)}
+            >
+              {transcriptExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {transcriptExpanded ? "Collapse transcript" : "Expand full transcript"}
+            </Button>
+          </div>
+        </div>
       </section>
 
       <Separator />
 
       {/* Handwritten notes OCR */}
-      <section className="space-y-3">
+      <section id="handwritten-notes" className="scroll-mt-20 space-y-3">
         <SectionHeading>Handwritten notes photo</SectionHeading>
         <OcrReviewPanel meetingId={id} />
       </section>
@@ -425,7 +492,7 @@ export default function MeetingDetailPage({
       <Separator />
 
       {/* Notes */}
-      <section className="space-y-3">
+      <section id="notes" className="scroll-mt-20 space-y-3">
         <SectionHeading>Notes</SectionHeading>
         <NotesEditor
           meetingId={id}
@@ -437,7 +504,7 @@ export default function MeetingDetailPage({
       <Separator />
 
       {/* Themes — Agent 4 slot */}
-      <section className="space-y-3">
+      <section id="themes" className="scroll-mt-20 space-y-3">
         <SectionHeading>Themes</SectionHeading>
         <ThemePanel meetingId={id} />
       </section>
@@ -445,7 +512,7 @@ export default function MeetingDetailPage({
       <Separator />
 
       {/* Evidence Email — Agent 4 slot */}
-      <section className="space-y-3">
+      <section id="evidence-email" className="scroll-mt-20 space-y-3">
         <SectionHeading>Evidence Email</SectionHeading>
         <EmailDraftPanel meetingId={id} />
       </section>
@@ -453,9 +520,27 @@ export default function MeetingDetailPage({
       <Separator />
 
       {/* Audit Trail — Agent 4 slot */}
-      <section className="space-y-3">
-        <SectionHeading>Audit Trail</SectionHeading>
-        <AuditTrail meetingId={id} />
+      <section id="audit-trail" className="scroll-mt-20 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <SectionHeading>Audit Trail</SectionHeading>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5 text-xs text-muted-foreground"
+            onClick={() => setAuditExpanded((current) => !current)}
+          >
+            {auditExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {auditExpanded ? "Hide audit trail" : "Show audit trail"}
+          </Button>
+        </div>
+        {auditExpanded ? (
+          <AuditTrail meetingId={id} />
+        ) : (
+          <div className="rounded-lg border border-border/60 bg-muted/5 p-4 text-sm text-muted-foreground">
+            Audit events are available when you need to verify chronology, but kept collapsed by default to keep the working flow focused.
+          </div>
+        )}
       </section>
 
       {/* Mark Complete confirmation */}

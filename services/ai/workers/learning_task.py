@@ -7,19 +7,14 @@ from typing import Any, Dict, Optional
 from core.learning_analyzer import AIInsightLearning, analyze_user_signals
 
 try:
-    from celery import Celery
-except ImportError:  # pragma: no cover - exercised only when celery is not installed.
-    Celery = None  # type: ignore[assignment]
+    from workers.celery_app import celery_app  # type: ignore[import]
+except (ImportError, ModuleNotFoundError):
+    celery_app = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TOPIC_TYPE = "theme_generation"
 DEFAULT_SIGNAL_LIMIT = 50
-
-celery_app = Celery("consultantplatform_ai") if Celery else None
-if celery_app:
-    celery_app.conf.broker_url = "redis://localhost:6379/0"
-    celery_app.conf.result_backend = "redis://localhost:6379/0"
 
 DELETE_EXISTING_LEARNINGS_QUERY = """
 DELETE FROM ai_insight_learnings
@@ -57,12 +52,28 @@ def run_compute_user_learnings(
     topic_type: str = DEFAULT_TOPIC_TYPE,
     engine: Any | None = None,
 ) -> Dict[str, Any]:
+    logger.info(
+        "learning_analysis.processing_started",
+        extra={
+            "user_id": user_id,
+            "topic_type": topic_type,
+            "engine_provided": engine is not None,
+        },
+    )
     db_engine = engine or _create_db_engine()
     learnings = analyze_user_signals(
         user_id,
         topic_type=topic_type,
         limit=DEFAULT_SIGNAL_LIMIT,
         engine=db_engine,
+    )
+    logger.info(
+        "learning_analysis.analysis_complete",
+        extra={
+            "user_id": user_id,
+            "topic_type": topic_type,
+            "analysis_count": len(learnings),
+        },
     )
     stored_count = _store_learnings(db_engine, user_id, topic_type, learnings)
 
@@ -151,7 +162,35 @@ if celery_app:
         topic_type: str = DEFAULT_TOPIC_TYPE,
     ) -> Dict[str, Any]:
         del self
-        return run_compute_user_learnings(user_id, topic_type)
+        logger.info(
+            "learning_analysis.task_received",
+            extra={
+                "user_id": user_id,
+                "topic_type": topic_type,
+            },
+        )
+        try:
+            result = run_compute_user_learnings(user_id, topic_type)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "learning_analysis.task_failed",
+                extra={
+                    "user_id": user_id,
+                    "topic_type": topic_type,
+                    "error_class": exc.__class__.__name__,
+                },
+            )
+            raise
+
+        logger.info(
+            "learning_analysis.task_completed",
+            extra={
+                "user_id": user_id,
+                "topic_type": topic_type,
+                "learning_count": result.get("learning_count"),
+            },
+        )
+        return result
 
 else:
 

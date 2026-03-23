@@ -64,8 +64,23 @@ WHERE phase IN ('extracting', 'embedding', 'clustering', 'syncing')
   AND started_at < now() - interval '{STUCK_TIMEOUT_MINUTES} minutes'
 """
 
+# Clean up duplicate active jobs for meetings with multiple active jobs.
+# Keeps the most recent one, deletes older duplicates.
+CLEANUP_DUPLICATE_ACTIVE_JOBS_QUERY = """
+DELETE FROM analytics_jobs
+WHERE id IN (
+    SELECT id FROM (
+        SELECT
+            id,
+            ROW_NUMBER() OVER (PARTITION BY meeting_id ORDER BY created_at DESC) as rn
+        FROM analytics_jobs
+        WHERE phase IN ('queued', 'extracting', 'embedding', 'clustering', 'syncing')
+    ) ranked
+    WHERE rn > 1
+)
+"""
+
 # Reset failed jobs that are eligible for a retry (below max attempts, past backoff window).
-# Only reset if there's no other active job for the same meeting (to respect the unique constraint).
 RESET_RETRYABLE_FAILED_JOBS_QUERY = f"""
 UPDATE analytics_jobs
 SET phase         = 'queued',
@@ -76,12 +91,6 @@ SET phase         = 'queued',
 WHERE phase        = 'failed'
   AND attempt_count < {MAX_JOB_ATTEMPTS}
   AND completed_at < now() - interval '{RETRY_BACKOFF_MINUTES} minutes'
-  AND NOT EXISTS (
-    SELECT 1 FROM analytics_jobs AS active
-    WHERE active.meeting_id = analytics_jobs.meeting_id
-      AND active.phase IN ('queued', 'extracting', 'embedding', 'clustering', 'syncing')
-      AND active.id != analytics_jobs.id
-  )
 """
 
 FETCH_TRANSCRIPT_QUERY = """
@@ -270,12 +279,15 @@ def _sql(query: str) -> Any:
 # ─── Poll loop ────────────────────────────────────────────────────────────────
 
 def reset_stale_jobs(engine: Any) -> None:
-    """Reset stuck in-flight jobs and re-queue failed jobs that are eligible for retry."""
+    """Reset stuck in-flight jobs, remove duplicate active jobs, and re-queue failed jobs eligible for retry."""
     with engine.begin() as conn:
         stuck = conn.execute(_sql(RESET_STUCK_JOBS_QUERY))
+        duplicates = conn.execute(_sql(CLEANUP_DUPLICATE_ACTIVE_JOBS_QUERY))
         retryable = conn.execute(_sql(RESET_RETRYABLE_FAILED_JOBS_QUERY))
     if stuck.rowcount:
         logger.info("[analytics_worker] reset stuck in-flight jobs", extra={"count": stuck.rowcount})
+    if duplicates.rowcount:
+        logger.info("[analytics_worker] cleaned up duplicate active jobs", extra={"count": duplicates.rowcount})
     if retryable.rowcount:
         logger.info("[analytics_worker] re-queued retryable failed jobs", extra={"count": retryable.rowcount})
 

@@ -110,79 +110,90 @@ export function RoundOutputsSection({
           return (
             <div
               key={type}
-              className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-muted/5 px-3 py-2.5"
+              className="rounded-lg border border-border/50 bg-muted/5 px-4 py-3"
             >
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <p className="text-sm font-medium">{outputTypeLabels[type]}</p>
-                {output?.generatedAt ? (
-                  <p className="text-xs text-muted-foreground">
-                    Generated {new Date(output.generatedAt).toLocaleDateString()}
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Not yet generated</p>
-                )}
-              </div>
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">{outputTypeLabels[type]}</p>
+                    {output?.generatedAt ? (
+                      <p className="text-xs text-muted-foreground">
+                        Generated {new Date(output.generatedAt).toLocaleDateString()}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Not yet generated</p>
+                    )}
+                  </div>
 
-              {/* Template selector — only for the "report" row */}
-              {type === "report" && templates.length > 0 && (
-                <Select
-                  value={reportTemplateId ?? "__none__"}
-                  onValueChange={(val) =>
-                    setReportTemplateId(val === "__none__" ? null : val)
-                  }
-                >
-                  <SelectTrigger className="h-8 w-44 text-xs">
-                    <SelectValue placeholder="No template" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__" className="text-xs">
-                      No template
-                    </SelectItem>
-                    {templates.map((t) => (
-                      <SelectItem key={t.id} value={t.id} className="text-xs">
-                        {t.name}
-                        {t.is_active ? " ★" : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {statusConfig ? (
+                      <Badge variant="outline" className={statusConfig.className}>
+                        {statusConfig.label}
+                      </Badge>
+                    ) : null}
+                  </div>
 
-              <div className="flex shrink-0 items-center gap-2">
-                {statusConfig ? (
-                  <Badge variant="outline" className={statusConfig.className}>
-                    {statusConfig.label}
-                  </Badge>
-                ) : null}
-                {output ? (
+                  {type === "report" && templates.length > 0 ? (
+                    <div className="max-w-xs space-y-1.5">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Report template
+                      </p>
+                      <Select
+                        value={reportTemplateId ?? "__none__"}
+                        onValueChange={(val) =>
+                          setReportTemplateId(val === "__none__" ? null : val)
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="No template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__" className="text-xs">
+                            No template
+                          </SelectItem>
+                          {templates.map((t) => (
+                            <SelectItem key={t.id} value={t.id} className="text-xs">
+                              {t.name}
+                              {t.is_active ? " ★" : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+                  {output ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 text-xs"
+                      asChild
+                    >
+                      <Link href={`/reports/${output.id}`}>View</Link>
+                    </Button>
+                  ) : null}
                   <Button
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                     className="h-8 text-xs"
-                    asChild
+                    disabled={generating !== null}
+                    onClick={() => {
+                      void handleGenerate(type, () => {
+                        if (type === "summary") return onGenerateSummary(roundId);
+                        if (type === "report") return onGenerateReport(roundId, reportTemplateId);
+                        return onGenerateEmail(roundId);
+                      });
+                    }}
                   >
-                    <Link href={`/reports/${output.id}`}>View</Link>
+                    {generating === type
+                      ? "Generating..."
+                      : output
+                        ? "Regenerate"
+                        : "Generate"}
                   </Button>
-                ) : null}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs"
-                  disabled={generating !== null}
-                  onClick={() => {
-                    void handleGenerate(type, () => {
-                      if (type === "summary") return onGenerateSummary(roundId);
-                      if (type === "report") return onGenerateReport(roundId, reportTemplateId);
-                      return onGenerateEmail(roundId);
-                    });
-                  }}
-                >
-                  {generating === type
-                    ? "Generating..."
-                    : output
-                      ? "Regenerate"
-                      : "Generate"}
-                </Button>
+                </div>
               </div>
             </div>
           );

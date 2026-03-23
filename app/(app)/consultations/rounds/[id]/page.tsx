@@ -1,9 +1,9 @@
 "use client";
 
-import { use, useCallback } from "react";
+import { use, useCallback, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
-import { Network } from "lucide-react";
+import { ChevronDown, ChevronUp, Network } from "lucide-react";
 import { toast } from "sonner";
 import posthog from "posthog-js";
 import { RoundAuditTrail } from "@/components/audit/audit-trail";
@@ -42,6 +42,8 @@ export default function RoundDetailPage({
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useRoundDetail(id);
   const { data: templates = [] } = useReportTemplates();
+  const [decisionLogsExpanded, setDecisionLogsExpanded] = useState(false);
+  const [auditExpanded, setAuditExpanded] = useState(false);
 
   const adaptedSourceThemes: SourceTheme[] = (data?.sourceThemes ?? []).map((theme) => ({
     id: theme.sourceThemeId,
@@ -222,15 +224,53 @@ export default function RoundDetailPage({
       <Separator />
 
       <section className="space-y-3">
-        <SectionHeading>Decision Logs</SectionHeading>
-        <DecisionHistorySection decisions={data.decisionHistory} />
+        <div className="flex items-center justify-between gap-3">
+          <SectionHeading>Decision Logs</SectionHeading>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5 text-xs text-muted-foreground"
+            onClick={() => setDecisionLogsExpanded((current) => !current)}
+          >
+            {decisionLogsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {decisionLogsExpanded ? "Hide decision logs" : "Show decision logs"}
+          </Button>
+        </div>
+        {decisionLogsExpanded ? (
+          <DecisionHistorySection decisions={data.decisionHistory} />
+        ) : (
+          <div className="text-sm text-muted-foreground">
+            {data.decisionHistory.length > 0
+              ? `${data.decisionHistory.length} decisions are recorded for review and compliance, but kept collapsed by default to keep the working surface calmer.`
+              : "No decisions have been recorded for this consultation yet."}
+          </div>
+        )}
       </section>
 
       <Separator />
 
       <section className="space-y-3">
-        <SectionHeading>Audit</SectionHeading>
-        <RoundAuditTrail roundId={id} />
+        <div className="flex items-center justify-between gap-3">
+          <SectionHeading>Audit</SectionHeading>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5 text-xs text-muted-foreground"
+            onClick={() => setAuditExpanded((current) => !current)}
+          >
+            {auditExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {auditExpanded ? "Hide audit trail" : "Show audit trail"}
+          </Button>
+        </div>
+        {auditExpanded ? (
+          <RoundAuditTrail roundId={id} />
+        ) : (
+          <div className="text-sm text-muted-foreground">
+            Audit events remain available when you need full chronology, but stay collapsed by default so the consultation work stays primary.
+          </div>
+        )}
       </section>
     </div>
   );

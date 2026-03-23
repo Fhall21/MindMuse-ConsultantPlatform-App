@@ -840,11 +840,9 @@ function CanvasGraphInner({
               ? snapGroupChildren(runtimeNodes, draggedNodeBeforeDrag.groupId)
             : runtimeNodes;
 
-      if (settledNodes !== allNodes) {
-        setFlowNodes(orderNodesParentFirst(settledNodes));
-      }
-
-      persistLayout(orderNodesParentFirst(settledNodes));
+      const settledFlowNodes = orderNodesParentFirst(settledNodes);
+      setFlowNodes(settledFlowNodes);
+      persistLayout(settledFlowNodes);
       dragRef.current = null;
       dragSelectionRef.current = false;
 

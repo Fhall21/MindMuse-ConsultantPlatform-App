@@ -64,6 +64,20 @@ WHERE phase IN ('extracting', 'embedding', 'clustering', 'syncing')
   AND started_at < now() - interval '{STUCK_TIMEOUT_MINUTES} minutes'
 """
 
+# Delete/reset very old queued jobs that have never been picked up (avoid infinite queue buildup).
+# If a queued job hasn't been picked up after {STUCK_TIMEOUT_MINUTES * 2} minutes, reset it.
+DELETE_STALE_QUEUED_JOBS_QUERY = f"""
+UPDATE analytics_jobs
+SET phase      = 'failed',
+    progress   = 0,
+    error_message = 'Job never started within {STUCK_TIMEOUT_MINUTES * 2} minutes; marked as failed to unblock retry queue.',
+    completed_at = now(),
+    updated_at   = now()
+WHERE phase = 'queued'
+  AND started_at IS NULL
+  AND created_at < now() - interval '{STUCK_TIMEOUT_MINUTES * 2} minutes'
+"""
+
 # Clean up duplicate active jobs for meetings with multiple active jobs.
 # Keeps the most recent one, deletes older duplicates.
 CLEANUP_DUPLICATE_ACTIVE_JOBS_QUERY = """
@@ -286,14 +300,17 @@ def _sql(query: str) -> Any:
 # ─── Poll loop ────────────────────────────────────────────────────────────────
 
 def reset_stale_jobs(engine: Any) -> None:
-    """Reset stuck in-flight jobs, remove duplicate active jobs, and re-queue failed jobs eligible for retry."""
+    """Reset stuck in-flight jobs, clean up stale queued jobs, remove duplicates, and re-queue retryable failed jobs."""
     try:
         with engine.begin() as conn:
             stuck = conn.execute(_sql(RESET_STUCK_JOBS_QUERY))
+            stale_queued = conn.execute(_sql(DELETE_STALE_QUEUED_JOBS_QUERY))
             duplicates = conn.execute(_sql(CLEANUP_DUPLICATE_ACTIVE_JOBS_QUERY))
             retryable = conn.execute(_sql(RESET_RETRYABLE_FAILED_JOBS_QUERY))
         if stuck.rowcount:
             logger.info("[analytics_worker] reset stuck in-flight jobs", extra={"count": stuck.rowcount})
+        if stale_queued.rowcount:
+            logger.info("[analytics_worker] marked stale queued jobs as failed", extra={"count": stale_queued.rowcount})
         if duplicates.rowcount:
             logger.info("[analytics_worker] cleaned up duplicate active jobs", extra={"count": duplicates.rowcount})
         if retryable.rowcount:

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  applyNodeChanges,
   Background,
   Controls,
   MiniMap,
@@ -13,6 +14,7 @@ import {
   type EdgeMouseHandler,
   type Node,
   type NodeMouseHandler,
+  type NodeChange,
   type OnNodeDrag,
   type OnSelectionChangeFunc,
   useEdgesState,
@@ -57,9 +59,8 @@ const CONNECTION_COLORS: Record<ConnectionType, string> = {
 
 // Canvas interaction contract:
 // 1. Use React Flow local node state so drag stays locked to the cursor.
-// 2. Keep persisted DB positions absolute, even when grouped child nodes render
-//    relative to a parent container. This avoids regressions if future work swaps
-//    between grouped and ungrouped layouts.
+// 2. Keep persisted DB positions absolute and manage grouping in app state so
+//    React Flow never needs nested parent/child nodes.
 const GROUP_COLUMNS = 2;
 const GROUP_WIDTH = 596;
 const GROUP_HEADER_HEIGHT = 118;
@@ -214,18 +215,23 @@ function buildFlowNodes(nodes: CanvasNode[], aiGeneratedGroupIds: Set<string>): 
     .map((node) => {
       const groupLayout = node.groupId ? themeLayoutById.get(node.groupId) : null;
       const memberIndex = groupLayout?.memberIndexById.get(node.id) ?? 0;
-      const relativePosition = groupLayout
+      const slotPosition = getDefaultGroupedPosition(memberIndex);
+      const absoluteSlotPosition = groupLayout
         ? {
-            x: node.position.x - groupLayout.position.x,
-            y: node.position.y - groupLayout.position.y,
+            x: groupLayout.position.x + slotPosition.x,
+            y: groupLayout.position.y + slotPosition.y,
           }
-        : null;
+        : node.position;
+
+      const absolutePosition =
+        groupLayout && isRelativePositionInsideGroup({ x: node.position.x - groupLayout.position.x, y: node.position.y - groupLayout.position.y }, groupLayout.height)
+          ? node.position
+          : absoluteSlotPosition;
 
       return {
         id: node.id,
         type: "canvasNode",
-        position: groupLayout ? getDefaultGroupedPosition(memberIndex) : node.position,
-        parentId: groupLayout ? node.groupId ?? undefined : undefined,
+        position: absolutePosition,
         draggable: true,
         selectable: true,
         zIndex: 1,
@@ -297,10 +303,7 @@ function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds:
   return orderNodesParentFirst(
     nextNodes.map((nextNode) => {
       const currentNode = currentById.get(nextNode.id);
-      const shouldPreservePosition =
-        currentNode &&
-        currentNode.type === nextNode.type &&
-        currentNode.parentId === nextNode.parentId;
+      const shouldPreservePosition = currentNode && currentNode.type === nextNode.type;
 
       return {
         ...nextNode,
@@ -323,8 +326,6 @@ function syncFlowEdges(currentEdges: Edge[], nextEdges: Edge[], selectedEdgeId: 
 }
 
 function buildLayoutPositions(allNodes: Node[], nodesById: Map<string, CanvasNode>) {
-  const nodesByRuntimeId = new Map(allNodes.map((node) => [node.id, node] as const));
-
   return Object.fromEntries(
     allNodes
       .map((node) => {
@@ -333,23 +334,12 @@ function buildLayoutPositions(allNodes: Node[], nodesById: Map<string, CanvasNod
           return null;
         }
 
-        const parentNode = node.parentId ? nodesByRuntimeId.get(node.parentId) : null;
-        const absolutePosition = parentNode
-          ? {
-              x: parentNode.position.x + node.position.x,
-              y: parentNode.position.y + node.position.y,
-            }
-          : {
-              x: node.position.x,
-              y: node.position.y,
-            };
-
         return [
           node.id,
           {
             nodeType: original.type,
-            x: absolutePosition.x,
-            y: absolutePosition.y,
+            x: node.position.x,
+            y: node.position.y,
           },
         ];
       })
@@ -357,10 +347,30 @@ function buildLayoutPositions(allNodes: Node[], nodesById: Map<string, CanvasNod
   );
 }
 
+function getFlowCanvasNode(node: Node) {
+  const data = node.data as unknown as CanvasNodeCardData | undefined;
+
+  return data?.node ?? null;
+}
+
+function resolveDropTargetNode(intersectingNodeIds: string[], nodes: Node[], draggedNodeId: string) {
+  const candidates = intersectingNodeIds
+    .filter((candidateId) => candidateId !== draggedNodeId)
+    .map((candidateId) => nodes.find((candidate) => candidate.id === candidateId) ?? null)
+    .filter((candidate): candidate is Node => Boolean(candidate));
+
+  return (
+    candidates.find((candidate) => getFlowCanvasNode(candidate)?.type === "insight") ??
+    candidates.find((candidate) => getFlowCanvasNode(candidate)?.type === "theme") ??
+    null
+  );
+}
+
 function snapGroupChildren(nodes: Node[], groupId: string) {
   const groupChildren = getOrderedGroupChildren(nodes, groupId);
+  const groupNode = nodes.find((candidate) => candidate.id === groupId);
 
-  if (groupChildren.length === 0) {
+  if (groupChildren.length === 0 || !groupNode) {
     return nodes;
   }
 
@@ -369,7 +379,8 @@ function snapGroupChildren(nodes: Node[], groupId: string) {
   );
 
   return nodes.map((candidate) => {
-    if (candidate.parentId !== groupId) {
+    const canvasNode = getFlowCanvasNode(candidate);
+    if (candidate.id === groupId || canvasNode?.groupId !== groupId) {
       return candidate;
     }
 
@@ -380,30 +391,17 @@ function snapGroupChildren(nodes: Node[], groupId: string) {
 
     return {
       ...candidate,
-      position: snappedPosition,
+      position: {
+        x: groupNode.position.x + snappedPosition.x,
+        y: groupNode.position.y + snappedPosition.y,
+      },
     } satisfies Node;
   });
-
-  return orderNodesParentFirst(nodes.map((candidate) => {
-    if (candidate.parentId !== groupId) {
-      return candidate;
-    }
-
-    const snappedPosition = snappedPositions.get(candidate.id);
-    if (!snappedPosition) {
-      return candidate;
-    }
-
-    return {
-      ...candidate,
-      position: snappedPosition,
-    } satisfies Node;
-  }));
 }
 
 function getOrderedGroupChildren(nodes: Node[], groupId: string) {
   return nodes
-    .filter((candidate) => candidate.parentId === groupId)
+    .filter((candidate) => getFlowCanvasNode(candidate)?.groupId === groupId)
     .sort((left, right) => {
       if (left.position.y === right.position.y) {
         return left.position.x - right.position.x;
@@ -421,6 +419,10 @@ function reorderGroupChildren(params: {
 }) {
   const { nodes, groupId, draggedNodeIds, insertionIndex } = params;
   const groupChildren = getOrderedGroupChildren(nodes, groupId);
+  const groupNode = nodes.find((candidate) => candidate.id === groupId);
+  if (!groupNode) {
+    return nodes;
+  }
   const draggedSet = new Set(draggedNodeIds);
   const reorderedIds = groupChildren
     .map((child) => child.id)
@@ -434,7 +436,8 @@ function reorderGroupChildren(params: {
   );
 
   return nodes.map((candidate) => {
-    if (!draggedSet.has(candidate.id) && candidate.parentId !== groupId) {
+    const canvasNode = getFlowCanvasNode(candidate);
+    if (!draggedSet.has(candidate.id) && canvasNode?.groupId !== groupId) {
       return candidate;
     }
 
@@ -445,27 +448,70 @@ function reorderGroupChildren(params: {
 
     return {
       ...candidate,
-      parentId: groupId,
-      position: snappedPosition,
+      position: {
+        x: groupNode.position.x + snappedPosition.x,
+        y: groupNode.position.y + snappedPosition.y,
+      },
     } satisfies Node;
   });
+}
 
-  return orderNodesParentFirst(nodes.map((candidate) => {
-    if (!draggedSet.has(candidate.id) && candidate.parentId !== groupId) {
-      return candidate;
-    }
-
-    const snappedPosition = snappedPositions.get(candidate.id);
-    if (!snappedPosition) {
+function translateGroupChildren(nodes: Node[], groupId: string, delta: { x: number; y: number }) {
+  return nodes.map((candidate) => {
+    const canvasNode = getFlowCanvasNode(candidate);
+    if (candidate.id === groupId || canvasNode?.groupId !== groupId) {
       return candidate;
     }
 
     return {
       ...candidate,
-      parentId: groupId,
-      position: snappedPosition,
+      position: {
+        x: candidate.position.x + delta.x,
+        y: candidate.position.y + delta.y,
+      },
     } satisfies Node;
-  }));
+  });
+}
+
+function applyThemeDragTranslations(changes: NodeChange[], currentNodes: Node[]) {
+  const themeDeltas = new Map<string, { x: number; y: number }>();
+
+  for (const change of changes) {
+    if (change.type !== "position" || !change.position) {
+      continue;
+    }
+
+    const currentNode = currentNodes.find((candidate) => candidate.id === change.id);
+    if (!currentNode) {
+      continue;
+    }
+
+    const canvasNode = getFlowCanvasNode(currentNode);
+    if (canvasNode?.type !== "theme") {
+      continue;
+    }
+
+    themeDeltas.set(change.id, {
+      x: change.position.x - currentNode.position.x,
+      y: change.position.y - currentNode.position.y,
+    });
+  }
+
+  if (themeDeltas.size === 0) {
+    return applyNodeChanges(changes, currentNodes);
+  }
+
+  let nextNodes = applyNodeChanges(changes, currentNodes);
+
+  for (const [groupId, delta] of themeDeltas.entries()) {
+    if (Math.abs(delta.x) < 0.5 && Math.abs(delta.y) < 0.5) {
+      continue;
+    }
+
+    nextNodes = translateGroupChildren(nextNodes, groupId, delta);
+  }
+
+  return nextNodes;
 }
 
 function CanvasGraphInner({
@@ -544,8 +590,20 @@ function CanvasGraphInner({
   );
   const nextFlowEdges = useMemo(() => buildFlowEdges(filteredEdges), [filteredEdges]);
 
-  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(nextFlowNodes);
+  const [flowNodes, setFlowNodes] = useNodesState(nextFlowNodes);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(nextFlowEdges);
+  const renderedFlowNodes = useMemo(() => orderNodesParentFirst(flowNodes), [flowNodes]);
+  const flowNodesRef = useRef(flowNodes);
+  flowNodesRef.current = flowNodes;
+
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      setFlowNodes((currentNodes) =>
+        orderNodesParentFirst(applyThemeDragTranslations(changes, currentNodes))
+      );
+    },
+    [setFlowNodes]
+  );
 
   // Preserve runtime positions while dragging/selecting. Recomputing from server
   // data on every render reintroduces cursor lag and snap-back.
@@ -726,23 +784,23 @@ function CanvasGraphInner({
   const handleNodeDragStop: OnNodeDrag = useCallback(
     async (_event, node, allNodes) => {
       const draggedNodeId = dragRef.current ?? node.id;
+      const draggedNodeBeforeDrag = nodesDataRef.current.find((candidate) => candidate.id === draggedNodeId);
+      const runtimeNodes = flowNodesRef.current;
+      const draggedNodeAfterDrop = runtimeNodes.find((candidate) => candidate.id === draggedNodeId) ?? allNodes.find((candidate) => candidate.id === draggedNodeId);
       const draggedInsightIds = getDraggedInsightIds({
         activeNodeId: draggedNodeId,
         selectedNodeIds: selectedNodeIdsRef.current,
         nodes: nodesDataRef.current,
       });
-      const intersectingNodeIds = getIntersectingNodes(node)
-        .map((candidate) => candidate.id)
-        .filter((candidateId) => candidateId !== draggedNodeId);
-      const targetNodeId = intersectingNodeIds[0] ?? null;
-      const targetCanvasNode = targetNodeId
-        ? nodesDataRef.current.find((candidate) => candidate.id === targetNodeId) ?? null
-        : null;
+      const intersectingNodeIds = getIntersectingNodes(node).map((candidate) => candidate.id);
+      const targetRuntimeNode = resolveDropTargetNode(intersectingNodeIds, runtimeNodes, draggedNodeId);
+      const targetNodeId = targetRuntimeNode?.id ?? null;
+      const targetCanvasNode = targetRuntimeNode ? getFlowCanvasNode(targetRuntimeNode) : null;
       const targetGroupId =
         targetCanvasNode?.type === "theme"
           ? targetCanvasNode.id
           : targetCanvasNode?.groupId ?? null;
-      const groupChildren = targetGroupId ? getOrderedGroupChildren(allNodes, targetGroupId) : [];
+      const groupChildren = targetGroupId ? getOrderedGroupChildren(runtimeNodes, targetGroupId) : [];
       const insertionIndex =
         targetCanvasNode?.type === "insight" && targetGroupId
           ? Math.max(
@@ -760,19 +818,27 @@ function CanvasGraphInner({
         nodes: nodesDataRef.current,
       });
 
-      const draggedNode = nodesDataRef.current.find((candidate) => candidate.id === draggedNodeId);
+      const themeDelta =
+        draggedNodeBeforeDrag?.type === "theme" && draggedNodeAfterDrop
+          ? {
+              x: draggedNodeAfterDrop.position.x - draggedNodeBeforeDrag.position.x,
+              y: draggedNodeAfterDrop.position.y - draggedNodeBeforeDrag.position.y,
+            }
+          : null;
 
       const settledNodes =
         targetGroupId && draggedInsightIds.length > 0 && typeof insertionIndex === "number"
           ? reorderGroupChildren({
-              nodes: allNodes,
+              nodes: runtimeNodes,
               groupId: targetGroupId,
               draggedNodeIds: draggedInsightIds,
               insertionIndex,
             })
-          : plan.type === "noop" && node.parentId
-            ? snapGroupChildren(allNodes, node.parentId)
-            : allNodes;
+          : draggedNodeBeforeDrag?.type === "theme" && themeDelta
+            ? runtimeNodes
+            : plan.type === "noop" && draggedNodeBeforeDrag?.type === "insight" && draggedNodeBeforeDrag.groupId
+              ? snapGroupChildren(runtimeNodes, draggedNodeBeforeDrag.groupId)
+            : runtimeNodes;
 
       if (settledNodes !== allNodes) {
         setFlowNodes(orderNodesParentFirst(settledNodes));
@@ -789,7 +855,7 @@ function CanvasGraphInner({
           targetGroupId,
           insertionIndex,
         });
-      } else if (draggedNode?.type === "insight" && draggedNode.groupId && !targetNodeId) {
+      } else if (draggedNodeBeforeDrag?.type === "insight" && draggedNodeBeforeDrag.groupId && !targetNodeId) {
         void onGroupDrop({ activeNodeId: draggedNodeId, targetNodeId: null });
       }
     },
@@ -806,11 +872,11 @@ function CanvasGraphInner({
 
   return (
     <ReactFlow
-      nodes={flowNodes}
+      nodes={renderedFlowNodes}
       edges={flowEdges}
       nodeTypes={nodeTypes}
       defaultViewport={data?.viewport ?? lastViewportRef.current}
-      onNodesChange={onNodesChange}
+      onNodesChange={handleNodesChange}
       onEdgesChange={onEdgesChange}
       onNodeClick={handleNodeClick}
       onEdgeClick={handleEdgeClick}

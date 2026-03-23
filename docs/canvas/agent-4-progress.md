@@ -7,7 +7,7 @@
 
 - Canvas route is now restored from the round detail page via `/canvas/round/[roundId]`.
 - Drag responsiveness was fixed by moving React Flow nodes into local `useNodesState` / `useEdgesState` state. Do not revert this to a server-driven `nodes={buildFlowNodes(...)}` render loop or drag lag/snap-back will return.
-- Group containers now use parent-child React Flow positioning. Child insight cards render relative to the parent theme container, but saved layout positions remain absolute when persisted. Do not switch persistence to relative coordinates unless the API contract changes everywhere.
+- Group containers now use a flat React Flow runtime model. Child insight cards are positioned absolutely in the canvas, and group motion is handled by translating child cards in app state. Do not reintroduce React Flow parent-child nesting unless the whole canvas model is being redesigned.
 - Theme group containers are expected to visually encompass their children with generous spacing and room for descriptions, rather than acting as small preview cards.
 
 ---

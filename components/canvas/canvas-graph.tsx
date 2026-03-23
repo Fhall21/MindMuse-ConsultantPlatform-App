@@ -383,6 +383,22 @@ function snapGroupChildren(nodes: Node[], groupId: string) {
       position: snappedPosition,
     } satisfies Node;
   });
+
+  return orderNodesParentFirst(nodes.map((candidate) => {
+    if (candidate.parentId !== groupId) {
+      return candidate;
+    }
+
+    const snappedPosition = snappedPositions.get(candidate.id);
+    if (!snappedPosition) {
+      return candidate;
+    }
+
+    return {
+      ...candidate,
+      position: snappedPosition,
+    } satisfies Node;
+  }));
 }
 
 function getOrderedGroupChildren(nodes: Node[], groupId: string) {
@@ -433,6 +449,23 @@ function reorderGroupChildren(params: {
       position: snappedPosition,
     } satisfies Node;
   });
+
+  return orderNodesParentFirst(nodes.map((candidate) => {
+    if (!draggedSet.has(candidate.id) && candidate.parentId !== groupId) {
+      return candidate;
+    }
+
+    const snappedPosition = snappedPositions.get(candidate.id);
+    if (!snappedPosition) {
+      return candidate;
+    }
+
+    return {
+      ...candidate,
+      parentId: groupId,
+      position: snappedPosition,
+    } satisfies Node;
+  }));
 }
 
 function CanvasGraphInner({

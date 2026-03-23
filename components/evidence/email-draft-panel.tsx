@@ -568,9 +568,9 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
               </div>
 
               {previousDrafts.length > 0 ? (
-                <div className="rounded-lg border border-border/70 bg-muted/10 p-4">
+                <div className="border-t pt-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-medium">
+                    <p className="text-sm font-medium text-muted-foreground">
                       Previous drafts ({previousDrafts.length})
                     </p>
                     <Button
@@ -585,10 +585,7 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
                   {showHistory ? (
                     <div className="mt-3 space-y-3">
                       {previousDrafts.map((draft) => (
-                        <div
-                          key={draft.id}
-                          className="rounded-md border border-border/70 bg-background p-3"
-                        >
+                        <div key={draft.id} className="space-y-1 border-l pl-3">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-sm font-medium">
                               {draft.subject || "Untitled draft"}
@@ -599,7 +596,7 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
                               )}
                             </p>
                           </div>
-                          <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
                             {draft.body_draft || "No body available."}
                           </p>
                         </div>

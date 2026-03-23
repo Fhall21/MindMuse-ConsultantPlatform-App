@@ -17,6 +17,7 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { toast } from "sonner";
 
 import { CanvasNodeCard, type CanvasNodeCardData } from "@/components/canvas/canvas-node-card";
 import { CONNECTION_TYPE_LABELS } from "@/components/canvas/connection-type-prompt";
@@ -275,17 +276,25 @@ function CanvasGraphInner({
         return;
       }
 
-      const edge = await onCreateEdge({
-        source_node_type: sourceNode.type,
-        source_node_id: sourceNode.id,
-        target_node_type: targetNode.type,
-        target_node_id: targetNode.id,
-        connection_type: "related_to",
-      });
+      try {
+        const edge = await onCreateEdge({
+          source_node_type: sourceNode.type,
+          source_node_id: sourceNode.id,
+          target_node_type: targetNode.type,
+          target_node_id: targetNode.id,
+          connection_type: "related_to",
+        });
 
-      onEdgeSelect(edge.id);
-      onNodeFocus(null);
-      onSelectionChange([]);
+        onEdgeSelect(edge.id);
+        onNodeFocus(null);
+        onSelectionChange([]);
+      } catch (error) {
+        console.error("[canvas-graph] failed to create edge", error);
+        onSelectionChange([]);
+        onNodeFocus(null);
+        onEdgeSelect(null);
+        toast.error("Failed to create connection.");
+      }
     },
     [nodesById, onCreateEdge, onEdgeSelect, onNodeFocus, onSelectionChange]
   );

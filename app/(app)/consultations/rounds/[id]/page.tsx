@@ -3,6 +3,7 @@
 import { use, useCallback } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
+import { Network } from "lucide-react";
 import { toast } from "sonner";
 import { RoundAuditTrail } from "@/components/audit/audit-trail";
 import { AnalyticsPanel } from "@/components/consultations/rounds/analytics-panel";
@@ -156,7 +157,15 @@ export default function RoundDetailPage({
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
-      <RoundDetailHeader round={data.round} />
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <RoundDetailHeader round={data.round} />
+        <Button variant="outline" asChild className="h-10 shrink-0 gap-2 self-start">
+          <Link href={`/canvas/round/${id}`}>
+            <Network className="h-4 w-4" />
+            Evidence Canvas
+          </Link>
+        </Button>
+      </div>
 
       <Separator />
 

@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -195,47 +196,51 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
   async function handleGroupDrop(params: { activeNodeId: string; targetNodeId: string | null }) {
     if (!canvasQuery.data) return;
+    try {
+      if (!params.targetNodeId) {
+        const activeNode = canvasQuery.data.nodes.find((node) => node.id === params.activeNodeId);
+        if (!activeNode || activeNode.type !== "insight" || !activeNode.groupId) return;
 
-    if (!params.targetNodeId) {
-      const activeNode = canvasQuery.data.nodes.find((node) => node.id === params.activeNodeId);
-      if (!activeNode || activeNode.type !== "insight" || !activeNode.groupId) return;
+        const selectedInsightIds = selectedNodeIds.filter((id) =>
+          canvasQuery.data?.nodes.some((node) => node.id === id && node.type === "insight")
+        );
+        const insightIds = selectedInsightIds.includes(params.activeNodeId)
+          ? selectedInsightIds
+          : [params.activeNodeId];
 
-      const selectedInsightIds = selectedNodeIds.filter((id) =>
-        canvasQuery.data?.nodes.some((node) => node.id === id && node.type === "insight")
-      );
-      const insightIds = selectedInsightIds.includes(params.activeNodeId)
-        ? selectedInsightIds
-        : [params.activeNodeId];
+        await Promise.all(insightIds.map((insightId) => moveThemeToGroup(insightId, null)));
+        void invalidateCanvas();
+        setSelectedNodeIds([]);
+        setFocusedNodeId(null);
+        return;
+      }
 
-      await Promise.all(insightIds.map((insightId) => moveThemeToGroup(insightId, null)));
+      const plan = resolveCanvasGroupingPlan({
+        activeNodeId: params.activeNodeId,
+        targetNodeId: params.targetNodeId,
+        selectedNodeIds,
+        nodes: canvasQuery.data.nodes,
+      });
+
+      if (plan.type === "noop") return;
+
+      if (plan.type === "create-group") {
+        await createTheme(roundId, plan.seedInsightIds);
+      } else {
+        await Promise.all(
+          plan.insightIds.map((insightId, index) =>
+            moveThemeToGroup(insightId, plan.targetGroupId, index)
+          )
+        );
+      }
+
       void invalidateCanvas();
       setSelectedNodeIds([]);
       setFocusedNodeId(null);
-      return;
+    } catch (error) {
+      console.error("[canvas-shell] failed to update grouping", error);
+      toast.error("Failed to update grouping.");
     }
-
-    const plan = resolveCanvasGroupingPlan({
-      activeNodeId: params.activeNodeId,
-      targetNodeId: params.targetNodeId,
-      selectedNodeIds,
-      nodes: canvasQuery.data.nodes,
-    });
-
-    if (plan.type === "noop") return;
-
-    if (plan.type === "create-group") {
-      await createTheme(canvasQuery.data.consultation_id, plan.seedInsightIds);
-    } else {
-      await Promise.all(
-        plan.insightIds.map((insightId, index) =>
-          moveThemeToGroup(insightId, plan.targetGroupId, index)
-        )
-      );
-    }
-
-    void invalidateCanvas();
-    setSelectedNodeIds([]);
-    setFocusedNodeId(null);
   }
 
   return (

@@ -298,6 +298,25 @@ export async function triggerRoundAnalyticsJobs(
   return { jobCount };
 }
 
+export async function clearRoundFailedJobs(
+  consultationId: string
+): Promise<{ clearedCount: number }> {
+  const userId = await requireCurrentUserId();
+  await requireOwnedRound(consultationId, userId);
+
+  const deleted = await db
+    .delete(analyticsJobs)
+    .where(
+      and(
+        eq(analyticsJobs.consultationId, consultationId),
+        eq(analyticsJobs.phase, "failed")
+      )
+    )
+    .returning({ id: analyticsJobs.id });
+
+  return { clearedCount: deleted.length };
+}
+
 export async function recordAnalyticsClusterDecision(params: {
   roundId: string;
   clusterId: number;

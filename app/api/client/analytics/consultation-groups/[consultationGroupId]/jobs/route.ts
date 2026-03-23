@@ -1,4 +1,5 @@
 import {
+  deleteConsultationGroupFailedJobsResponse,
   getConsultationGroupAnalyticsJobsResponse,
   postConsultationGroupAnalyticsJobsResponse,
 } from "../../_handlers";
@@ -17,4 +18,12 @@ export async function POST(
 ) {
   const { consultationGroupId } = await params;
   return postConsultationGroupAnalyticsJobsResponse(consultationGroupId);
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ consultationGroupId: string }> }
+) {
+  const { consultationGroupId } = await params;
+  return deleteConsultationGroupFailedJobsResponse(consultationGroupId);
 }

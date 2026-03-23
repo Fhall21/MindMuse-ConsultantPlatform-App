@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
+  clearRoundFailedJobs,
   getRoundAnalyticsDataSet,
   getRoundAnalyticsJobStatuses,
   recordAnalyticsClusterDecision,
@@ -59,6 +60,20 @@ export async function postConsultationGroupAnalyticsJobsResponse(consultationGro
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     return analyticsRouteError(error, "Failed to trigger consultation group analytics jobs");
+  }
+}
+
+export async function deleteConsultationGroupFailedJobsResponse(consultationGroupId: string) {
+  const client = await requireRouteClient();
+  if ("response" in client) {
+    return client.response;
+  }
+
+  try {
+    const data = await clearRoundFailedJobs(consultationGroupId);
+    return NextResponse.json(data);
+  } catch (error) {
+    return analyticsRouteError(error, "Failed to clear failed analytics jobs");
   }
 }
 

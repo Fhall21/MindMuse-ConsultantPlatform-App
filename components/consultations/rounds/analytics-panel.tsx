@@ -32,6 +32,7 @@ import {
   isAnalyticsJobActive,
   useConsultationGroupAnalyticsClusterDecision,
   useConsultationGroupAnalyticsJobs,
+  useClearAndRetriggerConsultationGroupJobs,
   useTriggerConsultationGroupAnalyticsJobs,
 } from "@/hooks/use-analytics";
 import { addAnalyticsClusterAsInsight } from "@/lib/actions/analytics-insights";
@@ -154,6 +155,7 @@ export function AnalyticsPanel({
   const queryClient = useQueryClient();
   const consultationGroupJobsQuery = useConsultationGroupAnalyticsJobs(consultationGroupId);
   const triggerConsultationGroupAnalyticsMutation = useTriggerConsultationGroupAnalyticsJobs(consultationGroupId);
+  const clearAndRetriggerMutation = useClearAndRetriggerConsultationGroupJobs(consultationGroupId);
   const analyticsDecisionMutation = useConsultationGroupAnalyticsClusterDecision(consultationGroupId);
   const [pendingDecision, setPendingDecision] = useState<ClusterDecisionDraft | null>(null);
   const [decisionRationale, setDecisionRationale] = useState("");
@@ -194,6 +196,28 @@ export function AnalyticsPanel({
     }
     return map;
   }, [decisionHistory]);
+
+  async function handleClearAndRetry() {
+    setErrorMessage(null);
+    try {
+      const result = await clearAndRetriggerMutation.mutateAsync();
+      toast.success(
+        result.jobCount > 1
+          ? `${result.jobCount} analytics jobs queued`
+          : "Analytics job queued"
+      );
+      posthog.capture("analysis_run_started", {
+        job_count: result.jobCount,
+        consultation_group_id: consultationGroupId,
+        clear_and_retry: true,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to clear and retry analytics";
+      setErrorMessage(message);
+      toast.error(message);
+    }
+  }
 
   async function handleTriggerRoundAnalytics() {
     setErrorMessage(null);
@@ -296,15 +320,15 @@ export function AnalyticsPanel({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => void handleTriggerRoundAnalytics()}
-              disabled={triggerConsultationGroupAnalyticsMutation.isPending}
+              onClick={() => void handleClearAndRetry()}
+              disabled={clearAndRetriggerMutation.isPending}
             >
-              {triggerConsultationGroupAnalyticsMutation.isPending ? (
+              {clearAndRetriggerMutation.isPending ? (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               ) : (
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
               )}
-              Retry
+              Clear &amp; Retry
             </Button>
           ) : (
             <Button

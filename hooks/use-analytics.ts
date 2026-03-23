@@ -134,6 +134,29 @@ export function useTriggerRoundAnalyticsJobs(consultationGroupId: string) {
   return useTriggerConsultationGroupAnalyticsJobs(consultationGroupId);
 }
 
+export function useClearAndRetriggerConsultationGroupJobs(consultationGroupId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      await fetchJson<{ clearedCount: number }>(
+        `/api/client/analytics/consultation-groups/${consultationGroupId}/jobs`,
+        { method: "DELETE" }
+      );
+      return fetchJson<{ jobCount: number }>(
+        `/api/client/analytics/consultation-groups/${consultationGroupId}/jobs`,
+        { method: "POST" }
+      );
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: analyticsQueryKeys.consultationGroup(consultationGroupId) }),
+        queryClient.invalidateQueries({ queryKey: analyticsQueryKeys.consultationGroupJobs(consultationGroupId) }),
+      ]);
+    },
+  });
+}
+
 export function useTriggerConsultationAnalyticsJob(consultationId: string) {
   const queryClient = useQueryClient();
 

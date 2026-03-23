@@ -8,6 +8,7 @@ import {
   numeric,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   unique,
@@ -647,6 +648,50 @@ export const userAIPreferences = pgTable(
   },
   (table) => ({
     userIdx: index("idx_user_ai_preferences_user_id").on(table.userId),
+  })
+);
+
+export const aiInsightLearnings = pgTable(
+  "ai_insight_learnings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    topicType: text("topic_type").default("theme_generation").notNull(),
+    learningType: text("learning_type").notNull(),
+    label: text("label").notNull(),
+    description: text("description").notNull(),
+    supportingMetrics: jsonb("supporting_metrics")
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    version: smallint("version").default(1).notNull(),
+  },
+  (table) => ({
+    topicTypeCheck: check(
+      "ai_insight_learnings_topic_type_check",
+      sql`${table.topicType} in ('theme_generation')`
+    ),
+    learningTypeCheck: check(
+      "ai_insight_learnings_learning_type_check",
+      sql`${table.learningType} in ('process_pattern', 'trend', 'rejection_signal', 'preference_alignment')`
+    ),
+    versionCheck: check(
+      "ai_insight_learnings_version_check",
+      sql`${table.version} >= 1`
+    ),
+    userTopicCreatedIdx: index("idx_ai_insight_learnings_user_topic_created").on(
+      table.userId,
+      table.topicType,
+      table.createdAt.desc()
+    ),
+    userTypeIdx: index("idx_ai_insight_learnings_user_type").on(
+      table.userId,
+      table.learningType
+    ),
   })
 );
 

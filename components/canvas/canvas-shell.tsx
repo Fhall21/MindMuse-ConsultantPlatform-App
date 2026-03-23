@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import posthog from "posthog-js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -86,6 +87,11 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
   const invalidateCanvas = () =>
     queryClient.invalidateQueries({ queryKey: ["canvas", roundId] });
+
+  // Track canvas entry for value attribution
+  useEffect(() => {
+    posthog.capture("canvas_opened", { round_id: roundId });
+  }, [roundId]);
 
   // Stable — prevents ReactFlow from rebuilding its selection handler on every render
   const handleCanvasSelectionChange = useCallback((nextIds: string[]) => {

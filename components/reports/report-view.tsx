@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import posthog from "posthog-js";
 import {
   useReportArtifact,
   useReportArtifactVersions,
@@ -852,6 +853,17 @@ export function ReportView({ artifactId }: ReportViewProps) {
   const [template, setTemplate] = useState<ReportTemplate>("standard");
   const [isExporting, setIsExporting] = useState(false);
 
+  // Track report view for value attribution
+  useEffect(() => {
+    if (!report) return;
+    posthog.capture("report_viewed", {
+      artifact_type: report.artifactType,
+      consultation_count: report.consultations.length || report.consultationTitles.length,
+      version_number: report.versionNumber,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report?.id]);
+
   const handleDownloadPDF = useCallback(async () => {
     if (!report) return;
     setIsExporting(true);
@@ -868,6 +880,10 @@ export function ReportView({ artifactId }: ReportViewProps) {
       a.click();
       URL.revokeObjectURL(url);
       toast.success("PDF downloaded");
+      posthog.capture("report_exported", {
+        artifact_type: report.artifactType,
+        template,
+      });
     } catch {
       toast.error("Failed to download PDF. Please try again.");
     } finally {

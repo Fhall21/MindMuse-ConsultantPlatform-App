@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import posthog from "posthog-js";
 import { fetchJson } from "@/hooks/api";
 import type {
   AiConnectionSuggestion,
@@ -100,7 +101,12 @@ export function useCreateEdge(roundId: string) {
           body: JSON.stringify(payload),
         }
       ),
-    onSuccess: (createdEdge) => {
+    onSuccess: (createdEdge, payload) => {
+      posthog.capture("canvas_connection_created", {
+        connection_type: createdEdge.connection_type,
+        source_node_type: payload.source_node_type,
+        target_node_type: payload.target_node_type,
+      });
       updateCanvasCache(queryClient, roundId, (current) => ({
         ...current,
         edges: [
@@ -147,6 +153,9 @@ export function useUpdateEdge(roundId: string) {
       }
     },
     onSuccess: (updatedEdge) => {
+      posthog.capture("canvas_connection_updated", {
+        connection_type: updatedEdge.connection_type,
+      });
       updateCanvasCache(queryClient, roundId, (current) => ({
         ...current,
         edges: current.edges.map((edge) =>
@@ -177,6 +186,9 @@ export function useDeleteEdge(roundId: string) {
       if (context?.previous) {
         queryClient.setQueryData(canvasKey(roundId), context.previous);
       }
+    },
+    onSuccess: () => {
+      posthog.capture("canvas_connection_deleted");
     },
   });
 }
@@ -225,6 +237,7 @@ export function useAcceptSuggestion(roundId: string) {
         { method: "POST" }
       ),
     onSuccess: () => {
+      posthog.capture("canvas_suggestion_accepted");
       queryClient.invalidateQueries({ queryKey: suggestionsKey(roundId) });
       queryClient.invalidateQueries({ queryKey: canvasKey(roundId) });
     },
@@ -240,6 +253,7 @@ export function useRejectSuggestion(roundId: string) {
         { method: "DELETE" }
       ),
     onSuccess: () => {
+      posthog.capture("canvas_suggestion_rejected");
       queryClient.invalidateQueries({ queryKey: suggestionsKey(roundId) });
       queryClient.invalidateQueries({ queryKey: canvasKey(roundId) });
     },
@@ -255,6 +269,7 @@ export function useGenerateSuggestions(roundId: string) {
         { method: "POST" }
       ),
     onSuccess: () => {
+      posthog.capture("canvas_suggestion_generated");
       queryClient.invalidateQueries({ queryKey: suggestionsKey(roundId) });
     },
   });

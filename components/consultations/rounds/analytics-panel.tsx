@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import posthog from "posthog-js";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -203,6 +204,10 @@ export function AnalyticsPanel({
           ? `${result.jobCount} analytics jobs queued`
           : "Analytics job queued"
       );
+      posthog.capture("analysis_run_started", {
+        job_count: result.jobCount,
+        consultation_group_id: consultationGroupId,
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to queue analytics run";
@@ -231,6 +236,10 @@ export function AnalyticsPanel({
             ? "Cluster suggestion rejected"
             : "Cluster suggestion edited"
       );
+      posthog.capture("cluster_decision_recorded", {
+        action,
+        consultation_group_id: consultationGroupId,
+      });
       setPendingDecision(null);
       setDecisionRationale("");
       setEditedLabel("");

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { Network } from "lucide-react";
 import { toast } from "sonner";
+import posthog from "posthog-js";
 import { RoundAuditTrail } from "@/components/audit/audit-trail";
 import { AnalyticsPanel } from "@/components/consultations/rounds/analytics-panel";
 import { DecisionHistorySection } from "@/components/consultations/rounds/decision-history-section";
@@ -98,6 +99,7 @@ export default function RoundDetailPage({
         await generateRoundSummary(roundId);
         await invalidateRoundDetail(roundId);
         toast.success("Summary generated");
+        posthog.capture("report_generated", { round_id: roundId, artifact_type: "summary" });
       } catch {
         toast.error("Failed to generate summary");
       }
@@ -111,6 +113,7 @@ export default function RoundDetailPage({
         await generateRoundReport(roundId);
         await invalidateRoundDetail(roundId);
         toast.success("Report generated");
+        posthog.capture("report_generated", { round_id: roundId, artifact_type: "report" });
       } catch {
         toast.error("Failed to generate report");
       }
@@ -124,6 +127,7 @@ export default function RoundDetailPage({
         await generateRoundEmail(roundId);
         await invalidateRoundDetail(roundId);
         toast.success("Email generated");
+        posthog.capture("report_generated", { round_id: roundId, artifact_type: "email" });
       } catch {
         toast.error("Failed to generate email");
       }

@@ -9,6 +9,11 @@ SERVICE_ROOT = Path(__file__).resolve().parent
 if str(SERVICE_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVICE_ROOT))
 
+logger_startup = logging.getLogger(__name__)
+logger_startup.debug(f"[main.py startup] SERVICE_ROOT={SERVICE_ROOT}")
+logger_startup.debug(f"[main.py startup] sys.path[0]={sys.path[0]}")
+logger_startup.debug(f"[main.py startup] core module available: {Path(SERVICE_ROOT / 'core').exists()}")
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

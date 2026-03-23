@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -306,9 +307,17 @@ def _fetch_transcript(engine: Any, meeting_id: str) -> str:
 
 
 def _run_extraction(transcript: str) -> Any:
-    from core.extraction import extract_terms_with_offsets
-    from core.stop_words import filter_terms
-    from core.term_normalization import normalize_terms
+    import sys
+    logger.debug(f"[_run_extraction] sys.path at import time: {sys.path[:3]}")
+    logger.debug(f"[_run_extraction] current working dir: {Path.cwd()}")
+    try:
+        from core.extraction import extract_terms_with_offsets
+        from core.stop_words import filter_terms
+        from core.term_normalization import normalize_terms
+        logger.debug("[_run_extraction] imports successful")
+    except ModuleNotFoundError as e:
+        logger.error(f"[_run_extraction] import failed: {e}", exc_info=True)
+        raise
 
     result = extract_terms_with_offsets(transcript)
     result.terms = filter_terms(normalize_terms(result.terms))
@@ -444,8 +453,10 @@ def _run_clustering(engine: Any, job: ClaimedJob) -> None:
 
 async def run_worker_loop(engine: Any, poll_interval: float = POLL_INTERVAL_SECONDS) -> None:
     """Async loop: runs poll_once in a thread executor so it doesn't block FastAPI."""
+    import sys
     loop = asyncio.get_running_loop()
     ensure_analytics_projection_refresh_compatibility(engine)
+    logger.debug(f"[run_worker_loop] sys.path at worker start: {sys.path[:3]}")
     logger.info("[analytics_worker] polling loop started", extra={"poll_interval_s": poll_interval})
     while True:
         try:

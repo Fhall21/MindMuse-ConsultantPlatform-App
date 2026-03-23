@@ -14,7 +14,7 @@ import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
 import { MultiSelectionPanel } from "@/components/canvas/multi-selection-panel";
 import { useCanvas, useCreateEdge, useUpdateEdge } from "@/hooks/use-canvas";
-import { resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
+import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
 import { createTheme, moveThemeToGroup, updateTheme } from "@/lib/actions/consultation-workflow";
 import { suggestGroupLabel } from "@/lib/actions/canvas-ai";
 import { defaultFilterState, type CanvasFilterState, type ConnectionType } from "@/types/canvas";
@@ -200,7 +200,12 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
   // ─── Drag-and-drop grouping ──────────────────────────────────────────────────
 
-  async function handleGroupDrop(params: { activeNodeId: string; targetNodeId: string | null }) {
+  async function handleGroupDrop(params: {
+    activeNodeId: string;
+    targetNodeId: string | null;
+    targetGroupId?: string | null;
+    insertionIndex?: number;
+  }) {
     if (!canvasQuery.data) return;
     try {
       if (!params.targetNodeId) {
@@ -228,16 +233,45 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
         nodes: canvasQuery.data.nodes,
       });
 
+      const draggedInsightIds = getDraggedInsightIds({
+        activeNodeId: params.activeNodeId,
+        selectedNodeIds,
+        nodes: canvasQuery.data.nodes,
+      });
+
+      if (
+        params.targetGroupId &&
+        typeof params.insertionIndex === "number" &&
+        draggedInsightIds.length > 0
+      ) {
+        for (const [offset, insightId] of draggedInsightIds.entries()) {
+          await moveThemeToGroup(
+            insightId,
+            params.targetGroupId,
+            params.insertionIndex + offset
+          );
+        }
+
+        void invalidateCanvas();
+        setSelectedNodeIds([]);
+        setFocusedNodeId(null);
+        return;
+      }
+
       if (plan.type === "noop") return;
 
       if (plan.type === "create-group") {
         await createTheme(roundId, plan.seedInsightIds);
       } else {
-        await Promise.all(
-          plan.insightIds.map((insightId, index) =>
-            moveThemeToGroup(insightId, plan.targetGroupId, index)
-          )
-        );
+        for (const [index, insightId] of plan.insightIds.entries()) {
+          await moveThemeToGroup(
+            insightId,
+            plan.targetGroupId,
+            typeof params.insertionIndex === "number"
+              ? params.insertionIndex + index
+              : undefined
+          );
+        }
       }
 
       void invalidateCanvas();

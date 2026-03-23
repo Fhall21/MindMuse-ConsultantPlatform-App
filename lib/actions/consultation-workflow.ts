@@ -793,6 +793,43 @@ async function loadGroupMembers(params: { groupId: string }) {
   return rows.map(mapThemeMemberRecord);
 }
 
+function clampInsertionIndex(position: number | undefined, length: number) {
+  if (typeof position !== "number" || Number.isNaN(position)) {
+    return length;
+  }
+
+  return Math.max(0, Math.min(Math.trunc(position), length));
+}
+
+async function rewriteGroupMemberPositions(params: {
+  groupId: string;
+  orderedInsightIds: string[];
+}) {
+  const { groupId, orderedInsightIds } = params;
+  const members = await loadGroupMembers({ groupId });
+  const memberByInsightId = new Map(
+    members.map((member) => [member.insight_id, member] as const)
+  );
+
+  await db.transaction(async (tx) => {
+    for (const [position, insightId] of orderedInsightIds.entries()) {
+      const member = memberByInsightId.get(insightId);
+      if (!member) {
+        continue;
+      }
+
+      if (member.position === position) {
+        continue;
+      }
+
+      await tx
+        .update(themeMembers)
+        .set({ position })
+        .where(eq(themeMembers.id, member.id));
+    }
+  });
+}
+
 async function writeGroupDraftSuggestion(params: {
   group: Theme;
   round: Consultation;
@@ -1347,11 +1384,22 @@ export async function moveThemeToGroup(
   const previousGroupId = currentMembership?.theme_id ?? null;
 
   if (currentMembership && currentMembership.theme_id === targetGroupId) {
-    if (typeof position === "number") {
-      await db
-        .update(themeMembers)
-        .set({ position })
-        .where(eq(themeMembers.id, currentMembership.id));
+    if (typeof position === "number" && targetGroupId) {
+      const currentMembers = await loadGroupMembers({ groupId: targetGroupId });
+      const reorderedInsightIds = currentMembers
+        .map((member) => member.insight_id)
+        .filter((insightId) => insightId !== themeId);
+
+      reorderedInsightIds.splice(
+        clampInsertionIndex(position, reorderedInsightIds.length),
+        0,
+        themeId
+      );
+
+      await rewriteGroupMemberPositions({
+        groupId: targetGroupId,
+        orderedInsightIds: reorderedInsightIds,
+      });
     }
 
     return { groupId: targetGroupId };
@@ -1361,12 +1409,23 @@ export async function moveThemeToGroup(
     await db
       .delete(themeMembers)
       .where(eq(themeMembers.id, currentMembership.id));
+
+    if (previousGroupId) {
+      const previousMembers = await loadGroupMembers({ groupId: previousGroupId });
+      await rewriteGroupMemberPositions({
+        groupId: previousGroupId,
+        orderedInsightIds: previousMembers.map((member) => member.insight_id),
+      });
+    }
   }
 
   if (targetGroup) {
     const targetMembers = await loadGroupMembers({ groupId: targetGroup.id });
-    const nextPosition =
-      typeof position === "number" ? position : targetMembers.length;
+    const orderedInsightIds = targetMembers.map((member) => member.insight_id);
+    const nextPosition = clampInsertionIndex(position, orderedInsightIds.length);
+
+    orderedInsightIds.splice(nextPosition, 0, theme.id);
+
     await db.insert(themeMembers).values({
       themeId: targetGroup.id,
       consultationId: roundId,
@@ -1376,6 +1435,11 @@ export async function moveThemeToGroup(
       userId,
       position: nextPosition,
       createdBy: userId,
+    });
+
+    await rewriteGroupMemberPositions({
+      groupId: targetGroup.id,
+      orderedInsightIds,
     });
   }
 

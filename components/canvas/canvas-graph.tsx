@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import { CanvasNodeCard, type CanvasNodeCardData } from "@/components/canvas/canvas-node-card";
 import { CONNECTION_TYPE_LABELS } from "@/components/canvas/connection-type-prompt";
 import { useCanvas, useSaveLayout, type CreateEdgePayload } from "@/hooks/use-canvas";
-import { resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
+import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
 import type { CanvasEdge, CanvasFilterState, CanvasNode, ConnectionType } from "@/types/canvas";
 
 interface CanvasGraphProps {
@@ -39,7 +39,12 @@ interface CanvasGraphProps {
   onNodeFocus: (id: string | null) => void;
   onEdgeSelect: (id: string | null) => void;
   onCreateEdge: (payload: CreateEdgePayload) => Promise<CanvasEdge>;
-  onGroupDrop: (params: { activeNodeId: string; targetNodeId: string | null }) => Promise<void>;
+  onGroupDrop: (params: {
+    activeNodeId: string;
+    targetNodeId: string | null;
+    targetGroupId?: string | null;
+    insertionIndex?: number;
+  }) => Promise<void>;
 }
 
 const CONNECTION_COLORS: Record<ConnectionType, string> = {
@@ -319,15 +324,7 @@ function buildLayoutPositions(allNodes: Node[], nodesById: Map<string, CanvasNod
 }
 
 function snapGroupChildren(nodes: Node[], groupId: string) {
-  const groupChildren = nodes
-    .filter((candidate) => candidate.parentId === groupId)
-    .sort((left, right) => {
-      if (left.position.y === right.position.y) {
-        return left.position.x - right.position.x;
-      }
-
-      return left.position.y - right.position.y;
-    });
+  const groupChildren = getOrderedGroupChildren(nodes, groupId);
 
   if (groupChildren.length === 0) {
     return nodes;
@@ -349,6 +346,56 @@ function snapGroupChildren(nodes: Node[], groupId: string) {
 
     return {
       ...candidate,
+      position: snappedPosition,
+    } satisfies Node;
+  });
+}
+
+function getOrderedGroupChildren(nodes: Node[], groupId: string) {
+  return nodes
+    .filter((candidate) => candidate.parentId === groupId)
+    .sort((left, right) => {
+      if (left.position.y === right.position.y) {
+        return left.position.x - right.position.x;
+      }
+
+      return left.position.y - right.position.y;
+    });
+}
+
+function reorderGroupChildren(params: {
+  nodes: Node[];
+  groupId: string;
+  draggedNodeIds: string[];
+  insertionIndex: number;
+}) {
+  const { nodes, groupId, draggedNodeIds, insertionIndex } = params;
+  const groupChildren = getOrderedGroupChildren(nodes, groupId);
+  const draggedSet = new Set(draggedNodeIds);
+  const reorderedIds = groupChildren
+    .map((child) => child.id)
+    .filter((childId) => !draggedSet.has(childId));
+  const boundedIndex = Math.max(0, Math.min(insertionIndex, reorderedIds.length));
+
+  reorderedIds.splice(boundedIndex, 0, ...draggedNodeIds);
+
+  const snappedPositions = new Map(
+    reorderedIds.map((childId, index) => [childId, getDefaultGroupedPosition(index)] as const)
+  );
+
+  return nodes.map((candidate) => {
+    if (!draggedSet.has(candidate.id) && candidate.parentId !== groupId) {
+      return candidate;
+    }
+
+    const snappedPosition = snappedPositions.get(candidate.id);
+    if (!snappedPosition) {
+      return candidate;
+    }
+
+    return {
+      ...candidate,
+      parentId: groupId,
       position: snappedPosition,
     } satisfies Node;
   });
@@ -603,10 +650,32 @@ function CanvasGraphInner({
   const handleNodeDragStop: OnNodeDrag = useCallback(
     async (_event, node, allNodes) => {
       const draggedNodeId = dragRef.current ?? node.id;
+      const draggedInsightIds = getDraggedInsightIds({
+        activeNodeId: draggedNodeId,
+        selectedNodeIds: selectedNodeIdsRef.current,
+        nodes: nodesDataRef.current,
+      });
       const intersectingNodeIds = getIntersectingNodes(node)
         .map((candidate) => candidate.id)
         .filter((candidateId) => candidateId !== draggedNodeId);
       const targetNodeId = intersectingNodeIds[0] ?? null;
+      const targetCanvasNode = targetNodeId
+        ? nodesDataRef.current.find((candidate) => candidate.id === targetNodeId) ?? null
+        : null;
+      const targetGroupId =
+        targetCanvasNode?.type === "theme"
+          ? targetCanvasNode.id
+          : targetCanvasNode?.groupId ?? null;
+      const groupChildren = targetGroupId ? getOrderedGroupChildren(allNodes, targetGroupId) : [];
+      const insertionIndex =
+        targetCanvasNode?.type === "insight" && targetGroupId
+          ? Math.max(
+              0,
+              groupChildren.findIndex((candidate) => candidate.id === targetCanvasNode.id)
+            )
+          : targetGroupId
+            ? groupChildren.filter((candidate) => !draggedInsightIds.includes(candidate.id)).length
+            : undefined;
 
       const plan = resolveCanvasGroupingPlan({
         activeNodeId: draggedNodeId,
@@ -618,9 +687,16 @@ function CanvasGraphInner({
       const draggedNode = nodesDataRef.current.find((candidate) => candidate.id === draggedNodeId);
 
       const settledNodes =
-        plan.type === "noop" && node.parentId
-          ? snapGroupChildren(allNodes, node.parentId)
-          : allNodes;
+        targetGroupId && draggedInsightIds.length > 0 && typeof insertionIndex === "number"
+          ? reorderGroupChildren({
+              nodes: allNodes,
+              groupId: targetGroupId,
+              draggedNodeIds: draggedInsightIds,
+              insertionIndex,
+            })
+          : plan.type === "noop" && node.parentId
+            ? snapGroupChildren(allNodes, node.parentId)
+            : allNodes;
 
       if (settledNodes !== allNodes) {
         setFlowNodes(settledNodes);
@@ -630,8 +706,13 @@ function CanvasGraphInner({
       dragRef.current = null;
       dragSelectionRef.current = false;
 
-      if (plan.type !== "noop" && targetNodeId) {
-        void onGroupDrop({ activeNodeId: draggedNodeId, targetNodeId });
+      if (targetGroupId && typeof insertionIndex === "number") {
+        void onGroupDrop({
+          activeNodeId: draggedNodeId,
+          targetNodeId,
+          targetGroupId,
+          insertionIndex,
+        });
       } else if (draggedNode?.type === "insight" && draggedNode.groupId && !targetNodeId) {
         void onGroupDrop({ activeNodeId: draggedNodeId, targetNodeId: null });
       }

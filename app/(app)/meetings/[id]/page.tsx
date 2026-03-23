@@ -211,7 +211,7 @@ export default function MeetingDetailPage({
           <span className="text-foreground">{normalizedSavedTitle}</span>
         </nav>
 
-        <div className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
+        <div className="space-y-4 rounded-xl border border-border/50 bg-card p-4 sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 flex-1 space-y-3">
               <div className="space-y-2">
@@ -312,9 +312,9 @@ export default function MeetingDetailPage({
           </div>
 
           <div className="space-y-4 border-t pt-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="space-y-2 rounded-lg border border-border/40 bg-muted/30 p-3">
-                <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   Consultation
                 </p>
                 <RoundsPanel
@@ -324,9 +324,9 @@ export default function MeetingDetailPage({
                 />
               </div>
 
-              <div className="space-y-2 rounded-lg border border-border/40 bg-muted/30 p-3">
+              <div className="space-y-1">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                     Meeting Type
                   </p>
                   <Button
@@ -347,7 +347,7 @@ export default function MeetingDetailPage({
                       handleSaveFields({ meetingTypeId: e.target.value || null })
                     }
                     disabled={savingFields}
-                    className="flex h-9 w-full appearance-none rounded-md border border-input bg-transparent px-3 py-1 pr-7 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                    className="flex h-9 w-full appearance-none rounded-md border border-input bg-background px-3 py-1 pr-7 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
                   >
                     <option value="">Not set</option>
                     {meetingTypes.map((t) => (
@@ -359,8 +359,8 @@ export default function MeetingDetailPage({
                 </div>
               </div>
 
-              <div className="space-y-2 rounded-lg border border-border/40 bg-muted/30 p-3">
-                <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   Date
                 </p>
                 <Input
@@ -380,8 +380,8 @@ export default function MeetingDetailPage({
                 />
               </div>
 
-              <div className="space-y-2 rounded-lg border border-border/40 bg-muted/30 p-3">
-                <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   Status
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -420,9 +420,7 @@ export default function MeetingDetailPage({
                   Keep participant linking explicit before transcription and theme work so speaker context stays trustworthy.
                 </p>
               </div>
-              <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
-                <PeoplePanel meetingId={id} />
-              </div>
+              <PeoplePanel meetingId={id} />
             </div>
           </div>
         </div>
@@ -447,13 +445,11 @@ export default function MeetingDetailPage({
       {/* Transcript intake — paste, file upload, or audio transcription */}
       <section id="transcript" className="scroll-mt-20 space-y-3">
         <SectionHeading>Transcript</SectionHeading>
-        <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
-          <TranscriptIntakePanel
-            meetingId={id}
-            initialTranscript={meeting.transcript_raw}
-            readOnly={!isDraft}
-          />
-        </div>
+        <TranscriptIntakePanel
+          meetingId={id}
+          initialTranscript={meeting.transcript_raw}
+          readOnly={!isDraft}
+        />
       </section>
 
       <Separator />
@@ -461,9 +457,7 @@ export default function MeetingDetailPage({
       {/* Handwritten notes OCR */}
       <section id="handwritten-notes" className="scroll-mt-20 space-y-3">
         <SectionHeading>Handwritten notes photo</SectionHeading>
-        <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
-          <OcrReviewPanel meetingId={id} />
-        </div>
+        <OcrReviewPanel meetingId={id} />
       </section>
 
       <Separator />
@@ -471,13 +465,11 @@ export default function MeetingDetailPage({
       {/* Notes */}
       <section id="notes" className="scroll-mt-20 space-y-3">
         <SectionHeading>Notes</SectionHeading>
-        <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
-          <NotesEditor
-            meetingId={id}
-            initialValue={meeting.notes}
-            readOnly={!isDraft}
-          />
-        </div>
+        <NotesEditor
+          meetingId={id}
+          initialValue={meeting.notes}
+          readOnly={!isDraft}
+        />
       </section>
 
       <Separator />
@@ -485,9 +477,7 @@ export default function MeetingDetailPage({
       {/* Themes — Agent 4 slot */}
       <section id="themes" className="scroll-mt-20 space-y-3">
         <SectionHeading>Themes</SectionHeading>
-        <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
-          <ThemePanel meetingId={id} />
-        </div>
+        <ThemePanel meetingId={id} />
       </section>
 
       <Separator />
@@ -495,9 +485,7 @@ export default function MeetingDetailPage({
       {/* Evidence Email — Agent 4 slot */}
       <section id="evidence-email" className="scroll-mt-20 space-y-3">
         <SectionHeading>Evidence Email</SectionHeading>
-        <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
-          <EmailDraftPanel meetingId={id} />
-        </div>
+        <EmailDraftPanel meetingId={id} />
       </section>
 
       <Separator />
@@ -520,7 +508,7 @@ export default function MeetingDetailPage({
         {auditExpanded ? (
           <AuditTrail meetingId={id} />
         ) : (
-          <div className="rounded-lg border border-border/40 bg-muted/30 p-4 text-sm text-muted-foreground">
+          <div className="text-sm text-muted-foreground">
             Audit events are available when you need to verify chronology, but kept collapsed by default to keep the working flow focused.
           </div>
         )}

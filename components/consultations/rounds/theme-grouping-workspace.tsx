@@ -603,7 +603,7 @@ export function ThemeGroupingWorkspace({
       <div className="h-[70vh] overflow-hidden rounded-lg border border-border">
         <div className="grid h-full gap-0 lg:grid-cols-2">
           {/* Left: Source themes pool (ungrouped) */}
-          <Card className="rounded-none border-r border-border lg:border-r">
+          <Card className="rounded-none border-r border-border lg:border-r flex flex-col">
             <CardHeader className="sticky top-0 z-10 bg-card border-b">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -649,7 +649,7 @@ export function ThemeGroupingWorkspace({
               }}
               onDrop={handleDropOnUngrouped}
               className={cn(
-                "overflow-y-auto space-y-4 transition-colors",
+                "overflow-y-auto flex-1 space-y-4 transition-colors",
                 isDragOverUngrouped && "bg-accent/30",
               )}
             >

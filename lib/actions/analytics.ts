@@ -203,37 +203,68 @@ export async function triggerConsultationAnalyticsJob(
     };
   }
 
-  const [created] = await db.transaction(async (tx) => {
-    const [job] = await tx
-      .insert(analyticsJobs)
-      .values({
-        meetingId,
-        consultationId: consultationId ?? meeting.consultationId ?? null,
-        phase: "queued",
-        progress: -1,
-      })
-      .returning({ id: analyticsJobs.id });
+  try {
+    const [created] = await db.transaction(async (tx) => {
+      const [job] = await tx
+        .insert(analyticsJobs)
+        .values({
+          meetingId,
+          consultationId: consultationId ?? meeting.consultationId ?? null,
+          phase: "queued",
+          progress: -1,
+        })
+        .returning({ id: analyticsJobs.id });
 
-    await insertAnalyticsAuditLog(tx, {
-      meetingId,
-      userId,
-      action: AUDIT_ACTIONS.ANALYTICS_JOB_TRIGGERED,
-      entityType: "analytics_job",
-      entityId: job.id,
-      metadata: {
+      await insertAnalyticsAuditLog(tx, {
         meetingId,
-        consultationId: consultationId ?? meeting.consultationId ?? null,
-        phase: "queued",
-      },
+        userId,
+        action: AUDIT_ACTIONS.ANALYTICS_JOB_TRIGGERED,
+        entityType: "analytics_job",
+        entityId: job.id,
+        metadata: {
+          meetingId,
+          consultationId: consultationId ?? meeting.consultationId ?? null,
+          phase: "queued",
+        },
+      });
+
+      return [job];
     });
 
-    return [job];
-  });
+    return {
+      jobId: created.id,
+      status: "queued",
+    };
+  } catch (error) {
+    // Handle race condition: if another request created a job for this meeting
+    // between our check and insert, the unique constraint will be violated.
+    // In this case, just return the existing active job.
+    if (
+      error instanceof Error &&
+      error.message.includes("idx_analytics_jobs_active_meeting")
+    ) {
+      const activeJob = await db
+        .select()
+        .from(analyticsJobs)
+        .where(
+          and(
+            eq(analyticsJobs.meetingId, meetingId),
+            inArray(analyticsJobs.phase, ACTIVE_JOB_PHASES)
+          )
+        )
+        .orderBy(desc(analyticsJobs.createdAt))
+        .limit(1)
+        .then((rows) => rows[0] ?? null);
 
-  return {
-    jobId: created.id,
-    status: "queued",
-  };
+      if (activeJob) {
+        return {
+          jobId: activeJob.id,
+          status: "already_running",
+        };
+      }
+    }
+    throw error;
+  }
 }
 
 export async function triggerRoundAnalyticsJobs(
@@ -268,30 +299,43 @@ export async function triggerRoundAnalyticsJobs(
         continue;
       }
 
-      const [created] = await tx
-        .insert(analyticsJobs)
-        .values({
-          meetingId: meeting.id,
-          consultationId,
-          phase: "queued",
-          progress: -1,
-        })
-        .returning({ id: analyticsJobs.id });
+      try {
+        const [created] = await tx
+          .insert(analyticsJobs)
+          .values({
+            meetingId: meeting.id,
+            consultationId,
+            phase: "queued",
+            progress: -1,
+          })
+          .returning({ id: analyticsJobs.id });
 
-      await insertAnalyticsAuditLog(tx, {
-        meetingId: meeting.id,
-        userId,
-        action: AUDIT_ACTIONS.ANALYTICS_JOB_TRIGGERED,
-        entityType: "analytics_job",
-        entityId: created.id,
-        metadata: {
+        await insertAnalyticsAuditLog(tx, {
           meetingId: meeting.id,
-          consultationId,
-          phase: "queued",
-        },
-      });
+          userId,
+          action: AUDIT_ACTIONS.ANALYTICS_JOB_TRIGGERED,
+          entityType: "analytics_job",
+          entityId: created.id,
+          metadata: {
+            meetingId: meeting.id,
+            consultationId,
+            phase: "queued",
+          },
+        });
 
-      jobCount += 1;
+        jobCount += 1;
+      } catch (error) {
+        // Handle race condition: if another request created a job for this meeting
+        // between our check and insert, silently skip this meeting.
+        if (
+          error instanceof Error &&
+          error.message.includes("idx_analytics_jobs_active_meeting")
+        ) {
+          // Another process beat us to creating the job, just continue to next meeting
+          continue;
+        }
+        throw error;
+      }
     }
   });
 

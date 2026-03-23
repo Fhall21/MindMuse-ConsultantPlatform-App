@@ -22,6 +22,7 @@ import {
   TRANSCRIPT_ACCEPTED_ATTR,
 } from "@/lib/transcript-file-parser";
 import type { Person } from "@/types/db";
+import posthog from "posthog-js";
 
 // ─── Consultation combobox ────────────────────────────────────────────────────
 
@@ -553,9 +554,18 @@ export default function NewMeetingPage() {
         }
       }
 
+      posthog.capture("meeting_created", {
+        has_transcript: Boolean(transcriptText.trim()),
+        has_consultation: Boolean(consultationId || newConsultationLabel),
+        has_meeting_type: Boolean(meetingTypeId),
+        person_count: selectedPeople.length,
+        intake_mode: mode,
+      });
+
       router.push(`/meetings/${id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create meeting");
+      posthog.captureException(err instanceof Error ? err : new Error("Failed to create meeting"));
       setSubmitting(false);
     }
   }

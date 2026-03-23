@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import posthog from "posthog-js";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -22,16 +23,22 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const { error } = await authClient.signIn.email({
+    const { error, data } = await authClient.signIn.email({
       email,
       password,
     });
 
     if (error) {
       setError(error.message ?? "Unable to sign in.");
+      posthog.captureException(new Error(error.message ?? "Sign in failed"));
       setLoading(false);
       return;
     }
+
+    if (data?.user?.id) {
+      posthog.identify(data.user.id);
+    }
+    posthog.capture("user_signed_in");
 
     router.push("/dashboard");
     router.refresh();
@@ -50,7 +57,7 @@ export default function LoginPage() {
       email.trim().split("@")[0]?.replace(/[._-]+/g, " ").trim() ||
       "New user";
 
-    const { error } = await authClient.signUp.email({
+    const { error, data } = await authClient.signUp.email({
       name: resolvedName,
       email,
       password,
@@ -58,9 +65,15 @@ export default function LoginPage() {
 
     if (error) {
       setError(error.message ?? "Unable to create your account.");
+      posthog.captureException(new Error(error.message ?? "Sign up failed"));
       setLoading(false);
       return;
     }
+
+    if (data?.user?.id) {
+      posthog.identify(data.user.id);
+    }
+    posthog.capture("user_signed_up");
 
     router.push("/dashboard");
     router.refresh();

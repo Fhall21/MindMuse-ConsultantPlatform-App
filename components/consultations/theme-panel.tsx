@@ -9,6 +9,7 @@ import { useMeetingThemes } from "@/hooks/use-themes";
 import { acceptTheme, addUserTheme, rejectTheme, saveThemes } from "@/lib/actions/themes";
 import { cn } from "@/lib/utils";
 import type { Insight } from "@/types/db";
+import posthog from "posthog-js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -316,9 +317,15 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
       setClarificationOpen(false);
       setConfirmReextractOpen(false);
 
+      posthog.capture("themes_extracted", {
+        theme_count: extractedThemes.length,
+        replace_existing: options?.replaceExisting ?? false,
+      });
+
       await refreshPanelData();
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
+      posthog.captureException(error instanceof Error ? error : new Error("Theme extraction failed"));
     } finally {
       setIsExtracting(false);
     }
@@ -330,6 +337,7 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
 
     try {
       await acceptTheme(themeId, resolvedMeetingId!);
+      posthog.capture("theme_accepted");
       await refreshPanelData();
     } catch (error) {
       console.error("[theme-panel] failed to accept insight", {
@@ -366,6 +374,7 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
 
     try {
       await rejectTheme(theme.id, resolvedMeetingId!, rationale);
+      posthog.capture("theme_rejected", { has_rationale: Boolean(rationale) });
       await refreshPanelData();
     } catch (error) {
       setRejectedThemes((current) => {
@@ -396,6 +405,8 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
     try {
       // addUserTheme: sets is_user_added=true, accepted=true, weight=2.0, logs learning signal
       await addUserTheme(resolvedMeetingId!, label, addThemeDescription.trim() || undefined);
+
+      posthog.capture("theme_added_manually", { has_description: Boolean(addThemeDescription.trim()) });
 
       setAddThemeLabel("");
       setAddThemeDescription("");

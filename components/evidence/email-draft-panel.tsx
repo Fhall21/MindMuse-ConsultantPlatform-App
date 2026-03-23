@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import posthog from "posthog-js";
 
 import { useMeeting } from "@/hooks/use-meetings";
 import { useMeetingEvidenceEmails } from "@/hooks/use-evidence-email";
@@ -309,9 +310,15 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
         themeSelections: includedThemes,
       });
 
+      posthog.capture("evidence_email_generated", {
+        theme_count: includedThemeLabels.length,
+        person_count: (peopleQuery.data ?? []).length,
+      });
+
       await refreshPanelData();
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
+      posthog.captureException(error instanceof Error ? error : new Error("Evidence email generation failed"));
     } finally {
       setIsGenerating(false);
     }
@@ -359,6 +366,7 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
         : currentDraft.id;
 
       await acceptEmailDraft(draftIdToAccept, resolvedMeetingId!);
+      posthog.capture("evidence_email_accepted", { saved_edits_first: isDirty });
       setConfirmAcceptOpen(false);
       await refreshPanelData();
     } catch (error) {
@@ -378,6 +386,7 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
 
     try {
       await markEmailSent(currentDraft.id, resolvedMeetingId!);
+      posthog.capture("evidence_email_marked_sent");
       await refreshPanelData();
     } catch (error) {
       setErrorMessage(getErrorMessage(error));

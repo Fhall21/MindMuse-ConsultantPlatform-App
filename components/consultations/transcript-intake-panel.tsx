@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { updateTranscript } from "@/lib/actions/consultations";
 import { TranscriptEditor } from "./transcript-editor";
 import { AudioUploadPanel } from "./audio-upload-panel";
+import posthog from "posthog-js";
 
 // TODO: When file processing is expanded beyond local extraction, persist an
 // ingestion artifact and capture any server-side processing metadata.
@@ -266,6 +267,9 @@ export function TranscriptIntakePanel({
 
       applyLocalTranscript(extractedText);
       setLoadedFileName(file.name);
+
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "unknown";
+      posthog.capture("transcript_file_uploaded", { file_extension: ext });
 
       // Auto-save so other panels (EmailDraftPanel, ThemePanel) see the
       // transcript immediately. Without this, the TanStack Query

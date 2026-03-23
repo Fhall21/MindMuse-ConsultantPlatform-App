@@ -5,6 +5,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import posthog from "posthog-js";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,6 +144,7 @@ export function PeoplePanel({ meetingId, consultationId }: PeoplePanelProps) {
     setLinking(person.id);
     try {
       await linkPersonToMeeting(resolvedMeetingId!, person.id);
+      posthog.capture("person_linked_to_meeting");
       invalidate();
       setDialogOpen(false);
       setSearch("");
@@ -178,6 +180,7 @@ export function PeoplePanel({ meetingId, consultationId }: PeoplePanelProps) {
         email: data.email?.trim() || undefined,
       });
       await linkPersonToMeeting(resolvedMeetingId!, personId);
+      posthog.capture("person_created_and_linked");
       invalidate();
       setDialogOpen(false);
       setShowCreateForm(false);

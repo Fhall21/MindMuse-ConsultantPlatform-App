@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import posthog from "posthog-js";
 import { useConsultations } from "@/hooks/use-consultations";
 import { useAuditExport, useAuditExportUsers } from "@/hooks/use-audit-export";
 import type { AuditExportFormat, AuditExportFilters } from "@/types/db";
@@ -55,6 +56,13 @@ export function AuditExportPanel() {
   async function handleExport(format: AuditExportFormat) {
     try {
       const exportPackage = await exportAudit({ format, filters });
+      posthog.capture("audit_export_downloaded", {
+        format,
+        event_count: exportPackage.summary.eventCount,
+        has_date_filter: Boolean(filters.dateFrom || filters.dateTo),
+        has_consultation_filter: Boolean(filters.consultationId),
+        has_user_filter: Boolean(filters.userId),
+      });
       toast.success(
         `Downloaded ${format.toUpperCase()} export with ${exportPackage.summary.eventCount} events.`
       );

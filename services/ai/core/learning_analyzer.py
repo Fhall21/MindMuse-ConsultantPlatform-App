@@ -53,10 +53,16 @@ REJECTION_REASON_PATTERNS: dict[str, tuple[str, ...]] = {
     "duplicate": ("duplicate", "already covered", "repeated", "same as"),
 }
 FETCH_RECENT_SIGNALS_QUERY = """
-SELECT insight_label, decision_type, rationale, created_at
-FROM insight_decision_logs
-WHERE user_id = :user_id
-ORDER BY created_at DESC
+SELECT
+    idl.insight_label,
+    idl.decision_type,
+    idl.rationale,
+    idl.created_at,
+    m.transcript_raw
+FROM insight_decision_logs idl
+LEFT JOIN meetings m ON m.id = idl.meeting_id
+WHERE idl.user_id = :user_id
+ORDER BY idl.created_at DESC
 LIMIT :limit
 """
 FETCH_USER_PREFERENCES_QUERY = """
@@ -78,6 +84,23 @@ class AIInsightLearning:
     created_at: datetime
     expires_at: datetime | None = None
     version: int = 1
+
+
+def _recency_weight(signal_time: datetime, now: datetime) -> float:
+    """Linear decay: 1.0 at age=0 days, 0.1 at age=30 days."""
+    age_days = (now - signal_time).total_seconds() / 86400
+    return max(0.1, 1.0 - (age_days / 30))
+
+
+def _topic_mentioned_in_transcript(label: str, transcript: str | None) -> bool:
+    """Return True if any keyword token of *label* appears in the transcript."""
+    if not transcript:
+        return False
+    tokens = _keyword_tokens(label)
+    if not tokens:
+        return False
+    transcript_lower = transcript.lower()
+    return any(tok in transcript_lower for tok in tokens)
 
 
 def analyze_user_signals(
@@ -127,20 +150,29 @@ def _build_process_pattern_learning(
     if len(positive_signals) < 2:
         return None
 
-    token_counts: Counter[str] = Counter()
+    # Weight each token by the recency of signals that contain it.
+    # Signals from 30+ days ago contribute only 0.1; today's signals contribute 1.0.
+    token_weights: defaultdict[str, float] = defaultdict(float)
     examples: defaultdict[str, list[str]] = defaultdict(list)
     for signal in positive_signals:
         label = str(signal["insight_label"])
+        weight = _recency_weight(signal["created_at"], created_at)
         for token in set(_keyword_tokens(label)):
-            token_counts[token] += 1
+            token_weights[token] += weight
             if label not in examples[token] and len(examples[token]) < 3:
                 examples[token].append(label)
 
-    if token_counts:
-        token, matched_count = token_counts.most_common(1)[0]
-        if matched_count >= 2:
+    if token_weights:
+        token = max(token_weights, key=lambda t: token_weights[t])
+        weighted_sum = token_weights[token]
+        # Threshold: equivalent to ~2 recent signals at full weight.
+        if weighted_sum >= 1.5:
             topic_label = token.replace("_", " ")
-            confidence = _confidence_score(matched_count, len(positive_signals))
+            raw_count = sum(
+                1 for s in positive_signals
+                if token in set(_keyword_tokens(str(s["insight_label"])))
+            )
+            confidence = _confidence_score(raw_count, len(positive_signals))
             example_labels = examples[token]
             return AIInsightLearning(
                 user_id=user_id,
@@ -152,7 +184,8 @@ def _build_process_pattern_learning(
                     f"Examples include {_format_examples(example_labels)}."
                 ),
                 supporting_metrics={
-                    "accepted_count": matched_count,
+                    "accepted_count": raw_count,
+                    "weighted_signal_strength": round(weighted_sum, 2),
                     "example_labels": example_labels,
                     "confidence_score": confidence,
                 },
@@ -199,18 +232,30 @@ def _build_trend_learning(
     if not positive_signals:
         return None
 
-    label_counts = Counter(_normalize_phrase(str(signal["insight_label"])) for signal in positive_signals)
-    top_label, count = label_counts.most_common(1)[0]
-    if not top_label:
+    # Weight each phrase group by recency so patterns that recur *recently*
+    # rank above older patterns with higher raw counts.
+    phrase_weights: defaultdict[str, float] = defaultdict(float)
+    for signal in positive_signals:
+        phrase = _normalize_phrase(str(signal["insight_label"]))
+        if phrase:
+            phrase_weights[phrase] += _recency_weight(signal["created_at"], created_at)
+
+    if not phrase_weights:
         return None
 
+    top_label = max(phrase_weights, key=lambda p: phrase_weights[p])
+    weighted_sum = phrase_weights[top_label]
+    raw_count = sum(
+        1 for s in positive_signals
+        if _normalize_phrase(str(s["insight_label"])) == top_label
+    )
     matching_labels = [
-        str(signal["insight_label"])
-        for signal in positive_signals
-        if _normalize_phrase(str(signal["insight_label"])) == top_label
+        str(s["insight_label"])
+        for s in positive_signals
+        if _normalize_phrase(str(s["insight_label"])) == top_label
     ]
-    percentage = round((count / len(positive_signals)) * 100, 1)
-    confidence = _confidence_score(count, len(positive_signals))
+    percentage = round((raw_count / len(positive_signals)) * 100, 1)
+    confidence = _confidence_score(raw_count, len(positive_signals))
     label_text = _title_case_phrase(top_label)
     return AIInsightLearning(
         user_id=user_id,
@@ -218,11 +263,12 @@ def _build_trend_learning(
         learning_type="trend",
         label=f"Strong interest in {label_text}",
         description=(
-            f"{count} of the last {len(positive_signals)} accepted or user-added insights focused on "
+            f"{raw_count} of the last {len(positive_signals)} accepted or user-added insights focused on "
             f"{label_text} ({percentage}%)."
         ),
         supporting_metrics={
-            "accepted_count": count,
+            "accepted_count": raw_count,
+            "weighted_signal_strength": round(weighted_sum, 2),
             "percentage": percentage,
             "example_labels": matching_labels[:3],
             "confidence_score": confidence,
@@ -244,6 +290,10 @@ def _build_rejection_signal_learning(
 
     grouped_reasons: Counter[str] = Counter()
     raw_reasons: Counter[str] = Counter()
+    # Transcript context: split rejections by whether the transcript covered the topic.
+    # "rejected_despite_mention": topic appeared in transcript → user dislikes that angle.
+    # "rejected_not_in_transcript": topic absent from transcript → likely AI hallucination.
+    transcript_context: Counter[str] = Counter()
     example_labels: list[str] = []
     for signal in rejected_signals:
         rationale = str(signal.get("rationale") or "").strip()
@@ -253,6 +303,10 @@ def _build_rejection_signal_learning(
         label = str(signal["insight_label"])
         if label not in example_labels and len(example_labels) < 3:
             example_labels.append(label)
+        if _topic_mentioned_in_transcript(label, signal.get("transcript_raw")):
+            transcript_context["rejected_despite_mention"] += 1
+        else:
+            transcript_context["rejected_not_in_transcript"] += 1
 
     reason_key, count = grouped_reasons.most_common(1)[0]
     reason_label = _rejection_reason_label(reason_key)
@@ -269,6 +323,7 @@ def _build_rejection_signal_learning(
         supporting_metrics={
             "rejection_count": count,
             "rejection_reasons": dict(raw_reasons),
+            "transcript_context": dict(transcript_context),
             "example_labels": example_labels,
             "confidence_score": confidence,
         },

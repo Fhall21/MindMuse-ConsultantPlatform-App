@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { insightDecisionLogs, insights } from "@/db/schema";
 import {
-  enqueueLearningAnalysis,
+  scheduleLearningAnalysis,
   getThemeLearningSignalCountForUser,
 } from "@/lib/data/ai-learnings";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
@@ -39,13 +39,32 @@ function normalizeRequiredId(value: string, field: string) {
 async function triggerLearningAnalysisIfReady(userId: string) {
   try {
     const signalCount = await getThemeLearningSignalCountForUser(userId);
+    console.info("[themes.learning-analysis] evaluated", {
+      userId,
+      signalCount,
+      threshold: MIN_SIGNALS_FOR_LEARNING_ANALYSIS,
+    });
     if (signalCount < MIN_SIGNALS_FOR_LEARNING_ANALYSIS) {
+      console.info("[themes.learning-analysis] skipped", {
+        userId,
+        signalCount,
+        threshold: MIN_SIGNALS_FOR_LEARNING_ANALYSIS,
+      });
       return;
     }
 
-    await enqueueLearningAnalysis(userId);
+    console.info("[themes.learning-analysis] scheduling", {
+      userId,
+      signalCount,
+      threshold: MIN_SIGNALS_FOR_LEARNING_ANALYSIS,
+    });
+    await scheduleLearningAnalysis(userId);
+    console.info("[themes.learning-analysis] scheduled", {
+      userId,
+      signalCount,
+    });
   } catch (error) {
-    console.warn("[themes.learning-analysis] enqueue failed", {
+    console.warn("[themes.learning-analysis] schedule failed", {
       userId,
       error,
     });

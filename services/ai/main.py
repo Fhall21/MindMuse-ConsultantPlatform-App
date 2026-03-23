@@ -14,9 +14,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Start the analytics job polling worker on startup; stop it on shutdown."""
+    """Start analytics and learning job polling workers on startup; stop them on shutdown."""
     engine = None
     worker_task: asyncio.Task | None = None  # type: ignore[type-arg]
+    learning_worker_task: asyncio.Task | None = None  # type: ignore[type-arg]
 
     try:
         from workers.analytics_job_worker import create_db_engine, run_worker_loop
@@ -28,17 +29,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning("[lifespan] analytics worker could not start: %s", exc)
 
     try:
+        from workers.learning_job_worker import run_worker_loop as run_learning_worker_loop
+        if engine is None:
+            from workers.learning_job_worker import create_db_engine as create_learning_engine
+            engine = create_learning_engine()
+        learning_worker_task = asyncio.create_task(run_learning_worker_loop(engine))
+        logger.info("[lifespan] learning worker started")
+    except Exception as exc:
+        logger.warning("[lifespan] learning worker could not start: %s", exc)
+
+    try:
         yield
     finally:
-        if worker_task and not worker_task.done():
-            worker_task.cancel()
-            try:
-                await worker_task
-            except asyncio.CancelledError:
-                pass
+        for task in (worker_task, learning_worker_task):
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
         if engine is not None:
             engine.dispose()
-        logger.info("[lifespan] analytics worker stopped")
+        logger.info("[lifespan] workers stopped")
 
 
 app = FastAPI(

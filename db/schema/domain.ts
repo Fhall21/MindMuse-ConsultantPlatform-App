@@ -644,6 +644,10 @@ export const userAIPreferences = pgTable(
       .$type<string[]>()
       .default(sql`'[]'::jsonb`)
       .notNull(),
+    // Debounce: set to now()+60s on each signal. Worker fires when <= now().
+    nextLearningAnalysisAt: timestamp("next_learning_analysis_at", {
+      withTimezone: true,
+    }),
     ...timestamps,
   },
   (table) => ({

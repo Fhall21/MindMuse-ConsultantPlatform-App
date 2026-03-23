@@ -81,6 +81,7 @@ WHERE id IN (
 """
 
 # Reset failed jobs that are eligible for a retry (below max attempts, past backoff window).
+# Only reset jobs that don't have another active job for the same meeting (avoids constraint violation).
 RESET_RETRYABLE_FAILED_JOBS_QUERY = f"""
 UPDATE analytics_jobs
 SET phase         = 'queued',
@@ -91,6 +92,12 @@ SET phase         = 'queued',
 WHERE phase        = 'failed'
   AND attempt_count < {MAX_JOB_ATTEMPTS}
   AND completed_at < now() - interval '{RETRY_BACKOFF_MINUTES} minutes'
+  AND NOT EXISTS (
+    SELECT 1 FROM analytics_jobs AS active
+    WHERE active.meeting_id = analytics_jobs.meeting_id
+      AND active.phase IN ('queued', 'extracting', 'embedding', 'clustering', 'syncing')
+      AND active.id != analytics_jobs.id
+  )
 """
 
 FETCH_TRANSCRIPT_QUERY = """
@@ -280,16 +287,21 @@ def _sql(query: str) -> Any:
 
 def reset_stale_jobs(engine: Any) -> None:
     """Reset stuck in-flight jobs, remove duplicate active jobs, and re-queue failed jobs eligible for retry."""
-    with engine.begin() as conn:
-        stuck = conn.execute(_sql(RESET_STUCK_JOBS_QUERY))
-        duplicates = conn.execute(_sql(CLEANUP_DUPLICATE_ACTIVE_JOBS_QUERY))
-        retryable = conn.execute(_sql(RESET_RETRYABLE_FAILED_JOBS_QUERY))
-    if stuck.rowcount:
-        logger.info("[analytics_worker] reset stuck in-flight jobs", extra={"count": stuck.rowcount})
-    if duplicates.rowcount:
-        logger.info("[analytics_worker] cleaned up duplicate active jobs", extra={"count": duplicates.rowcount})
-    if retryable.rowcount:
-        logger.info("[analytics_worker] re-queued retryable failed jobs", extra={"count": retryable.rowcount})
+    try:
+        with engine.begin() as conn:
+            stuck = conn.execute(_sql(RESET_STUCK_JOBS_QUERY))
+            duplicates = conn.execute(_sql(CLEANUP_DUPLICATE_ACTIVE_JOBS_QUERY))
+            retryable = conn.execute(_sql(RESET_RETRYABLE_FAILED_JOBS_QUERY))
+        if stuck.rowcount:
+            logger.info("[analytics_worker] reset stuck in-flight jobs", extra={"count": stuck.rowcount})
+        if duplicates.rowcount:
+            logger.info("[analytics_worker] cleaned up duplicate active jobs", extra={"count": duplicates.rowcount})
+        if retryable.rowcount:
+            logger.info("[analytics_worker] re-queued retryable failed jobs", extra={"count": retryable.rowcount})
+    except Exception as exc:
+        # Log but don't fail the worker if stale job reset has issues.
+        # Worst case: some jobs don't retry until the next timeout period.
+        logger.exception("[analytics_worker] error resetting stale jobs", extra={"error": str(exc)})
 
 
 def poll_once(engine: Any) -> int:

@@ -71,7 +71,7 @@ export function TranscriptEditor({
             ? "No transcript recorded."
             : "Paste or type the consultation transcript here…"
         }
-        className="min-h-[300px] resize-y font-mono text-sm leading-relaxed"
+        className="max-h-[60vh] min-h-[300px] resize-y font-mono text-sm leading-relaxed"
       />
 
       {!readOnly && (

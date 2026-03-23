@@ -65,6 +65,7 @@ WHERE phase IN ('extracting', 'embedding', 'clustering', 'syncing')
 """
 
 # Reset failed jobs that are eligible for a retry (below max attempts, past backoff window).
+# Only reset if there's no other active job for the same meeting (to respect the unique constraint).
 RESET_RETRYABLE_FAILED_JOBS_QUERY = f"""
 UPDATE analytics_jobs
 SET phase         = 'queued',
@@ -75,6 +76,12 @@ SET phase         = 'queued',
 WHERE phase        = 'failed'
   AND attempt_count < {MAX_JOB_ATTEMPTS}
   AND completed_at < now() - interval '{RETRY_BACKOFF_MINUTES} minutes'
+  AND NOT EXISTS (
+    SELECT 1 FROM analytics_jobs AS active
+    WHERE active.meeting_id = analytics_jobs.meeting_id
+      AND active.phase IN ('queued', 'extracting', 'embedding', 'clustering', 'syncing')
+      AND active.id != analytics_jobs.id
+  )
 """
 
 FETCH_TRANSCRIPT_QUERY = """
@@ -233,6 +240,16 @@ def create_db_engine() -> Any:
             "Analytics worker requires DATABASE_URL or DATABASE_HOST/PORT/NAME/USER/PASSWORD "
             "env vars (read via .env or shell environment)."
         )
+    logger.info(
+        "[analytics_worker] database target resolved",
+        extra={
+            "mode": "database_url" if settings.database_url else "discrete-env",
+            "host": settings.database_host,
+            "port": settings.database_port,
+            "db_name": settings.database_name,
+            "user": settings.database_user,
+        },
+    )
     return create_engine(database_url, future=True, pool_pre_ping=True)
 
 

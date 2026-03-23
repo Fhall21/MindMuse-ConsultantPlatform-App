@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -28,12 +28,26 @@ class UserPreferences(BaseModel):
     excluded_topics: List[str] = []
 
 
+class AIInsightLearning(BaseModel):
+    id: str
+    user_id: str
+    topic_type: str
+    learning_type: str
+    label: str
+    description: str
+    supporting_metrics: Dict[str, Any] = {}
+    created_at: str
+    expires_at: Optional[str] = None
+    version: int = 1
+
+
 # --- Theme extraction ---
 
 
 class ThemeExtractRequest(BaseModel):
     transcript: str
     learning_signals: List[LearningSignal] = []   # Optional: user-scoped learning history
+    ai_learnings: List[AIInsightLearning] = []
     user_preferences: Optional[UserPreferences] = None
 
 

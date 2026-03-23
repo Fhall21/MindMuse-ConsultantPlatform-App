@@ -312,7 +312,7 @@ export default function MeetingDetailPage({
           </div>
 
           <div className="space-y-5 border-t pt-4">
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="space-y-5">
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   Consultation
@@ -325,13 +325,10 @@ export default function MeetingDetailPage({
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                    Meeting Type
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="relative">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Meeting Type
+                </p>
+                <div className="relative">
                   <select
                     value={meeting.meeting_type_id ?? ""}
                     onChange={(e) =>
@@ -347,19 +344,18 @@ export default function MeetingDetailPage({
                       </option>
                     ))}
                   </select>
-                  </div>
-                  <div className="flex justify-end">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs text-muted-foreground"
-                      title="Regenerate title from type and date"
-                      onClick={handleRegenerateTitle}
-                      disabled={!isEditable}
-                    >
-                      Regenerate
-                    </Button>
-                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    title="Regenerate title from type and date"
+                    onClick={handleRegenerateTitle}
+                    disabled={!isEditable}
+                  >
+                    Regenerate
+                  </Button>
                 </div>
               </div>
 

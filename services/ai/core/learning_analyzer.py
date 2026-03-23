@@ -418,6 +418,16 @@ def _create_db_engine() -> Any:
         raise ValueError(
             "Learning analyzer requires DATABASE_URL or DATABASE_HOST/PORT/NAME/USER/PASSWORD env vars."
         )
+    logger.info(
+        "[learning_analyzer] database target resolved",
+        extra={
+            "mode": "database_url" if settings.database_url else "discrete-env",
+            "host": settings.database_host,
+            "port": settings.database_port,
+            "db_name": settings.database_name,
+            "user": settings.database_user,
+        },
+    )
     return create_engine(database_url, future=True, pool_pre_ping=True)
 
 

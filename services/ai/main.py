@@ -34,6 +34,15 @@ from routers import clarification, draft, infer, ocr, rounds, shorthand, tasks, 
 logger = logging.getLogger(__name__)
 
 
+def _log_background_task_result(task: asyncio.Task, label: str) -> None:
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        logger.info("[lifespan] %s cancelled", label)
+    except Exception:
+        logger.exception("[lifespan] %s crashed", label)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Start analytics and learning job polling workers on startup; stop them on shutdown."""
@@ -42,9 +51,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     learning_worker_task: asyncio.Task | None = None  # type: ignore[type-arg]
 
     try:
-        from workers.analytics_job_worker import create_db_engine, run_worker_loop
+        from workers.analytics_job_worker import (
+            create_db_engine,
+            ensure_analytics_projection_refresh_compatibility,
+            run_worker_loop,
+        )
         engine = create_db_engine()
+        ensure_analytics_projection_refresh_compatibility(engine)
         worker_task = asyncio.create_task(run_worker_loop(engine))
+        worker_task.add_done_callback(
+            lambda task: _log_background_task_result(task, "analytics worker")
+        )
         logger.info("[lifespan] analytics worker started")
     except Exception as exc:
         # Worker startup failure is non-fatal — the API still serves requests.
@@ -56,6 +73,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from workers.learning_job_worker import create_db_engine as create_learning_engine
             engine = create_learning_engine()
         learning_worker_task = asyncio.create_task(run_learning_worker_loop(engine))
+        learning_worker_task.add_done_callback(
+            lambda task: _log_background_task_result(task, "learning worker")
+        )
         logger.info("[lifespan] learning worker started")
     except Exception as exc:
         logger.warning("[lifespan] learning worker could not start: %s", exc)

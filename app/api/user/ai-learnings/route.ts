@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import {
   AI_LEARNING_TOPIC_TYPES,
   DEFAULT_AI_LEARNING_TOPIC_TYPE,
-  loadUserAILearnings,
-} from "@/lib/data/ai-learnings";
+} from "@/lib/data/ai-learning-topics";
+import { loadUserAILearnings } from "@/lib/data/ai-learnings";
 import type { AILearningTopicType } from "@/types/db";
 import { jsonError, requireRouteClient } from "../../client/_helpers";
 

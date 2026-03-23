@@ -6,12 +6,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
 
-# Configure logging early - respect LOGLEVEL env var, default to DEBUG for troubleshooting
-log_level = os.getenv("LOGLEVEL", "DEBUG").upper()
+# Configure logging early - respect LOGLEVEL env var, default to INFO
+log_level = os.getenv("LOGLEVEL", "INFO").upper()
 logging.basicConfig(
     level=getattr(logging, log_level),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+# Suppress noisy HTTP client debug logs unless explicitly requested
+for _noisy in ("httpcore", "httpx", "openai._base_client"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 SERVICE_ROOT = Path(__file__).resolve().parent
 if str(SERVICE_ROOT) not in sys.path:

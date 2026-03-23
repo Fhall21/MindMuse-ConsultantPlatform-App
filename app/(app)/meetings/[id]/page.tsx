@@ -312,7 +312,7 @@ export default function MeetingDetailPage({
           </div>
 
           <div className="space-y-4 border-t pt-4">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   Consultation
@@ -325,7 +325,7 @@ export default function MeetingDetailPage({
               </div>
 
               <div className="space-y-1">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex min-h-6 items-end justify-between gap-2">
                   <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                     Meeting Type
                   </p>
@@ -378,18 +378,6 @@ export default function MeetingDetailPage({
                   disabled={savingFields || !isEditable}
                   className="h-9 w-full text-sm"
                 />
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Status
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  {isArchived ? <Badge variant="outline">Archived</Badge> : null}
-                  <Badge variant={isDraft ? "outline" : "secondary"}>
-                    {isDraft ? "Draft" : "Complete"}
-                  </Badge>
-                </div>
               </div>
             </div>
 

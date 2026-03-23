@@ -47,7 +47,7 @@ import { cn } from "@/lib/utils";
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-base font-semibold tracking-tight text-foreground">
+    <h2 className="text-base font-medium tracking-tight text-muted-foreground">
       {children}
     </h2>
   );
@@ -78,7 +78,6 @@ export default function MeetingDetailPage({
   const [titleDraft, setTitleDraft] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
   const [savingFields, setSavingFields] = useState(false);
-  const [transcriptExpanded, setTranscriptExpanded] = useState(false);
   const [auditExpanded, setAuditExpanded] = useState(false);
 
   const meeting = data?.meeting;
@@ -314,8 +313,8 @@ export default function MeetingDetailPage({
 
           <div className="space-y-4 border-t pt-4">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/5 p-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <div className="space-y-2 rounded-lg border border-border/40 bg-muted/30 p-3">
+                <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
                   Consultation
                 </p>
                 <RoundsPanel
@@ -325,9 +324,9 @@ export default function MeetingDetailPage({
                 />
               </div>
 
-              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/5 p-3">
+              <div className="space-y-2 rounded-lg border border-border/40 bg-muted/30 p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
                     Meeting Type
                   </p>
                   <Button
@@ -360,8 +359,8 @@ export default function MeetingDetailPage({
                 </div>
               </div>
 
-              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/5 p-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <div className="space-y-2 rounded-lg border border-border/40 bg-muted/30 p-3">
+                <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
                   Date
                 </p>
                 <Input
@@ -381,8 +380,8 @@ export default function MeetingDetailPage({
                 />
               </div>
 
-              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/5 p-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <div className="space-y-2 rounded-lg border border-border/40 bg-muted/30 p-3">
+                <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
                   Status
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -414,14 +413,14 @@ export default function MeetingDetailPage({
 
             <div className="space-y-3 border-t pt-4">
               <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
                   Participants
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Keep participant linking explicit before transcription and theme work so speaker context stays trustworthy.
                 </p>
               </div>
-              <div className="rounded-lg border border-border/60 bg-muted/5 p-3">
+              <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
                 <PeoplePanel meetingId={id} />
               </div>
             </div>
@@ -448,36 +447,12 @@ export default function MeetingDetailPage({
       {/* Transcript intake — paste, file upload, or audio transcription */}
       <section id="transcript" className="scroll-mt-20 space-y-3">
         <SectionHeading>Transcript</SectionHeading>
-        <div className="space-y-3">
-          <div
-            className={cn(
-              "relative overflow-hidden rounded-xl border border-border/60 bg-card/40 transition-[max-height] duration-300 ease-in-out",
-              transcriptExpanded ? "max-h-[240rem]" : "max-h-[34rem]"
-            )}
-          >
-            <div className="p-4">
-              <TranscriptIntakePanel
-                meetingId={id}
-                initialTranscript={meeting.transcript_raw}
-                readOnly={!isDraft}
-              />
-            </div>
-            {!transcriptExpanded ? (
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background via-background/95 to-transparent" />
-            ) : null}
-          </div>
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="h-8 gap-1.5 text-xs text-muted-foreground"
-              onClick={() => setTranscriptExpanded((current) => !current)}
-            >
-              {transcriptExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              {transcriptExpanded ? "Collapse transcript" : "Expand full transcript"}
-            </Button>
-          </div>
+        <div className="rounded-xl border border-border/60 bg-card/40 overflow-y-auto max-h-96 p-4">
+          <TranscriptIntakePanel
+            meetingId={id}
+            initialTranscript={meeting.transcript_raw}
+            readOnly={!isDraft}
+          />
         </div>
       </section>
 
@@ -486,7 +461,9 @@ export default function MeetingDetailPage({
       {/* Handwritten notes OCR */}
       <section id="handwritten-notes" className="scroll-mt-20 space-y-3">
         <SectionHeading>Handwritten notes photo</SectionHeading>
-        <OcrReviewPanel meetingId={id} />
+        <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
+          <OcrReviewPanel meetingId={id} />
+        </div>
       </section>
 
       <Separator />
@@ -494,11 +471,13 @@ export default function MeetingDetailPage({
       {/* Notes */}
       <section id="notes" className="scroll-mt-20 space-y-3">
         <SectionHeading>Notes</SectionHeading>
-        <NotesEditor
-          meetingId={id}
-          initialValue={meeting.notes}
-          readOnly={!isDraft}
-        />
+        <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
+          <NotesEditor
+            meetingId={id}
+            initialValue={meeting.notes}
+            readOnly={!isDraft}
+          />
+        </div>
       </section>
 
       <Separator />
@@ -506,7 +485,9 @@ export default function MeetingDetailPage({
       {/* Themes — Agent 4 slot */}
       <section id="themes" className="scroll-mt-20 space-y-3">
         <SectionHeading>Themes</SectionHeading>
-        <ThemePanel meetingId={id} />
+        <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
+          <ThemePanel meetingId={id} />
+        </div>
       </section>
 
       <Separator />
@@ -514,7 +495,9 @@ export default function MeetingDetailPage({
       {/* Evidence Email — Agent 4 slot */}
       <section id="evidence-email" className="scroll-mt-20 space-y-3">
         <SectionHeading>Evidence Email</SectionHeading>
-        <EmailDraftPanel meetingId={id} />
+        <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
+          <EmailDraftPanel meetingId={id} />
+        </div>
       </section>
 
       <Separator />
@@ -537,7 +520,7 @@ export default function MeetingDetailPage({
         {auditExpanded ? (
           <AuditTrail meetingId={id} />
         ) : (
-          <div className="rounded-lg border border-border/60 bg-muted/5 p-4 text-sm text-muted-foreground">
+          <div className="rounded-lg border border-border/40 bg-muted/30 p-4 text-sm text-muted-foreground">
             Audit events are available when you need to verify chronology, but kept collapsed by default to keep the working flow focused.
           </div>
         )}

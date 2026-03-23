@@ -6,6 +6,7 @@ import {
   requireAuthenticatedApiUser,
 } from "@/lib/api/route-helpers";
 import { loadRecentThemeLearningSignals } from "@/lib/data/theme-learning";
+import { loadUserAIPreferences } from "@/lib/data/user-ai-preferences";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedApiUser();
@@ -24,15 +25,20 @@ export async function POST(request: NextRequest) {
   }
 
   let learningSignals: Awaited<ReturnType<typeof loadRecentThemeLearningSignals>> = [];
+  let userPreferences: Awaited<ReturnType<typeof loadUserAIPreferences>> = null;
 
   try {
-    learningSignals = await loadRecentThemeLearningSignals();
+    [learningSignals, userPreferences] = await Promise.all([
+      loadRecentThemeLearningSignals(),
+      loadUserAIPreferences(),
+    ]);
   } catch (err) {
-    console.error("Failed to load theme learning signals", err);
+    console.error("Failed to load theme personalization context", err);
   }
 
   return forwardJsonToAi(aiServiceUrl, "/themes/extract", {
     ...(body as Record<string, unknown>),
     learning_signals: learningSignals,
+    user_preferences: userPreferences,
   });
 }

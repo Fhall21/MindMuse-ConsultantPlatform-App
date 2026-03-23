@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Background,
   Controls,
@@ -14,6 +14,8 @@ import {
   type NodeMouseHandler,
   type OnNodeDrag,
   type OnSelectionChangeFunc,
+  useEdgesState,
+  useNodesState,
   useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -45,6 +47,15 @@ const CONNECTION_COLORS: Record<ConnectionType, string> = {
   contradicts: "#dc2626",
   related_to: "#6b7280",
 };
+
+const GROUP_WIDTH = 360;
+const GROUP_HEADER_HEIGHT = 76;
+const GROUP_PADDING_X = 24;
+const GROUP_PADDING_TOP = 20;
+const GROUP_PADDING_BOTTOM = 24;
+const GROUP_GAP_Y = 18;
+const INSIGHT_WIDTH = 236;
+const INSIGHT_HEIGHT = 56;
 
 const nodeTypes = {
   canvasNode: CanvasNodeCard,
@@ -81,75 +92,186 @@ function applyFilters(nodes: CanvasNode[], edges: CanvasEdge[], filters: CanvasF
   return { filteredNodes, filteredEdges };
 }
 
-function buildFlowNodes(
-  nodes: CanvasNode[],
-  selectedNodeIds: string[],
-  aiGeneratedGroupIds: Set<string>
-): Node[] {
-  const selectedSet = new Set(selectedNodeIds);
-  const labelsById = new Map(nodes.map((node) => [node.id, node.label] as const));
+function getGroupHeight(memberCount: number) {
+  const visibleCount = Math.max(memberCount, 1);
+  return Math.max(
+    176,
+    GROUP_HEADER_HEIGHT +
+      GROUP_PADDING_TOP +
+      GROUP_PADDING_BOTTOM +
+      visibleCount * INSIGHT_HEIGHT +
+      Math.max(0, visibleCount - 1) * GROUP_GAP_Y
+  );
+}
+
+function getDefaultGroupedPosition(index: number) {
+  return {
+    x: GROUP_PADDING_X,
+    y: GROUP_HEADER_HEIGHT + GROUP_PADDING_TOP + index * (INSIGHT_HEIGHT + GROUP_GAP_Y),
+  };
+}
+
+function isRelativePositionInsideGroup(position: { x: number; y: number }, groupHeight: number) {
+  return (
+    position.x >= 12 &&
+    position.x <= GROUP_WIDTH - INSIGHT_WIDTH - 12 &&
+    position.y >= GROUP_HEADER_HEIGHT - 8 &&
+    position.y <= groupHeight - INSIGHT_HEIGHT - 12
+  );
+}
+
+function buildFlowNodes(nodes: CanvasNode[], aiGeneratedGroupIds: Set<string>): Node[] {
+  const nodesById = new Map(nodes.map((node) => [node.id, node] as const));
+  const themeLayoutById = new Map<
+    string,
+    { position: { x: number; y: number }; height: number; memberIndexById: Map<string, number> }
+  >();
+
+  for (const themeNode of nodes.filter((node) => node.type === "theme")) {
+    const memberPositions = themeNode.memberIds
+      .map((memberId) => nodesById.get(memberId)?.position)
+      .filter((position): position is { x: number; y: number } => Boolean(position));
+    const height = getGroupHeight(themeNode.memberIds.length);
+    let position = themeNode.position;
+
+    if (memberPositions.length > 0) {
+      const storedLayoutFits = memberPositions.every((memberPosition) =>
+        isRelativePositionInsideGroup(
+          {
+            x: memberPosition.x - position.x,
+            y: memberPosition.y - position.y,
+          },
+          height
+        )
+      );
+
+      if (!storedLayoutFits) {
+        const minX = Math.min(...memberPositions.map((memberPosition) => memberPosition.x));
+        const minY = Math.min(...memberPositions.map((memberPosition) => memberPosition.y));
+        position = {
+          x: minX - GROUP_PADDING_X,
+          y: minY - GROUP_HEADER_HEIGHT - GROUP_PADDING_TOP,
+        };
+      }
+    }
+
+    themeLayoutById.set(themeNode.id, {
+      position,
+      height,
+      memberIndexById: new Map(themeNode.memberIds.map((memberId, index) => [memberId, index])),
+    });
+  }
 
   const themeNodes = nodes
     .filter((node) => node.type === "theme")
     .map((node) => {
-      const previewLabels = node.memberIds
-        .slice(0, 4)
-        .map((memberId) => labelsById.get(memberId))
-        .filter((label): label is string => Boolean(label));
+      const layout = themeLayoutById.get(node.id);
+      const height = layout?.height ?? getGroupHeight(node.memberIds.length);
 
       return {
         id: node.id,
         type: "canvasNode",
-        position: node.position,
-        selected: selectedSet.has(node.id),
+        position: layout?.position ?? node.position,
         draggable: true,
+        selectable: true,
+        zIndex: 0,
+        style: {
+          width: GROUP_WIDTH,
+          height,
+        },
         data: {
           node,
           isNestedInGroup: false,
-          memberPreviewLabels: previewLabels,
+          memberPreviewLabels: [],
           aiGenerated: aiGeneratedGroupIds.has(node.id),
+          containerWidth: GROUP_WIDTH,
+          containerHeight: height,
         } satisfies CanvasNodeCardData,
       } satisfies Node;
     });
 
-  // All nodes are flat (no parentId nesting). ReactFlow's parent-child position
-  // recalculation during drag was expensive. Grouped insights use absolute positions
-  // and rely on visual styling (left border accent) to show group membership.
   const insightNodes = nodes
     .filter((node) => node.type === "insight")
-    .map((node) => ({
-      id: node.id,
-      type: "canvasNode",
-      position: node.position,
-      selected: selectedSet.has(node.id),
-      draggable: true,
-      data: {
-        node,
-        isNestedInGroup: Boolean(node.groupId),
-        memberPreviewLabels: [],
-      } satisfies CanvasNodeCardData,
-    } satisfies Node));
+    .map((node) => {
+      const groupLayout = node.groupId ? themeLayoutById.get(node.groupId) : null;
+      const memberIndex = groupLayout?.memberIndexById.get(node.id) ?? 0;
+      const relativePosition = groupLayout
+        ? {
+            x: node.position.x - groupLayout.position.x,
+            y: node.position.y - groupLayout.position.y,
+          }
+        : null;
+
+      return {
+        id: node.id,
+        type: "canvasNode",
+        position:
+          groupLayout && relativePosition
+            ? isRelativePositionInsideGroup(relativePosition, groupLayout.height)
+              ? relativePosition
+              : getDefaultGroupedPosition(memberIndex)
+            : node.position,
+        parentId: groupLayout ? node.groupId ?? undefined : undefined,
+        draggable: true,
+        selectable: true,
+        zIndex: 1,
+        style: {
+          width: INSIGHT_WIDTH,
+        },
+        data: {
+          node,
+          isNestedInGroup: Boolean(node.groupId),
+          memberPreviewLabels: [],
+          containerWidth: INSIGHT_WIDTH,
+        } satisfies CanvasNodeCardData,
+      } satisfies Node;
+    });
 
   return [...themeNodes, ...insightNodes];
 }
 
-function buildFlowEdges(
-  edges: CanvasEdge[],
-  selectedEdgeId: string | null
-): Edge[] {
-  // Edge labels are now plain strings, not JSX buttons. This eliminates React
-  // reconciliation overhead per edge and allows edge selection via handleEdgeClick.
+function buildFlowEdges(edges: CanvasEdge[]): Edge[] {
   return edges.map((edge) => ({
     id: edge.id,
     source: edge.source_node_id,
     target: edge.target_node_id,
     label: CONNECTION_TYPE_LABELS[edge.connection_type],
-    animated: selectedEdgeId === edge.id,
+    animated: false,
     style: edgeStyle(edge.connection_type),
     labelStyle: {
       fontSize: 11,
     },
   }));
+}
+
+function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds: string[]) {
+  const currentById = new Map(currentNodes.map((node) => [node.id, node] as const));
+  const selectedSet = new Set(selectedNodeIds);
+
+  return nextNodes.map((nextNode) => {
+    const currentNode = currentById.get(nextNode.id);
+    const shouldPreservePosition =
+      currentNode &&
+      currentNode.type === nextNode.type &&
+      currentNode.parentId === nextNode.parentId;
+
+    return {
+      ...nextNode,
+      position: shouldPreservePosition ? currentNode.position : nextNode.position,
+      selected: selectedSet.has(nextNode.id),
+    } satisfies Node;
+  });
+}
+
+function syncFlowEdges(currentEdges: Edge[], nextEdges: Edge[], selectedEdgeId: string | null) {
+  const currentById = new Map(currentEdges.map((edge) => [edge.id, edge] as const));
+
+  return nextEdges.map((nextEdge) => ({
+    ...nextEdge,
+    animated: selectedEdgeId === nextEdge.id,
+    selected: selectedEdgeId === nextEdge.id,
+    data: currentById.get(nextEdge.id)?.data,
+  } satisfies Edge));
 }
 
 function CanvasGraphInner({
@@ -170,13 +292,8 @@ function CanvasGraphInner({
   const dragRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragSelectionRef = useRef(false);
-  // Suppresses handleSelectionChange while a node-click is being processed
-  // so we don't get a double-update cycle (click handler + ReactFlow's own
-  // onSelectionChange both calling the same parent state setters).
   const clickHandlingRef = useRef(false);
 
-  // Refs for stable callbacks during drag/click — avoid recreating handlers
-  // on every selection change, which caused dependency array bloat and performance issues
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   selectedNodeIdsRef.current = selectedNodeIds;
 
@@ -193,15 +310,26 @@ function CanvasGraphInner({
     [data?.nodes, data?.edges, filters]
   );
 
-  const flowNodes = useMemo(
-    () => buildFlowNodes(filteredNodes, selectedNodeIds, aiGeneratedGroupIds),
-    [filteredNodes, selectedNodeIds, aiGeneratedGroupIds]
+  const nextFlowNodes = useMemo(
+    () => buildFlowNodes(filteredNodes, aiGeneratedGroupIds),
+    [filteredNodes, aiGeneratedGroupIds]
   );
+  const nextFlowEdges = useMemo(() => buildFlowEdges(filteredEdges), [filteredEdges]);
 
-  const flowEdges = useMemo(
-    () => buildFlowEdges(filteredEdges, selectedEdgeId),
-    [filteredEdges, selectedEdgeId]
-  );
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(nextFlowNodes);
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(nextFlowEdges);
+
+  useEffect(() => {
+    setFlowNodes((currentNodes) =>
+      syncFlowNodes(currentNodes, nextFlowNodes, selectedNodeIds)
+    );
+  }, [nextFlowNodes, selectedNodeIds, setFlowNodes]);
+
+  useEffect(() => {
+    setFlowEdges((currentEdges) =>
+      syncFlowEdges(currentEdges, nextFlowEdges, selectedEdgeId)
+    );
+  }, [nextFlowEdges, selectedEdgeId, setFlowEdges]);
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (event, node) => {
@@ -209,8 +337,6 @@ function CanvasGraphInner({
       clickHandlingRef.current = true;
       const isMultiToggle = event.metaKey || event.ctrlKey || event.shiftKey;
       if (isMultiToggle) {
-        // Multi-select: toggle this node in the selection set but don't focus
-        // (focusing would hide the multi-select action panel).
         const next = new Set(selectedNodeIdsRef.current);
         if (next.has(node.id)) {
           next.delete(node.id);
@@ -224,17 +350,15 @@ function CanvasGraphInner({
         onNodeFocus(node.id);
       }
       onEdgeSelect(null);
-      // Reset after React has flushed this update so handleSelectionChange
-      // (fired by ReactFlow in the same tick) is suppressed.
-      Promise.resolve().then(() => { clickHandlingRef.current = false; });
+      Promise.resolve().then(() => {
+        clickHandlingRef.current = false;
+      });
     },
     [onEdgeSelect, onNodeFocus, onSelectionChange]
   );
 
   const handleSelectionChange = useCallback<OnSelectionChangeFunc>(
     ({ nodes }) => {
-      // Suppress during active click or drag — those handlers call the same
-      // parent setters directly, so firing again causes a cascade.
       if (dragSelectionRef.current || clickHandlingRef.current) {
         return;
       }
@@ -243,8 +367,6 @@ function CanvasGraphInner({
       }
       onSelectionChange(nodes.map((node) => node.id));
       onNodeFocus(nodes[nodes.length - 1]?.id ?? null);
-      // Do NOT call onEdgeSelect here — it's set by handleNodeClick /
-      // handlePaneClick and calling it here causes extra update cycles.
     },
     [onNodeFocus, onSelectionChange]
   );
@@ -306,20 +428,34 @@ function CanvasGraphInner({
       }
 
       saveTimerRef.current = setTimeout(() => {
+        const nodesByRuntimeId = new Map(allNodes.map((node) => [node.id, node] as const));
         const positions = Object.fromEntries(
           allNodes
             .map((node) => {
               const original = nodesById.get(node.id);
-              return original
-                ? [
-                    node.id,
-                    {
-                      nodeType: original.type,
-                      x: node.position.x,
-                      y: node.position.y,
-                    },
-                  ]
-                : null;
+              if (!original) {
+                return null;
+              }
+
+              const parentNode = node.parentId ? nodesByRuntimeId.get(node.parentId) : null;
+              const absolutePosition = parentNode
+                ? {
+                    x: parentNode.position.x + node.position.x,
+                    y: parentNode.position.y + node.position.y,
+                  }
+                : {
+                    x: node.position.x,
+                    y: node.position.y,
+                  };
+
+              return [
+                node.id,
+                {
+                  nodeType: original.type,
+                  x: absolutePosition.x,
+                  y: absolutePosition.y,
+                },
+              ];
             })
             .filter(Boolean) as Array<[string, { nodeType: CanvasNode["type"]; x: number; y: number }]>
         );
@@ -333,13 +469,10 @@ function CanvasGraphInner({
     [getViewport, nodesById, saveLayout]
   );
 
-  const handleNodeDragStart: OnNodeDrag = useCallback(
-    (_event, node) => {
-      dragRef.current = node.id;
-      dragSelectionRef.current = true;
-    },
-    []
-  );
+  const handleNodeDragStart: OnNodeDrag = useCallback((_event, node) => {
+    dragRef.current = node.id;
+    dragSelectionRef.current = true;
+  }, []);
 
   const handleNodeDragStop: OnNodeDrag = useCallback(
     async (_event, node, allNodes) => {
@@ -385,6 +518,8 @@ function CanvasGraphInner({
       edges={flowEdges}
       nodeTypes={nodeTypes}
       defaultViewport={data.viewport}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
       onNodeClick={handleNodeClick}
       onEdgeClick={handleEdgeClick}
       onPaneClick={handlePaneClick}

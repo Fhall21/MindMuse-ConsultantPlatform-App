@@ -286,6 +286,77 @@ function syncFlowEdges(currentEdges: Edge[], nextEdges: Edge[], selectedEdgeId: 
   } satisfies Edge));
 }
 
+function buildLayoutPositions(allNodes: Node[], nodesById: Map<string, CanvasNode>) {
+  const nodesByRuntimeId = new Map(allNodes.map((node) => [node.id, node] as const));
+
+  return Object.fromEntries(
+    allNodes
+      .map((node) => {
+        const original = nodesById.get(node.id);
+        if (!original) {
+          return null;
+        }
+
+        const parentNode = node.parentId ? nodesByRuntimeId.get(node.parentId) : null;
+        const absolutePosition = parentNode
+          ? {
+              x: parentNode.position.x + node.position.x,
+              y: parentNode.position.y + node.position.y,
+            }
+          : {
+              x: node.position.x,
+              y: node.position.y,
+            };
+
+        return [
+          node.id,
+          {
+            nodeType: original.type,
+            x: absolutePosition.x,
+            y: absolutePosition.y,
+          },
+        ];
+      })
+      .filter(Boolean) as Array<[string, { nodeType: CanvasNode["type"]; x: number; y: number }]>
+  );
+}
+
+function snapGroupChildren(nodes: Node[], groupId: string) {
+  const groupChildren = nodes
+    .filter((candidate) => candidate.parentId === groupId)
+    .sort((left, right) => {
+      if (left.position.y === right.position.y) {
+        return left.position.x - right.position.x;
+      }
+
+      return left.position.y - right.position.y;
+    });
+
+  if (groupChildren.length === 0) {
+    return nodes;
+  }
+
+  const snappedPositions = new Map(
+    groupChildren.map((child, index) => [child.id, getDefaultGroupedPosition(index)] as const)
+  );
+
+  return nodes.map((candidate) => {
+    if (candidate.parentId !== groupId) {
+      return candidate;
+    }
+
+    const snappedPosition = snappedPositions.get(candidate.id);
+    if (!snappedPosition) {
+      return candidate;
+    }
+
+    return {
+      ...candidate,
+      position: snappedPosition,
+    } satisfies Node;
+  });
+}
+
 function CanvasGraphInner({
   roundId,
   filters,
@@ -305,6 +376,7 @@ function CanvasGraphInner({
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragSelectionRef = useRef(false);
   const clickHandlingRef = useRef(false);
+  const initialSeedSaveRef = useRef<string | null>(null);
 
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   selectedNodeIdsRef.current = selectedNodeIds;
@@ -320,6 +392,11 @@ function CanvasGraphInner({
   const { filteredNodes, filteredEdges } = useMemo(
     () => applyFilters(data?.nodes ?? [], data?.edges ?? [], filters),
     [data?.nodes, data?.edges, filters]
+  );
+
+  const allFlowNodes = useMemo(
+    () => buildFlowNodes(data?.nodes ?? [], aiGeneratedGroupIds),
+    [data?.nodes, aiGeneratedGroupIds]
   );
 
   const nextFlowNodes = useMemo(
@@ -344,6 +421,22 @@ function CanvasGraphInner({
       syncFlowEdges(currentEdges, nextFlowEdges, selectedEdgeId)
     );
   }, [nextFlowEdges, selectedEdgeId, setFlowEdges]);
+
+  useEffect(() => {
+    if (!data?.needs_initial_layout_save) {
+      return;
+    }
+
+    if (initialSeedSaveRef.current === roundId) {
+      return;
+    }
+
+    initialSeedSaveRef.current = roundId;
+    saveLayout.mutate({
+      positions: buildLayoutPositions(allFlowNodes, nodesById),
+      viewport: data.viewport,
+    });
+  }, [allFlowNodes, data?.needs_initial_layout_save, data?.viewport, nodesById, roundId, saveLayout]);
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (event, node) => {
@@ -442,42 +535,8 @@ function CanvasGraphInner({
       }
 
       saveTimerRef.current = setTimeout(() => {
-        const nodesByRuntimeId = new Map(allNodes.map((node) => [node.id, node] as const));
-        const positions = Object.fromEntries(
-          allNodes
-            .map((node) => {
-              const original = nodesById.get(node.id);
-              if (!original) {
-                return null;
-              }
-
-              const parentNode = node.parentId ? nodesByRuntimeId.get(node.parentId) : null;
-              // Child nodes render relative to the group container but persist
-              // absolute positions so regroup/ungroup actions round-trip cleanly.
-              const absolutePosition = parentNode
-                ? {
-                    x: parentNode.position.x + node.position.x,
-                    y: parentNode.position.y + node.position.y,
-                  }
-                : {
-                    x: node.position.x,
-                    y: node.position.y,
-                  };
-
-              return [
-                node.id,
-                {
-                  nodeType: original.type,
-                  x: absolutePosition.x,
-                  y: absolutePosition.y,
-                },
-              ];
-            })
-            .filter(Boolean) as Array<[string, { nodeType: CanvasNode["type"]; x: number; y: number }]>
-        );
-
         saveLayout.mutate({
-          positions,
+          positions: buildLayoutPositions(allNodes, nodesById),
           viewport: getViewport(),
         });
       }, 1500);
@@ -507,7 +566,16 @@ function CanvasGraphInner({
 
       const draggedNode = nodesDataRef.current.find((candidate) => candidate.id === draggedNodeId);
 
-      persistLayout(allNodes);
+      const settledNodes =
+        plan.type === "noop" && node.parentId
+          ? snapGroupChildren(allNodes, node.parentId)
+          : allNodes;
+
+      if (settledNodes !== allNodes) {
+        setFlowNodes(settledNodes);
+      }
+
+      persistLayout(settledNodes);
       dragRef.current = null;
       dragSelectionRef.current = false;
 
@@ -517,7 +585,7 @@ function CanvasGraphInner({
         void onGroupDrop({ activeNodeId: draggedNodeId, targetNodeId: null });
       }
     },
-    [getIntersectingNodes, onGroupDrop, persistLayout]
+    [getIntersectingNodes, onGroupDrop, persistLayout, setFlowNodes]
   );
 
   if (isLoading || !data) {

@@ -23,6 +23,7 @@ export interface CanvasData {
   nodes: CanvasNode[];
   edges: CanvasEdge[];
   viewport: CanvasViewport;
+  needs_initial_layout_save?: boolean;
 }
 
 function normalizeCanvasData(payload: CanvasData): CanvasData {

@@ -7,6 +7,94 @@ import { jsonError, requireRouteClient } from "../../../_helpers";
 import { requireOwnedRound } from "@/lib/data/ownership";
 import type { CanvasNode } from "@/types/canvas";
 
+const GROUP_COLUMNS = 2;
+const GROUP_WIDTH = 596;
+const GROUP_HEADER_HEIGHT = 118;
+const GROUP_PADDING_X = 28;
+const GROUP_PADDING_TOP = 24;
+const GROUP_PADDING_BOTTOM = 28;
+const GROUP_GAP_X = 24;
+const GROUP_GAP_Y = 22;
+const INSIGHT_WIDTH = 258;
+const INSIGHT_HEIGHT = 110;
+const THEME_GRID_GAP_X = 56;
+const THEME_GRID_GAP_Y = 72;
+
+function getGroupHeight(memberCount: number) {
+  const visibleCount = Math.max(memberCount, 1);
+  const rowCount = Math.max(1, Math.ceil(visibleCount / GROUP_COLUMNS));
+
+  return Math.max(
+    246,
+    GROUP_HEADER_HEIGHT +
+      GROUP_PADDING_TOP +
+      GROUP_PADDING_BOTTOM +
+      rowCount * INSIGHT_HEIGHT +
+      Math.max(0, rowCount - 1) * GROUP_GAP_Y
+  );
+}
+
+function getDefaultGroupedPosition(index: number) {
+  const row = Math.floor(index / GROUP_COLUMNS);
+  const column = index % GROUP_COLUMNS;
+
+  return {
+    x: GROUP_PADDING_X + column * (INSIGHT_WIDTH + GROUP_GAP_X),
+    y: GROUP_HEADER_HEIGHT + GROUP_PADDING_TOP + row * (INSIGHT_HEIGHT + GROUP_GAP_Y),
+  };
+}
+
+function seedThemeGroupGrid(nodes: CanvasNode[]) {
+  const nodesById = new Map(nodes.map((node) => [node.id, node] as const));
+  const themeNodes = nodes
+    .filter((node) => node.type === "theme" && node.memberIds.length > 0)
+    .sort((left, right) => left.label.localeCompare(right.label));
+
+  if (themeNodes.length === 0) {
+    return false;
+  }
+
+  const leftMostThemeX = Math.min(...themeNodes.map((node) => node.position.x));
+  const topMostThemeY = Math.min(...themeNodes.map((node) => node.position.y));
+  const baseX = Math.max(leftMostThemeX, 688);
+  let column = 0;
+  let currentX = baseX;
+  let currentY = topMostThemeY;
+  let tallestInRow = 0;
+
+  for (const themeNode of themeNodes) {
+    const groupHeight = getGroupHeight(themeNode.memberIds.length);
+
+    if (column >= GROUP_COLUMNS) {
+      column = 0;
+      currentX = baseX;
+      currentY += tallestInRow + THEME_GRID_GAP_Y;
+      tallestInRow = 0;
+    }
+
+    themeNode.position = { x: currentX, y: currentY };
+
+    themeNode.memberIds.forEach((memberId, index) => {
+      const memberNode = nodesById.get(memberId);
+      if (!memberNode) {
+        return;
+      }
+
+      const relativePosition = getDefaultGroupedPosition(index);
+      memberNode.position = {
+        x: currentX + relativePosition.x,
+        y: currentY + relativePosition.y,
+      };
+    });
+
+    tallestInRow = Math.max(tallestInRow, groupHeight);
+    currentX += GROUP_WIDTH + THEME_GRID_GAP_X;
+    column += 1;
+  }
+
+  return true;
+}
+
 function buildFallbackPositions(nodes: CanvasNode[]) {
   const insightColumns = new Map<string, CanvasNode[]>();
   const themeNodes: CanvasNode[] = [];
@@ -153,6 +241,23 @@ export async function GET(
       }
     }
 
+    const groupedThemeIdsMissingLayout = new Set(
+      themeNodes
+        .filter((node) => node.memberIds.length > 0 && !layout.positions[node.id])
+        .map((node) => node.id)
+    );
+
+    let seededThemeGrid = false;
+    if (groupedThemeIdsMissingLayout.size > 0) {
+      seededThemeGrid = seedThemeGroupGrid(
+        allNodes.filter(
+          (node) =>
+            (node.type === "theme" && groupedThemeIdsMissingLayout.has(node.id)) ||
+            (node.type === "insight" && node.groupId && groupedThemeIdsMissingLayout.has(node.groupId))
+        )
+      );
+    }
+
     const insightPositions = new Map(
       allNodes
         .filter((node) => node.type === "insight")
@@ -160,7 +265,12 @@ export async function GET(
     );
 
     for (const node of allNodes) {
-      if (node.type !== "theme" || layout.positions[node.id] || node.memberIds.length === 0) {
+      if (
+        node.type !== "theme" ||
+        layout.positions[node.id] ||
+        node.memberIds.length === 0 ||
+        groupedThemeIdsMissingLayout.has(node.id)
+      ) {
         continue;
       }
 
@@ -191,6 +301,7 @@ export async function GET(
       nodes: allNodes,
       edges,
       viewport: layout.viewport,
+      needs_initial_layout_save: seededThemeGrid,
     });
   } catch (error) {
     console.error("[rounds/canvas/GET]", error);

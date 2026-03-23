@@ -17,9 +17,10 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRoundDetail } from "@/hooks/use-consultations";
+import { useReportTemplates } from "@/hooks/use-report-templates";
 import {
   generateRoundEmail,
-  generateRoundReport,
+  generateRoundReportWithTemplate,
   generateRoundSummary,
 } from "@/lib/actions/consultation-workflow";
 import type { RoundConsultationSummary, SourceTheme } from "@/types/round-detail";
@@ -40,6 +41,7 @@ export default function RoundDetailPage({
   const { id } = use(params);
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useRoundDetail(id);
+  const { data: templates = [] } = useReportTemplates();
 
   const adaptedSourceThemes: SourceTheme[] = (data?.sourceThemes ?? []).map((theme) => ({
     id: theme.sourceThemeId,
@@ -108,9 +110,9 @@ export default function RoundDetailPage({
   );
 
   const handleGenerateReport = useCallback(
-    async (roundId: string) => {
+    async (roundId: string, templateId: string | null) => {
       try {
-        await generateRoundReport(roundId);
+        await generateRoundReportWithTemplate(roundId, templateId);
         await invalidateRoundDetail(roundId);
         toast.success("Report generated");
         posthog.capture("report_generated", { round_id: roundId, artifact_type: "report" });
@@ -185,6 +187,7 @@ export default function RoundDetailPage({
         <RoundOutputsSection
           roundId={id}
           outputs={data.outputs}
+          templates={templates}
           onGenerateSummary={handleGenerateSummary}
           onGenerateReport={handleGenerateReport}
           onGenerateEmail={handleGenerateEmail}

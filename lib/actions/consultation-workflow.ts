@@ -16,7 +16,7 @@ import {
   themes,
 } from "@/db/schema";
 import { callAIService } from "@/lib/openai/client";
-import { getActiveReportTemplate } from "@/lib/actions/report-templates";
+import { getActiveReportTemplate, getReportTemplate } from "@/lib/actions/report-templates";
 import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";
 import { emitAuditEvent } from "@/lib/actions/audit";
 import { getServerSession } from "@/lib/auth/session";
@@ -2057,6 +2057,13 @@ export async function generateRoundReport(roundId: string) {
   return generateRoundOutput(roundId, "report");
 }
 
+export async function generateRoundReportWithTemplate(
+  roundId: string,
+  templateId: string | null
+) {
+  return generateRoundOutput(roundId, "report", templateId);
+}
+
 export async function generateRoundEmail(roundId: string) {
   return generateRoundOutput(roundId, "email");
 }
@@ -2284,7 +2291,8 @@ async function loadRoundOutputForContext(params: {
 
 async function generateRoundOutput(
   roundId: string,
-  artifactType: RoundOutputArtifactType
+  artifactType: RoundOutputArtifactType,
+  templateIdOverride?: string | null
 ) {
   const detail = await getRoundDetail(roundId);
   if (!detail) {
@@ -2320,8 +2328,13 @@ async function generateRoundOutput(
     throw new Error("Accept at least one round or consultation theme before generating a round output.");
   }
 
-  // Load user's active report template (if any) to inject into the AI prompt
-  const activeTemplate = await getActiveReportTemplate();
+  // Load report template: explicit override > active template > none
+  const activeTemplate =
+    templateIdOverride === undefined
+      ? await getActiveReportTemplate()
+      : typeof templateIdOverride === "string"
+        ? await getReportTemplate(templateIdOverride)
+        : null;
 
   const requestPayload = {
     round_label: detail.round.label,

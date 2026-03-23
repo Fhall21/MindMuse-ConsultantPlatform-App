@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,13 +11,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { RoundOutputCollection } from "@/types/round-detail";
+import type { ReportTemplate } from "@/types/db";
 
 interface RoundOutputsSectionProps {
   roundId: string;
   outputs: RoundOutputCollection;
+  templates: ReportTemplate[];
   onGenerateSummary: (roundId: string) => Promise<void>;
-  onGenerateReport: (roundId: string) => Promise<void>;
+  onGenerateReport: (roundId: string, templateId: string | null) => Promise<void>;
   onGenerateEmail: (roundId: string) => Promise<void>;
 }
 
@@ -49,19 +58,30 @@ const statusBadgeConfig: Record<string, { label: string; className: string }> = 
 export function RoundOutputsSection({
   roundId,
   outputs,
+  templates,
   onGenerateSummary,
   onGenerateReport,
   onGenerateEmail,
 }: RoundOutputsSectionProps) {
   const [generating, setGenerating] = useState<string | null>(null);
+  const [reportTemplateId, setReportTemplateId] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (!initialized && templates.length > 0) {
+      const active = templates.find((t) => t.is_active);
+      setReportTemplateId(active?.id ?? null);
+      setInitialized(true);
+    }
+  }, [templates, initialized]);
 
   async function handleGenerate(
     type: string,
-    fn: (roundId: string) => Promise<void>
+    fn: () => Promise<void>
   ) {
     setGenerating(type);
     try {
-      await fn(roundId);
+      await fn();
     } finally {
       setGenerating(null);
     }
@@ -90,9 +110,9 @@ export function RoundOutputsSection({
           return (
             <div
               key={type}
-              className="flex items-center justify-between rounded-md border px-3 py-2.5"
+              className="flex items-center justify-between rounded-md border px-3 py-2.5 gap-3"
             >
-              <div className="space-y-0.5">
+              <div className="min-w-0 flex-1 space-y-0.5">
                 <p className="text-sm font-medium">{outputTypeLabels[type]}</p>
                 {output?.generatedAt ? (
                   <p className="text-xs text-muted-foreground">
@@ -102,7 +122,33 @@ export function RoundOutputsSection({
                   <p className="text-xs text-muted-foreground">Not yet generated</p>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+
+              {/* Template selector — only for the "report" row */}
+              {type === "report" && templates.length > 0 && (
+                <Select
+                  value={reportTemplateId ?? "__none__"}
+                  onValueChange={(val) =>
+                    setReportTemplateId(val === "__none__" ? null : val)
+                  }
+                >
+                  <SelectTrigger className="h-7 w-44 text-xs">
+                    <SelectValue placeholder="No template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__" className="text-xs">
+                      No template
+                    </SelectItem>
+                    {templates.map((t) => (
+                      <SelectItem key={t.id} value={t.id} className="text-xs">
+                        {t.name}
+                        {t.is_active ? " ★" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              <div className="flex shrink-0 items-center gap-2">
                 {statusConfig ? (
                   <Badge variant="outline" className={statusConfig.className}>
                     {statusConfig.label}
@@ -124,13 +170,11 @@ export function RoundOutputsSection({
                   className="h-7 text-xs"
                   disabled={generating !== null}
                   onClick={() => {
-                    const fn =
-                      type === "summary"
-                        ? onGenerateSummary
-                        : type === "report"
-                          ? onGenerateReport
-                          : onGenerateEmail;
-                    void handleGenerate(type, fn);
+                    void handleGenerate(type, () => {
+                      if (type === "summary") return onGenerateSummary(roundId);
+                      if (type === "report") return onGenerateReport(roundId, reportTemplateId);
+                      return onGenerateEmail(roundId);
+                    });
                   }}
                 >
                   {generating === type

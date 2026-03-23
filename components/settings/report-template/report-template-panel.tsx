@@ -231,22 +231,52 @@ function AnalyseForm({ onDone }: { onDone: () => void }) {
   const [templateName, setTemplateName] = useState("");
   const queryClient = useQueryClient();
 
+  const ALLOWED_EXTENSIONS = [".txt", ".md", ".csv", ".pdf"];
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const selected = Array.from(e.target.files ?? []).slice(0, 3);
+      const selected = Array.from(e.target.files ?? []);
       const loaded: Array<{ name: string; content: string }> = [];
+      const errors: string[] = [];
 
       for (const file of selected) {
+        // Validate file extension
+        const extension = "." + file.name.split(".").pop()?.toLowerCase();
+        if (!ALLOWED_EXTENSIONS.includes(extension)) {
+          errors.push(
+            `${file.name}: unsupported file type. Allowed types: ${ALLOWED_EXTENSIONS.join(", ")}`
+          );
+          continue;
+        }
+
+        // Validate file size
+        if (file.size > MAX_FILE_SIZE) {
+          errors.push(
+            `${file.name}: file too large (max ${MAX_FILE_SIZE / 1024 / 1024}MB)`
+          );
+          continue;
+        }
+
         try {
           const text = await file.text();
           loaded.push({ name: file.name, content: text });
         } catch {
-          toast.error(`Could not read ${file.name}`);
+          errors.push(`${file.name}: could not read file`);
         }
       }
 
-      setFiles(loaded);
-      setAnalysed(null);
+      // Show any validation errors
+      errors.forEach((error) => toast.error(error));
+
+      if (loaded.length > 0) {
+        setFiles((prev) => [...prev, ...loaded]);
+        setAnalysed(null);
+        toast.success(`Added ${loaded.length} file(s)`);
+        if (loaded.length < selected.length) {
+          toast.info(`Loaded ${loaded.length} of ${selected.length} files`);
+        }
+      }
     },
     []
   );
@@ -316,7 +346,7 @@ function AnalyseForm({ onDone }: { onDone: () => void }) {
       <div className="space-y-2">
         <Label htmlFor="example-files">
           Upload example reports{" "}
-          <span className="text-muted-foreground font-normal">(up to 3, plain text or PDF text)</span>
+          <span className="text-muted-foreground font-normal">(plain text, Markdown, CSV, or PDF text)</span>
         </Label>
         <input
           id="example-files"
@@ -327,17 +357,37 @@ function AnalyseForm({ onDone }: { onDone: () => void }) {
           className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border file:border-border file:bg-muted/40 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground hover:file:bg-muted/60"
         />
         {files.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {files.map((f) => (
-              <Badge key={f.name} variant="outline" className="text-[10px]">
-                {f.name}
-              </Badge>
-            ))}
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {files.map((f, idx) => (
+                <Badge key={`${f.name}-${idx}`} variant="outline" className="text-[10px] flex items-center gap-1">
+                  {f.name}
+                  <button
+                    type="button"
+                    onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))}
+                    className="ml-1 hover:text-destructive"
+                    title="Remove file"
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setFiles([])}
+              className="text-xs text-muted-foreground h-6"
+            >
+              Clear all files
+            </Button>
           </div>
         )}
         <p className="text-[11px] text-muted-foreground">
-          Upload the text from 1–3 reports you&apos;ve written previously.
-          For PDFs, copy and paste the text into a .txt file first.
+          Upload the text from your example reports (.txt, .md, .csv, or .pdf). 
+          For PDFs, copy and paste the text into a .txt or .md file first. 
+          You can upload multiple files to create a more robust template.
         </p>
       </div>
 
@@ -468,8 +518,9 @@ export function ReportTemplatePanel() {
       <div>
         <h2 className="text-base font-semibold">Report Template</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload 1–3 example reports you&apos;ve written previously. The AI will analyse their
+          Upload example reports you&apos;ve written previously. The AI will analyse their
           structure and style, then use that as a template when generating future reports.
+          Supported formats: plain text (.txt), Markdown (.md), CSV (.csv), and PDF text.
           Only one template can be active at a time.
         </p>
       </div>

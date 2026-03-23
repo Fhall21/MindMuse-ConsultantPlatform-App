@@ -28,11 +28,6 @@ const settingsSections = [
     href: "/settings/meeting-types",
   },
   {
-    title: "Report Template",
-    description: "Customise the structure and style of generated reports.",
-    href: "/settings/report-template",
-  },
-  {
     title: "Integrations",
     href: "/settings/integrations",
   },

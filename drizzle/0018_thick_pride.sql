@@ -1,0 +1,1 @@
+ALTER TABLE "analytics_jobs" ADD COLUMN "attempt_count" integer DEFAULT 0 NOT NULL;

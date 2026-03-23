@@ -25,10 +25,13 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 10
+MAX_JOB_ATTEMPTS = 3
+STUCK_TIMEOUT_MINUTES = 15
+RETRY_BACKOFF_MINUTES = 5
 
 # ─── SQL ──────────────────────────────────────────────────────────────────────
 
-# Atomically claim one queued job by updating its phase in the same CTE.
+# Atomically claim one queued job, incrementing attempt_count in the same statement.
 CLAIM_QUEUED_JOB_QUERY = """
 WITH claimed AS (
     SELECT id
@@ -39,13 +42,39 @@ WITH claimed AS (
     FOR UPDATE SKIP LOCKED
 )
 UPDATE analytics_jobs
-SET phase       = 'extracting',
-    progress    = 10,
-    started_at  = now(),
-    updated_at  = now()
+SET phase          = 'extracting',
+    progress       = 10,
+    started_at     = now(),
+    attempt_count  = attempt_count + 1,
+    updated_at     = now()
 FROM claimed
 WHERE analytics_jobs.id = claimed.id
-RETURNING analytics_jobs.id, analytics_jobs.meeting_id, analytics_jobs.consultation_id
+RETURNING analytics_jobs.id, analytics_jobs.meeting_id, analytics_jobs.consultation_id,
+          analytics_jobs.attempt_count
+"""
+
+# Reset jobs stuck in-flight (service crashed while processing).
+RESET_STUCK_JOBS_QUERY = f"""
+UPDATE analytics_jobs
+SET phase      = 'queued',
+    progress   = 0,
+    started_at = NULL,
+    updated_at = now()
+WHERE phase IN ('extracting', 'embedding', 'clustering', 'syncing')
+  AND started_at < now() - interval '{STUCK_TIMEOUT_MINUTES} minutes'
+"""
+
+# Reset failed jobs that are eligible for a retry (below max attempts, past backoff window).
+RESET_RETRYABLE_FAILED_JOBS_QUERY = f"""
+UPDATE analytics_jobs
+SET phase         = 'queued',
+    progress      = 0,
+    error_message = NULL,
+    completed_at  = NULL,
+    updated_at    = now()
+WHERE phase        = 'failed'
+  AND attempt_count < {MAX_JOB_ATTEMPTS}
+  AND completed_at < now() - interval '{RETRY_BACKOFF_MINUTES} minutes'
 """
 
 FETCH_TRANSCRIPT_QUERY = """
@@ -189,6 +218,7 @@ class ClaimedJob:
     id: str
     meeting_id: str
     consultation_id: str | None
+    attempt_count: int = 0
 
 
 # ─── Engine ───────────────────────────────────────────────────────────────────
@@ -222,8 +252,21 @@ def _sql(query: str) -> Any:
 
 # ─── Poll loop ────────────────────────────────────────────────────────────────
 
+def reset_stale_jobs(engine: Any) -> None:
+    """Reset stuck in-flight jobs and re-queue failed jobs that are eligible for retry."""
+    with engine.begin() as conn:
+        stuck = conn.execute(_sql(RESET_STUCK_JOBS_QUERY))
+        retryable = conn.execute(_sql(RESET_RETRYABLE_FAILED_JOBS_QUERY))
+    if stuck.rowcount:
+        logger.info("[analytics_worker] reset stuck in-flight jobs", extra={"count": stuck.rowcount})
+    if retryable.rowcount:
+        logger.info("[analytics_worker] re-queued retryable failed jobs", extra={"count": retryable.rowcount})
+
+
 def poll_once(engine: Any) -> int:
     """Claim and process up to one queued job. Returns 1 if a job ran, 0 if queue was empty."""
+    reset_stale_jobs(engine)
+
     with engine.begin() as conn:
         result = conn.execute(_sql(CLAIM_QUEUED_JOB_QUERY))
         rows = list(result.mappings())
@@ -236,6 +279,7 @@ def poll_once(engine: Any) -> int:
         id=str(row["id"]),
         meeting_id=str(row["meeting_id"]),
         consultation_id=str(row["consultation_id"]) if row["consultation_id"] else None,
+        attempt_count=int(row["attempt_count"]),
     )
     _process_job(engine, job)
     return 1
@@ -248,6 +292,7 @@ def _process_job(engine: Any, job: ClaimedJob) -> None:
         "job_id": job.id,
         "meeting_id": job.meeting_id,
         "consultation_id": job.consultation_id,
+        "attempt": job.attempt_count,
     })
     try:
         # Extraction
@@ -458,6 +503,7 @@ async def run_worker_loop(engine: Any, poll_interval: float = POLL_INTERVAL_SECO
     ensure_analytics_projection_refresh_compatibility(engine)
     logger.debug(f"[run_worker_loop] sys.path at worker start: {sys.path[:3]}")
     logger.info("[analytics_worker] polling loop started", extra={"poll_interval_s": poll_interval})
+    reset_stale_jobs(engine)
     while True:
         try:
             processed = await loop.run_in_executor(None, lambda: poll_once(engine))

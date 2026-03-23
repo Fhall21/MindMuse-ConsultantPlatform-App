@@ -895,6 +895,7 @@ export const analyticsJobs = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     errorMessage: text("error_message"),
+    attemptCount: integer("attempt_count").default(0).notNull(),
     ...timestamps,
   },
   (table) => ({

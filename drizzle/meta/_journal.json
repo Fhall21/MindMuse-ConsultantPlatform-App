@@ -127,6 +127,13 @@
       "when": 1774252881937,
       "tag": "0017_steady_the_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1774262526166,
+      "tag": "0018_thick_pride",
+      "breakpoints": true
     }
   ]
 }

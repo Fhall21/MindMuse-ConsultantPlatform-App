@@ -47,7 +47,7 @@ import { cn } from "@/lib/utils";
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-base font-medium tracking-tight text-muted-foreground">
+    <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
       {children}
     </h2>
   );
@@ -447,7 +447,7 @@ export default function MeetingDetailPage({
       {/* Transcript intake — paste, file upload, or audio transcription */}
       <section id="transcript" className="scroll-mt-20 space-y-3">
         <SectionHeading>Transcript</SectionHeading>
-        <div className="rounded-xl border border-border/60 bg-card/40 overflow-y-auto max-h-96 p-4">
+        <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
           <TranscriptIntakePanel
             meetingId={id}
             initialTranscript={meeting.transcript_raw}

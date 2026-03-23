@@ -93,6 +93,9 @@ export function ThemeGroupingWorkspace({
   const [groups, setGroups] = useState<ThemeDetail[]>(initialGroups);
   const [selectedThemeIds, setSelectedThemeIds] = useState<Set<string>>(new Set());
 
+  // Refs for auto-scroll on drop
+  const rightColumnRef = useRef<HTMLDivElement>(null);
+
   // Sync local state when the server-fetched groups change (e.g. after AI group creation)
   useEffect(() => {
     setGroups(initialGroups);
@@ -217,6 +220,18 @@ export function ThemeGroupingWorkspace({
           }
           return g;
         });
+      });
+
+      // Schedule auto-scroll after render
+      requestAnimationFrame(() => {
+        if (rightColumnRef.current) {
+          const targetElement = rightColumnRef.current.querySelector(
+            `[data-group-id="${targetGroupId}"]`
+          );
+          if (targetElement) {
+            targetElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+        }
       });
 
       // Persist to server
@@ -585,171 +600,181 @@ export function ThemeGroupingWorkspace({
 
   return (
     <>
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Left: Source themes pool (ungrouped) */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <CardTitle className="text-base">Source Themes</CardTitle>
-                <CardDescription>
-                  {ungroupedThemes.length} ungrouped &middot;{" "}
-                  {sourceThemes.length} total
-                </CardDescription>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setAiDialogOpen(true)}
-                  disabled={ungroupedThemes.length < 2}
-                  className="gap-1.5"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  AI Groups
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleCreateGroup}
-                  disabled={ungroupedThemes.length === 0}
-                >
-                  Create Group
-                  {selectedThemeIds.size > 0 ? (
-                    <span className="ml-1">({selectedThemeIds.size})</span>
-                  ) : null}
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragOverUngrouped(true);
-              setDragOverThemeId(null);
-            }}
-            onDragLeave={() => {
-              setIsDragOverUngrouped(false);
-              setDragOverThemeId(null);
-            }}
-            onDrop={handleDropOnUngrouped}
-            className={cn(
-              "space-y-4 transition-colors",
-              isDragOverUngrouped && "bg-accent/30",
-            )}
-          >
-            {themesByMeeting.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                All themes are grouped. Drag themes here to ungroup them.
-              </p>
-            ) : (
-              themesByMeeting.map(([meetingId, { title, themes }]) => (
-                <div key={meetingId} className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="h-px flex-1 bg-border/60" />
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {title}
-                    </span>
-                    <Badge variant="outline" className="h-4 px-1 text-[10px]">
-                      {themes.length}
-                    </Badge>
-                    <div className="h-px flex-1 bg-border/60" />
-                  </div>
-                  {themes.map((theme) => (
-                    <SourceThemeCard
-                      key={theme.id}
-                      theme={theme}
-                      selected={selectedThemeIds.has(theme.id)}
-                      onSelect={handleThemeSelect}
-                      onDragStart={handleDragStart}
-                      onDragOverCard={setDragOverThemeId}
-                      onDragLeaveCard={() => setDragOverThemeId(null)}
-                      onDropOnCard={handleDropOnThemeCard}
-                      dropTarget={dragOverThemeId === theme.id}
-                    />
-                  ))}
+      <div className="h-[70vh] overflow-hidden rounded-lg border border-border">
+        <div className="grid h-full gap-0 lg:grid-cols-2">
+          {/* Left: Source themes pool (ungrouped) */}
+          <Card className="rounded-none border-r border-border lg:border-r">
+            <CardHeader className="sticky top-0 z-10 bg-card border-b">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <CardTitle className="text-base">Source Themes</CardTitle>
+                  <CardDescription>
+                    {ungroupedThemes.length} ungrouped &middot;{" "}
+                    {sourceThemes.length} total
+                  </CardDescription>
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Right: Theme groups */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h3 className="text-base font-semibold">Theme Groups</h3>
-              <p className="text-sm text-muted-foreground">
-                {activeGroups.length} active group{activeGroups.length !== 1 ? "s" : ""}
-              </p>
-            </div>
-            {mergeSelectedGroupIds.size >= 2 ? (
-              <Button size="sm" onClick={handleMergeGroups}>
-                Merge {mergeSelectedGroupIds.size} groups
-              </Button>
-            ) : null}
-          </div>
-
-          {activeGroups.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-sm text-muted-foreground">
-                  No groups yet. Select themes and click &ldquo;Create Group&rdquo;,
-                  or drag themes from the source pool.
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAiDialogOpen(true)}
+                    disabled={ungroupedThemes.length < 2}
+                    className="gap-1.5"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    AI Groups
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleCreateGroup}
+                    disabled={ungroupedThemes.length === 0}
+                  >
+                    Create Group
+                    {selectedThemeIds.size > 0 ? (
+                      <span className="ml-1">({selectedThemeIds.size})</span>
+                    ) : null}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragOverUngrouped(true);
+                setDragOverThemeId(null);
+              }}
+              onDragLeave={() => {
+                setIsDragOverUngrouped(false);
+                setDragOverThemeId(null);
+              }}
+              onDrop={handleDropOnUngrouped}
+              className={cn(
+                "overflow-y-auto space-y-4 transition-colors",
+                isDragOverUngrouped && "bg-accent/30",
+              )}
+            >
+              {themesByMeeting.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  All themes are grouped. Drag themes here to ungroup them.
                 </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {activeGroups.map((group) => (
-                <ThemeGroupCard
-                  key={group.id}
-                  group={group}
-                  selectedThemeIds={selectedThemeIds}
-                  onThemeSelect={handleThemeSelect}
-                  onThemeDragStart={handleDragStart}
-                  onDrop={handleDropOnGroup}
-                  onLabelChange={handleLabelChange}
-                  onDescriptionChange={handleDescriptionChange}
-                  onAcceptDraft={handleAcceptDraft}
-                  onDiscardDraft={handleDiscardDraft}
-                  onAccept={handleAcceptGroup}
-                  onDiscard={handleDiscardGroup}
-                  onManagementReject={handleManagementRejectGroup}
-                  onSplit={handleSplitGroup}
-                  mergeSelected={mergeSelectedGroupIds.has(group.id)}
-                  onToggleMergeSelect={handleToggleMergeSelect}
-                />
-              ))}
-            </div>
-          )}
+              ) : (
+                themesByMeeting.map(([meetingId, { title, themes }]) => (
+                  <div key={meetingId} className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="h-px flex-1 bg-border/60" />
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {title}
+                      </span>
+                      <Badge variant="outline" className="h-4 px-1 text-[10px]">
+                        {themes.length}
+                      </Badge>
+                      <div className="h-px flex-1 bg-border/60" />
+                    </div>
+                    {themes.map((theme) => (
+                      <SourceThemeCard
+                        key={theme.id}
+                        theme={theme}
+                        selected={selectedThemeIds.has(theme.id)}
+                        onSelect={handleThemeSelect}
+                        onDragStart={handleDragStart}
+                        onDragOverCard={setDragOverThemeId}
+                        onDragLeaveCard={() => setDragOverThemeId(null)}
+                        onDropOnCard={handleDropOnThemeCard}
+                        dropTarget={dragOverThemeId === theme.id}
+                      />
+                    ))}
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
 
-          {/* Terminal groups (discarded / management rejected) */}
-          {terminalGroups.length > 0 ? (
-            <div className="space-y-2">
-              <h4 className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                Excluded
-              </h4>
-              {terminalGroups.map((group) => (
-                <ThemeGroupCard
-                  key={group.id}
-                  group={group}
-                  selectedThemeIds={selectedThemeIds}
-                  onThemeSelect={handleThemeSelect}
-                  onThemeDragStart={handleDragStart}
-                  onDrop={handleDropOnGroup}
-                  onLabelChange={handleLabelChange}
-                  onDescriptionChange={handleDescriptionChange}
-                  onAcceptDraft={handleAcceptDraft}
-                  onDiscardDraft={handleDiscardDraft}
-                  onAccept={handleAcceptGroup}
-                  onDiscard={handleDiscardGroup}
-                  onManagementReject={handleManagementRejectGroup}
-                  onSplit={handleSplitGroup}
-                  disabled
-                />
-              ))}
+          {/* Right: Theme groups */}
+          <div className="flex flex-col overflow-hidden border-l border-border lg:border-l">
+            <div className="sticky top-0 z-10 bg-background border-b border-border px-6 py-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-semibold">Theme Groups</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {activeGroups.length} active group{activeGroups.length !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                {mergeSelectedGroupIds.size >= 2 ? (
+                  <Button size="sm" onClick={handleMergeGroups}>
+                    Merge {mergeSelectedGroupIds.size} groups
+                  </Button>
+                ) : null}
+              </div>
             </div>
-          ) : null}
+
+            <div className="overflow-y-auto flex-1 px-6 py-4">
+              <div ref={rightColumnRef} className="space-y-4">
+                {activeGroups.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        No groups yet. Select themes and click &ldquo;Create Group&rdquo;,
+                        or drag themes from the source pool.
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-3">
+                    {activeGroups.map((group) => (
+                      <div key={group.id} data-group-id={group.id}>
+                        <ThemeGroupCard
+                          group={group}
+                          selectedThemeIds={selectedThemeIds}
+                          onThemeSelect={handleThemeSelect}
+                          onThemeDragStart={handleDragStart}
+                          onDrop={handleDropOnGroup}
+                          onLabelChange={handleLabelChange}
+                          onDescriptionChange={handleDescriptionChange}
+                          onAcceptDraft={handleAcceptDraft}
+                          onDiscardDraft={handleDiscardDraft}
+                          onAccept={handleAcceptGroup}
+                          onDiscard={handleDiscardGroup}
+                          onManagementReject={handleManagementRejectGroup}
+                          onSplit={handleSplitGroup}
+                          mergeSelected={mergeSelectedGroupIds.has(group.id)}
+                          onToggleMergeSelect={handleToggleMergeSelect}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Terminal groups (discarded / management rejected) */}
+                {terminalGroups.length > 0 ? (
+                  <div className="space-y-2 mt-4 pt-4 border-t">
+                    <h4 className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                      Excluded
+                    </h4>
+                    {terminalGroups.map((group) => (
+                      <div key={group.id} data-group-id={group.id}>
+                        <ThemeGroupCard
+                          group={group}
+                          selectedThemeIds={selectedThemeIds}
+                          onThemeSelect={handleThemeSelect}
+                          onThemeDragStart={handleDragStart}
+                          onDrop={handleDropOnGroup}
+                          onLabelChange={handleLabelChange}
+                          onDescriptionChange={handleDescriptionChange}
+                          onAcceptDraft={handleAcceptDraft}
+                          onDiscardDraft={handleDiscardDraft}
+                          onAccept={handleAcceptGroup}
+                          onDiscard={handleDiscardGroup}
+                          onManagementReject={handleManagementRejectGroup}
+                          onSplit={handleSplitGroup}
+                          disabled
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

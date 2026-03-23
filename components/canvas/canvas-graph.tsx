@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   Controls,
   MiniMap,
+  Panel,
   ReactFlow,
   ReactFlowProvider,
   type Connection,
@@ -19,6 +20,7 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { CanvasNodeCard, type CanvasNodeCardData } from "@/components/canvas/canvas-node-card";
@@ -217,12 +219,7 @@ function buildFlowNodes(nodes: CanvasNode[], aiGeneratedGroupIds: Set<string>): 
       return {
         id: node.id,
         type: "canvasNode",
-        position:
-          groupLayout && relativePosition
-            ? isRelativePositionInsideGroup(relativePosition, groupLayout.height)
-              ? relativePosition
-              : getDefaultGroupedPosition(memberIndex)
-            : node.position,
+        position: groupLayout ? getDefaultGroupedPosition(memberIndex) : node.position,
         parentId: groupLayout ? node.groupId ?? undefined : undefined,
         draggable: true,
         selectable: true,
@@ -377,6 +374,7 @@ function CanvasGraphInner({
   const dragSelectionRef = useRef(false);
   const clickHandlingRef = useRef(false);
   const initialSeedSaveRef = useRef<string | null>(null);
+  const [hasQueuedSave, setHasQueuedSave] = useState(false);
 
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   selectedNodeIdsRef.current = selectedNodeIds;
@@ -397,6 +395,31 @@ function CanvasGraphInner({
   const allFlowNodes = useMemo(
     () => buildFlowNodes(data?.nodes ?? [], aiGeneratedGroupIds),
     [data?.nodes, aiGeneratedGroupIds]
+  );
+  const normalizedAllPositions = useMemo(
+    () => buildLayoutPositions(allFlowNodes, nodesById),
+    [allFlowNodes, nodesById]
+  );
+  const normalizedLayoutSignature = useMemo(
+    () =>
+      Object.entries(normalizedAllPositions)
+        .sort(([leftId], [rightId]) => leftId.localeCompare(rightId))
+        .map(([id, position]) => `${id}:${position.x}:${position.y}`)
+        .join("|"),
+    [normalizedAllPositions]
+  );
+  const needsLayoutNormalization = useMemo(
+    () =>
+      Object.entries(normalizedAllPositions).some(([nodeId, position]) => {
+        const original = nodesById.get(nodeId);
+
+        return (
+          original &&
+          (Math.abs(original.position.x - position.x) > 0.5 ||
+            Math.abs(original.position.y - position.y) > 0.5)
+        );
+      }),
+    [nodesById, normalizedAllPositions]
   );
 
   const nextFlowNodes = useMemo(
@@ -422,21 +445,42 @@ function CanvasGraphInner({
     );
   }, [nextFlowEdges, selectedEdgeId, setFlowEdges]);
 
+  const saveLayoutNow = useCallback(
+    (positions: Record<string, { nodeType: CanvasNode["type"]; x: number; y: number }>, viewport: { x: number; y: number; zoom: number }) => {
+      setHasQueuedSave(false);
+      saveLayout.mutate(
+        {
+          positions,
+          viewport,
+        },
+        {
+          onError: (error) => {
+            console.error("[canvas-graph] failed to save layout", error);
+            toast.error("Failed to save canvas layout.");
+          },
+        }
+      );
+    },
+    [saveLayout]
+  );
+
   useEffect(() => {
-    if (!data?.needs_initial_layout_save) {
+    if (!data) {
       return;
     }
 
-    if (initialSeedSaveRef.current === roundId) {
+    if (!(data.needs_initial_layout_save || needsLayoutNormalization)) {
       return;
     }
 
-    initialSeedSaveRef.current = roundId;
-    saveLayout.mutate({
-      positions: buildLayoutPositions(allFlowNodes, nodesById),
-      viewport: data.viewport,
-    });
-  }, [allFlowNodes, data?.needs_initial_layout_save, data?.viewport, nodesById, roundId, saveLayout]);
+    const saveKey = `${roundId}:${normalizedLayoutSignature}`;
+    if (initialSeedSaveRef.current === saveKey) {
+      return;
+    }
+
+    initialSeedSaveRef.current = saveKey;
+    saveLayoutNow(normalizedAllPositions, data.viewport);
+  }, [data, needsLayoutNormalization, normalizedAllPositions, normalizedLayoutSignature, roundId, saveLayoutNow]);
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (event, node) => {
@@ -534,14 +578,21 @@ function CanvasGraphInner({
         clearTimeout(saveTimerRef.current);
       }
 
+      setHasQueuedSave(true);
       saveTimerRef.current = setTimeout(() => {
-        saveLayout.mutate({
-          positions: buildLayoutPositions(allNodes, nodesById),
-          viewport: getViewport(),
-        });
+        saveLayoutNow(buildLayoutPositions(allNodes, nodesById), getViewport());
       }, 1500);
     },
-    [getViewport, nodesById, saveLayout]
+    [getViewport, nodesById, saveLayoutNow]
+  );
+
+  useEffect(
+    () => () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    },
+    []
   );
 
   const handleNodeDragStart: OnNodeDrag = useCallback((_event, node) => {
@@ -622,6 +673,14 @@ function CanvasGraphInner({
       }}
     >
       <Background gap={16} size={1} />
+      {hasQueuedSave || saveLayout.isPending ? (
+        <Panel position="top-right">
+          <div className="flex items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Saving layout…
+          </div>
+        </Panel>
+      ) : null}
       <Controls />
       <MiniMap nodeStrokeWidth={3} zoomable pannable />
     </ReactFlow>

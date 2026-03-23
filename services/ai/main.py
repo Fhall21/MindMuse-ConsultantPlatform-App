@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
-from routers import clarification, draft, infer, ocr, rounds, shorthand, templates, themes, transcribe
+from routers import clarification, draft, infer, ocr, rounds, shorthand, tasks, templates, themes, transcribe
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,7 @@ app.include_router(infer.router)
 
 # Stage 5 endpoints
 app.include_router(templates.router)
+app.include_router(tasks.router)
 
 
 @app.get("/health")
@@ -94,5 +95,6 @@ async def health():
             "/ocr/extract",
             "/shorthand/expand",
             "/templates/analyse-examples",
+            "/tasks/learning/compute",
         ],
     }

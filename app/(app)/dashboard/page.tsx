@@ -18,9 +18,7 @@ function formatDate(value: string) {
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "complete") {
-    return (
-      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Complete</Badge>
-    );
+    return <Badge variant="default">Complete</Badge>;
   }
   return <Badge variant="secondary">Draft</Badge>;
 }
@@ -39,7 +37,7 @@ function MetricValue({
   isError: boolean;
 }) {
   return (
-    <div className="space-y-1 sm:border-l sm:pl-6 first:sm:border-l-0 first:sm:pl-0">
+    <div className="space-y-1">
       <dt className="text-sm font-medium text-foreground">{label}</dt>
       <dd className="text-sm text-muted-foreground">{description}</dd>
       <dd className="pt-1 text-4xl font-semibold tracking-tight">
@@ -92,7 +90,7 @@ function RecentConsultationsSkeleton() {
 
 function EmptyState() {
   return (
-    <div className="border border-dashed px-6 py-10 text-center">
+    <div className="py-10 text-center">
       <p className="text-sm text-muted-foreground">No consultations yet.</p>
       <Button asChild size="sm" className="mt-4">
         <Link href="/meetings/new">New Meeting</Link>

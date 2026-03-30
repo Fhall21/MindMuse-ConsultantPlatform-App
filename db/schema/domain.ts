@@ -677,12 +677,15 @@ export const reportTemplates = pgTable(
           sectionId: string;
           depth: "brief" | "detailed";
           note: string | null;
+          purpose?: string | null;
+          proseGuidance?: string | null;
           position: number;
         }>;
         customSections: Array<{
           id: string;
           heading: string;
           description: string;
+          proseGuidance?: string | null;
         }>;
       }>()
       .default(sql`'{}'::jsonb`)

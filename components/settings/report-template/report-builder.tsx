@@ -61,6 +61,7 @@ function initFromTemplate(template: ReportTemplate | null | undefined): {
   customSections: CustomSectionDef[];
   name: string;
   description: string;
+  styleNotes: ReportTemplateStyleNotes;
 } {
   if (!template) {
     return {
@@ -68,6 +69,11 @@ function initFromTemplate(template: ReportTemplate | null | undefined): {
       customSections: [],
       name: "",
       description: "",
+      styleNotes: {
+        tone: null,
+        person: null,
+        formatting_notes: null,
+      },
     };
   }
 
@@ -81,6 +87,7 @@ function initFromTemplate(template: ReportTemplate | null | undefined): {
       customSections: bc.customSections,
       name: template.name,
       description: template.description ?? "",
+      styleNotes: template.style_notes,
     };
   }
 
@@ -97,6 +104,8 @@ function initFromTemplate(template: ReportTemplate | null | undefined): {
         sectionId: predefined?.id ?? `custom-${crypto.randomUUID()}`,
         depth: section.depth ?? predefined?.defaultDepth ?? "detailed",
         note: section.section_note ?? null,
+        purpose: section.purpose,
+        proseGuidance: section.prose_guidance,
         position: index,
       };
     }
@@ -104,13 +113,14 @@ function initFromTemplate(template: ReportTemplate | null | undefined): {
 
   // Extract custom sections (ones that didn't match predefined)
   const customs: CustomSectionDef[] = template.sections
-    .map((section, index) => {
+    .map((section, index): CustomSectionDef | null => {
       const config = converted[index];
       if (getPredefinedSection(config.sectionId)) return null;
       return {
         id: config.sectionId,
         heading: section.heading,
         description: section.purpose,
+        proseGuidance: section.prose_guidance || null,
       };
     })
     .filter((s): s is CustomSectionDef => s !== null);
@@ -120,6 +130,7 @@ function initFromTemplate(template: ReportTemplate | null | undefined): {
     customSections: customs,
     name: template.name,
     description: template.description ?? "",
+    styleNotes: template.style_notes,
   };
 }
 
@@ -139,9 +150,13 @@ export function ReportBuilder({
   );
   const [name, setName] = useState(init.name);
   const [description, setDescription] = useState(init.description);
+  const [styleNotes, setStyleNotes] = useState<ReportTemplateStyleNotes>(
+    init.styleNotes
+  );
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customHeading, setCustomHeading] = useState("");
   const [customDescription, setCustomDescription] = useState("");
+  const [customProseGuidance, setCustomProseGuidance] = useState("");
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -188,6 +203,9 @@ export function ReportBuilder({
           sectionId,
           depth,
           note: null,
+          purpose: getPredefinedSection(sectionId)?.defaultPurpose ?? null,
+          proseGuidance:
+            getPredefinedSection(sectionId)?.defaultProseGuidance ?? null,
           position: prev.length,
         },
       ]);
@@ -221,6 +239,26 @@ export function ReportBuilder({
     []
   );
 
+  const updatePurpose = useCallback(
+    (sectionId: string, purpose: string | null) => {
+      setSelectedSections((prev) =>
+        prev.map((s) => (s.sectionId === sectionId ? { ...s, purpose } : s))
+      );
+    },
+    []
+  );
+
+  const updateProseGuidance = useCallback(
+    (sectionId: string, proseGuidance: string | null) => {
+      setSelectedSections((prev) =>
+        prev.map((s) =>
+          s.sectionId === sectionId ? { ...s, proseGuidance } : s
+        )
+      );
+    },
+    []
+  );
+
   const addCustomSection = useCallback(() => {
     if (!customHeading.trim() || atLimit) return;
 
@@ -229,14 +267,26 @@ export function ReportBuilder({
       id,
       heading: customHeading.trim(),
       description: customDescription.trim(),
+      proseGuidance: customProseGuidance.trim() || null,
     };
 
     setCustomSections((prev) => [...prev, newCustom]);
-    addSection(id);
+    setSelectedSections((prev) => [
+      ...prev,
+      {
+        sectionId: id,
+        depth: "detailed",
+        note: null,
+        purpose: newCustom.description,
+        proseGuidance: newCustom.proseGuidance,
+        position: prev.length,
+      },
+    ]);
     setCustomHeading("");
     setCustomDescription("");
+    setCustomProseGuidance("");
     setShowCustomForm(false);
-  }, [customHeading, customDescription, atLimit, addSection]);
+  }, [customHeading, customDescription, customProseGuidance, atLimit]);
 
   const handleSave = useCallback(() => {
     if (!name.trim()) return;
@@ -255,17 +305,14 @@ export function ReportBuilder({
       name: name.trim(),
       description: description.trim() || null,
       sections,
-      styleNotes: template?.style_notes ?? {
-        tone: null,
-        person: null,
-        formatting_notes: null,
-      },
+      styleNotes,
       prescriptiveness: template?.prescriptiveness ?? "moderate",
       builderConfig,
     });
   }, [
     name,
     description,
+    styleNotes,
     selectedSections,
     customSections,
     template,
@@ -337,6 +384,12 @@ export function ReportBuilder({
                 onChange={(e) => setCustomDescription(e.target.value)}
                 className="min-h-[3rem] text-sm"
               />
+              <Textarea
+                placeholder="Section elaboration"
+                value={customProseGuidance}
+                onChange={(e) => setCustomProseGuidance(e.target.value)}
+                className="min-h-[3rem] text-sm"
+              />
               <div className="flex gap-2">
                 <Button
                   size="xs"
@@ -352,6 +405,7 @@ export function ReportBuilder({
                     setShowCustomForm(false);
                     setCustomHeading("");
                     setCustomDescription("");
+                    setCustomProseGuidance("");
                   }}
                 >
                   Cancel
@@ -377,6 +431,43 @@ export function ReportBuilder({
           <h4 className="text-sm font-medium text-muted-foreground">
             Your Report Structure
           </h4>
+
+          <div className="space-y-2 rounded-md border p-3">
+            <h4 className="text-sm font-medium text-muted-foreground">
+              Style Notes
+            </h4>
+            <Input
+              placeholder="Tone"
+              value={styleNotes.tone ?? ""}
+              onChange={(e) =>
+                setStyleNotes((prev) => ({
+                  ...prev,
+                  tone: e.target.value || null,
+                }))
+              }
+            />
+            <Input
+              placeholder="Person"
+              value={styleNotes.person ?? ""}
+              onChange={(e) =>
+                setStyleNotes((prev) => ({
+                  ...prev,
+                  person: e.target.value || null,
+                }))
+              }
+            />
+            <Textarea
+              placeholder="Formatting notes"
+              value={styleNotes.formatting_notes ?? ""}
+              onChange={(e) =>
+                setStyleNotes((prev) => ({
+                  ...prev,
+                  formatting_notes: e.target.value || null,
+                }))
+              }
+              className="min-h-[4rem] text-sm"
+            />
+          </div>
 
           <DndContext
             sensors={sensors}
@@ -407,6 +498,12 @@ export function ReportBuilder({
                     }
                     onDepthChange={(depth) =>
                       updateDepth(config.sectionId, depth)
+                    }
+                    onPurposeChange={(purpose) =>
+                      updatePurpose(config.sectionId, purpose)
+                    }
+                    onProseGuidanceChange={(proseGuidance) =>
+                      updateProseGuidance(config.sectionId, proseGuidance)
                     }
                     onNoteChange={(note) =>
                       updateNote(config.sectionId, note)
@@ -465,7 +562,7 @@ export function ReportBuilder({
         name={name}
         sections={selectedSections}
         customSections={customSections}
-        styleNotes={template?.style_notes ?? { tone: null, person: null, formatting_notes: null }}
+        styleNotes={styleNotes}
         prescriptiveness={template?.prescriptiveness ?? "moderate"}
         suggestions={template?.suggestions ?? []}
       />

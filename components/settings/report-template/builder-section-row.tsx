@@ -15,16 +15,21 @@ interface BuilderSectionRowProps {
   config: BuilderSectionConfig;
   customHeading?: string;
   onDepthChange: (depth: "brief" | "detailed") => void;
+  onPurposeChange: (purpose: string | null) => void;
+  onProseGuidanceChange: (proseGuidance: string | null) => void;
   onNoteChange: (note: string | null) => void;
   onRemove: () => void;
 }
 
 const MAX_NOTE_LENGTH = 500;
+const MAX_TEXT_LENGTH = 500;
 
 export function BuilderSectionRow({
   config,
   customHeading,
   onDepthChange,
+  onPurposeChange,
+  onProseGuidanceChange,
   onNoteChange,
   onRemove,
 }: BuilderSectionRowProps) {
@@ -48,6 +53,8 @@ export function BuilderSectionRow({
   const heading = predefined?.heading ?? customHeading ?? "Untitled Section";
 
   const noteLength = config.note?.length ?? 0;
+  const purposeLength = config.purpose?.length ?? 0;
+  const proseGuidanceLength = config.proseGuidance?.length ?? 0;
 
   return (
     <div
@@ -124,6 +131,44 @@ export function BuilderSectionRow({
               {predefined.description}
             </p>
           )}
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">
+              Description
+            </label>
+            <Textarea
+              value={config.purpose ?? ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                onPurposeChange(value || null);
+              }}
+              maxLength={MAX_TEXT_LENGTH}
+              placeholder="Explain what this section should cover."
+              className="mt-1 min-h-[4rem] text-sm"
+            />
+            <span className="text-[10px] text-muted-foreground">
+              {purposeLength}/{MAX_TEXT_LENGTH}
+            </span>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">
+              Elaboration
+            </label>
+            <Textarea
+              value={config.proseGuidance ?? ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                onProseGuidanceChange(value || null);
+              }}
+              maxLength={MAX_TEXT_LENGTH}
+              placeholder="Add extra guidance about how this section should be written."
+              className="mt-1 min-h-[4rem] text-sm"
+            />
+            <span className="text-[10px] text-muted-foreground">
+              {proseGuidanceLength}/{MAX_TEXT_LENGTH}
+            </span>
+          </div>
 
           <div>
             <label className="text-xs font-medium text-muted-foreground">

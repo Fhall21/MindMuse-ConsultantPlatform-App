@@ -13,7 +13,7 @@ import type {
   BuilderSectionConfig,
   CustomSectionDef,
 } from "@/types/db";
-import { sanitizeSectionNote } from "@/lib/sanitize-section-note";
+import { sanitizePromptText, sanitizeSectionNote } from "@/lib/sanitize-section-note";
 
 type ReportTemplateSuggestion = {
   id: string;
@@ -403,10 +403,24 @@ export async function saveBuilderTemplate(
   // Sanitize any section notes before persisting
   const sanitizedSections = params.sections.map((section) => ({
     ...section,
+    purpose: sanitizePromptText(section.purpose),
+    prose_guidance: sanitizePromptText(section.prose_guidance),
     section_note: section.section_note
       ? sanitizeSectionNote(section.section_note)
       : null,
   }));
+
+  const sanitizedStyleNotes = {
+    tone: params.styleNotes.tone
+      ? sanitizePromptText(params.styleNotes.tone)
+      : null,
+    person: params.styleNotes.person
+      ? sanitizePromptText(params.styleNotes.person)
+      : null,
+    formatting_notes: params.styleNotes.formatting_notes
+      ? sanitizePromptText(params.styleNotes.formatting_notes)
+      : null,
+  };
 
   if (params.templateId) {
     await updateReportTemplate({
@@ -414,7 +428,7 @@ export async function saveBuilderTemplate(
       name: params.name,
       description: params.description,
       sections: sanitizedSections,
-      styleNotes: params.styleNotes,
+      styleNotes: sanitizedStyleNotes,
       prescriptiveness: params.prescriptiveness,
       builderConfig: params.builderConfig,
       isActive: true,
@@ -433,7 +447,7 @@ export async function saveBuilderTemplate(
         name: params.name,
         description: params.description ?? null,
         sections: sanitizedSections,
-        styleNotes: params.styleNotes,
+        styleNotes: sanitizedStyleNotes,
         prescriptiveness: params.prescriptiveness,
         builderConfig: params.builderConfig,
         sourceFileNames: [],

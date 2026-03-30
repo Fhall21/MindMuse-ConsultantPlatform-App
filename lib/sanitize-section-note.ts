@@ -19,9 +19,9 @@ const INJECTION_PATTERNS = [
 ];
 
 /**
- * Strip prompt-injection patterns and enforce length limit on freetext section notes.
+ * Strip prompt-injection patterns and enforce length limit on freetext prompt-facing text.
  */
-export function sanitizeSectionNote(text: string): string {
+export function sanitizePromptText(text: string): string {
   let result = text.trim();
 
   for (const pattern of INJECTION_PATTERNS) {
@@ -39,10 +39,17 @@ export function sanitizeSectionNote(text: string): string {
 }
 
 /**
+ * Backwards-compatible alias for section note sanitization.
+ */
+export function sanitizeSectionNote(text: string): string {
+  return sanitizePromptText(text);
+}
+
+/**
  * Wrap a sanitized note in XML tags for safe injection into the LLM prompt.
  */
 export function containSectionNote(text: string): string {
-  const sanitized = sanitizeSectionNote(text);
+  const sanitized = sanitizePromptText(text);
   if (!sanitized) return "";
   return `<section_note>${sanitized}</section_note>`;
 }

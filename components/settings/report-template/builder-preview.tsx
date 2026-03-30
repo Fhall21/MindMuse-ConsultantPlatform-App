@@ -67,7 +67,15 @@ export function BuilderPreview({
               const heading =
                 predefined?.heading ?? custom?.heading ?? "Untitled Section";
               const purpose =
-                predefined?.defaultPurpose ?? custom?.description ?? "";
+                config.purpose ??
+                predefined?.defaultPurpose ??
+                custom?.description ??
+                "";
+              const proseGuidance =
+                config.proseGuidance ??
+                predefined?.defaultProseGuidance ??
+                custom?.proseGuidance ??
+                "";
 
               return (
                 <div
@@ -91,6 +99,11 @@ export function BuilderPreview({
                       {purpose && (
                         <p className="text-xs text-muted-foreground">
                           {purpose}
+                        </p>
+                      )}
+                      {proseGuidance && (
+                        <p className="text-xs italic text-foreground/70">
+                          {proseGuidance}
                         </p>
                       )}
                       {config.note && (

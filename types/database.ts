@@ -280,6 +280,8 @@ export interface BuilderSectionConfig {
   sectionId: string;
   depth: "brief" | "detailed";
   note: string | null;
+  purpose?: string | null;
+  proseGuidance?: string | null;
   position: number;
 }
 
@@ -287,6 +289,7 @@ export interface CustomSectionDef {
   id: string;
   heading: string;
   description: string;
+  proseGuidance?: string | null;
 }
 
 export interface BuilderConfig {

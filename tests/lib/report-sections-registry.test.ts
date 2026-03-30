@@ -66,6 +66,8 @@ describe("getDefaultSections", () => {
   it("each config has a note of null", () => {
     for (const config of getDefaultSections()) {
       expect(config.note).toBeNull();
+      expect(config.purpose).toBeTruthy();
+      expect(config.proseGuidance).toBeTruthy();
     }
   });
 });
@@ -87,21 +89,41 @@ describe("sectionConfigToTemplateSection", () => {
     expect(result.example_excerpt).toBeNull();
   });
 
+  it("prefers builder overrides for predefined sections", () => {
+    const config: BuilderSectionConfig = {
+      sectionId: "executive-summary",
+      depth: "brief",
+      note: "Keep it short",
+      purpose: "Custom description",
+      proseGuidance: "Custom elaboration",
+      position: 0,
+    };
+
+    const result = sectionConfigToTemplateSection(config, []);
+
+    expect(result.purpose).toBe("Custom description");
+    expect(result.prose_guidance).toBe("Custom elaboration");
+  });
+
   it("converts a custom section config", () => {
     const custom: CustomSectionDef = {
       id: "custom-abc",
       heading: "My Section",
       description: "Custom purpose",
+      proseGuidance: "Custom elaboration",
     };
     const config: BuilderSectionConfig = {
       sectionId: "custom-abc",
       depth: "detailed",
       note: null,
+      purpose: custom.description,
+      proseGuidance: custom.proseGuidance,
       position: 0,
     };
     const result = sectionConfigToTemplateSection(config, [custom]);
     expect(result.heading).toBe("My Section");
     expect(result.purpose).toBe("Custom purpose");
+    expect(result.prose_guidance).toBe("Custom elaboration");
     expect(result.depth).toBe("detailed");
     expect(result.section_note).toBeNull();
   });

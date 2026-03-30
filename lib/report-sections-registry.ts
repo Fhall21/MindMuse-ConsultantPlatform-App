@@ -127,6 +127,8 @@ export function getDefaultSections(): BuilderSectionConfig[] {
       sectionId: id,
       depth: section.defaultDepth,
       note: null,
+      purpose: section.defaultPurpose,
+      proseGuidance: section.defaultProseGuidance,
       position: index,
     };
   });
@@ -141,8 +143,8 @@ export function sectionConfigToTemplateSection(
   if (predefined) {
     return {
       heading: predefined.heading,
-      purpose: predefined.defaultPurpose,
-      prose_guidance: predefined.defaultProseGuidance,
+      purpose: config.purpose ?? predefined.defaultPurpose,
+      prose_guidance: config.proseGuidance ?? predefined.defaultProseGuidance,
       example_excerpt: null,
       depth: config.depth,
       section_note: config.note,
@@ -153,8 +155,8 @@ export function sectionConfigToTemplateSection(
   const custom = customSections.find((s) => s.id === config.sectionId);
   return {
     heading: custom?.heading ?? "Untitled Section",
-    purpose: custom?.description ?? "",
-    prose_guidance: "",
+    purpose: config.purpose ?? custom?.description ?? "",
+    prose_guidance: config.proseGuidance ?? custom?.proseGuidance ?? "",
     example_excerpt: null,
     depth: config.depth,
     section_note: config.note,

@@ -22,7 +22,9 @@ import {
   formatConnectionTypeLabel,
   getAcceptedConsultationThemes,
   getSupportingMeetingThemes,
+  getAllThemeGroups,
   type ReportGraphModel,
+  type AllThemeGroupSnapshot,
 } from "@/lib/report-graph";
 import {
   filterMajorEvents,
@@ -488,6 +490,259 @@ function LegacyFindingsSection({
                   />
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─── Theme Hierarchy Section ──────────────────────────────────────────────────
+
+const STATUS_CONFIG = {
+  accepted: {
+    label: "Accepted",
+    badgeClass:
+      "border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400",
+    cardClass:
+      "border-emerald-200/60 border-l-emerald-500 bg-emerald-50/20 dark:border-emerald-800/40 dark:border-l-emerald-600 dark:bg-emerald-950/10",
+    dotClass: "bg-emerald-500",
+  },
+  draft: {
+    label: "Pending",
+    badgeClass:
+      "border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-400",
+    cardClass:
+      "border-amber-200/60 border-l-amber-400 bg-amber-50/20 dark:border-amber-800/40 dark:border-l-amber-500 dark:bg-amber-950/10",
+    dotClass: "bg-amber-400",
+  },
+  management_rejected: {
+    label: "Rejected",
+    badgeClass:
+      "border-rose-300 text-rose-600 dark:border-rose-700 dark:text-rose-400",
+    cardClass:
+      "border-rose-200/40 border-l-rose-300 bg-rose-50/10 dark:border-rose-800/30 dark:border-l-rose-700 dark:bg-rose-950/10",
+    dotClass: "bg-rose-400",
+  },
+} as const;
+
+function ThemeGroupCard({
+  group,
+  defaultOpen,
+  showCopy,
+}: {
+  group: AllThemeGroupSnapshot;
+  defaultOpen: boolean;
+  showCopy: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const cfg =
+    STATUS_CONFIG[group.status as keyof typeof STATUS_CONFIG] ??
+    STATUS_CONFIG.draft;
+  const hasMembers = group.members.length > 0;
+
+  return (
+    <div>
+      <div
+        className={cn(
+          "rounded-lg border border-l-4 px-4 py-3",
+          cfg.cardClass,
+          hasMembers && "cursor-pointer select-none"
+        )}
+        onClick={() => hasMembers && setOpen((v) => !v)}
+        role={hasMembers ? "button" : undefined}
+        aria-expanded={hasMembers ? open : undefined}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-medium text-foreground">{group.label}</p>
+              <Badge
+                variant="outline"
+                className={cn("shrink-0 text-[10px]", cfg.badgeClass)}
+              >
+                {cfg.label}
+              </Badge>
+              {hasMembers && (
+                <span className="text-[10px] text-muted-foreground">
+                  {group.members.length} insight{group.members.length !== 1 ? "s" : ""}
+                  {" "}
+                  <span className="opacity-60">{open ? "▲" : "▼"}</span>
+                </span>
+              )}
+            </div>
+            {group.description && (
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {group.description}
+              </p>
+            )}
+          </div>
+          {showCopy && (
+            <CopyButton
+              text={
+                group.description
+                  ? `${group.label}: ${group.description}`
+                  : group.label
+              }
+              label={group.label}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Child insights */}
+      {hasMembers && open && (
+        <div className="ml-4 mt-1 space-y-1 border-l-2 border-border/30 pl-3">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 pb-0.5">
+            Insights
+          </p>
+          {[...group.members]
+            .sort((a, b) => a.position - b.position)
+            .map((member, j) => (
+              <div
+                key={j}
+                className="flex items-start gap-2 rounded-md border border-border/30 bg-muted/5 px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <p className="text-xs font-medium text-foreground/80">
+                      {member.label}
+                    </p>
+                    {member.isUserAdded && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Custom
+                      </Badge>
+                    )}
+                    {member.sourceConsultationTitle && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {member.sourceConsultationTitle}
+                      </Badge>
+                    )}
+                  </div>
+                  {member.description && (
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                      {member.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ThemeHierarchySection({
+  report,
+  template,
+}: {
+  report: ReportArtifactDetail;
+  template: ReportTemplate;
+}) {
+  const allGroups = getAllThemeGroups(report.inputSnapshot);
+  const accepted = allGroups.filter((g) => g.status === "accepted");
+  const pending = allGroups.filter((g) => g.status === "draft");
+  const rejected = allGroups.filter((g) => g.status === "management_rejected");
+
+  const acceptedToShow =
+    template === "executive" ? accepted.slice(0, 3) : accepted;
+  const showNonAccepted = template !== "executive";
+
+  if (allGroups.length === 0) return null;
+
+  return (
+    <section className="space-y-6">
+      {/* Status legend */}
+      {allGroups.length > 0 && (
+        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+          {[
+            { key: "accepted", label: "Accepted" },
+            { key: "draft", label: "Pending" },
+            { key: "management_rejected", label: "Rejected" },
+          ]
+            .filter(({ key }) =>
+              key === "accepted"
+                ? accepted.length > 0
+                : key === "draft"
+                  ? pending.length > 0
+                  : rejected.length > 0
+            )
+            .map(({ key, label }, i) => {
+              const cfg = STATUS_CONFIG[key as keyof typeof STATUS_CONFIG];
+              return (
+                <React.Fragment key={key}>
+                  {i > 0 && <span className="opacity-30">·</span>}
+                  <span className="flex items-center gap-1">
+                    <span
+                      className={cn("h-2 w-2 rounded-full", cfg.dotClass)}
+                    />
+                    {label}
+                  </span>
+                </React.Fragment>
+              );
+            })}
+        </div>
+      )}
+
+      {/* Accepted themes */}
+      {acceptedToShow.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Key Findings ({accepted.length})
+            {template === "executive" && accepted.length > 3 && (
+              <span className="ml-2 normal-case tracking-normal font-normal">
+                — showing top 3
+              </span>
+            )}
+          </h3>
+          <div className="grid gap-3">
+            {acceptedToShow.map((group, i) => (
+              <ThemeGroupCard
+                key={group.id ?? i}
+                group={group}
+                defaultOpen
+                showCopy
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pending themes */}
+      {showNonAccepted && pending.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Pending Review ({pending.length})
+          </h3>
+          <div className="grid gap-3">
+            {pending.map((group, i) => (
+              <ThemeGroupCard
+                key={group.id ?? i}
+                group={group}
+                defaultOpen={false}
+                showCopy={false}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Rejected themes — standard/custom only, not executive */}
+      {showNonAccepted && rejected.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Management-Rejected Themes ({rejected.length})
+          </h3>
+          <div className="grid gap-3">
+            {rejected.map((group, i) => (
+              <ThemeGroupCard
+                key={group.id ?? i}
+                group={group}
+                defaultOpen={false}
+                showCopy={false}
+              />
             ))}
           </div>
         </div>
@@ -1010,7 +1265,7 @@ export function ReportView({ artifactId }: ReportViewProps) {
             </>
           ) : (
             <>
-              <LegacyFindingsSection report={report} template={template} />
+              <ThemeHierarchySection report={report} template={template} />
             </>
           )}
 

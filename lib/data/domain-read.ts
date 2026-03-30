@@ -136,12 +136,21 @@ export async function listMeetingsForUser(
   }
 
   const rows = await db
-    .select()
+    .select({
+      meeting: meetings,
+      consultationLabel: consultations.label,
+    })
     .from(meetings)
+    .leftJoin(consultations, eq(meetings.consultationId, consultations.id))
     .where(and(...conditions))
     .orderBy(desc(meetings.createdAt));
 
-  return rows.map(mapMeetingRecord);
+  return rows.map(({ meeting, consultationLabel }) =>
+    mapMeetingRecord({
+      ...meeting,
+      consultationLabel: consultationLabel ?? null,
+    })
+  );
 }
 
 export async function getMeetingForUser(

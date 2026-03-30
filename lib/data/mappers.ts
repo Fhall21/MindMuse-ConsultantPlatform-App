@@ -90,6 +90,8 @@ export function mapMeetingRecord(row: MeetingRow): Meeting {
     status: row.status as Meeting["status"],
     is_archived: row.isArchived ?? false,
     consultation_id: row.consultationId,
+    consultation_label:
+      (row as { consultationLabel?: string | null }).consultationLabel ?? null,
     meeting_type_id: (row as { meetingTypeId?: string | null }).meetingTypeId ?? null,
     meeting_date: (row as { meetingDate?: Date | null }).meetingDate?.toISOString() ?? null,
   };

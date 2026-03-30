@@ -97,7 +97,7 @@ export default function MeetingsPage() {
 
     return (meetings ?? []).slice(0, 200).map((meeting) => ({
       ...meeting,
-      consultationLabel: null,
+      consultationLabel: meeting.consultation_label ?? null,
       peopleCount: peopleCounts[meeting.id] ?? 0,
     }));
   }, [meetings, peopleCountsQuery.data]);

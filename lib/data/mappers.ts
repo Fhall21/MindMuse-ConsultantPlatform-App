@@ -22,7 +22,10 @@ import type {
 
 type ConsultationRow = typeof consultations.$inferSelect;
 type ConsultationRoundRow = typeof meetings.$inferSelect;
-type MeetingRow = typeof meetings.$inferSelect;
+type MeetingRow = typeof meetings.$inferSelect & {
+  consultationLabel?: string | null;
+  peopleNames?: string[];
+};
 type InsightRow = typeof insights.$inferSelect;
 type ThemeRow = typeof themes.$inferSelect;
 type PersonRow = typeof people.$inferSelect;

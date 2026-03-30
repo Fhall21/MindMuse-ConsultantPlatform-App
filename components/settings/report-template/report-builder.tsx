@@ -378,14 +378,19 @@ export function ReportBuilder({
                 onChange={(e) => setCustomHeading(e.target.value)}
                 autoFocus
               />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Description is the section&apos;s job in the report. Elaboration is the
+                writing guidance: voice, intent, detail level, and what the generator
+                should emphasise or avoid.
+              </p>
               <Textarea
-                placeholder="Section description"
+                placeholder="Description: what this section covers"
                 value={customDescription}
                 onChange={(e) => setCustomDescription(e.target.value)}
                 className="min-h-[3rem] text-sm"
               />
               <Textarea
-                placeholder="Section elaboration"
+                placeholder="Elaboration: how to write it"
                 value={customProseGuidance}
                 onChange={(e) => setCustomProseGuidance(e.target.value)}
                 className="min-h-[3rem] text-sm"
@@ -436,6 +441,10 @@ export function ReportBuilder({
             <h4 className="text-sm font-medium text-muted-foreground">
               Style Notes
             </h4>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Keep style notes brief and consistent: they set the overall tone of the
+              template, not the content of any one section.
+            </p>
             <Input
               placeholder="Tone"
               value={styleNotes.tone ?? ""}

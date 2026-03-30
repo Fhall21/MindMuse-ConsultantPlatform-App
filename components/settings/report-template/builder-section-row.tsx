@@ -136,6 +136,9 @@ export function BuilderSectionRow({
             <label className="text-xs font-medium text-muted-foreground">
               Description
             </label>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              One short sentence on the section&apos;s job or outcome.
+            </p>
             <Textarea
               value={config.purpose ?? ""}
               onChange={(e) => {
@@ -155,6 +158,10 @@ export function BuilderSectionRow({
             <label className="text-xs font-medium text-muted-foreground">
               Elaboration
             </label>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              Add writing guidance: voice, intent, examples to include, what to avoid,
+              and how long or detailed the section should be.
+            </p>
             <Textarea
               value={config.proseGuidance ?? ""}
               onChange={(e) => {

@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -34,25 +33,6 @@ const outputTypeLabels: Record<string, string> = {
   summary: "Consultation Summary",
   report: "Consultation Report",
   email: "Evidence Email",
-};
-
-const statusBadgeConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  pending: {
-    label: "Pending",
-    variant: "secondary",
-  },
-  generating: {
-    label: "Generating...",
-    variant: "outline",
-  },
-  ready: {
-    label: "Ready",
-    variant: "default",
-  },
-  failed: {
-    label: "Failed",
-    variant: "destructive",
-  },
 };
 
 export function RoundOutputsSection({
@@ -104,9 +84,6 @@ export function RoundOutputsSection({
       <CardContent className="space-y-3">
         {(["summary", "report", "email"] as const).map((type) => {
           const output = outputMap.get(type);
-          const statusConfig = output
-            ? statusBadgeConfig[output.status] ?? statusBadgeConfig.pending
-            : null;
 
           return (
             <div
@@ -124,14 +101,6 @@ export function RoundOutputsSection({
                     ) : (
                       <p className="text-xs text-muted-foreground">Not yet generated</p>
                     )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {statusConfig ? (
-                      <Badge variant={statusConfig.variant}>
-                        {statusConfig.label}
-                      </Badge>
-                    ) : null}
                   </div>
 
                   {type === "report" && templates.some((t) => t.is_active) ? (

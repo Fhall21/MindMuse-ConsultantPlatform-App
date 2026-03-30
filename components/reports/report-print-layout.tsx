@@ -509,18 +509,34 @@ function PdfGraphConnections({
         </View>
       ) : (
         groupsToShow.map((group) => (
-          <View key={group.type}>
+          <View key={group.type} style={{ marginBottom: 8 }}>
             <Text style={s.sectionSubheading}>
               {group.label} ({group.connections.length})
             </Text>
-            {group.connections.map((connection) => (
-              <View key={connection.key} style={s.evidenceCard} wrap={false}>
-                <View style={{ flex: 1 }}>
+            <View
+              style={{
+                borderWidth: 0.5,
+                borderColor: colors.border,
+                borderRadius: 4,
+                backgroundColor: colors.white,
+                padding: 8,
+              }}
+            >
+              {group.connections.map((connection) => (
+                <View
+                  key={connection.key}
+                  style={{
+                    paddingVertical: 6,
+                    borderBottomWidth: 0.5,
+                    borderBottomColor: colors.borderLight,
+                  }}
+                  wrap={false}
+                >
                   <Text style={s.evidenceTitle}>
                     {connection.fromLabel}
-                    {" \u2192 "}
-                    {formatConnectionTypeLabel(connection.connectionType)}
-                    {" \u2192 "}
+                    {"  \u2192  "}
+                    [{formatConnectionTypeLabel(connection.connectionType)}]
+                    {"  \u2192  "}
                     {connection.toLabel}
                   </Text>
                   <Text style={s.themeDescription}>
@@ -528,8 +544,8 @@ function PdfGraphConnections({
                     {connection.notes ? `  ·  ${connection.notes}` : ""}
                   </Text>
                 </View>
-              </View>
-            ))}
+              ))}
+            </View>
           </View>
         ))
       )}

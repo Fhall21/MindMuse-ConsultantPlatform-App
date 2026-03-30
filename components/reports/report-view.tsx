@@ -19,7 +19,6 @@ import {
 } from "@/lib/report-formatting";
 import {
   buildReportGraphModel,
-  formatConnectionTypeLabel,
   getAcceptedConsultationThemes,
   getSupportingMeetingThemes,
   getAllThemeGroups,
@@ -35,6 +34,7 @@ import {
 import { parseContentBlocks } from "@/lib/report-content-blocks";
 import { cn } from "@/lib/utils";
 import { ReportCoverPage, deriveMatterRef } from "@/components/reports/report-cover-page";
+import { NetworkDiagram } from "@/components/reports/network-diagram";
 import { toast } from "sonner";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -185,79 +185,31 @@ function GraphOverviewSection({
   );
 }
 
-function GraphConnectionsSection({
+function NetworkDiagramSection({
   graphModel,
   template,
 }: {
   graphModel: ReportGraphModel;
   template: ReportTemplate;
 }) {
-  const groupsToShow =
-    template === "executive"
-      ? graphModel.connectionsByType
-          .map((group) => ({
-            ...group,
-            connections: group.connections.slice(0, 2),
-          }))
-          .filter((group) => group.connections.length > 0)
-          .slice(0, 2)
-      : graphModel.connectionsByType;
-
   return (
     <section className="space-y-3">
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Network Connections ({graphModel.connectionCount})
-      </h3>
-      {groupsToShow.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border/60 bg-muted/5 px-4 py-4 text-sm text-muted-foreground">
-          No saved typed connections were available on this artifact. The snapshot still preserves
-          the network nodes and can be enriched by later canvas-aware generations.
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Network Diagram ({graphModel.connectionCount})
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Static evidence map with typed connection labels and automatic spacing.
+          </p>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {groupsToShow.map((group) => (
-            <div
-              key={group.type}
-              className="rounded-lg border border-border/50 bg-muted/5 px-4 py-4"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <h4 className="text-sm font-medium text-foreground">{group.label}</h4>
-                <Badge variant="outline" className="text-[10px]">
-                  {group.connections.length}
-                </Badge>
-              </div>
-              <div className="mt-3 space-y-2">
-                {group.connections.map((connection) => (
-                  <div
-                    key={connection.key}
-                    className="rounded-md border border-border/50 bg-background px-3 py-3"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-foreground">
-                        {connection.fromLabel}
-                      </p>
-                      <Badge variant="secondary" className="text-[10px] uppercase">
-                        {formatConnectionTypeLabel(connection.connectionType)}
-                      </Badge>
-                      <p className="text-sm font-medium text-foreground">
-                        {connection.toLabel}
-                      </p>
-                      <Badge variant="outline" className="text-[10px]">
-                        {connection.origin === "ai_suggested" ? "AI accepted" : "Manual"}
-                      </Badge>
-                    </div>
-                    {connection.notes && (
-                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                        {connection.notes}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+        {template === "executive" ? (
+          <Badge variant="outline" className="text-[10px] uppercase tracking-[0.16em]">
+            Executive snapshot
+          </Badge>
+        ) : null}
+      </div>
+      <NetworkDiagram graphModel={graphModel} />
     </section>
   );
 }
@@ -1253,7 +1205,7 @@ export function ReportView({ artifactId }: ReportViewProps) {
             <>
               <GraphOverviewSection graphModel={graphModel} />
               <Separator />
-              <GraphConnectionsSection
+              <NetworkDiagramSection
                 graphModel={graphModel}
                 template={template}
               />

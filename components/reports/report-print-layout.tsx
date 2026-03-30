@@ -361,27 +361,24 @@ function estimateReadTime(content: string): number {
 }
 
 // ─── PDF inline renderer (supports **bold**) ─────────────────────────────────
+//
+// Returns the children for a <Text> node. Call sites are responsible for
+// wrapping in <Text style={...}> so the base style is correctly typed.
 
-function renderPdfInline(
-  text: string,
-  baseStyle: Record<string, unknown>
-): React.ReactNode {
+function renderPdfInlineContent(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  if (parts.length === 1) return <Text style={baseStyle}>{text}</Text>;
-  return (
-    <Text style={baseStyle}>
-      {parts.map((part, i) => {
-        if (part.startsWith("**") && part.endsWith("**")) {
-          return (
-            <Text key={i} style={{ ...baseStyle, fontFamily: "Helvetica-Bold" }}>
-              {part.slice(2, -2)}
-            </Text>
-          );
-        }
-        return part;
-      })}
-    </Text>
-  );
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      // Bold segment: inherit parent style but switch to the bold font
+      return (
+        <Text key={i} style={{ fontFamily: "Helvetica-Bold" }}>
+          {part.slice(2, -2)}
+        </Text>
+      );
+    }
+    return part;
+  });
 }
 
 // ─── Content renderer (for markdown-style text) ──────────────────────────────
@@ -417,7 +414,7 @@ function PdfContentBlocks({ content }: { content: string }) {
                 {block.items.map((item, j) => (
                   <View key={j} style={s.bulletItem}>
                     <Text style={s.bulletDot}>{"\u2022"}</Text>
-                    {renderPdfInline(item, s.bulletText as Record<string, unknown>)}
+                    <Text style={s.bulletText}>{renderPdfInlineContent(item)}</Text>
                   </View>
                 ))}
               </View>
@@ -428,16 +425,17 @@ function PdfContentBlocks({ content }: { content: string }) {
                 {block.items.map((item, j) => (
                   <View key={j} style={s.numberedItem}>
                     <Text style={s.numberedIndex}>{j + 1}.</Text>
-                    {renderPdfInline(item, s.bulletText as Record<string, unknown>)}
+                    <Text style={s.bulletText}>{renderPdfInlineContent(item)}</Text>
                   </View>
                 ))}
               </View>
             );
           case "prose":
           default:
-            return renderPdfInline(
-              block.text,
-              s.paragraph as Record<string, unknown>
+            return (
+              <Text key={i} style={s.paragraph}>
+                {renderPdfInlineContent(block.text)}
+              </Text>
             );
         }
       })}

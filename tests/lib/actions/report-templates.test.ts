@@ -9,6 +9,8 @@ const testState = vi.hoisted(() => ({
   updateError: null as unknown,
   insertError: null as unknown,
   deleteError: null as unknown,
+  selectResult: [] as unknown[],
+  lastUpdateValues: null as Record<string, unknown> | null,
 }));
 
 function makeMissingTableError() {
@@ -42,10 +44,11 @@ function makeSelectBuilder(result: unknown[]) {
 }
 
 const fakeDb = vi.hoisted(() => ({
-  select: vi.fn(() => makeSelectBuilder([])),
+  select: vi.fn(() => makeSelectBuilder(testState.selectResult)),
   update: vi.fn(() => ({
-    set: () => ({
+    set: (values: Record<string, unknown>) => ({
       where: async () => {
+        testState.lastUpdateValues = values;
         if (testState.updateError) {
           throw testState.updateError;
         }
@@ -82,12 +85,34 @@ vi.mock("@/db/client", () => ({
 vi.mock("@/lib/data/auth-context", () => authContextMock);
 
 import {
+  addTemplateSuggestion,
   createReportTemplate,
   deleteReportTemplate,
   getActiveReportTemplate,
   listReportTemplates,
+  removeTemplateSuggestion,
   updateReportTemplate,
+  updateTemplateSuggestion,
 } from "@/lib/actions/report-templates";
+
+function makeTemplateRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "template-1",
+    userId: "user-1",
+    name: "Example",
+    description: null,
+    sections: [],
+    styleNotes: {},
+    prescriptiveness: "moderate",
+    sourceFileNames: [],
+    suggestions: [],
+    isActive: true,
+    createdBy: "user-1",
+    createdAt: new Date("2026-03-30T00:00:00.000Z"),
+    updatedAt: new Date("2026-03-30T00:00:00.000Z"),
+    ...overrides,
+  };
+}
 
 describe("lib/actions/report-templates", () => {
   beforeEach(() => {
@@ -97,6 +122,8 @@ describe("lib/actions/report-templates", () => {
     testState.updateError = null;
     testState.insertError = null;
     testState.deleteError = null;
+    testState.selectResult = [];
+    testState.lastUpdateValues = null;
   });
 
   it("returns an empty list when the report_templates table is missing", async () => {
@@ -138,6 +165,89 @@ describe("lib/actions/report-templates", () => {
 
     await expect(deleteReportTemplate("template-1")).rejects.toThrow(
       "The database is missing the report template tables. Run the latest database migration, then try again."
+    );
+  });
+
+  it("adds, updates, and removes template suggestions", async () => {
+    testState.selectResult = [
+      makeTemplateRow({
+        suggestions: [
+          {
+            id: "s-1",
+            text: "First note",
+            created_at: "2026-03-30T00:00:00.000Z",
+          },
+        ],
+      }),
+    ];
+
+    await addTemplateSuggestion("template-1", "  Second note  ");
+
+    expect(testState.lastUpdateValues?.suggestions).toEqual([
+      {
+        id: "s-1",
+        text: "First note",
+        created_at: "2026-03-30T00:00:00.000Z",
+      },
+      expect.objectContaining({ text: "Second note" }),
+    ]);
+
+    testState.selectResult = [
+      makeTemplateRow({
+        suggestions: [
+          {
+            id: "s-1",
+            text: "First note",
+            created_at: "2026-03-30T00:00:00.000Z",
+          },
+          {
+            id: "s-2",
+            text: "Second note",
+            created_at: "2026-03-30T00:01:00.000Z",
+          },
+        ],
+      }),
+    ];
+
+    await updateTemplateSuggestion("template-1", "s-2", "Updated note");
+
+    expect(testState.lastUpdateValues?.suggestions).toEqual([
+      {
+        id: "s-1",
+        text: "First note",
+        created_at: "2026-03-30T00:00:00.000Z",
+      },
+      {
+        id: "s-2",
+        text: "Updated note",
+        created_at: "2026-03-30T00:01:00.000Z",
+      },
+    ]);
+
+    await removeTemplateSuggestion("template-1", "s-1");
+
+    expect(testState.lastUpdateValues?.suggestions).toEqual([
+      {
+        id: "s-2",
+        text: "Second note",
+        created_at: "2026-03-30T00:01:00.000Z",
+      },
+    ]);
+  });
+
+  it("rejects adding more than 10 guidance notes", async () => {
+    testState.selectResult = [
+      makeTemplateRow({
+        suggestions: Array.from({ length: 10 }, (_, index) => ({
+          id: `s-${index + 1}`,
+          text: `Note ${index + 1}`,
+          created_at: `2026-03-30T00:${String(index).padStart(2, "0")}:00.000Z`,
+        })),
+      }),
+    ];
+
+    await expect(addTemplateSuggestion("template-1", "Another note")).rejects.toThrow(
+      "A report template can have at most 10 suggestions."
     );
   });
 });

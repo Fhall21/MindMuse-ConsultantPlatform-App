@@ -11,6 +11,12 @@ import type {
   ReportTemplatePrescriptiveness,
 } from "@/types/db";
 
+type ReportTemplateSuggestion = {
+  id: string;
+  text: string;
+  created_at: string;
+};
+
 const REPORT_TEMPLATE_MISSING_TABLE_MESSAGE =
   "The database is missing the report template tables. Run the latest database migration, then try again.";
 
@@ -47,6 +53,41 @@ function normalizeReportTemplatesWriteError(error: unknown): never {
   throw error;
 }
 
+function normalizeTemplateSuggestions(value: unknown): ReportTemplateSuggestion[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+
+      const record = entry as Record<string, unknown>;
+      const id = typeof record.id === "string" ? record.id : "";
+      const text = typeof record.text === "string" ? record.text : "";
+      const createdAt =
+        typeof record.created_at === "string"
+          ? record.created_at
+          : typeof record.createdAt === "string"
+            ? record.createdAt
+            : "";
+
+      if (!id || !text || !createdAt) return null;
+
+      return { id, text, created_at: createdAt };
+    })
+    .filter((entry): entry is ReportTemplateSuggestion => entry !== null)
+    .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at));
+}
+
+async function getOwnedReportTemplateRow(templateId: string, userId: string) {
+  const [row] = await db
+    .select()
+    .from(reportTemplates)
+    .where(and(eq(reportTemplates.id, templateId), eq(reportTemplates.userId, userId)))
+    .limit(1);
+
+  return row;
+}
+
 function mapReportTemplateRecord(row: typeof reportTemplates.$inferSelect): ReportTemplate {
   return {
     id: row.id,
@@ -57,6 +98,7 @@ function mapReportTemplateRecord(row: typeof reportTemplates.$inferSelect): Repo
     style_notes: (row.styleNotes ?? {}) as ReportTemplateStyleNotes,
     prescriptiveness: row.prescriptiveness as ReportTemplatePrescriptiveness,
     source_file_names: (row.sourceFileNames ?? []) as string[],
+    suggestions: normalizeTemplateSuggestions(row.suggestions),
     is_active: row.isActive,
     created_by: row.createdBy,
     created_at: row.createdAt.toISOString(),
@@ -165,6 +207,7 @@ export async function createReportTemplate(
         styleNotes: params.styleNotes,
         prescriptiveness: params.prescriptiveness,
         sourceFileNames: params.sourceFileNames,
+        suggestions: [],
         isActive: true,
         createdBy: userId,
       })
@@ -243,6 +286,106 @@ export async function deleteReportTemplate(templateId: string): Promise<void> {
           eq(reportTemplates.userId, userId)
         )
       );
+  } catch (error) {
+    normalizeReportTemplatesWriteError(error);
+  }
+}
+
+function normalizeSuggestionText(text: string): string {
+  return text.trim();
+}
+
+function createSuggestionRecord(text: string): ReportTemplateSuggestion {
+  return {
+    id: crypto.randomUUID(),
+    text,
+    created_at: new Date().toISOString(),
+  };
+}
+
+export async function addTemplateSuggestion(templateId: string, text: string): Promise<void> {
+  const userId = await requireCurrentUserId();
+  const suggestionText = normalizeSuggestionText(text);
+
+  if (!suggestionText) {
+    throw new Error("Suggestion text cannot be empty.");
+  }
+
+  try {
+    const row = await getOwnedReportTemplateRow(templateId, userId);
+    if (!row) {
+      throw new Error("Report template not found.");
+    }
+
+    const suggestions = normalizeTemplateSuggestions(row.suggestions);
+    if (suggestions.length >= 10) {
+      throw new Error("A report template can have at most 10 suggestions.");
+    }
+
+    const nextSuggestions = [...suggestions, createSuggestionRecord(suggestionText)];
+
+    await db
+      .update(reportTemplates)
+      .set({ suggestions: nextSuggestions })
+      .where(and(eq(reportTemplates.id, templateId), eq(reportTemplates.userId, userId)));
+  } catch (error) {
+    normalizeReportTemplatesWriteError(error);
+  }
+}
+
+export async function updateTemplateSuggestion(
+  templateId: string,
+  suggestionId: string,
+  text: string
+): Promise<void> {
+  const userId = await requireCurrentUserId();
+  const suggestionText = normalizeSuggestionText(text);
+
+  if (!suggestionText) {
+    throw new Error("Suggestion text cannot be empty.");
+  }
+
+  try {
+    const row = await getOwnedReportTemplateRow(templateId, userId);
+    if (!row) {
+      throw new Error("Report template not found.");
+    }
+
+    const suggestions = normalizeTemplateSuggestions(row.suggestions);
+    const nextSuggestions = suggestions.map((suggestion) =>
+      suggestion.id === suggestionId
+        ? { ...suggestion, text: suggestionText }
+        : suggestion
+    );
+
+    await db
+      .update(reportTemplates)
+      .set({ suggestions: nextSuggestions })
+      .where(and(eq(reportTemplates.id, templateId), eq(reportTemplates.userId, userId)));
+  } catch (error) {
+    normalizeReportTemplatesWriteError(error);
+  }
+}
+
+export async function removeTemplateSuggestion(
+  templateId: string,
+  suggestionId: string
+): Promise<void> {
+  const userId = await requireCurrentUserId();
+
+  try {
+    const row = await getOwnedReportTemplateRow(templateId, userId);
+    if (!row) {
+      throw new Error("Report template not found.");
+    }
+
+    const suggestions = normalizeTemplateSuggestions(row.suggestions);
+    const nextSuggestions = suggestions.filter((suggestion) => suggestion.id !== suggestionId);
+
+    await db
+      .update(reportTemplates)
+      .set({ suggestions: nextSuggestions })
+      .where(and(eq(reportTemplates.id, templateId), eq(reportTemplates.userId, userId)));
   } catch (error) {
     normalizeReportTemplatesWriteError(error);
   }

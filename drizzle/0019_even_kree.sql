@@ -1,0 +1,1 @@
+ALTER TABLE "report_templates" ADD COLUMN "suggestions" jsonb DEFAULT '[]'::jsonb NOT NULL;

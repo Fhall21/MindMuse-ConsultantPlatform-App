@@ -165,6 +165,7 @@ class RoundOutputRequest(BaseModel):
     accepted_round_themes: List[RoundOutputTheme] = []
     supporting_consultation_themes: List[RoundOutputTheme] = []
     report_template: Optional[ReportTemplateOverride] = None
+    template_suggestions: List[str] = []
 
 
 class RoundOutputResponse(BaseModel):

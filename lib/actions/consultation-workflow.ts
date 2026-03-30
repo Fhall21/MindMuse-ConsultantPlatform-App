@@ -2349,6 +2349,7 @@ async function generateRoundOutput(
             style_notes: activeTemplate.style_notes,
             prescriptiveness: activeTemplate.prescriptiveness,
           },
+          template_suggestions: activeTemplate.suggestions.map((suggestion) => suggestion.text),
         }
       : {}),
   };

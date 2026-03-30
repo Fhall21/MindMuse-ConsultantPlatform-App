@@ -107,7 +107,7 @@ async def refine_group_draft(request: RoundThemeGroupDraftRequest):
         ) from exc
 
 
-def _format_template_instructions(template) -> str:
+def _format_template_instructions(template, template_suggestions: list[str] | None = None) -> str:
     """Build prompt instructions from a user-defined report template."""
     lines = []
 
@@ -161,10 +161,16 @@ def _format_template_instructions(template) -> str:
             if excerpt and prescriptiveness != "flexible":
                 lines.append(f"   Example style: \"{excerpt}\"")
 
+    if template_suggestions:
+        lines.append("")
+        lines.append("The user has provided the following guidance for this report:")
+        for i, suggestion in enumerate(template_suggestions, 1):
+            lines.append(f"{i}. {suggestion}")
+
     return "\n".join(lines)
 
 
-def _round_output_prompt(artifact_type: str, template=None):
+def _round_output_prompt(artifact_type: str, template=None, template_suggestions: list[str] | None = None):
     base_prompts = {
         "summary": (
             "You are writing a round-level consultation summary for internal use.\n\n"
@@ -205,7 +211,7 @@ def _round_output_prompt(artifact_type: str, template=None):
     prompt = base_prompts.get(artifact_type, base_prompts["email"])
 
     if template and template.sections:
-        template_block = _format_template_instructions(template)
+        template_block = _format_template_instructions(template, template_suggestions)
         prompt = (
             f"{prompt}\n\n"
             "─── USER REPORT TEMPLATE ───\n"
@@ -258,7 +264,14 @@ async def _generate_round_output(artifact_type: str, request: RoundOutputRequest
     completion = client.chat.completions.create(
         model=settings.openai_model,
         messages=[
-            {"role": "system", "content": _round_output_prompt(artifact_type, request.report_template)},
+            {
+                "role": "system",
+                "content": _round_output_prompt(
+                    artifact_type,
+                    request.report_template,
+                    request.template_suggestions,
+                ),
+            },
             {"role": "user", "content": _round_output_user_content(request)},
         ],
         response_format={"type": "json_object"},

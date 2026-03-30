@@ -261,6 +261,11 @@ export interface ReportTemplate {
   style_notes: ReportTemplateStyleNotes;
   prescriptiveness: ReportTemplatePrescriptiveness;
   source_file_names: string[];
+  suggestions: Array<{
+    id: string;
+    text: string;
+    created_at: string;
+  }>;
   is_active: boolean;
   created_by: string;
   created_at: string;

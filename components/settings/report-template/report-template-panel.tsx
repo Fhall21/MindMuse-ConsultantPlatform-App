@@ -16,9 +16,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
   createReportTemplate,
+  addTemplateSuggestion,
   deleteReportTemplate,
   listReportTemplates,
+  removeTemplateSuggestion,
   updateReportTemplate,
+  updateTemplateSuggestion,
 } from "@/lib/actions/report-templates";
 import type {
   ReportTemplate,
@@ -214,6 +217,231 @@ function ActiveTemplateCard({
           )}
         </CardContent>
       )}
+    </Card>
+  );
+}
+
+function GenerationGuidanceCard({ template }: { template: ReportTemplate }) {
+  const queryClient = useQueryClient();
+  const suggestions = [...(template.suggestions ?? [])].sort(
+    (left, right) => Date.parse(left.created_at) - Date.parse(right.created_at)
+  );
+  const [isAddFormVisible, setIsAddFormVisible] = useState(false);
+  const [newSuggestionText, setNewSuggestionText] = useState("");
+  const [editingSuggestionId, setEditingSuggestionId] = useState<string | null>(null);
+  const [editingSuggestionText, setEditingSuggestionText] = useState("");
+
+  const addMutation = useMutation({
+    mutationFn: async (text: string) => {
+      await addTemplateSuggestion(template.id, text);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["report-templates"] });
+      setNewSuggestionText("");
+      setIsAddFormVisible(false);
+      toast.success("Guidance note added");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to add guidance note");
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (input: { suggestionId: string; text: string }) => {
+      await updateTemplateSuggestion(template.id, input.suggestionId, input.text);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["report-templates"] });
+      setEditingSuggestionId(null);
+      setEditingSuggestionText("");
+      toast.success("Guidance note updated");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to update guidance note");
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async (suggestionId: string) => {
+      await removeTemplateSuggestion(template.id, suggestionId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["report-templates"] });
+      toast.success("Guidance note deleted");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to delete guidance note");
+    },
+  });
+
+  const suggestionCountLabel = `${suggestions.length} of 10`;
+  const showCounter = suggestions.length >= 5;
+  const canAddMore = suggestions.length < 10;
+
+  return (
+    <Card className="border-border/60 bg-muted/5">
+      <CardHeader className="space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">Generation Guidance</CardTitle>
+            <CardDescription className="mt-1">
+              Add short reminders that should be threaded into every generated report.
+            </CardDescription>
+          </div>
+          {showCounter && (
+            <Badge variant="outline" className="text-[10px]">
+              {suggestionCountLabel}
+            </Badge>
+          )}
+        </div>
+        {!showCounter && canAddMore && (
+          <p className="text-xs text-muted-foreground">Add up to 10 guidance notes.</p>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        {suggestions.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/60 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+            No guidance notes yet.
+          </div>
+        ) : (
+          suggestions.map((suggestion) => {
+            const isEditing = editingSuggestionId === suggestion.id;
+
+            return (
+              <div key={suggestion.id} className="rounded-lg border border-border/50 bg-background px-4 py-3">
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                        {new Date(suggestion.created_at).toLocaleString()}
+                      </p>
+                      {isEditing ? (
+                        <Textarea
+                          value={editingSuggestionText}
+                          onChange={(event) => setEditingSuggestionText(event.target.value)}
+                          className="min-h-[88px] text-sm"
+                          autoFocus
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingSuggestionId(suggestion.id);
+                            setEditingSuggestionText(suggestion.text);
+                          }}
+                          className="w-full rounded-md text-left text-sm leading-relaxed text-foreground transition-colors hover:text-foreground/80"
+                        >
+                          {suggestion.text}
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {isEditing ? (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() =>
+                              updateMutation.mutate({
+                                suggestionId: suggestion.id,
+                                text: editingSuggestionText,
+                              })
+                            }
+                            disabled={updateMutation.isPending}
+                            className="h-8 text-xs"
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingSuggestionId(null);
+                              setEditingSuggestionText("");
+                            }}
+                            className="h-8 text-xs"
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingSuggestionId(suggestion.id);
+                            setEditingSuggestionText(suggestion.text);
+                          }}
+                          className="h-8 text-xs"
+                        >
+                          Edit
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeMutation.mutate(suggestion.id)}
+                        disabled={removeMutation.isPending}
+                        className="h-8 text-xs text-destructive hover:text-destructive"
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        {isAddFormVisible ? (
+          <div className="rounded-lg border border-dashed border-border/60 bg-background px-4 py-3 space-y-3">
+            <Textarea
+              value={newSuggestionText}
+              onChange={(event) => setNewSuggestionText(event.target.value)}
+              className="min-h-[88px] text-sm"
+              placeholder="Add guidance for every generated report"
+              autoFocus
+            />
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setIsAddFormVisible(false);
+                  setNewSuggestionText("");
+                }}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => addMutation.mutate(newSuggestionText)}
+                disabled={addMutation.isPending || newSuggestionText.trim().length === 0}
+                className="text-xs"
+              >
+                Add note
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setIsAddFormVisible(true)}
+          disabled={!canAddMore}
+          className="w-full"
+        >
+          {canAddMore ? "Add guidance note" : "Maximum 10 guidance notes reached"}
+        </Button>
+      </CardContent>
     </Card>
   );
 }
@@ -529,11 +757,14 @@ export function ReportTemplatePanel() {
       {isLoading ? (
         <div className="h-24 rounded-lg border border-border/50 bg-muted/10 animate-pulse" />
       ) : activeTemplate ? (
-        <ActiveTemplateCard
-          template={activeTemplate}
-          onDeactivate={() => deactivateMutation.mutate(activeTemplate.id)}
-          onDelete={() => deleteMutation.mutate(activeTemplate.id)}
-        />
+        <div className="space-y-4">
+          <ActiveTemplateCard
+            template={activeTemplate}
+            onDeactivate={() => deactivateMutation.mutate(activeTemplate.id)}
+            onDelete={() => deleteMutation.mutate(activeTemplate.id)}
+          />
+          <GenerationGuidanceCard template={activeTemplate} />
+        </div>
       ) : (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-10 text-center">

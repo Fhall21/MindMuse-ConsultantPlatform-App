@@ -608,6 +608,16 @@ export const reportTemplates = pgTable(
       .$type<string[]>()
       .default(sql`'[]'::jsonb`)
       .notNull(),
+    suggestions: jsonb("suggestions")
+      .$type<
+        Array<{
+          id: string;
+          text: string;
+          created_at: string;
+        }>
+      >()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     createdBy: uuid("created_by")
       .notNull()

@@ -51,8 +51,16 @@ import { parseContentBlocks } from "@/lib/report-content-blocks";
 import { cn } from "@/lib/utils";
 import { ReportCoverPage, deriveMatterRef } from "@/components/reports/report-cover-page";
 import { NetworkDiagram } from "@/components/reports/network-diagram";
+import { GroupNetworkSection, CanvasPreviewSection } from "@/components/reports/theme-visualization";
 import { toast } from "sonner";
 import { ReportShareDialog } from "@/components/reports/report-share-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown, Loader2 } from "lucide-react";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -896,13 +904,13 @@ export function ReportContent({ content }: { content: string }) {
           case "heading1":
             return (
               <h2 key={i} className="pt-4 text-lg font-semibold text-foreground">
-                {block.text}
+                {renderInline(block.text)}
               </h2>
             );
           case "heading2":
             return (
               <h3 key={i} className="pt-3 text-base font-semibold text-foreground">
-                {block.text}
+                {renderInline(block.text)}
               </h3>
             );
           case "heading3":
@@ -911,7 +919,7 @@ export function ReportContent({ content }: { content: string }) {
                 key={i}
                 className="pt-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
               >
-                {block.text}
+                {renderInline(block.text)}
               </h4>
             );
           case "bullet":
@@ -1094,7 +1102,7 @@ function ReportEditor({ report, onExit, onSaved }: ReportEditorProps) {
   return (
     <div className="mx-auto max-w-4xl space-y-0">
       {/* Slim sticky toolbar */}
-      <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border/60 bg-background/95 px-4 py-2 backdrop-blur print:hidden">
+      <div className="sticky top-0 z-20 flex h-12 items-center justify-between border-b border-border/60 bg-background/95 px-4 py-2 backdrop-blur print:hidden">
         <Button
           variant="ghost"
           size="sm"
@@ -1152,7 +1160,7 @@ interface ReportViewProps {
 export function ReportView({ artifactId }: ReportViewProps) {
   const { data: report, isLoading, error } = useReportArtifact(artifactId);
   const [template, setTemplate] = useState<ReportTemplate>("standard");
-  const [isExporting, setIsExporting] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<"pdf" | "markdown" | "docx" | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -1173,32 +1181,40 @@ export function ReportView({ artifactId }: ReportViewProps) {
     router.push(`/reports/${newArtifactId}`);
   }, [queryClient, router]);
 
-  const handleDownloadPDF = useCallback(async () => {
-    if (!report) return;
-    setIsExporting(true);
+  const handleExport = useCallback(async (format: "pdf" | "markdown" | "docx") => {
+    if (!report || exportingFormat !== null) return;
+    setExportingFormat(format);
+
+    const urlMap = {
+      pdf: `/api/reports/${report.id}/export?template=${template}`,
+      markdown: `/api/reports/${report.id}/export/markdown?template=${template}`,
+      docx: `/api/reports/${report.id}/export/docx?template=${template}`,
+    };
+    const extMap = { pdf: "pdf", markdown: "md", docx: "docx" };
+    const labelMap = { pdf: "PDF", markdown: "Markdown", docx: "Word document" };
+
     try {
-      const response = await fetch(
-        `/api/reports/${report.id}/export?template=${template}`
-      );
+      const response = await fetch(urlMap[format]);
       if (!response.ok) throw new Error("Export failed");
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `report-${report.id.slice(0, 8)}.pdf`;
+      a.download = `report-${report.id.slice(0, 8)}.${extMap[format]}`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("PDF downloaded");
+      toast.success(`${labelMap[format]} downloaded`);
       posthog.capture("report_exported", {
         artifact_type: report.artifactType,
         template,
+        format,
       });
     } catch {
-      toast.error("Failed to download PDF. Please try again.");
+      toast.error(`Failed to download ${labelMap[format]}. Please try again.`);
     } finally {
-      setIsExporting(false);
+      setExportingFormat(null);
     }
-  }, [report, template]);
+  }, [report, template, exportingFormat]);
 
   if (isLoading) {
     return (
@@ -1287,14 +1303,41 @@ export function ReportView({ artifactId }: ReportViewProps) {
           <div className="flex items-center gap-2 print:hidden">
             <TemplateSelector value={template} onChange={setTemplate} />
             <ReportShareDialog artifactId={report.id} />
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleDownloadPDF}
-              disabled={isExporting}
-            >
-              {isExporting ? "Exporting..." : "Download PDF"}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={exportingFormat !== null}
+                >
+                  {exportingFormat !== null ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      Export
+                      <ChevronDown className="ml-1.5 h-3.5 w-3.5" />
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExport("pdf")}>
+                  {exportingFormat === "pdf" && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                  PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("markdown")}>
+                  {exportingFormat === "markdown" && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                  Markdown (.md)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("docx")}>
+                  {exportingFormat === "docx" && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                  Word (.docx)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -1347,25 +1390,33 @@ export function ReportView({ artifactId }: ReportViewProps) {
 
           <Separator />
 
+          {/* ─── Section 1: Theme Groups (always shown) ─── */}
+          <ThemeHierarchySection report={report} template={template} />
+
           {graphModel ? (
             <>
+              <Separator />
+              {/* ─── Graph stats bar ─── */}
               <GraphOverviewSection graphModel={graphModel} />
+
+              {/* ─── Section 2: Group-level connections (only shown when group→group edges exist) ─── */}
+              <GroupNetworkSection graphModel={graphModel} />
+
               <Separator />
-              <NetworkDiagramSection
+              {/* ─── Section 3: Full canvas preview with nested groups ─── */}
+              <CanvasPreviewSection
                 graphModel={graphModel}
-                template={template}
+                allGroups={getAllThemeGroups(report.inputSnapshot)}
+                roundId={report.roundId}
               />
-              <Separator />
+
+              {/* ─── Node degree table (analytics) ─── */}
               <GraphNodesSection
                 graphModel={graphModel}
                 template={template}
               />
             </>
-          ) : (
-            <>
-              <ThemeHierarchySection report={report} template={template} />
-            </>
-          )}
+          ) : null}
 
           {report.draftThemeGroups && report.draftThemeGroups.length > 0 && (
             <>

@@ -30,6 +30,7 @@ import {
   getAuditDotColor,
   type AuditCluster,
 } from "@/lib/report-audit";
+import { parseContentBlocks } from "@/lib/report-content-blocks";
 import { cn } from "@/lib/utils";
 import { ReportCoverPage, deriveMatterRef } from "@/components/reports/report-cover-page";
 import { toast } from "sonner";
@@ -662,96 +663,63 @@ function renderInline(text: string): React.ReactNode {
 // ─── Content renderer ────────────────────────────────────────────────────────
 
 function ReportContent({ content }: { content: string }) {
-  const blocks = content.split(/\n{2,}/);
+  const blocks = parseContentBlocks(content);
 
   return (
     <div className="space-y-4">
       {blocks.map((block, i) => {
-        const trimmed = block.trim();
-        if (!trimmed) return null;
-
-        if (trimmed.startsWith("### ")) {
-          return (
-            <h4
-              key={i}
-              className="pt-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
-            >
-              {trimmed.slice(4)}
-            </h4>
-          );
-        }
-        if (trimmed.startsWith("## ")) {
-          return (
-            <h3
-              key={i}
-              className="pt-3 text-base font-semibold text-foreground"
-            >
-              {trimmed.slice(3)}
-            </h3>
-          );
-        }
-        if (trimmed.startsWith("# ")) {
-          return (
-            <h2
-              key={i}
-              className="pt-4 text-lg font-semibold text-foreground"
-            >
-              {trimmed.slice(2)}
-            </h2>
-          );
-        }
-
-        const lines = trimmed.split("\n");
-        const nonEmptyLines = lines.filter((line) => line.trim() !== "");
-
-        const isBulletList = nonEmptyLines.length > 0 && nonEmptyLines.every(
-          (line) =>
-            line.trim().startsWith("- ") ||
-            line.trim().startsWith("\u2022 ") ||
-            line.trim().startsWith("* ")
-        );
-        const isNumberedList = nonEmptyLines.length > 0 && nonEmptyLines.every(
-          (line) => /^\d+\.\s/.test(line.trim())
-        );
-
-        if (isBulletList) {
-          return (
-            <ul
-              key={i}
-              className="list-inside list-disc space-y-1 pl-1 text-sm leading-relaxed text-foreground/90"
-            >
-              {lines
-                .filter((line) => line.trim())
-                .map((line, j) => (
-                  <li key={j}>{renderInline(line.replace(/^[\s]*[-\u2022*]\s*/, ""))}</li>
+        switch (block.type) {
+          case "heading1":
+            return (
+              <h2 key={i} className="pt-4 text-lg font-semibold text-foreground">
+                {block.text}
+              </h2>
+            );
+          case "heading2":
+            return (
+              <h3 key={i} className="pt-3 text-base font-semibold text-foreground">
+                {block.text}
+              </h3>
+            );
+          case "heading3":
+            return (
+              <h4
+                key={i}
+                className="pt-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                {block.text}
+              </h4>
+            );
+          case "bullet":
+            return (
+              <ul
+                key={i}
+                className="list-inside list-disc space-y-1 pl-1 text-sm leading-relaxed text-foreground/90"
+              >
+                {block.items.map((item, j) => (
+                  <li key={j}>{renderInline(item)}</li>
                 ))}
-            </ul>
-          );
-        }
-
-        if (isNumberedList) {
-          return (
-            <ol
-              key={i}
-              className="list-inside list-decimal space-y-1 pl-1 text-sm leading-relaxed text-foreground/90"
-            >
-              {lines
-                .filter((line) => line.trim())
-                .map((line, j) => (
-                  <li key={j}>{renderInline(line.replace(/^\d+\.\s*/, ""))}</li>
+              </ul>
+            );
+          case "numbered":
+            return (
+              <ol
+                key={i}
+                className="list-inside list-decimal space-y-1 pl-1 text-sm leading-relaxed text-foreground/90"
+              >
+                {block.items.map((item, j) => (
+                  <li key={j}>{renderInline(item)}</li>
                 ))}
-            </ol>
-          );
+              </ol>
+            );
+          case "prose":
+          default:
+            return (
+              <p key={i} className="text-sm leading-relaxed text-foreground/90">
+                {renderInline(block.text)}
+              </p>
+            );
         }
-
-        return (
-          <p
-            key={i}
-            className="text-sm leading-relaxed text-foreground/90"
-          >
-            {renderInline(trimmed)}
-          </p>
-        );
       })}
     </div>
   );

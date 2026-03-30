@@ -46,11 +46,13 @@ import {
   getAuditDotColor,
   type AuditCluster,
 } from "@/lib/report-audit";
+import { normalizeReportMarkdownForEditor } from "@/lib/report-editor-markdown";
 import { parseContentBlocks } from "@/lib/report-content-blocks";
 import { cn } from "@/lib/utils";
 import { ReportCoverPage, deriveMatterRef } from "@/components/reports/report-cover-page";
 import { NetworkDiagram } from "@/components/reports/network-diagram";
 import { toast } from "sonner";
+import { ReportShareDialog } from "@/components/reports/report-share-dialog";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -101,7 +103,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 
 // ─── Quick Stats ─────────────────────────────────────────────────────────────
 
-function QuickStats({ report }: { report: ReportArtifactDetail }) {
+export function QuickStats({ report }: { report: ReportArtifactDetail }) {
   const readTime = estimateReadTime(report.content);
   const consultationCount = report.consultations.length || report.consultationTitles.length;
 
@@ -145,7 +147,7 @@ function QuickStats({ report }: { report: ReportArtifactDetail }) {
 
 // ─── Findings Section ────────────────────────────────────────────────────────
 
-function GraphOverviewSection({
+export function GraphOverviewSection({
   graphModel,
 }: {
   graphModel: ReportGraphModel;
@@ -200,7 +202,7 @@ function GraphOverviewSection({
   );
 }
 
-function NetworkDiagramSection({
+export function NetworkDiagramSection({
   graphModel,
   template,
 }: {
@@ -229,7 +231,7 @@ function NetworkDiagramSection({
   );
 }
 
-function GraphNodesSection({
+export function GraphNodesSection({
   graphModel,
   template,
 }: {
@@ -601,7 +603,7 @@ function ThemeGroupCard({
   );
 }
 
-function ThemeHierarchySection({
+export function ThemeHierarchySection({
   report,
   template,
 }: {
@@ -720,7 +722,7 @@ function ThemeHierarchySection({
 
 // ─── Draft Groups Section ─────────────────────────────────────────────────────
 
-function DraftGroupsSection({ report }: { report: ReportArtifactDetail }) {
+export function DraftGroupsSection({ report }: { report: ReportArtifactDetail }) {
   const draftGroups = report.draftThemeGroups;
 
   if (!draftGroups || draftGroups.length === 0) return null;
@@ -763,7 +765,7 @@ function DraftGroupsSection({ report }: { report: ReportArtifactDetail }) {
 
 // ─── Evidence Section ────────────────────────────────────────────────────────
 
-function EvidenceSection({ report }: { report: ReportArtifactDetail }) {
+export function EvidenceSection({ report }: { report: ReportArtifactDetail }) {
   const consultations: ConsultationMeta[] = report.consultations.length > 0
     ? report.consultations
     : report.consultationTitles.map((title) => ({ id: title, title, date: "", people: [] }));
@@ -842,7 +844,7 @@ function AuditClusterItem({
   );
 }
 
-function AuditTrailSection({ report }: { report: ReportArtifactDetail }) {
+export function AuditTrailSection({ report }: { report: ReportArtifactDetail }) {
   const clusters = useMemo(() => {
     const major = filterMajorEvents(report.auditSummary ?? []);
     return clusterAuditEvents(major);
@@ -884,7 +886,7 @@ function renderInline(text: string): React.ReactNode {
 
 // ─── Content renderer ────────────────────────────────────────────────────────
 
-function ReportContent({ content }: { content: string }) {
+export function ReportContent({ content }: { content: string }) {
   const blocks = parseContentBlocks(content);
 
   return (
@@ -1044,6 +1046,10 @@ function ReportEditor({ report, onExit, onSaved }: ReportEditorProps) {
   const editorRef = useRef<MDXEditorMethods>(null);
   const isDirtyRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
+  const initialMarkdown = useMemo(
+    () => normalizeReportMarkdownForEditor(report.content),
+    [report.content]
+  );
 
   // Warn before navigating away with unsaved changes
   useEffect(() => {
@@ -1111,9 +1117,9 @@ function ReportEditor({ report, onExit, onSaved }: ReportEditorProps) {
       <MDXEditor
         ref={editorRef}
         className="report-mdxeditor"
-        markdown={report.content}
+        markdown={initialMarkdown}
         onChange={() => { isDirtyRef.current = true; }}
-        contentEditableClassName="prose prose-sm dark:prose-invert max-w-none min-h-[60vh] px-8 py-6 focus:outline-none"
+        contentEditableClassName="report-mdxeditor-content min-h-[60vh] px-8 py-6 focus:outline-none"
         plugins={[
           headingsPlugin({ allowedHeadingLevels: [2, 3] }),
           listsPlugin(),
@@ -1280,6 +1286,7 @@ export function ReportView({ artifactId }: ReportViewProps) {
           </div>
           <div className="flex items-center gap-2 print:hidden">
             <TemplateSelector value={template} onChange={setTemplate} />
+            <ReportShareDialog artifactId={report.id} />
             <Button
               size="sm"
               variant="outline"

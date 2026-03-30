@@ -256,6 +256,67 @@ html[data-accessibility-motion="reduced"] *::after {
   padding: 0.25rem;
 }
 
+.report-mdxeditor-content {
+  color: color-mix(in oklab, var(--foreground) 90%, var(--muted-foreground));
+  font-size: 0.875rem;
+  line-height: 1.75;
+}
+
+.report-mdxeditor-content > * + * {
+  margin-top: 1rem;
+}
+
+.report-mdxeditor-content h2 {
+  padding-top: 1rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.report-mdxeditor-content h3 {
+  padding-top: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.report-mdxeditor-content h4 {
+  padding-top: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.report-mdxeditor-content p {
+  color: color-mix(in oklab, var(--foreground) 92%, var(--muted-foreground));
+}
+
+.report-mdxeditor-content ul,
+.report-mdxeditor-content ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: color-mix(in oklab, var(--foreground) 92%, var(--muted-foreground));
+}
+
+.report-mdxeditor-content ul {
+  list-style-type: disc;
+}
+
+.report-mdxeditor-content ol {
+  list-style-type: decimal;
+}
+
+.report-mdxeditor-content li {
+  margin-top: 0.25rem;
+}
+
+.report-mdxeditor-content strong {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
 /* ─── Print styles (Cmd+P / Ctrl+P) ─── */
 @media print {
   /* Hide navigation, sidebar, and interactive elements */

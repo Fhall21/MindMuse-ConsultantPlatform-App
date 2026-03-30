@@ -119,7 +119,7 @@ function validateDateRange(dateFromIso: string | null, dateToIso: string | null)
 
 function buildFilenameBase(filters: Required<AuditExportFilters>) {
   const today = new Date().toISOString().slice(0, 10);
-  const segments = ["audit-export", today];
+  const segments = ["site-actions-audit-export", today];
 
   if (filters.consultationId) {
     segments.push("consultation");

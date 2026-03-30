@@ -7,6 +7,13 @@ import { useConsultations } from "@/hooks/use-consultations";
 import { useAuditExport, useAuditExportUsers } from "@/hooks/use-audit-export";
 import type { AuditExportFormat, AuditExportFilters } from "@/types/db";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -73,15 +80,16 @@ export function AuditExportPanel() {
   }
 
   return (
-    <section className="space-y-5 border-t border-border/80 pt-4">
-      <div className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight">Compliance audit export</h2>
-        <p className="text-sm text-muted-foreground">
-          Export a chronology of report activity.
-        </p>
-      </div>
-
-      <div className="space-y-5">
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg font-semibold tracking-tight">
+          Site Actions Audit Export
+        </CardTitle>
+        <CardDescription>
+          Export a chronology of site actions and evidence trail activity.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="audit-export-date-from">Date from</Label>
@@ -234,7 +242,7 @@ export function AuditExportPanel() {
             Clear filters
           </Button>
         </div>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }

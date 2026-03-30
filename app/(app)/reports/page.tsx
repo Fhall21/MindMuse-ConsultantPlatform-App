@@ -1,6 +1,6 @@
 "use client";
 
-import { AuditExportPanel } from "@/components/audit/audit-export-panel";
+import { AuditExportsPanel } from "@/components/audit/audit-exports-panel";
 import { ReportGenerationCard } from "@/components/reports/report-generation-card";
 import { ReportList } from "@/components/reports/report-list";
 import { ReportTemplatePanel } from "@/components/settings/report-template/report-template-panel";
@@ -19,13 +19,17 @@ export default function ReportsPage() {
       <Tabs defaultValue="reports">
         <TabsList>
           <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="audit-exports">Audit Exports</TabsTrigger>
           <TabsTrigger value="custom-templates">Custom Templates</TabsTrigger>
         </TabsList>
 
         <TabsContent value="reports" className="space-y-6">
           <ReportGenerationCard />
           <ReportList />
-          <AuditExportPanel />
+        </TabsContent>
+
+        <TabsContent value="audit-exports" className="space-y-6">
+          <AuditExportsPanel />
         </TabsContent>
 
         <TabsContent value="custom-templates">

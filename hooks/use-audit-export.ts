@@ -206,7 +206,7 @@ async function serializeAuditExportAsPdf(exportPackage: AuditExportPackage) {
     y -= options.gapAfter ?? 4;
   }
 
-  drawTextBlock("Compliance Audit Export", {
+  drawTextBlock("Site Actions Audit Export", {
     size: 18,
     bold: true,
     gapAfter: 6,

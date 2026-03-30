@@ -14,6 +14,7 @@ import {
   getSupportingMeetingThemes,
   type ReportGraphModel,
 } from "@/lib/report-graph";
+import { parseContentBlocks } from "@/lib/report-content-blocks";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -359,90 +360,86 @@ function estimateReadTime(content: string): number {
   return Math.max(1, Math.ceil(wordCount / 200));
 }
 
+// ─── PDF inline renderer (supports **bold**) ─────────────────────────────────
+
+function renderPdfInline(
+  text: string,
+  baseStyle: Record<string, unknown>
+): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  if (parts.length === 1) return <Text style={baseStyle}>{text}</Text>;
+  return (
+    <Text style={baseStyle}>
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return (
+            <Text key={i} style={{ ...baseStyle, fontFamily: "Helvetica-Bold" }}>
+              {part.slice(2, -2)}
+            </Text>
+          );
+        }
+        return part;
+      })}
+    </Text>
+  );
+}
+
 // ─── Content renderer (for markdown-style text) ──────────────────────────────
 
 function PdfContentBlocks({ content }: { content: string }) {
-  const blocks = content.split(/\n{2,}/);
+  const blocks = parseContentBlocks(content);
 
   return (
     <>
       {blocks.map((block, i) => {
-        const trimmed = block.trim();
-        if (!trimmed) return null;
-
-        if (trimmed.startsWith("### ")) {
-          return (
-            <Text key={i} style={s.h3}>
-              {trimmed.slice(4)}
-            </Text>
-          );
-        }
-        if (trimmed.startsWith("## ")) {
-          return (
-            <Text key={i} style={s.h2}>
-              {trimmed.slice(3)}
-            </Text>
-          );
-        }
-        if (trimmed.startsWith("# ")) {
-          return (
-            <Text key={i} style={s.h1}>
-              {trimmed.slice(2)}
-            </Text>
-          );
-        }
-
-        const lines = trimmed.split("\n");
-        const isBulletList = lines.every(
-          (line) =>
-            line.trim().startsWith("- ") ||
-            line.trim().startsWith("\u2022 ") ||
-            line.trim().startsWith("* ") ||
-            line.trim() === ""
-        );
-        const isNumberedList = lines.every(
-          (line) => /^\d+\.\s/.test(line.trim()) || line.trim() === ""
-        );
-
-        if (isBulletList) {
-          return (
-            <View key={i} style={s.bulletList}>
-              {lines
-                .filter((line) => line.trim())
-                .map((line, j) => (
+        switch (block.type) {
+          case "heading1":
+            return (
+              <Text key={i} style={s.h1}>
+                {block.text}
+              </Text>
+            );
+          case "heading2":
+            return (
+              <Text key={i} style={s.h2}>
+                {block.text}
+              </Text>
+            );
+          case "heading3":
+            return (
+              <Text key={i} style={s.h3}>
+                {block.text}
+              </Text>
+            );
+          case "bullet":
+            return (
+              <View key={i} style={s.bulletList}>
+                {block.items.map((item, j) => (
                   <View key={j} style={s.bulletItem}>
                     <Text style={s.bulletDot}>{"\u2022"}</Text>
-                    <Text style={s.bulletText}>
-                      {line.replace(/^[\s]*[-\u2022*]\s*/, "").replace(/\*\*([^*]+)\*\*/g, "$1")}
-                    </Text>
+                    {renderPdfInline(item, s.bulletText as Record<string, unknown>)}
                   </View>
                 ))}
-            </View>
-          );
-        }
-
-        if (isNumberedList) {
-          return (
-            <View key={i} style={s.bulletList}>
-              {lines
-                .filter((line) => line.trim())
-                .map((line, j) => (
+              </View>
+            );
+          case "numbered":
+            return (
+              <View key={i} style={s.bulletList}>
+                {block.items.map((item, j) => (
                   <View key={j} style={s.numberedItem}>
                     <Text style={s.numberedIndex}>{j + 1}.</Text>
-                    <Text style={s.bulletText}>
-                      {line.replace(/^\d+\.\s*/, "").replace(/\*\*([^*]+)\*\*/g, "$1")}
-                    </Text>
+                    {renderPdfInline(item, s.bulletText as Record<string, unknown>)}
                   </View>
                 ))}
-            </View>
-          );
+              </View>
+            );
+          case "prose":
+          default:
+            return renderPdfInline(
+              block.text,
+              s.paragraph as Record<string, unknown>
+            );
         }
-
-        return (
-          <Text key={i} style={s.paragraph}>
-            {trimmed.replace(/\*\*([^*]+)\*\*/g, "$1")}
-          </Text>
-        );
       })}
     </>
   );

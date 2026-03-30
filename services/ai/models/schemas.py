@@ -158,6 +158,18 @@ class ReportTemplateOverride(BaseModel):
     prescriptiveness: str = "moderate" # 'flexible' | 'moderate' | 'strict'
 
 
+class StructuredReportOutlineSection(BaseModel):
+    heading: str
+    purpose: Optional[str] = None
+    prose_guidance: Optional[str] = None
+    depth: Optional[str] = None
+    section_note: Optional[str] = None
+
+
+class StructuredReportOutline(BaseModel):
+    sections: List[StructuredReportOutlineSection] = []
+
+
 class RoundOutputRequest(BaseModel):
     round_label: str
     round_description: Optional[str] = None
@@ -165,6 +177,7 @@ class RoundOutputRequest(BaseModel):
     accepted_round_themes: List[RoundOutputTheme] = []
     supporting_consultation_themes: List[RoundOutputTheme] = []
     report_template: Optional[ReportTemplateOverride] = None
+    report_outline: Optional[StructuredReportOutline] = None
     template_suggestions: List[str] = []
 
 

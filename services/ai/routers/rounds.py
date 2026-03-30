@@ -13,6 +13,7 @@ from models.schemas import (
     RoundOutputRequest,
     RoundOutputResponse,
     StructuredReportDocument,
+    StructuredReportOutline,
     RoundThemeGroupDraftRequest,
     RoundThemeGroupDraftResponse,
     ThemeGroupSuggestionRequest,
@@ -103,6 +104,52 @@ def _render_structured_report_markdown(document: StructuredReportDocument) -> st
     return "\n".join(lines)
 
 
+def _template_outline_block(outline: StructuredReportOutline) -> str:
+    lines: list[str] = [
+        "REPORT OUTLINE CONTRACT:",
+        "Return report_document.sections in exactly this order.",
+        "Use each heading exactly as written below.",
+        "Do not add, remove, or rename top-level sections.",
+        "You may add subsections inside a section when needed.",
+        "",
+    ]
+
+    for index, section in enumerate(outline.sections, start=1):
+        lines.append(f"{index}. {section.heading}")
+        if section.purpose:
+            lines.append(f"   Purpose: {section.purpose}")
+        if section.prose_guidance:
+            lines.append(f"   Guidance: {section.prose_guidance}")
+        if section.depth:
+            lines.append(f"   Depth: {section.depth}")
+        if section.section_note:
+            lines.append(f"   Section note: {section.section_note}")
+
+    return "\n".join(lines)
+
+
+def _align_report_document_to_outline(
+    document: StructuredReportDocument,
+    outline: StructuredReportOutline | None,
+) -> StructuredReportDocument:
+    if outline is None or not outline.sections:
+        return document
+
+    source_sections = list(document.sections)
+    aligned_sections = []
+
+    for index, outline_section in enumerate(outline.sections):
+        source = source_sections[index] if index < len(source_sections) else None
+        aligned_sections.append({
+            "heading": outline_section.heading,
+            "paragraphs": list(source.paragraphs) if source and source.paragraphs else [],
+            "bullet_points": list(source.bullet_points) if source and source.bullet_points else [],
+            "subsections": [subsection.model_dump() for subsection in source.subsections] if source and source.subsections else [],
+        })
+
+    return StructuredReportDocument(sections=aligned_sections)
+
+
 def _normalise_round_output_payload(artifact_type: str, parsed: dict):
     if artifact_type != "report":
         return parsed
@@ -114,6 +161,25 @@ def _normalise_round_output_payload(artifact_type: str, parsed: dict):
     payload = dict(parsed)
     payload["report_document"] = report_document.model_dump()
     payload["content"] = _render_structured_report_markdown(report_document)
+    return payload
+
+
+def _finalize_round_output_payload(artifact_type: str, request: RoundOutputRequest, parsed: dict):
+    payload = _normalise_round_output_payload(artifact_type, parsed)
+
+    if artifact_type != "report":
+        return payload
+
+    if "report_document" not in payload:
+        return payload
+
+    aligned_document = _align_report_document_to_outline(
+        StructuredReportDocument(**payload["report_document"]),
+        request.report_outline,
+    )
+
+    payload["report_document"] = aligned_document.model_dump()
+    payload["content"] = _render_structured_report_markdown(aligned_document)
     return payload
 
 
@@ -371,13 +437,21 @@ async def _generate_round_output(artifact_type: str, request: RoundOutputRequest
                     request.template_suggestions,
                 ),
             },
-            {"role": "user", "content": _round_output_user_content(request)},
+            {
+                "role": "user",
+                "content": (
+                    f"{_round_output_user_content(request)}\n\n{_template_outline_block(request.report_outline)}"
+                    if artifact_type == "report" and request.report_outline and request.report_outline.sections
+                    else _round_output_user_content(request)
+                ),
+            },
         ],
         response_format={"type": "json_object"},
     )
 
-    parsed = _normalise_round_output_payload(
+    parsed = _finalize_round_output_payload(
         artifact_type,
+        request,
         _parse_json_response(completion.choices[0].message.content),
     )
 

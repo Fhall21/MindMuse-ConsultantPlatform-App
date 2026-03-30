@@ -4,6 +4,18 @@ export interface StructuredReportSubsection {
   bullet_points?: string[];
 }
 
+export interface StructuredReportOutlineSection {
+  heading: string;
+  purpose?: string | null;
+  prose_guidance?: string | null;
+  depth?: "brief" | "detailed";
+  section_note?: string | null;
+}
+
+export interface StructuredReportOutline {
+  sections: StructuredReportOutlineSection[];
+}
+
 export interface StructuredReportSection {
   heading: string;
   paragraphs?: string[];

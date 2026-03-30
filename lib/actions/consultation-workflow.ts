@@ -35,6 +35,7 @@ import {
 import {
   renderStructuredReportDocumentMarkdown,
   type StructuredReportDocument,
+  type StructuredReportOutline,
 } from "@/lib/report-document";
 import {
   loadRoundAnalyticsSummary,
@@ -2382,12 +2383,26 @@ async function generateRoundOutput(
         ? await getReportTemplate(templateIdOverride)
         : null;
 
+  const reportTemplateOutline: StructuredReportOutline | null =
+    artifactType === "report" && activeTemplate
+      ? {
+          sections: activeTemplate.sections.map((section) => ({
+            heading: section.heading,
+            purpose: section.purpose,
+            prose_guidance: section.prose_guidance,
+            depth: section.depth,
+            section_note: section.section_note,
+          })),
+        }
+      : null;
+
   const requestPayload = {
     round_label: detail.round.label,
     round_description: detail.round.description,
     consultations: detail.consultations.map((consultation) => consultation.title),
     accepted_round_themes: acceptedRoundThemes,
     supporting_consultation_themes: supportingConsultationThemes,
+    ...(reportTemplateOutline ? { report_outline: reportTemplateOutline } : {}),
     ...(activeTemplate
       ? {
           report_template: {
@@ -2460,6 +2475,7 @@ async function generateRoundOutput(
     accepted_round_themes: acceptedRoundThemes,
     supporting_consultation_themes: supportingConsultationThemes,
     generated_report_document: generatedReportDocument,
+    report_template_outline: reportTemplateOutline,
     all_theme_groups: detail.themeGroups
       .filter((group) => group.status !== "discarded")
       .map((group) => ({

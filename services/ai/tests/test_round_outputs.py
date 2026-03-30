@@ -18,6 +18,24 @@ REPORT_PAYLOAD = {
     "round_label": "March Cohort",
     "round_description": "Round covering staff wellbeing themes.",
     "consultations": ["Session A", "Session B"],
+    "report_outline": {
+        "sections": [
+            {
+                "heading": "Executive Summary",
+                "purpose": "Summarise the round clearly.",
+                "prose_guidance": "Keep it concise.",
+                "depth": "brief",
+                "section_note": None,
+            },
+            {
+                "heading": "Priority Risks",
+                "purpose": "Focus on material psychosocial risks.",
+                "prose_guidance": "Use direct evidence.",
+                "depth": "detailed",
+                "section_note": "Prefer risk framing over generic theme labels.",
+            },
+        ]
+    },
     "accepted_round_themes": [
         {
             "label": "Workload pressure",
@@ -93,6 +111,8 @@ def test_generate_round_report_renders_structured_document_to_markdown():
     assert resp.status_code == 200
     body = resp.json()
     assert body["title"] == "March Cohort round report"
+    assert body["report_document"]["sections"][0]["heading"] == "Executive Summary"
+    assert body["report_document"]["sections"][1]["heading"] == "Priority Risks"
     assert body["report_document"]["sections"][1]["subsections"][0]["heading"] == "Workload pressure"
     assert body["content"] == "\n".join(
         [
@@ -100,7 +120,7 @@ def test_generate_round_report_renders_structured_document_to_markdown():
             "",
             "A concise overview of the round.",
             "",
-            "## Accepted Round Themes",
+            "## Priority Risks",
             "",
             "### Workload pressure",
             "",
@@ -109,6 +129,54 @@ def test_generate_round_report_renders_structured_document_to_markdown():
             "- Sustained high workload",
         ]
     )
+
+
+def test_generate_round_report_realigns_top_level_sections_to_template_outline():
+    mock_completion = _mock_openai_response(
+        {
+            "title": "March Cohort round report",
+            "report_document": {
+                "sections": [
+                    {
+                        "heading": "Wrong Heading",
+                        "paragraphs": ["Model used the wrong heading but correct content."],
+                        "bullet_points": [],
+                        "subsections": [],
+                    },
+                    {
+                        "heading": "Another Wrong Heading",
+                        "paragraphs": ["Second section content."],
+                        "bullet_points": [],
+                        "subsections": [],
+                    },
+                    {
+                        "heading": "Extra Section",
+                        "paragraphs": ["This should be dropped."],
+                        "bullet_points": [],
+                        "subsections": [],
+                    },
+                ]
+            },
+        }
+    )
+
+    with patch("routers.rounds.get_client") as mock_get_client, \
+         patch("routers.rounds.settings") as mock_settings:
+        mock_settings.openai_api_key = "sk-test"
+        mock_settings.openai_model = "gpt-4o-mini"
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_completion
+        mock_get_client.return_value = mock_client
+
+        resp = client.post("/rounds/generate-report", json=REPORT_PAYLOAD)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [section["heading"] for section in body["report_document"]["sections"]] == [
+        "Executive Summary",
+        "Priority Risks",
+    ]
+    assert "## Extra Section" not in body["content"]
 
 
 def test_generate_round_report_rejects_malformed_structured_document():

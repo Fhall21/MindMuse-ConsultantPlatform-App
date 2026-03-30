@@ -6,7 +6,10 @@ import type {
   GraphSnapshotEdge,
   GraphSnapshotNode,
 } from "@/lib/graph/types";
-import type { StructuredReportDocument } from "@/lib/report-document";
+import type {
+  StructuredReportDocument,
+  StructuredReportOutline,
+} from "@/lib/report-document";
 
 export interface AcceptedConsultationThemeSnapshot {
   label: string;
@@ -58,6 +61,7 @@ export interface ReportInputSnapshot {
   supporting_meeting_themes?: SupportingMeetingThemeSnapshot[];
   supporting_consultation_themes?: SupportingMeetingThemeSnapshot[];
   generated_report_document?: StructuredReportDocument | null;
+  report_template_outline?: StructuredReportOutline | null;
   /** All non-discarded theme groups with their current status. Present in snapshots
    *  generated after Sprint 11.2. Falls back to accepted_round_themes for older artifacts. */
   all_theme_groups?: AllThemeGroupSnapshot[];

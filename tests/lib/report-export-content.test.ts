@@ -223,7 +223,7 @@ describe("buildExportSections — Source Evidence section", () => {
     const report = makeReport({
       consultationTitles: ["Fallback title"],
       consultations: [
-        { title: "Interview with Alice", date: "2026-01-10", people: ["Alice Smith"] },
+        { id: "c-1", title: "Interview with Alice", date: "2026-01-10", people: ["Alice Smith"] },
       ],
     });
     const sections = buildExportSections(report, "standard");

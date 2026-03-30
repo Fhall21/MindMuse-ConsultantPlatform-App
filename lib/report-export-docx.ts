@@ -111,7 +111,6 @@ function blockToParagraphs(block: ContentBlock): Paragraph[] {
       return block.items.map(
         (item, i) =>
           new Paragraph({
-            numbering: { reference: "numbered-list", level: 0 },
             children: [new TextRun({ text: `${i + 1}. ${item}` })],
           })
       );

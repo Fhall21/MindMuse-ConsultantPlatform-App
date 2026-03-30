@@ -1,6 +1,7 @@
 "use client";
 
 import { AuditExportPanel } from "@/components/audit/audit-export-panel";
+import { ReportGenerationCard } from "@/components/reports/report-generation-card";
 import { ReportList } from "@/components/reports/report-list";
 import { ReportTemplatePanel } from "@/components/settings/report-template/report-template-panel";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -22,6 +23,7 @@ export default function ReportsPage() {
         </TabsList>
 
         <TabsContent value="reports" className="space-y-6">
+          <ReportGenerationCard />
           <ReportList />
           <AuditExportPanel />
         </TabsContent>

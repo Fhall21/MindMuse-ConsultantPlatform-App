@@ -1028,60 +1028,137 @@ function EvidenceContent({ report }: { report: ReportArtifactDetail }) {
   );
 }
 
-function formatAuditAction(action: string): string {
-  return action
-    .replace(/\./g, " \u2192 ")
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c: string) => c.toUpperCase());
+// ─── Compliance audit trail helpers ──────────────────────────────────────────
+//
+// The audit trail in the PDF is a compliance record, not a system log.
+// It answers: "Did this consultation process happen properly?"
+//
+// Two tiers:
+//   1. Consultation sessions — from report.consultations (has title + date)
+//   2. Process milestones   — from auditSummary, filtered to 4 meaningful actions
+
+// Only these actions represent meaningful process milestones for compliance purposes.
+// Internal plumbing (OCR, transcript parsing, AI jobs, person links) is excluded.
+const COMPLIANCE_MILESTONE_ACTIONS = new Set([
+  "evidence_email.sent",
+  "round.output_generated",
+  "report.manually_edited",
+  "round.target_accepted",
+]);
+
+const MILESTONE_LABELS: Record<string, string> = {
+  "evidence_email.sent": "Evidence email sent",
+  "round.output_generated": "Report generated",
+  "report.manually_edited": "Report revised",
+  "round.target_accepted": "Theme validated",
+};
+
+function formatMilestoneDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function AuditTrailContent({ report }: { report: ReportArtifactDetail }) {
-  // Group events by calendar day (ISO date string YYYY-MM-DD)
-  const byDay = new Map<string, typeof report.auditSummary>();
-  for (const event of report.auditSummary) {
-    const day = event.createdAt.slice(0, 10);
-    const existing = byDay.get(day) ?? [];
-    existing.push(event);
-    byDay.set(day, existing);
-  }
-  // Keep chronological order (most-recent first matches typical audit display)
-  const days = Array.from(byDay.entries()).sort((a, b) =>
-    b[0].localeCompare(a[0])
+  // Tier 1: consultation sessions, sorted most-recent first
+  const sessions =
+    report.consultations.length > 0
+      ? [...report.consultations]
+          .filter((c) => c.date)
+          .sort((a, b) => b.date.localeCompare(a.date))
+      : [];
+
+  // Tier 2: process milestones from audit log, filtered and aggregated
+  type Milestone = { label: string; date: string; count: number };
+  const milestones: Milestone[] = [];
+
+  // Aggregate round.target_accepted into a single count
+  const acceptedEvents = report.auditSummary.filter(
+    (e) => e.action === "round.target_accepted"
   );
+  const otherMilestones = report.auditSummary.filter(
+    (e) =>
+      COMPLIANCE_MILESTONE_ACTIONS.has(e.action) &&
+      e.action !== "round.target_accepted"
+  );
+
+  if (acceptedEvents.length > 0) {
+    const mostRecent = acceptedEvents.reduce((a, b) =>
+      a.createdAt > b.createdAt ? a : b
+    );
+    milestones.push({
+      label:
+        acceptedEvents.length === 1
+          ? "1 theme validated"
+          : `${acceptedEvents.length} themes validated`,
+      date: mostRecent.createdAt,
+      count: acceptedEvents.length,
+    });
+  }
+
+  for (const e of otherMilestones) {
+    milestones.push({
+      label: MILESTONE_LABELS[e.action] ?? e.action,
+      date: e.createdAt,
+      count: 1,
+    });
+  }
+
+  milestones.sort((a, b) => b.date.localeCompare(a.date));
+
+  const hasSessions = sessions.length > 0;
+  const hasMilestones = milestones.length > 0;
+
+  if (!hasSessions && !hasMilestones) return null;
 
   return (
     <View>
-      <Text style={s.sectionHeading}>
-        Audit Trail ({report.auditSummary.length} events)
-      </Text>
+      <Text style={s.sectionHeading}>Audit Trail</Text>
       <View style={s.dividerAccent} />
-      {days.map(([day, events]) => (
-        <View key={day}>
-          {/* Day header rail */}
-          <View style={s.railDayRow} wrap={false}>
-            <Text style={s.railDayLabel}>
-              {new Date(day + "T00:00:00").toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </Text>
+
+      {/* Tier 1: consultation sessions */}
+      {hasSessions && (
+        <View style={{ marginBottom: 10 }}>
+          <View style={s.railDayRow}>
+            <Text style={s.railDayLabel}>Consultation sessions</Text>
             <View style={s.railDayLine} />
           </View>
-          {/* Events for this day */}
-          {events.map((event, j) => (
-            <View key={j} style={s.railEventRow} wrap={false}>
+          {sessions.map((c, i) => (
+            <View key={i} style={s.railEventRow} wrap={false}>
               <View style={s.railDot} />
-              <Text style={s.railEventText}>
-                {formatAuditAction(event.action)}
-              </Text>
-              {event.entityType ? (
-                <Text style={s.railEntityText}>{event.entityType}</Text>
+              <Text style={s.railEventText}>{c.title}</Text>
+              {c.date ? (
+                <Text style={s.railEntityText}>
+                  {new Date(c.date).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </Text>
               ) : null}
             </View>
           ))}
         </View>
-      ))}
+      )}
+
+      {/* Tier 2: process milestones */}
+      {hasMilestones && (
+        <View>
+          <View style={s.railDayRow}>
+            <Text style={s.railDayLabel}>Process record</Text>
+            <View style={s.railDayLine} />
+          </View>
+          {milestones.map((m, i) => (
+            <View key={i} style={s.railEventRow} wrap={false}>
+              <View style={s.railDot} />
+              <Text style={s.railEventText}>{m.label}</Text>
+              <Text style={s.railEntityText}>{formatMilestoneDate(m.date)}</Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }

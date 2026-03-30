@@ -2405,6 +2405,23 @@ async function generateRoundOutput(
     consultations: requestPayload.consultations,
     accepted_round_themes: acceptedRoundThemes,
     supporting_consultation_themes: supportingConsultationThemes,
+    all_theme_groups: detail.themeGroups
+      .filter((group) => group.status !== "discarded")
+      .map((group) => ({
+        id: group.id,
+        label: group.label,
+        description: group.description,
+        status: group.status,
+        origin: group.origin,
+        members: group.members.map((member) => ({
+          insightId: member.insightId,
+          label: member.label,
+          description: member.description,
+          sourceConsultationTitle: member.sourceConsultationTitle,
+          isUserAdded: member.isUserAdded,
+          position: member.position,
+        })),
+      })),
     graphNetwork: buildLegacyReportGraphSnapshot({
       roundId,
       snapshotAt: new Date().toISOString(),

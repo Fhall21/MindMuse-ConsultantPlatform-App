@@ -1110,6 +1110,7 @@ function ReportEditor({ report, onExit, onSaved }: ReportEditorProps) {
       {/* MDXEditor — full width, no sidebar */}
       <MDXEditor
         ref={editorRef}
+        className="report-mdxeditor"
         markdown={report.content}
         onChange={() => { isDirtyRef.current = true; }}
         contentEditableClassName="prose prose-sm dark:prose-invert max-w-none min-h-[60vh] px-8 py-6 focus:outline-none"

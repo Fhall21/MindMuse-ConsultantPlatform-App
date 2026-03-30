@@ -572,19 +572,19 @@ function PdfContentBlocks({ content }: { content: string }) {
           case "heading1":
             return (
               <Text key={i} style={s.h1}>
-                {block.text}
+                {renderPdfInlineContent(block.text)}
               </Text>
             );
           case "heading2":
             return (
               <Text key={i} style={s.h2}>
-                {block.text}
+                {renderPdfInlineContent(block.text)}
               </Text>
             );
           case "heading3":
             return (
               <Text key={i} style={s.h3}>
-                {block.text}
+                {renderPdfInlineContent(block.text)}
               </Text>
             );
           case "bullet":

@@ -52,6 +52,15 @@ describe("lib/report-content-blocks - parseContentBlocks", () => {
     expect(result).toEqual<ContentBlock[]>([{ type: "heading3", text: "Sub-section" }]);
   });
 
+  it("cleans legacy heading artifacts exported by the editor", () => {
+    const result = parseContentBlocks("## **Key Themes**&#x20;\n### __Workload and Stress__&nbsp;");
+
+    expect(result).toEqual<ContentBlock[]>([
+      { type: "heading2", text: "Key Themes" },
+      { type: "heading3", text: "Workload and Stress" },
+    ]);
+  });
+
   it("#hashtag is NOT treated as a heading (requires trailing space)", () => {
     const result = parseContentBlocks("#hashtag is a word");
     expect(result[0].type).toBe("prose");

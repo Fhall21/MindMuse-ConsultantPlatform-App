@@ -181,7 +181,7 @@ html[data-accessibility-motion="reduced"] *::after {
 .report-mdxeditor.mdxeditor {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
   border-radius: var(--radius-xl);
   background: var(--card);
@@ -189,6 +189,9 @@ html[data-accessibility-motion="reduced"] *::after {
 }
 
 .report-mdxeditor.mdxeditor .mdxeditor-toolbar {
+  position: sticky;
+  top: 3rem;
+  z-index: 15;
   display: flex;
   flex-wrap: wrap;
   gap: 0.375rem;
@@ -196,6 +199,7 @@ html[data-accessibility-motion="reduced"] *::after {
   padding: 0.75rem;
   border-bottom: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
   background: color-mix(in oklab, var(--background) 82%, var(--card));
+  box-shadow: 0 1px 0 rgb(15 23 42 / 0.05);
 }
 
 .report-mdxeditor.mdxeditor .mdxeditor-toolbar [data-toolbar-item] {

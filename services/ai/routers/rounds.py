@@ -12,6 +12,7 @@ from models.schemas import (
     ConsultationGroupSummaryResponse,
     RoundOutputRequest,
     RoundOutputResponse,
+    StructuredReportDocument,
     RoundThemeGroupDraftRequest,
     RoundThemeGroupDraftResponse,
     ThemeGroupSuggestionRequest,
@@ -38,6 +39,82 @@ def _parse_json_response(content: str | None):
             status_code=422,
             detail=f"Model returned invalid JSON: {exc}",
         ) from exc
+
+
+def _clean_report_text(value: str) -> str:
+    return " ".join(value.strip().split())
+
+
+def _render_structured_report_markdown(document: StructuredReportDocument) -> str:
+    lines: list[str] = []
+
+    def push(line: str = ""):
+        if line == "" and (not lines or lines[-1] == ""):
+            return
+        lines.append(line)
+
+    for section in document.sections:
+        heading = _clean_report_text(section.heading)
+        if not heading:
+            continue
+
+        push(f"## {heading}")
+        push()
+
+        for paragraph in section.paragraphs:
+            text = _clean_report_text(paragraph)
+            if text:
+                push(text)
+                push()
+
+        for bullet in section.bullet_points:
+            text = _clean_report_text(bullet)
+            if text:
+                push(f"- {text}")
+
+        if section.bullet_points:
+            push()
+
+        for subsection in section.subsections:
+            subheading = _clean_report_text(subsection.heading)
+            if not subheading:
+                continue
+
+            push(f"### {subheading}")
+            push()
+
+            for paragraph in subsection.paragraphs:
+                text = _clean_report_text(paragraph)
+                if text:
+                    push(text)
+                    push()
+
+            for bullet in subsection.bullet_points:
+                text = _clean_report_text(bullet)
+                if text:
+                    push(f"- {text}")
+
+            if subsection.bullet_points:
+                push()
+
+    while lines and lines[-1] == "":
+        lines.pop()
+
+    return "\n".join(lines)
+
+
+def _normalise_round_output_payload(artifact_type: str, parsed: dict):
+    if artifact_type != "report":
+        return parsed
+
+    if "report_document" not in parsed:
+        return parsed
+
+    report_document = StructuredReportDocument(**parsed["report_document"])
+    payload = dict(parsed)
+    payload["report_document"] = report_document.model_dump()
+    payload["content"] = _render_structured_report_markdown(report_document)
+    return payload
 
 
 @router.post("/refine-group-draft", response_model=RoundThemeGroupDraftResponse)
@@ -199,15 +276,23 @@ def _round_output_prompt(artifact_type: str, template=None, template_suggestions
         ),
         "report": (
             "You are drafting a round-level consultation report for internal evidence and reporting.\n\n"
-            "Write a structured report with:\n"
-            "- Executive summary\n"
-            "- Accepted round themes\n"
-            "- Supporting consultation-level evidence themes\n"
-            "- Key follow-up or monitoring considerations if they are implied by the themes\n\n"
+            "Return a structured report document, not prose-with-formatting baked into a single blob.\n\n"
+            "The report should usually include:\n"
+            "- Executive Summary\n"
+            "- Accepted Round Themes\n"
+            "- Supporting Consultation-Level Evidence Themes\n"
+            "- Key Follow-Up or Monitoring Considerations, only if grounded in the themes\n\n"
+            "Use section headings as plain text only. Do not include markdown markers, bold markers, numbering, or trailing spaces in headings.\n"
+            "Use subsections for named themes where that makes the report easier to scan.\n"
+            "Each paragraph must be a standalone sentence or short paragraph string.\n"
+            "Each bullet point must be plain text without a leading bullet character.\n\n"
             "Do not invent recommendations that are not grounded in the inputs.\n"
             "Write all output in Australian English (e.g., 'organisation' not 'organization', "
             "'analyse' not 'analyze', 'colour' not 'color').\n\n"
-            "Return JSON with 'title' and 'content'. The content should be plain text."
+            "Return JSON with:\n"
+            "- title: string\n"
+            "- report_document: { sections: [ { heading: string, paragraphs: string[], bullet_points: string[], subsections: [ { heading: string, paragraphs: string[], bullet_points: string[] } ] } ] }\n\n"
+            "Return only valid JSON."
         ),
         "email": (
             "You are drafting a round-level evidence email for internal coordination.\n\n"
@@ -291,7 +376,10 @@ async def _generate_round_output(artifact_type: str, request: RoundOutputRequest
         response_format={"type": "json_object"},
     )
 
-    parsed = _parse_json_response(completion.choices[0].message.content)
+    parsed = _normalise_round_output_payload(
+        artifact_type,
+        _parse_json_response(completion.choices[0].message.content),
+    )
 
     try:
         return RoundOutputResponse(**parsed)

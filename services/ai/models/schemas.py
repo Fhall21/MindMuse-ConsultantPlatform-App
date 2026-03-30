@@ -168,9 +168,27 @@ class RoundOutputRequest(BaseModel):
     template_suggestions: List[str] = []
 
 
+class StructuredReportSubsection(BaseModel):
+    heading: str
+    paragraphs: List[str] = []
+    bullet_points: List[str] = []
+
+
+class StructuredReportSection(BaseModel):
+    heading: str
+    paragraphs: List[str] = []
+    bullet_points: List[str] = []
+    subsections: List[StructuredReportSubsection] = []
+
+
+class StructuredReportDocument(BaseModel):
+    sections: List[StructuredReportSection] = []
+
+
 class RoundOutputResponse(BaseModel):
     title: str
     content: str
+    report_document: Optional[StructuredReportDocument] = None
 
 
 # --- Clarification questions ---

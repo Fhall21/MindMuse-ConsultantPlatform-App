@@ -23,6 +23,7 @@ import {
   toReportInputSnapshot,
   type ReportInputSnapshot,
 } from "@/lib/report-graph";
+import { normalizeReportMarkdownForStorage } from "@/lib/report-editor-markdown";
 
 type ConsultationContext = Pick<Meeting, "id" | "title" | "consultation_id" | "created_at">;
 type RoundContext = Pick<Consultation, "id" | "label" | "description">;
@@ -757,7 +758,7 @@ export async function saveEditedReport(
       consultationId: original.consultation_id,
       userId,
       artifactType: original.artifact_type,
-      content: newContent,
+      content: normalizeReportMarkdownForStorage(newContent),
       title: original.title,
       inputSnapshot: (original.input_snapshot as Record<string, unknown>) ?? {},
       createdBy: userId,

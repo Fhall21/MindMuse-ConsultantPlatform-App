@@ -1,3 +1,8 @@
+import {
+  decodeReportMarkdownEntities,
+  normalizeReportHeadingText,
+} from "@/lib/report-editor-markdown";
+
 // ─── Report Content Block Parser ──────────────────────────────────────────────
 //
 // Pure line-by-line state machine that converts markdown report content into a
@@ -81,7 +86,8 @@ export function parseContentBlocks(content: string): ContentBlock[] {
   }
 
   for (const line of lines) {
-    const trimmed = line.trim();
+    const normalizedLine = decodeReportMarkdownEntities(line);
+    const trimmed = normalizedLine.trim();
 
     // Blank line → flush current block
     if (!trimmed) {
@@ -92,26 +98,26 @@ export function parseContentBlocks(content: string): ContentBlock[] {
     // ── Headings (must have a trailing space after #/##/### to avoid #hashtag) ──
     if (trimmed.startsWith("### ")) {
       flush();
-      results.push({ type: "heading3", text: trimmed.slice(4) });
+      results.push({ type: "heading3", text: normalizeReportHeadingText(trimmed.slice(4)) });
       current = null;
       continue;
     }
     if (trimmed.startsWith("## ")) {
       flush();
-      results.push({ type: "heading2", text: trimmed.slice(3) });
+      results.push({ type: "heading2", text: normalizeReportHeadingText(trimmed.slice(3)) });
       current = null;
       continue;
     }
     if (trimmed.startsWith("# ")) {
       flush();
-      results.push({ type: "heading1", text: trimmed.slice(2) });
+      results.push({ type: "heading1", text: normalizeReportHeadingText(trimmed.slice(2)) });
       current = null;
       continue;
     }
 
     // ── Bullet list ──────────────────────────────────────────────────────────
-    if (isBulletLine(line)) {
-      const item = stripBulletPrefix(line).trim();
+    if (isBulletLine(normalizedLine)) {
+      const item = stripBulletPrefix(normalizedLine).trim();
       if (current && blockType(current) === "bullet") {
         (current as { type: "bullet"; items: string[] }).items.push(item);
       } else {
@@ -122,8 +128,8 @@ export function parseContentBlocks(content: string): ContentBlock[] {
     }
 
     // ── Numbered list ────────────────────────────────────────────────────────
-    if (isNumberedLine(line)) {
-      const item = stripNumberedPrefix(line).trim();
+    if (isNumberedLine(normalizedLine)) {
+      const item = stripNumberedPrefix(normalizedLine).trim();
       if (current && blockType(current) === "numbered") {
         (current as { type: "numbered"; items: string[] }).items.push(item);
       } else {

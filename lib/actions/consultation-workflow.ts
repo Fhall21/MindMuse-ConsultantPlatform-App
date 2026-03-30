@@ -33,6 +33,10 @@ import {
   type ReportInputSnapshot,
 } from "@/lib/report-graph";
 import {
+  renderStructuredReportDocumentMarkdown,
+  type StructuredReportDocument,
+} from "@/lib/report-document";
+import {
   loadRoundAnalyticsSummary,
   type RoundAnalyticsSummary,
 } from "@/lib/data/analytics-read";
@@ -352,6 +356,47 @@ function buildFallbackOutput(params: {
         ? `${roundLabel} round report`
         : `${roundLabel} round summary`;
 
+  if (artifactType === "report") {
+    const fallbackDocument: StructuredReportDocument = {
+      sections: [
+        {
+          heading: "Executive Summary",
+          paragraphs: [
+            roundDescription
+              ? `${roundLabel} includes themes grounded in ${consultationTitles.length} linked meeting${consultationTitles.length === 1 ? "" : "s"}. ${roundDescription}`
+              : `${roundLabel} includes themes grounded in ${consultationTitles.length} linked meeting${consultationTitles.length === 1 ? "" : "s"}.`,
+          ],
+        },
+        {
+          heading: "Accepted Round Themes",
+          subsections:
+            acceptedRoundThemes.length > 0
+              ? acceptedRoundThemes.map((theme) => ({
+                  heading: theme.label,
+                  paragraphs: [theme.description ?? "Accepted round theme."],
+                }))
+              : [{ heading: "No accepted round themes", paragraphs: ["No accepted round themes are available yet."] }],
+        },
+        {
+          heading: "Supporting Consultation-Level Evidence Themes",
+          bullet_points:
+            supportingThemes.length > 0
+              ? supportingThemes.map(
+                  (theme) =>
+                    `${theme.label}${theme.consultationTitle ? ` (${theme.consultationTitle})` : ""}: ${theme.description ?? "Supporting consultation theme."}`
+                )
+              : ["No supporting consultation themes are available yet."],
+        },
+      ],
+    };
+
+    return {
+      title: header,
+      content: renderStructuredReportDocumentMarkdown(fallbackDocument),
+      reportDocument: fallbackDocument,
+    };
+  }
+
   const roundThemeLines =
     acceptedRoundThemes.length > 0
       ? acceptedRoundThemes.map((theme) => `- ${theme.label}: ${theme.description ?? "Accepted round theme."}`)
@@ -387,6 +432,7 @@ function buildFallbackOutput(params: {
   return {
     title: header,
     content,
+    reportDocument: null,
   };
 }
 
@@ -2369,6 +2415,7 @@ async function generateRoundOutput(
       consultationTitle: theme.consultation_title ?? null,
     })),
   });
+  let generatedReportDocument: StructuredReportDocument | null = generated.reportDocument;
 
   try {
     const endpoint =
@@ -2380,15 +2427,21 @@ async function generateRoundOutput(
     const response = (await callAIService(endpoint, requestPayload)) as {
       title?: string;
       content?: string;
+      report_document?: StructuredReportDocument;
     };
     const title = trimToNull(response.title);
-    const content = trimToNull(response.content);
+    const renderedStructuredContent = response.report_document
+      ? trimToNull(renderStructuredReportDocumentMarkdown(response.report_document))
+      : null;
+    const content = trimToNull(response.content) ?? renderedStructuredContent;
 
     if (title && content) {
       generated = {
         title,
         content,
+        reportDocument: response.report_document ?? null,
       };
+      generatedReportDocument = response.report_document ?? null;
     }
   } catch (error) {
     console.error("[round-workflow.generateRoundOutput] AI generation failed; using fallback", {
@@ -2406,6 +2459,7 @@ async function generateRoundOutput(
     consultations: requestPayload.consultations,
     accepted_round_themes: acceptedRoundThemes,
     supporting_consultation_themes: supportingConsultationThemes,
+    generated_report_document: generatedReportDocument,
     all_theme_groups: detail.themeGroups
       .filter((group) => group.status !== "discarded")
       .map((group) => ({

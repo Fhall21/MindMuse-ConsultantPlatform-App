@@ -12,7 +12,6 @@ import {
   formatConnectionTypeLabel,
   getAllThemeGroups,
   type ReportGraphModel,
-  type AllThemeGroupSnapshot,
 } from "@/lib/report-graph";
 import { parseContentBlocks } from "@/lib/report-content-blocks";
 
@@ -20,15 +19,26 @@ import { parseContentBlocks } from "@/lib/report-content-blocks";
 
 type ReportTemplate = "standard" | "executive";
 
+export interface TocPageNumbers {
+  executiveSummary?: number;
+  keyThemes?: number;
+  rejectedThemes?: number;
+  network?: number;
+  evidence?: number;
+  auditTrail?: number;
+}
+
+export interface SectionElement {
+  id: keyof TocPageNumbers;
+  label: string;
+  element: React.ReactElement;
+}
+
 interface ReportPrintLayoutProps {
   report: ReportArtifactDetail;
   template: ReportTemplate;
+  tocPageNumbers?: TocPageNumbers;
 }
-
-// ─── Fonts ───────────────────────────────────────────────────────────────────
-// Using built-in PDF fonts (no CDN dependency):
-// Helvetica / Helvetica-Bold for UI labels and headings
-// Times-Roman / Times-Bold for body copy
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
@@ -48,32 +58,36 @@ const colors = {
   white: "#ffffff",
 };
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// ─── Content page style (exported for two-pass page counting in route.tsx) ───
+
+export const CONTENT_PAGE_STYLE = {
+  fontFamily: "Times-Roman" as const,
+  fontSize: 10,
+  lineHeight: 1.6,
+  color: colors.dark,
+  paddingTop: 60,
+  paddingBottom: 70,
+  paddingHorizontal: 50,
+  backgroundColor: colors.white,
+};
+
+// ─── StyleSheet ──────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  page: {
-    fontFamily: "Times-Roman",
-    fontSize: 10.5,
-    lineHeight: 1.65,
-    color: colors.dark,
-    paddingTop: 60,
-    paddingBottom: 70,
-    paddingHorizontal: 56,
-    backgroundColor: colors.white,
-  },
+  page: CONTENT_PAGE_STYLE,
 
-  // Header (fixed on every page)
+  // ── Running header ─────────────────────────────────────────────────────────
   header: {
     position: "absolute",
     top: 24,
-    left: 56,
-    right: 56,
+    left: 50,
+    right: 50,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     borderBottomWidth: 0.5,
     borderBottomColor: colors.border,
-    paddingBottom: 8,
+    paddingBottom: 7,
   },
   headerLeft: {
     fontFamily: "Helvetica-Bold",
@@ -88,25 +102,25 @@ const s = StyleSheet.create({
     color: colors.faint,
   },
 
-  // Footer (fixed on every page)
+  // ── Running footer ─────────────────────────────────────────────────────────
   footer: {
     position: "absolute",
     bottom: 28,
-    left: 56,
-    right: 56,
+    left: 50,
+    right: 50,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     borderTopWidth: 0.5,
     borderTopColor: colors.border,
-    paddingTop: 8,
+    paddingTop: 7,
   },
   footerText: {
     fontFamily: "Helvetica",
     fontSize: 7,
     color: colors.faint,
   },
-  confidential: {
+  confidentialStamp: {
     fontFamily: "Helvetica-Bold",
     fontSize: 7,
     color: colors.faint,
@@ -114,59 +128,180 @@ const s = StyleSheet.create({
     letterSpacing: 2,
   },
 
-  // Title block
-  titleBlock: {
-    marginBottom: 24,
+  // ── Title page ─────────────────────────────────────────────────────────────
+  titlePageContent: {
+    flex: 1,
+    flexDirection: "column",
+    paddingHorizontal: 50,
+    paddingBottom: 50,
   },
-  reportType: {
+  titlePageRoundLabel: {
     fontFamily: "Helvetica-Bold",
     fontSize: 8,
     color: colors.emerald,
     textTransform: "uppercase",
-    letterSpacing: 1.5,
-    marginBottom: 8,
+    letterSpacing: 2,
+    marginBottom: 20,
+    marginTop: 60,
   },
-  title: {
+  titlePageTitle: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 22,
+    fontSize: 28,
     color: colors.black,
-    lineHeight: 1.25,
-    marginBottom: 6,
+    lineHeight: 1.2,
+    marginBottom: 10,
   },
-  subtitle: {
+  titlePageSubtitle: {
     fontFamily: "Helvetica",
-    fontSize: 10,
+    fontSize: 11,
+    color: colors.mid,
+    lineHeight: 1.5,
+    marginBottom: 24,
+  },
+  titlePageMeta: {
+    fontFamily: "Helvetica",
+    fontSize: 9,
     color: colors.light,
+  },
+  confidentialLarge: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 9,
+    color: colors.faint,
+    textTransform: "uppercase",
+    letterSpacing: 3,
     marginBottom: 4,
   },
-  metaRow: {
-    flexDirection: "row",
-    gap: 16,
-    marginTop: 10,
-  },
-  metaItem: {
+  confidentialNote: {
     fontFamily: "Helvetica",
     fontSize: 8,
-    color: colors.light,
+    color: colors.faint,
+    textAlign: "center",
   },
 
-  // Divider
+  // ── TOC ────────────────────────────────────────────────────────────────────
+  tocHeading: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 8,
+    color: colors.light,
+    textTransform: "uppercase",
+    letterSpacing: 2,
+    marginBottom: 20,
+  },
+  tocRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    marginBottom: 10,
+  },
+  tocLabel: {
+    fontFamily: "Helvetica",
+    fontSize: 11,
+    color: colors.dark,
+  },
+  tocDots: {
+    flex: 1,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border,
+    marginHorizontal: 8,
+    marginBottom: 3,
+  },
+  tocPage: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 11,
+    color: colors.dark,
+    minWidth: 16,
+    textAlign: "right",
+  },
+
+  // ── Section headings ───────────────────────────────────────────────────────
+  sectionHeading: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 14,
+    color: colors.black,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  sectionSubheading: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 8,
+    color: colors.light,
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+    marginBottom: 8,
+    marginTop: 10,
+  },
+
+  // ── Content blocks ─────────────────────────────────────────────────────────
+  paragraph: {
+    marginBottom: 10,
+    textAlign: "justify",
+  },
+  h1: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 16,
+    color: colors.black,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  h2: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 13,
+    color: colors.dark,
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  h3: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 10,
+    color: colors.mid,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  bulletList: {
+    marginBottom: 10,
+    paddingLeft: 4,
+  },
+  bulletItem: {
+    flexDirection: "row",
+    marginBottom: 4,
+  },
+  bulletDot: {
+    width: 12,
+    fontSize: 10,
+    color: colors.emerald,
+  },
+  bulletText: {
+    flex: 1,
+  },
+  numberedItem: {
+    flexDirection: "row",
+    marginBottom: 4,
+  },
+  numberedIndex: {
+    fontFamily: "Helvetica-Bold",
+    width: 16,
+    fontSize: 10,
+    color: colors.mid,
+  },
+
+  // ── Dividers ───────────────────────────────────────────────────────────────
   divider: {
     borderBottomWidth: 0.5,
     borderBottomColor: colors.border,
     marginVertical: 16,
   },
-  dividerThick: {
-    borderBottomWidth: 1.5,
+  dividerAccent: {
+    borderBottomWidth: 2,
     borderBottomColor: colors.emerald,
-    marginVertical: 20,
     width: 40,
+    marginBottom: 20,
   },
 
-  // Stats row
+  // ── Stats ──────────────────────────────────────────────────────────────────
   statsRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
     marginBottom: 20,
   },
   statBox: {
@@ -191,79 +326,7 @@ const s = StyleSheet.create({
     color: colors.black,
   },
 
-  // Section heading
-  sectionHeading: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 13,
-    color: colors.black,
-    marginBottom: 10,
-    marginTop: 4,
-  },
-  sectionSubheading: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 8,
-    color: colors.light,
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-    marginBottom: 8,
-  },
-
-  // Content blocks
-  paragraph: {
-    marginBottom: 8,
-    textAlign: "justify",
-  },
-  h1: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 16,
-    color: colors.black,
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  h2: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 13,
-    color: colors.dark,
-    marginTop: 14,
-    marginBottom: 5,
-  },
-  h3: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 10,
-    color: colors.mid,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  bulletList: {
-    marginBottom: 8,
-    paddingLeft: 4,
-  },
-  bulletItem: {
-    flexDirection: "row",
-    marginBottom: 3,
-  },
-  bulletDot: {
-    width: 12,
-    fontSize: 10,
-    color: colors.emerald,
-  },
-  bulletText: {
-    flex: 1,
-  },
-  numberedItem: {
-    flexDirection: "row",
-    marginBottom: 3,
-  },
-  numberedIndex: {
-    fontFamily: "Helvetica-Bold",
-    width: 16,
-    fontSize: 10,
-    color: colors.mid,
-  },
-
-  // Theme cards
+  // ── Theme cards ────────────────────────────────────────────────────────────
   themeCard: {
     borderWidth: 0.5,
     borderColor: colors.emeraldBorder,
@@ -274,7 +337,7 @@ const s = StyleSheet.create({
     padding: 10,
     marginBottom: 6,
   },
-  themeCardSupporting: {
+  themeCardMuted: {
     borderColor: colors.border,
     borderLeftColor: colors.slateBorder,
     backgroundColor: colors.slateBg,
@@ -293,7 +356,7 @@ const s = StyleSheet.create({
     letterSpacing: 0.8,
     marginLeft: 6,
   },
-  themeBadgeSupporting: {
+  themeBadgeMuted: {
     color: colors.light,
   },
   themeDescription: {
@@ -308,7 +371,7 @@ const s = StyleSheet.create({
     marginBottom: 2,
   },
 
-  // Evidence cards
+  // ── Evidence / Audit cards ─────────────────────────────────────────────────
   evidenceCard: {
     borderWidth: 0.5,
     borderColor: colors.border,
@@ -316,19 +379,19 @@ const s = StyleSheet.create({
     padding: 10,
     marginBottom: 5,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 10,
   },
   evidenceNumber: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 9,
+    fontSize: 8,
     color: colors.light,
     width: 18,
     height: 18,
     borderRadius: 9,
     backgroundColor: colors.borderLight,
     textAlign: "center",
-    lineHeight: 18,
+    paddingTop: 3,
   },
   evidenceTitle: {
     fontFamily: "Helvetica",
@@ -349,28 +412,14 @@ const artifactTypeLabels: Record<string, string> = {
 function formatPdfDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown";
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "long",
-    timeStyle: "short",
-  }).format(date);
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(date);
 }
-
-function estimateReadTime(content: string): number {
-  const wordCount = content.split(/\s+/).filter(Boolean).length;
-  return Math.max(1, Math.ceil(wordCount / 200));
-}
-
-// ─── PDF inline renderer (supports **bold**) ─────────────────────────────────
-//
-// Returns the children for a <Text> node. Call sites are responsible for
-// wrapping in <Text style={...}> so the base style is correctly typed.
 
 function renderPdfInlineContent(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   if (parts.length === 1) return text;
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
-      // Bold segment: inherit parent style but switch to the bold font
       return (
         <Text key={i} style={{ fontFamily: "Helvetica-Bold" }}>
           {part.slice(2, -2)}
@@ -381,7 +430,137 @@ function renderPdfInlineContent(text: string): React.ReactNode {
   });
 }
 
-// ─── Content renderer (for markdown-style text) ──────────────────────────────
+// ─── Running header / footer ─────────────────────────────────────────────────
+
+function RunningHeader({
+  roundLabel,
+  generatedDate,
+}: {
+  roundLabel: string;
+  generatedDate: string;
+}) {
+  return (
+    <View style={s.header} fixed>
+      <Text style={s.headerLeft}>{roundLabel}</Text>
+      <Text style={s.headerRight}>{generatedDate}</Text>
+    </View>
+  );
+}
+
+function RunningFooter() {
+  return (
+    <View style={s.footer} fixed>
+      <Text
+        style={s.footerText}
+        render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
+          `Page ${pageNumber} of ${totalPages}`
+        }
+      />
+      <Text style={s.confidentialStamp}>Confidential</Text>
+    </View>
+  );
+}
+
+// ─── Title page ───────────────────────────────────────────────────────────────
+
+function TitlePage({ report }: { report: ReportArtifactDetail }) {
+  const consultationCount =
+    report.consultations.length || report.consultationTitles.length;
+  const generatedDate = formatPdfDate(report.generatedAt);
+  const typeLabel = artifactTypeLabels[report.artifactType] ?? report.artifactType;
+
+  return (
+    <Page size="LETTER" style={{ backgroundColor: colors.white }}>
+      {/* Emerald accent band */}
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 8,
+          backgroundColor: colors.emerald,
+        }}
+      />
+
+      {/* Page body */}
+      <View style={s.titlePageContent}>
+        {/* Top section */}
+        <View>
+          <Text style={s.titlePageRoundLabel}>{report.roundLabel}</Text>
+
+          <Text style={s.titlePageTitle}>
+            {report.title ?? "Untitled Report"}
+          </Text>
+
+          {report.roundDescription ? (
+            <Text style={s.titlePageSubtitle}>{report.roundDescription}</Text>
+          ) : null}
+
+          <View style={s.divider} />
+
+          <View style={{ flexDirection: "row", gap: 16 }}>
+            <Text style={s.titlePageMeta}>Generated {generatedDate}</Text>
+            <Text style={s.titlePageMeta}>·</Text>
+            <Text style={s.titlePageMeta}>
+              {consultationCount} consultation{consultationCount !== 1 ? "s" : ""}
+            </Text>
+            <Text style={s.titlePageMeta}>·</Text>
+            <Text style={s.titlePageMeta}>{typeLabel}</Text>
+          </View>
+        </View>
+
+        {/* Spacer */}
+        <View style={{ flex: 1 }} />
+
+        {/* Confidential notice */}
+        <View style={{ alignItems: "center" }}>
+          <Text style={s.confidentialLarge}>Confidential</Text>
+          <Text style={s.confidentialNote}>
+            This document contains privileged and confidential information
+            intended solely for the named recipient.
+          </Text>
+        </View>
+      </View>
+    </Page>
+  );
+}
+
+// ─── TOC page ─────────────────────────────────────────────────────────────────
+
+function TocPage({
+  roundLabel,
+  generatedDate,
+  tocPageNumbers,
+  sections,
+}: {
+  roundLabel: string;
+  generatedDate: string;
+  tocPageNumbers?: TocPageNumbers;
+  sections: SectionElement[];
+}) {
+  return (
+    <Page size="LETTER" style={s.page}>
+      <RunningHeader roundLabel={roundLabel} generatedDate={generatedDate} />
+      <RunningFooter />
+
+      <Text style={s.tocHeading}>Contents</Text>
+      <View style={s.dividerAccent} />
+
+      {sections.map(({ id, label }) => (
+        <View key={id} style={s.tocRow} wrap={false}>
+          <Text style={s.tocLabel}>{label}</Text>
+          <View style={s.tocDots} />
+          <Text style={s.tocPage}>
+            {tocPageNumbers?.[id] != null ? String(tocPageNumbers[id]) : "—"}
+          </Text>
+        </View>
+      ))}
+    </Page>
+  );
+}
+
+// ─── Content blocks renderer ──────────────────────────────────────────────────
 
 function PdfContentBlocks({ content }: { content: string }) {
   const blocks = parseContentBlocks(content);
@@ -430,7 +609,6 @@ function PdfContentBlocks({ content }: { content: string }) {
                 ))}
               </View>
             );
-          case "prose":
           default:
             return (
               <Text key={i} style={s.paragraph}>
@@ -443,16 +621,153 @@ function PdfContentBlocks({ content }: { content: string }) {
   );
 }
 
-function PdfGraphOverview({ graphModel }: { graphModel: ReportGraphModel }) {
+// ─── Section content components (no Page wrapper) ────────────────────────────
+// Used both in the full layout and in pass-1 mini-renders for page counting.
+
+function ExecutiveSummaryContent({ content }: { content: string }) {
   return (
-    <>
-      <View wrap={false}>
-        <View style={s.divider} />
-        <Text style={s.sectionHeading}>Evidence Network</Text>
-        <Text style={s.sectionSubheading}>
-          Snapshot saved {formatPdfDate(graphModel.snapshot.snapshotAt)}
-        </Text>
-      </View>
+    <View>
+      <Text style={s.sectionHeading}>Executive Summary</Text>
+      <View style={s.dividerAccent} />
+      <PdfContentBlocks content={content} />
+    </View>
+  );
+}
+
+function KeyThemesContent({
+  report,
+  template,
+}: {
+  report: ReportArtifactDetail;
+  template: ReportTemplate;
+}) {
+  const allGroups = getAllThemeGroups(report.inputSnapshot);
+  const accepted = allGroups.filter((g) => g.status === "accepted");
+  const pending = allGroups.filter((g) => g.status === "draft");
+
+  const acceptedToShow = template === "executive" ? accepted.slice(0, 3) : accepted;
+
+  return (
+    <View>
+      <Text style={s.sectionHeading}>
+        Key Themes
+        {template === "executive" && accepted.length > 3
+          ? ` (Top 3 of ${accepted.length})`
+          : ` (${accepted.length})`}
+      </Text>
+      <View style={s.dividerAccent} />
+
+      {acceptedToShow.length === 0 && (
+        <Text style={s.themeDescription}>No accepted themes recorded.</Text>
+      )}
+
+      {acceptedToShow.map((group, i) => (
+        <View key={i}>
+          <View style={s.themeCard} wrap={false}>
+            <View style={s.themeLabelRow}>
+              <Text style={s.themeLabel}>{group.label}</Text>
+              <Text style={s.themeBadge}>Accepted</Text>
+            </View>
+            {group.description && (
+              <Text style={s.themeDescription}>{group.description}</Text>
+            )}
+          </View>
+          {group.members.length > 0 && (
+            <View style={{ marginLeft: 12, marginTop: 2 }}>
+              {[...group.members]
+                .sort((a, b) => a.position - b.position)
+                .map((member, j) => (
+                  <View
+                    key={j}
+                    style={[s.themeCard, s.themeCardMuted, { marginBottom: 3 }]}
+                    wrap={false}
+                  >
+                    <View style={s.themeLabelRow}>
+                      <Text style={s.themeLabel}>{member.label}</Text>
+                      {member.sourceConsultationTitle ? (
+                        <Text style={[s.themeBadge, s.themeBadgeMuted]}>
+                          {member.sourceConsultationTitle}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {member.description && (
+                      <Text style={s.themeDescription}>{member.description}</Text>
+                    )}
+                  </View>
+                ))}
+            </View>
+          )}
+        </View>
+      ))}
+
+      {template === "standard" && pending.length > 0 && (
+        <>
+          <Text style={s.sectionSubheading}>Pending Review ({pending.length})</Text>
+          {pending.map((group, i) => (
+            <View key={i} style={[s.themeCard, s.themeCardMuted]} wrap={false}>
+              <View style={s.themeLabelRow}>
+                <Text style={s.themeLabel}>{group.label}</Text>
+                <Text style={[s.themeBadge, s.themeBadgeMuted]}>Pending</Text>
+              </View>
+              {group.description && (
+                <Text style={s.themeDescription}>{group.description}</Text>
+              )}
+            </View>
+          ))}
+        </>
+      )}
+    </View>
+  );
+}
+
+function RejectedThemesContent({ report }: { report: ReportArtifactDetail }) {
+  const allGroups = getAllThemeGroups(report.inputSnapshot);
+  const rejected = allGroups.filter((g) => g.status === "management_rejected");
+
+  return (
+    <View>
+      <Text style={s.sectionHeading}>
+        Rejected Themes ({rejected.length})
+      </Text>
+      <View style={s.dividerAccent} />
+      {rejected.map((group, i) => (
+        <View key={i} style={[s.themeCard, s.themeCardMuted]} wrap={false}>
+          <View style={s.themeLabelRow}>
+            <Text style={s.themeLabel}>{group.label}</Text>
+            <Text style={[s.themeBadge, s.themeBadgeMuted]}>Rejected</Text>
+          </View>
+          {group.description && (
+            <Text style={s.themeDescription}>{group.description}</Text>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function NetworkContent({
+  graphModel,
+  template,
+}: {
+  graphModel: ReportGraphModel;
+  template: ReportTemplate;
+}) {
+  const groupsToShow =
+    template === "executive"
+      ? graphModel.connectionsByType
+          .map((g) => ({ ...g, connections: g.connections.slice(0, 2) }))
+          .filter((g) => g.connections.length > 0)
+          .slice(0, 2)
+      : graphModel.connectionsByType;
+
+  const nodesToShow =
+    template === "executive" ? graphModel.topNodes.slice(0, 4) : graphModel.nodes;
+
+  return (
+    <View>
+      <Text style={s.sectionHeading}>Evidence Network</Text>
+      <View style={s.dividerAccent} />
+
       <View style={s.statsRow}>
         <View style={s.statBox}>
           <Text style={s.statLabel}>Nodes</Text>
@@ -471,283 +786,246 @@ function PdfGraphOverview({ graphModel }: { graphModel: ReportGraphModel }) {
           <Text style={s.statValue}>{graphModel.supportingThemeCount}</Text>
         </View>
       </View>
-    </>
-  );
-}
 
-function PdfGraphConnections({
-  graphModel,
-  template,
-}: {
-  graphModel: ReportGraphModel;
-  template: ReportTemplate;
-}) {
-  const groupsToShow =
-    template === "executive"
-      ? graphModel.connectionsByType
-          .map((group) => ({
-            ...group,
-            connections: group.connections.slice(0, 2),
-          }))
-          .filter((group) => group.connections.length > 0)
-          .slice(0, 2)
-      : graphModel.connectionsByType;
-
-  return (
-    <>
-      <View wrap={false}>
-        <Text style={s.sectionHeading}>
-          Network Connections ({graphModel.connectionCount})
-        </Text>
-      </View>
-      {groupsToShow.length === 0 ? (
-        <View style={s.evidenceCard} wrap={false}>
-          <Text style={s.themeDescription}>
-            No saved typed connections were available on this artifact. The saved network still
-            preserves nodes for future graph-aware report generations.
+      {groupsToShow.length > 0 && (
+        <>
+          <Text style={s.sectionSubheading}>
+            Connections ({graphModel.connectionCount})
           </Text>
-        </View>
-      ) : (
-        groupsToShow.map((group) => (
-          <View key={group.type} style={{ marginBottom: 8 }}>
-            <Text style={s.sectionSubheading}>
-              {group.label} ({group.connections.length})
-            </Text>
-            <View
-              style={{
-                borderWidth: 0.5,
-                borderColor: colors.border,
-                borderRadius: 4,
-                backgroundColor: colors.white,
-                padding: 8,
-              }}
-            >
-              {group.connections.map((connection) => (
-                <View
-                  key={connection.key}
-                  style={{
-                    paddingVertical: 6,
-                    borderBottomWidth: 0.5,
-                    borderBottomColor: colors.borderLight,
-                  }}
-                  wrap={false}
-                >
-                  <Text style={s.evidenceTitle}>
-                    {connection.fromLabel}
-                    {"  \u2192  "}
-                    [{formatConnectionTypeLabel(connection.connectionType)}]
-                    {"  \u2192  "}
-                    {connection.toLabel}
-                  </Text>
-                  <Text style={s.themeDescription}>
-                    {connection.origin === "ai_suggested" ? "AI accepted" : "Manual"}
-                    {connection.notes ? `  ·  ${connection.notes}` : ""}
-                  </Text>
+          {groupsToShow.map((group) => (
+            <View key={group.type}>
+              <Text style={[s.sectionSubheading, { fontSize: 7 }]}>
+                {group.label} ({group.connections.length})
+              </Text>
+              {group.connections.map((conn) => (
+                <View key={conn.key} style={s.evidenceCard} wrap={false}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.evidenceTitle}>
+                      {conn.fromLabel}
+                      {" \u2192 "}
+                      {formatConnectionTypeLabel(conn.connectionType)}
+                      {" \u2192 "}
+                      {conn.toLabel}
+                    </Text>
+                    <Text style={s.themeDescription}>
+                      {conn.origin === "ai_suggested" ? "AI accepted" : "Manual"}
+                      {conn.notes ? `  ·  ${conn.notes}` : ""}
+                    </Text>
+                  </View>
                 </View>
               ))}
             </View>
-          </View>
-        ))
+          ))}
+        </>
       )}
-    </>
-  );
-}
 
-function PdfGraphNodes({
-  graphModel,
-  template,
-}: {
-  graphModel: ReportGraphModel;
-  template: ReportTemplate;
-}) {
-  const nodesToShow =
-    template === "executive"
-      ? graphModel.topNodes.slice(0, 4)
-      : graphModel.nodes;
-
-  if (nodesToShow.length === 0) {
-    return null;
-  }
-
-  return (
-    <>
-      <View wrap={false}>
-        <Text style={s.sectionHeading}>Network Nodes ({graphModel.nodeCount})</Text>
-      </View>
-      {nodesToShow.map((node) => {
-        const cardStyle =
-          node.nodeType === "insight"
-            ? [s.themeCard, s.themeCardSupporting]
-            : [s.themeCard];
-        const badgeStyle =
-          node.nodeType === "insight"
-            ? [s.themeBadge, s.themeBadgeSupporting]
-            : [s.themeBadge];
-
-        return (
-          <View
-            key={node.key}
-            style={cardStyle}
-            wrap={false}
-          >
-            <View style={s.themeLabelRow}>
-              <Text style={s.themeLabel}>{node.label}</Text>
-              <Text style={badgeStyle}>
-                {node.nodeType}
-              </Text>
-              {node.consultationTitle && (
-                <Text style={[s.themeBadge, s.themeBadgeSupporting]}>
-                  {"\u2014"} {node.consultationTitle}
-                </Text>
-              )}
-            </View>
-            {node.description && (
-              <Text style={s.themeDescription}>{node.description}</Text>
-            )}
-            <Text style={s.themeDescription}>
-              Degree {node.degree}
-              {node.memberCount !== null ? `  ·  ${node.memberCount} members` : ""}
-              {node.isUserAdded ? "  ·  User added" : ""}
-            </Text>
-          </View>
-        );
-      })}
-    </>
-  );
-}
-
-// ─── Document component ──────────────────────────────────────────────────────
-
-function PdfThemeHierarchy({
-  report,
-  template,
-}: {
-  report: ReportPrintLayoutProps["report"];
-  template: ReportTemplate;
-}) {
-  const allGroups = getAllThemeGroups(report.inputSnapshot);
-  const accepted = allGroups.filter((g) => g.status === "accepted");
-  const pending = allGroups.filter((g) => g.status === "draft");
-  const rejected = allGroups.filter((g) => g.status === "management_rejected");
-
-  const acceptedToShow = template === "executive" ? accepted.slice(0, 3) : accepted;
-  const showNonAccepted = template !== "executive";
-
-  if (allGroups.length === 0) return null;
-
-  return (
-    <>
-      {/* ─── Key Findings ─── */}
-      {acceptedToShow.length > 0 && (
-        <View wrap={false}>
-          <View style={s.divider} />
-          <Text style={s.sectionHeading}>
-            Key Findings
-            {template === "executive" &&
-              accepted.length > 3 &&
-              ` (Top 3 of ${accepted.length})`}
+      {nodesToShow.length > 0 && (
+        <>
+          <Text style={s.sectionSubheading}>
+            Nodes ({graphModel.nodeCount})
           </Text>
-        </View>
-      )}
-      {acceptedToShow.map((group, i) => (
-        <View key={i} wrap={false}>
-          <View style={s.themeCard}>
-            <View style={s.themeLabelRow}>
-              <Text style={s.themeLabel}>{group.label}</Text>
-              <Text style={s.themeBadge}>Accepted</Text>
+          {nodesToShow.map((node) => (
+            <View
+              key={node.key}
+              style={
+                node.nodeType === "insight"
+                  ? [s.themeCard, s.themeCardMuted]
+                  : [s.themeCard]
+              }
+              wrap={false}
+            >
+              <View style={s.themeLabelRow}>
+                <Text style={s.themeLabel}>{node.label}</Text>
+                <Text
+                  style={
+                    node.nodeType === "insight"
+                      ? [s.themeBadge, s.themeBadgeMuted]
+                      : [s.themeBadge]
+                  }
+                >
+                  {node.nodeType}
+                </Text>
+                {node.consultationTitle && (
+                  <Text style={[s.themeBadge, s.themeBadgeMuted]}>
+                    {"\u2014"} {node.consultationTitle}
+                  </Text>
+                )}
+              </View>
+              {node.description && (
+                <Text style={s.themeDescription}>{node.description}</Text>
+              )}
+              <Text style={s.themeDescription}>
+                Degree {node.degree}
+                {node.memberCount !== null ? `  ·  ${node.memberCount} members` : ""}
+                {node.isUserAdded ? "  ·  User added" : ""}
+              </Text>
             </View>
-            {group.description && (
-              <Text style={s.themeDescription}>{group.description}</Text>
+          ))}
+        </>
+      )}
+    </View>
+  );
+}
+
+function EvidenceContent({ report }: { report: ReportArtifactDetail }) {
+  const consultationCount =
+    report.consultations.length || report.consultationTitles.length;
+
+  const rows =
+    report.consultations.length > 0
+      ? report.consultations.map((c, i) => ({
+          i,
+          title: c.title,
+          date: c.date,
+          people: c.people,
+        }))
+      : report.consultationTitles.map((title, i) => ({
+          i,
+          title,
+          date: "",
+          people: [] as string[],
+        }));
+
+  return (
+    <View>
+      <Text style={s.sectionHeading}>
+        Source Evidence ({consultationCount})
+      </Text>
+      <View style={s.dividerAccent} />
+      {rows.map(({ i, title, date, people }) => (
+        <View key={i} style={s.evidenceCard} wrap={false}>
+          <Text style={s.evidenceNumber}>{i + 1}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.evidenceTitle}>{title}</Text>
+            {(date || people.length > 0) && (
+              <Text style={[s.themeDescription, { marginTop: 2 }]}>
+                {[
+                  date
+                    ? new Date(date).toLocaleDateString("en-US", {
+                        dateStyle: "medium",
+                      })
+                    : null,
+                  people.length > 0 ? people.join(", ") : null,
+                ]
+                  .filter(Boolean)
+                  .join("  ·  ")}
+              </Text>
             )}
           </View>
-          {/* Child insights */}
-          {group.members.length > 0 && (
-            <View style={{ marginLeft: 12, marginTop: 2 }}>
-              {[...group.members]
-                .sort((a, b) => a.position - b.position)
-                .map((member, j) => (
-                  <View
-                    key={j}
-                    style={[s.themeCard, s.themeCardSupporting, { marginBottom: 3 }]}
-                    wrap={false}
-                  >
-                    <View style={s.themeLabelRow}>
-                      <Text style={s.themeLabel}>{member.label}</Text>
-                      {member.sourceConsultationTitle ? (
-                        <Text style={[s.themeBadge, s.themeBadgeSupporting]}>
-                          {member.sourceConsultationTitle}
-                        </Text>
-                      ) : null}
-                    </View>
-                    {member.description && (
-                      <Text style={s.themeDescription}>{member.description}</Text>
-                    )}
-                  </View>
-                ))}
-            </View>
-          )}
         </View>
       ))}
-
-      {/* ─── Pending themes ─── */}
-      {showNonAccepted && pending.length > 0 && (
-        <>
-          <View wrap={false} style={{ marginTop: 12 }}>
-            <Text style={s.sectionSubheading}>
-              Pending Review ({pending.length})
-            </Text>
-          </View>
-          {pending.map((group, i) => (
-            <View key={i} style={s.themeCard} wrap={false}>
-              <View style={s.themeLabelRow}>
-                <Text style={s.themeLabel}>{group.label}</Text>
-                <Text style={[s.themeBadge, s.themeBadgeSupporting]}>Pending</Text>
-              </View>
-              {group.description && (
-                <Text style={s.themeDescription}>{group.description}</Text>
-              )}
-            </View>
-          ))}
-        </>
-      )}
-
-      {/* ─── Management-Rejected themes (standard/custom only) ─── */}
-      {showNonAccepted && rejected.length > 0 && (
-        <>
-          <View wrap={false} style={{ marginTop: 12 }}>
-            <View style={s.divider} />
-            <Text style={s.sectionHeading}>
-              Management-Rejected Themes ({rejected.length})
-            </Text>
-          </View>
-          {rejected.map((group, i) => (
-            <View key={i} style={[s.themeCard, s.themeCardSupporting]} wrap={false}>
-              <View style={s.themeLabelRow}>
-                <Text style={s.themeLabel}>{group.label}</Text>
-                <Text style={[s.themeBadge, s.themeBadgeSupporting]}>Rejected</Text>
-              </View>
-              {group.description && (
-                <Text style={s.themeDescription}>{group.description}</Text>
-              )}
-            </View>
-          ))}
-        </>
-      )}
-    </>
+    </View>
   );
 }
+
+function AuditTrailContent({ report }: { report: ReportArtifactDetail }) {
+  return (
+    <View>
+      <Text style={s.sectionHeading}>
+        Audit Trail ({report.auditSummary.length} events)
+      </Text>
+      <View style={s.dividerAccent} />
+      {report.auditSummary.map((event, i) => (
+        <View
+          key={i}
+          style={[
+            s.evidenceCard,
+            { flexDirection: "row", justifyContent: "space-between" },
+          ]}
+          wrap={false}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={s.evidenceTitle}>
+              {event.action
+                .replace(/\./g, " \u2192 ")
+                .replace(/_/g, " ")
+                .replace(/\b\w/g, (c: string) => c.toUpperCase())}
+            </Text>
+            {event.entityType && (
+              <Text style={s.themeDescription}>{event.entityType}</Text>
+            )}
+          </View>
+          <Text style={[s.themeDescription, { marginLeft: 8 }]}>
+            {new Date(event.createdAt).toLocaleDateString("en-US", {
+              dateStyle: "medium",
+            })}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ─── buildSectionElements ─────────────────────────────────────────────────────
+// Returns ordered section specs for both pass-1 counting and the final layout.
+
+export function buildSectionElements(
+  report: ReportArtifactDetail,
+  template: ReportTemplate
+): SectionElement[] {
+  const sections: SectionElement[] = [];
+  const graphModel = buildReportGraphModel(report.inputSnapshot);
+
+  sections.push({
+    id: "executiveSummary",
+    label: "Executive Summary",
+    element: <ExecutiveSummaryContent content={report.content} />,
+  });
+
+  sections.push({
+    id: "keyThemes",
+    label: "Key Themes",
+    element: <KeyThemesContent report={report} template={template} />,
+  });
+
+  if (template === "standard") {
+    const allGroups = getAllThemeGroups(report.inputSnapshot);
+    const hasRejected = allGroups.some((g) => g.status === "management_rejected");
+
+    if (hasRejected) {
+      sections.push({
+        id: "rejectedThemes",
+        label: "Rejected Themes",
+        element: <RejectedThemesContent report={report} />,
+      });
+    }
+
+    if (graphModel) {
+      sections.push({
+        id: "network",
+        label: "Evidence Network",
+        element: <NetworkContent graphModel={graphModel} template={template} />,
+      });
+    }
+
+    sections.push({
+      id: "evidence",
+      label: "Source Evidence",
+      element: <EvidenceContent report={report} />,
+    });
+
+    if (report.auditSummary.length > 0) {
+      sections.push({
+        id: "auditTrail",
+        label: "Audit Trail",
+        element: <AuditTrailContent report={report} />,
+      });
+    }
+  }
+
+  return sections;
+}
+
+// ─── Main document ────────────────────────────────────────────────────────────
 
 export function ReportPrintLayout({
   report,
   template,
+  tocPageNumbers,
 }: ReportPrintLayoutProps) {
-  const readTime = estimateReadTime(report.content);
-  const typeLabel =
-    artifactTypeLabels[report.artifactType] ?? report.artifactType;
   const generatedDate = formatPdfDate(report.generatedAt);
-  const graphModel = buildReportGraphModel(report.inputSnapshot);
-
-  const showEvidence = template === "standard";
+  const typeLabel = artifactTypeLabels[report.artifactType] ?? report.artifactType;
+  const sections = buildSectionElements(report, template);
 
   return (
     <Document
@@ -755,153 +1033,28 @@ export function ReportPrintLayout({
       author="ConsultantPlatform"
       subject={typeLabel}
     >
-      <Page size="LETTER" style={s.page} wrap>
-        {/* Fixed header */}
-        <View style={s.header} fixed>
-          <Text style={s.headerLeft}>{typeLabel}</Text>
-          <Text style={s.headerRight}>{report.roundLabel}</Text>
-        </View>
+      {/* Page 1: Title page (no header/footer) */}
+      <TitlePage report={report} />
 
-        {/* Fixed footer with page numbers */}
-        <View style={s.footer} fixed>
-          <Text style={s.confidential}>Confidential</Text>
-          <Text
-            style={s.footerText}
-            render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
-              `Page ${pageNumber} of ${totalPages}`
-            }
+      {/* Page 2: Table of contents */}
+      <TocPage
+        roundLabel={report.roundLabel}
+        generatedDate={generatedDate}
+        tocPageNumbers={tocPageNumbers}
+        sections={sections}
+      />
+
+      {/* Pages 3+: Content sections, each on its own Page */}
+      {sections.map(({ id, element }) => (
+        <Page key={id} size="LETTER" style={s.page} wrap>
+          <RunningHeader
+            roundLabel={report.roundLabel}
+            generatedDate={generatedDate}
           />
-          <Text style={s.footerText}>{generatedDate}</Text>
-        </View>
-
-        {/* ─── Title block ─── */}
-        <View style={s.titleBlock}>
-          <Text style={s.reportType}>{typeLabel}</Text>
-          <Text style={s.title}>{report.title ?? "Untitled Report"}</Text>
-          <Text style={s.subtitle}>
-            {report.roundLabel}
-            {report.roundDescription ? ` \u2014 ${report.roundDescription}` : ""}
-          </Text>
-          <View style={s.metaRow}>
-            <Text style={s.metaItem}>Generated {generatedDate}</Text>
-            <Text style={s.metaItem}>~{readTime} min read</Text>
-            {report.totalVersions > 1 && (
-              <Text style={s.metaItem}>
-                Version {report.versionNumber} of {report.totalVersions}
-              </Text>
-            )}
-          </View>
-        </View>
-
-        {/* ─── Quick Stats ─── */}
-        <View style={s.statsRow}>
-          <View style={s.statBox}>
-            <Text style={s.statLabel}>Meetings</Text>
-            <Text style={s.statValue}>
-              {report.consultationTitles.length}
-            </Text>
-          </View>
-          <View style={s.statBox}>
-            <Text style={s.statLabel}>Accepted Themes</Text>
-            <Text style={s.statValue}>{report.acceptedThemeCount}</Text>
-          </View>
-          <View style={s.statBox}>
-            <Text style={s.statLabel}>Supporting Themes</Text>
-            <Text style={s.statValue}>{report.supportingThemeCount}</Text>
-          </View>
-          <View style={s.statBox}>
-            <Text style={s.statLabel}>Reading Time</Text>
-            <Text style={s.statValue}>~{readTime}m</Text>
-          </View>
-        </View>
-
-        <View style={s.dividerThick} />
-
-        {graphModel ? (
-          <>
-            <PdfGraphOverview graphModel={graphModel} />
-            <PdfGraphConnections graphModel={graphModel} template={template} />
-            <PdfGraphNodes graphModel={graphModel} template={template} />
-            <View style={s.divider} />
-            <PdfContentBlocks content={report.content} />
-          </>
-        ) : (
-          <>
-            {/* ─── Report content ─── */}
-            <PdfContentBlocks content={report.content} />
-
-            {/* ─── Theme hierarchy ─── */}
-            <PdfThemeHierarchy report={report} template={template} />
-          </>
-        )}
-
-        {/* ─── Source Evidence ─── */}
-        {showEvidence && (report.consultations.length > 0 || report.consultationTitles.length > 0) && (
-          <>
-            <View wrap={false} style={{ marginTop: 12 }}>
-              <View style={s.divider} />
-              <Text style={s.sectionHeading}>
-                Source Consultations ({report.consultations.length || report.consultationTitles.length})
-              </Text>
-            </View>
-            {(report.consultations.length > 0
-              ? report.consultations.map((c, i) => ({ i, title: c.title, date: c.date, people: c.people }))
-              : report.consultationTitles.map((title, i) => ({ i, title, date: "", people: [] }))
-            ).map(({ i, title, date, people }) => (
-              <View key={i} style={s.evidenceCard} wrap={false}>
-                <Text style={s.evidenceNumber}>{i + 1}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.evidenceTitle}>{title}</Text>
-                  {(date || people.length > 0) && (
-                    <Text style={[s.themeDescription, { marginTop: 1 }]}>
-                      {[
-                        date ? new Date(date).toLocaleDateString("en-US", { dateStyle: "medium" }) : null,
-                        people.length > 0 ? people.join(", ") : null,
-                      ]
-                        .filter(Boolean)
-                        .join("  ·  ")}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            ))}
-          </>
-        )}
-
-        {/* ─── Audit Trail (compliance page) ─── */}
-        {report.auditSummary && report.auditSummary.length > 0 && (
-          <>
-            <View wrap={false} style={{ marginTop: 20 }}>
-              <View style={s.divider} />
-              <Text style={s.sectionHeading}>
-                Audit Trail ({report.auditSummary.length} events)
-              </Text>
-            </View>
-            {report.auditSummary.map((event, i) => (
-              <View
-                key={i}
-                style={[s.evidenceCard, { flexDirection: "row", justifyContent: "space-between" }]}
-                wrap={false}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={s.evidenceTitle}>
-                    {event.action
-                      .replace(/\./g, " \u2192 ")
-                      .replace(/_/g, " ")
-                      .replace(/\b\w/g, (c: string) => c.toUpperCase())}
-                  </Text>
-                  {event.entityType && (
-                    <Text style={s.themeDescription}>{event.entityType}</Text>
-                  )}
-                </View>
-                <Text style={[s.themeDescription, { marginLeft: 8 }]}>
-                  {new Date(event.createdAt).toLocaleDateString("en-US", { dateStyle: "medium" })}
-                </Text>
-              </View>
-            ))}
-          </>
-        )}
-      </Page>
+          <RunningFooter />
+          {element}
+        </Page>
+      ))}
     </Document>
   );
 }

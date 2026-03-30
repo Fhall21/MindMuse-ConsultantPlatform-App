@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -178,8 +179,8 @@ export function AccountSettingsPanel() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 pb-4">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <p className="text-sm font-medium">Account</p>
           <p className="text-sm text-muted-foreground">
@@ -189,158 +190,155 @@ export function AccountSettingsPanel() {
         <Badge variant="outline">{isLoading ? "Loading" : "Signed in"}</Badge>
       </div>
 
-      <section className="space-y-4 border-t border-border/80 pt-5">
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold tracking-tight">Profile</h2>
-          <p className="text-sm text-muted-foreground">
-            Set the name shown around the workspace.
-          </p>
-        </div>
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Profile</CardTitle>
+          <CardDescription>Set the name shown around the workspace.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-4" onSubmit={handleProfileUpdate}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="settings-display-name">Preferred name</Label>
+                <Input
+                  id="settings-display-name"
+                  value={displayNameValue}
+                  onChange={(event) => setDisplayNameValue(event.target.value)}
+                  disabled={isLoading || isSavingProfile}
+                  placeholder="How you want to be addressed"
+                  autoComplete="nickname"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="settings-full-name">Full name</Label>
+                <Input
+                  id="settings-full-name"
+                  value={fullNameValue}
+                  onChange={(event) => setFullNameValue(event.target.value)}
+                  disabled={isLoading || isSavingProfile}
+                  placeholder="Your full name"
+                  autoComplete="name"
+                />
+              </div>
+            </div>
 
-        <form className="space-y-4" onSubmit={handleProfileUpdate}>
-          <div className="grid gap-4 md:grid-cols-2">
+            {!hasProfileDetails ? (
+              <p className="text-sm text-muted-foreground">Optional.</p>
+            ) : null}
+
+            <Button type="submit" disabled={isLoading || isSavingProfile}>
+              {isSavingProfile ? "Saving..." : "Save Profile"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Email</CardTitle>
+          <CardDescription>Update the address used for sign-in.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-4" onSubmit={handleEmailUpdate}>
             <div className="space-y-2">
-              <Label htmlFor="settings-display-name">Preferred name</Label>
+              <Label htmlFor="settings-email">Email address</Label>
               <Input
-                id="settings-display-name"
-                value={displayNameValue}
-                onChange={(event) => setDisplayNameValue(event.target.value)}
-                disabled={isLoading || isSavingProfile}
-                placeholder="How you want to be addressed"
-                autoComplete="nickname"
+                id="settings-email"
+                type="email"
+                value={emailValue}
+                onChange={(event) => setEmailValue(event.target.value)}
+                disabled={isLoading || isSavingEmail}
+                autoComplete="email"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="settings-full-name">Full name</Label>
-              <Input
-                id="settings-full-name"
-                value={fullNameValue}
-                onChange={(event) => setFullNameValue(event.target.value)}
-                disabled={isLoading || isSavingProfile}
-                placeholder="Your full name"
-                autoComplete="name"
-              />
+
+            {pendingEmail ? (
+              <p className="text-sm text-muted-foreground">
+                Confirmation is pending for <span className="font-medium text-foreground">{pendingEmail}</span>.
+              </p>
+            ) : null}
+
+            <div className="flex flex-wrap gap-3">
+              <Button type="submit" disabled={!isEmailChanged || isLoading || isSavingEmail}>
+                {isSavingEmail ? "Saving..." : "Update Email"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isLoading || isSavingEmail}
+                onClick={() => {
+                  setEmailValue(currentEmail);
+                  setPendingEmail(null);
+                }}
+              >
+                Reset
+              </Button>
             </div>
-          </div>
+          </form>
+        </CardContent>
+      </Card>
 
-          {!hasProfileDetails ? (
-            <p className="text-sm text-muted-foreground">Optional.</p>
-          ) : null}
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Password</CardTitle>
+          <CardDescription>Use your current password to set a new one.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-4" onSubmit={handlePasswordUpdate}>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="settings-password-current">Current password</Label>
+                <Input
+                  id="settings-password-current"
+                  type="password"
+                  value={currentPasswordValue}
+                  onChange={(event) => setCurrentPasswordValue(event.target.value)}
+                  disabled={isSavingPassword}
+                  autoComplete="current-password"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="settings-password">New password</Label>
+                <Input
+                  id="settings-password"
+                  type="password"
+                  value={passwordValue}
+                  onChange={(event) => setPasswordValue(event.target.value)}
+                  disabled={isSavingPassword}
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="settings-password-confirm">Confirm password</Label>
+                <Input
+                  id="settings-password-confirm"
+                  type="password"
+                  value={confirmPasswordValue}
+                  onChange={(event) => setConfirmPasswordValue(event.target.value)}
+                  disabled={isSavingPassword}
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
 
-          <Button type="submit" disabled={isLoading || isSavingProfile}>
-            {isSavingProfile ? "Saving..." : "Save Profile"}
-          </Button>
-        </form>
-      </section>
-
-      <section className="space-y-4 border-t border-border/80 pt-5">
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold tracking-tight">Email</h2>
-          <p className="text-sm text-muted-foreground">
-            Update the address used for sign-in.
-          </p>
-        </div>
-
-        <form className="space-y-4" onSubmit={handleEmailUpdate}>
-          <div className="space-y-2">
-            <Label htmlFor="settings-email">Email address</Label>
-            <Input
-              id="settings-email"
-              type="email"
-              value={emailValue}
-              onChange={(event) => setEmailValue(event.target.value)}
-              disabled={isLoading || isSavingEmail}
-              autoComplete="email"
-            />
-          </div>
-
-          {pendingEmail ? (
             <p className="text-sm text-muted-foreground">
-              Confirmation is pending for <span className="font-medium text-foreground">{pendingEmail}</span>.
+              Minimum length: {MIN_PASSWORD_LENGTH} characters.
             </p>
-          ) : null}
 
-          <div className="flex flex-wrap gap-3">
-            <Button type="submit" disabled={!isEmailChanged || isLoading || isSavingEmail}>
-              {isSavingEmail ? "Saving..." : "Update Email"}
-            </Button>
             <Button
-              type="button"
-              variant="outline"
-              disabled={isLoading || isSavingEmail}
-              onClick={() => {
-                setEmailValue(currentEmail);
-                setPendingEmail(null);
-              }}
+              type="submit"
+              disabled={
+                isSavingPassword ||
+                currentPasswordValue.length === 0 ||
+                passwordValue.length < MIN_PASSWORD_LENGTH ||
+                confirmPasswordValue.length < MIN_PASSWORD_LENGTH
+              }
             >
-              Reset
+              {isSavingPassword ? "Saving..." : "Update Password"}
             </Button>
-          </div>
-        </form>
-      </section>
-
-      <section className="space-y-4 border-t border-border/80 pt-5">
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold tracking-tight">Password</h2>
-          <p className="text-sm text-muted-foreground">
-            Use your current password to set a new one.
-          </p>
-        </div>
-
-        <form className="space-y-4" onSubmit={handlePasswordUpdate}>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="settings-password-current">Current password</Label>
-              <Input
-                id="settings-password-current"
-                type="password"
-                value={currentPasswordValue}
-                onChange={(event) => setCurrentPasswordValue(event.target.value)}
-                disabled={isSavingPassword}
-                autoComplete="current-password"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="settings-password">New password</Label>
-              <Input
-                id="settings-password"
-                type="password"
-                value={passwordValue}
-                onChange={(event) => setPasswordValue(event.target.value)}
-                disabled={isSavingPassword}
-                autoComplete="new-password"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="settings-password-confirm">Confirm password</Label>
-              <Input
-                id="settings-password-confirm"
-                type="password"
-                value={confirmPasswordValue}
-                onChange={(event) => setConfirmPasswordValue(event.target.value)}
-                disabled={isSavingPassword}
-                autoComplete="new-password"
-              />
-            </div>
-          </div>
-
-          <p className="text-sm text-muted-foreground">
-            Minimum length: {MIN_PASSWORD_LENGTH} characters.
-          </p>
-
-          <Button
-            type="submit"
-            disabled={
-              isSavingPassword ||
-              currentPasswordValue.length === 0 ||
-              passwordValue.length < MIN_PASSWORD_LENGTH ||
-              confirmPasswordValue.length < MIN_PASSWORD_LENGTH
-            }
-          >
-            {isSavingPassword ? "Saving..." : "Update Password"}
-          </Button>
-        </form>
-      </section>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

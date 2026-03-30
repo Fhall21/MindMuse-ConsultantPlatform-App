@@ -16,13 +16,14 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
-import { Plus, Save, X } from "lucide-react";
+import { Plus, Save, X, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { BuilderSectionRow } from "./builder-section-row";
 import { BuilderAvailableSection } from "./builder-available-section";
+import { BuilderPreview } from "./builder-preview";
 import {
   PREDEFINED_SECTIONS,
   getPredefinedSection,
@@ -280,6 +281,7 @@ export function ReportBuilder({
   const activeDragSection = activeDragId
     ? selectedSections.find((s) => s.sectionId === activeDragId)
     : null;
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -443,11 +445,30 @@ export function ReportBuilder({
           <Save className="size-3.5" />
           {isSaving ? "Saving..." : "Save & Activate"}
         </Button>
+        <Button
+          variant="outline"
+          onClick={() => setPreviewOpen(true)}
+          disabled={selectedSections.length === 0}
+        >
+          <Eye className="size-3.5" />
+          Preview
+        </Button>
         <Button variant="ghost" onClick={onCancel}>
           <X className="size-3.5" />
           Cancel
         </Button>
       </div>
+
+      <BuilderPreview
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        name={name}
+        sections={selectedSections}
+        customSections={customSections}
+        styleNotes={template?.style_notes ?? { tone: null, person: null, formatting_notes: null }}
+        prescriptiveness={template?.prescriptiveness ?? "moderate"}
+        suggestions={template?.suggestions ?? []}
+      />
     </div>
   );
 }

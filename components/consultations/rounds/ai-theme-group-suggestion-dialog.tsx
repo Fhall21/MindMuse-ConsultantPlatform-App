@@ -147,7 +147,7 @@ export function AiThemeGroupSuggestionDialog({
               Select all
             </Button>
           </div>
-          <div className="space-y-1.5 max-h-48 overflow-y-auto border rounded-md p-3">
+          <div className="space-y-1.5 max-h-48 overflow-y-auto border rounded-xl p-3">
             {uniqueThemeLabels.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 No ungrouped themes available.
@@ -202,7 +202,7 @@ export function AiThemeGroupSuggestionDialog({
             {activeSuggestions.map((suggestion) => {
               const isAccepted = acceptedLabels.has(suggestion.label);
               return (
-                <div key={suggestion.label} className="rounded-md border p-3 space-y-2">
+                <div key={suggestion.label} className="rounded-xl border p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium">{suggestion.label}</p>
                     <div className="flex gap-1 shrink-0">

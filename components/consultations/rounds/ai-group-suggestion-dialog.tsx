@@ -148,7 +148,7 @@ export function AiGroupSuggestionDialog({
         {/* Theme picker */}
         <div className="space-y-2">
           <p className="text-sm font-medium">Select focus themes</p>
-          <div className="space-y-1.5 max-h-40 overflow-y-auto border rounded-md p-3">
+          <div className="space-y-1.5 max-h-40 overflow-y-auto border rounded-xl p-3">
             {uniqueThemeLabels.length === 0 ? (
               <p className="text-xs text-muted-foreground">No accepted themes in this round yet.</p>
             ) : (
@@ -202,7 +202,7 @@ export function AiGroupSuggestionDialog({
               return (
                 <div
                   key={suggestion.label}
-                  className="rounded-md border p-3 space-y-2"
+                  className="rounded-xl border p-3 space-y-2"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium">{suggestion.label}</p>

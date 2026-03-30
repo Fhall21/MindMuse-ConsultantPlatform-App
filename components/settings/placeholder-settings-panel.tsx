@@ -16,9 +16,7 @@ export function PlaceholderSettingsPanel({
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="rounded-xl border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
-          {note}
-        </div>
+        <p className="text-sm text-muted-foreground">{note}</p>
       </CardContent>
     </Card>
   );

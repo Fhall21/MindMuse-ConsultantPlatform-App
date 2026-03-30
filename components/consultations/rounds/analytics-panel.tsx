@@ -18,6 +18,13 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -457,19 +464,25 @@ export function AnalyticsPanel({
 
       {/* Cluster list */}
       {analytics.clusterCount > 0 ? (
-        <div className="space-y-3">
-          <Separator />
-          {analytics.clusters.map((cluster) => {
-            const decision =
-              clusterDecisionById.get(cluster.clusterId.toString()) ?? null;
-            const terms =
-              cluster.representativeTerms.length > 0
-                ? cluster.representativeTerms
-                : cluster.allTerms;
-            const isPending = pendingDecision?.clusterId === cluster.clusterId;
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Suggested Insights</CardTitle>
+            <CardDescription>
+              {analytics.clusterCount} cluster{analytics.clusterCount !== 1 ? "s" : ""} — Review, edit, or reject suggestions
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="max-h-96 space-y-3 overflow-y-auto">
+            {analytics.clusters.map((cluster) => {
+              const decision =
+                clusterDecisionById.get(cluster.clusterId.toString()) ?? null;
+              const terms =
+                cluster.representativeTerms.length > 0
+                  ? cluster.representativeTerms
+                  : cluster.allTerms;
+              const isPending = pendingDecision?.clusterId === cluster.clusterId;
 
-            return (
-              <div key={cluster.clusterId} className="space-y-2.5 rounded-md border px-4 py-3">
+              return (
+                <div key={cluster.clusterId} className="space-y-2.5 rounded-md border px-4 py-3">
                 {/* Cluster header */}
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="space-y-1">
@@ -669,7 +682,8 @@ export function AnalyticsPanel({
               </div>
             );
           })}
-        </div>
+          </CardContent>
+        </Card>
       ) : null}
 
       {/* Outlier notice */}

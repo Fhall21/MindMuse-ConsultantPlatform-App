@@ -170,14 +170,14 @@ export default function RoundDetailPage({
 
       <Separator />
 
-      <section className="space-y-3">
+      <section className="space-y-4">
         <SectionHeading>Linked Meetings</SectionHeading>
         <LinkedConsultationsSection meetings={adaptedMeetings} />
       </section>
 
       <Separator />
 
-      <section className="space-y-3">
+      <section className="space-y-4">
         <SectionHeading>Reports</SectionHeading>
         <RoundOutputsSection
           roundId={id}
@@ -191,7 +191,7 @@ export default function RoundDetailPage({
 
       <Separator />
 
-      <section className="space-y-3">
+      <section className="space-y-4">
         <SectionHeading>Analysis</SectionHeading>
         <AnalyticsPanel
           consultationGroupId={id}
@@ -203,7 +203,7 @@ export default function RoundDetailPage({
 
       <Separator />
 
-      <section className="space-y-3">
+      <section className="space-y-4">
         <SectionHeading>Groupings</SectionHeading>
         <ThemeGroupingWorkspace
           roundId={id}
@@ -216,7 +216,7 @@ export default function RoundDetailPage({
 
       <Separator />
 
-      <section className="space-y-3">
+      <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <SectionHeading>Decision Logs</SectionHeading>
           <Button
@@ -243,7 +243,7 @@ export default function RoundDetailPage({
 
       <Separator />
 
-      <section className="space-y-3">
+      <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <SectionHeading>Audit</SectionHeading>
           <Button

@@ -371,7 +371,7 @@ const s = StyleSheet.create({
     marginBottom: 2,
   },
 
-  // ── Evidence / Audit cards ─────────────────────────────────────────────────
+  // ── Evidence cards ─────────────────────────────────────────────────────────
   evidenceCard: {
     borderWidth: 0.5,
     borderColor: colors.border,
@@ -380,24 +380,78 @@ const s = StyleSheet.create({
     marginBottom: 5,
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
   },
-  evidenceNumber: {
+  // View wrapper for the number so borderRadius clips correctly
+  evidenceNumberBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.borderLight,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    flexShrink: 0,
+  },
+  evidenceNumberText: {
     fontFamily: "Helvetica-Bold",
     fontSize: 8,
     color: colors.light,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.borderLight,
-    textAlign: "center",
-    paddingTop: 3,
   },
   evidenceTitle: {
     fontFamily: "Helvetica",
     fontSize: 9.5,
     color: colors.dark,
     flex: 1,
+  },
+
+  // ── Audit rail ─────────────────────────────────────────────────────────────
+  railDayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 5,
+  },
+  railDayLabel: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 7.5,
+    color: colors.mid,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginRight: 8,
+    flexShrink: 0,
+  },
+  railDayLine: {
+    flex: 1,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border,
+  },
+  railEventRow: {
+    flexDirection: "row",
+    paddingLeft: 4,
+    marginBottom: 4,
+    alignItems: "flex-start",
+  },
+  railDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.faint,
+    marginTop: 4,
+    marginRight: 8,
+    flexShrink: 0,
+  },
+  railEventText: {
+    fontFamily: "Helvetica",
+    fontSize: 9,
+    color: colors.dark,
+    flex: 1,
+  },
+  railEntityText: {
+    fontFamily: "Helvetica",
+    fontSize: 8,
+    color: colors.faint,
+    marginLeft: 6,
+    flexShrink: 0,
   },
 });
 
@@ -948,7 +1002,9 @@ function EvidenceContent({ report }: { report: ReportArtifactDetail }) {
       <View style={s.dividerAccent} />
       {rows.map(({ i, title, date, people }) => (
         <View key={i} style={s.evidenceCard} wrap={false}>
-          <Text style={s.evidenceNumber}>{i + 1}</Text>
+          <View style={s.evidenceNumberBox}>
+            <Text style={s.evidenceNumberText}>{i + 1}</Text>
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={s.evidenceTitle}>{title}</Text>
             {(date || people.length > 0) && (
@@ -972,38 +1028,58 @@ function EvidenceContent({ report }: { report: ReportArtifactDetail }) {
   );
 }
 
+function formatAuditAction(action: string): string {
+  return action
+    .replace(/\./g, " \u2192 ")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c: string) => c.toUpperCase());
+}
+
 function AuditTrailContent({ report }: { report: ReportArtifactDetail }) {
+  // Group events by calendar day (ISO date string YYYY-MM-DD)
+  const byDay = new Map<string, typeof report.auditSummary>();
+  for (const event of report.auditSummary) {
+    const day = event.createdAt.slice(0, 10);
+    const existing = byDay.get(day) ?? [];
+    existing.push(event);
+    byDay.set(day, existing);
+  }
+  // Keep chronological order (most-recent first matches typical audit display)
+  const days = Array.from(byDay.entries()).sort((a, b) =>
+    b[0].localeCompare(a[0])
+  );
+
   return (
     <View>
       <Text style={s.sectionHeading}>
         Audit Trail ({report.auditSummary.length} events)
       </Text>
       <View style={s.dividerAccent} />
-      {report.auditSummary.map((event, i) => (
-        <View
-          key={i}
-          style={[
-            s.evidenceCard,
-            { flexDirection: "row", justifyContent: "space-between" },
-          ]}
-          wrap={false}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={s.evidenceTitle}>
-              {event.action
-                .replace(/\./g, " \u2192 ")
-                .replace(/_/g, " ")
-                .replace(/\b\w/g, (c: string) => c.toUpperCase())}
+      {days.map(([day, events]) => (
+        <View key={day}>
+          {/* Day header rail */}
+          <View style={s.railDayRow} wrap={false}>
+            <Text style={s.railDayLabel}>
+              {new Date(day + "T00:00:00").toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
             </Text>
-            {event.entityType && (
-              <Text style={s.themeDescription}>{event.entityType}</Text>
-            )}
+            <View style={s.railDayLine} />
           </View>
-          <Text style={[s.themeDescription, { marginLeft: 8 }]}>
-            {new Date(event.createdAt).toLocaleDateString("en-US", {
-              dateStyle: "medium",
-            })}
-          </Text>
+          {/* Events for this day */}
+          {events.map((event, j) => (
+            <View key={j} style={s.railEventRow} wrap={false}>
+              <View style={s.railDot} />
+              <Text style={s.railEventText}>
+                {formatAuditAction(event.action)}
+              </Text>
+              {event.entityType ? (
+                <Text style={s.railEntityText}>{event.entityType}</Text>
+              ) : null}
+            </View>
+          ))}
         </View>
       ))}
     </View>

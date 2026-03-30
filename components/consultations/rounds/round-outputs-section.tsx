@@ -36,22 +36,22 @@ const outputTypeLabels: Record<string, string> = {
   email: "Evidence Email",
 };
 
-const statusBadgeConfig: Record<string, { label: string; className: string }> = {
+const statusBadgeConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending: {
     label: "Pending",
-    className: "",
+    variant: "secondary",
   },
   generating: {
     label: "Generating...",
-    className: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300",
+    variant: "outline",
   },
   ready: {
     label: "Ready",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300",
+    variant: "default",
   },
   failed: {
     label: "Failed",
-    className: "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300",
+    variant: "destructive",
   },
 };
 
@@ -110,7 +110,7 @@ export function RoundOutputsSection({
           return (
             <div
               key={type}
-              className="rounded-lg border border-border/50 bg-muted/5 px-4 py-3"
+              className="space-y-3 border-b border-border/60 py-3 last:border-b-0"
             >
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1 space-y-2">
@@ -127,7 +127,7 @@ export function RoundOutputsSection({
 
                   <div className="flex flex-wrap items-center gap-2">
                     {statusConfig ? (
-                      <Badge variant="outline" className={statusConfig.className}>
+                      <Badge variant={statusConfig.variant}>
                         {statusConfig.label}
                       </Badge>
                     ) : null}

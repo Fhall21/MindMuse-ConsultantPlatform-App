@@ -35,6 +35,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dagre": "^0.8.5",
+    "docx": "^8",
     "drizzle-orm": "^0.44.5",
     "heic2any": "^0.0.4",
     "lucide-react": "^0.577.0",

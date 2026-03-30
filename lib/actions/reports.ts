@@ -2,7 +2,8 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { meetings } from "@/db/schema";
+import { consultationOutputArtifacts, meetings } from "@/db/schema";
+import { emitAuditEvent } from "@/lib/data/audit-log";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
 import {
   getConsultationForUser,
@@ -729,3 +730,42 @@ export async function getConsultationReportData(
 }
 
 export const getMeetingReportData = getConsultationReportData;
+
+// ─── Direct report editing ────────────────────────────────────────────────────
+
+export async function saveEditedReport(
+  artifactId: string,
+  newContent: string
+): Promise<{ newArtifactId: string }> {
+  const userId = await requireCurrentUserId();
+  const original = await getRoundOutputArtifactForUser(artifactId, userId);
+
+  if (!original) {
+    throw new Error("Report not found or access denied");
+  }
+
+  const [inserted] = await db
+    .insert(consultationOutputArtifacts)
+    .values({
+      consultationId: original.consultation_id,
+      userId,
+      artifactType: original.artifact_type,
+      content: newContent,
+      title: original.title,
+      inputSnapshot: (original.input_snapshot as Record<string, unknown>) ?? {},
+      createdBy: userId,
+    })
+    .returning({ id: consultationOutputArtifacts.id });
+
+  await emitAuditEvent({
+    action: "report.manually_edited",
+    entityType: "artifact",
+    entityId: inserted.id,
+    metadata: {
+      original_artifact_id: artifactId,
+      round_id: original.consultation_id,
+    },
+  });
+
+  return { newArtifactId: inserted.id };
+}

@@ -1,12 +1,27 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import posthog from "posthog-js";
+import {
+  MDXEditor,
+  type MDXEditorMethods,
+  headingsPlugin,
+  listsPlugin,
+  markdownShortcutPlugin,
+  toolbarPlugin,
+  BoldItalicUnderlineToggles,
+  BlockTypeSelect,
+  ListsToggle,
+  Separator as EditorSeparator,
+  UndoRedo,
+} from "@mdxeditor/editor";
 import {
   useReportArtifact,
   useReportArtifactVersions,
@@ -1017,6 +1032,110 @@ function TemplateSelector({
   );
 }
 
+// ─── Report editor ───────────────────────────────────────────────────────────
+
+interface ReportEditorProps {
+  report: ReportArtifactDetail;
+  onExit: () => void;
+  onSaved: (newArtifactId: string) => void;
+}
+
+function ReportEditor({ report, onExit, onSaved }: ReportEditorProps) {
+  const editorRef = useRef<MDXEditorMethods>(null);
+  const isDirtyRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Warn before navigating away with unsaved changes
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (isDirtyRef.current) {
+        e.preventDefault();
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
+  const handleExit = useCallback(() => {
+    if (isDirtyRef.current) {
+      if (!window.confirm("You have unsaved changes. Discard and exit?")) return;
+    }
+    onExit();
+  }, [onExit]);
+
+  const handleSave = useCallback(async () => {
+    const content = editorRef.current?.getMarkdown();
+    if (!content) return;
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/reports/${report.id}/edit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      const { newArtifactId } = await res.json();
+      isDirtyRef.current = false;
+      toast.success("Saved as new version");
+      onSaved(newArtifactId);
+    } catch {
+      toast.error("Failed to save. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [report.id, onSaved]);
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-0">
+      {/* Slim sticky toolbar */}
+      <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border/60 bg-background/95 px-4 py-2 backdrop-blur print:hidden">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleExit}
+          className="gap-1.5 text-muted-foreground hover:text-foreground"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          Exit editing
+        </Button>
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={isSaving}
+        >
+          {isSaving ? "Saving…" : "Save as new version"}
+        </Button>
+      </div>
+
+      {/* MDXEditor — full width, no sidebar */}
+      <MDXEditor
+        ref={editorRef}
+        markdown={report.content}
+        onChange={() => { isDirtyRef.current = true; }}
+        contentEditableClassName="prose prose-sm dark:prose-invert max-w-none min-h-[60vh] px-8 py-6 focus:outline-none"
+        plugins={[
+          headingsPlugin({ allowedHeadingLevels: [2, 3] }),
+          listsPlugin(),
+          markdownShortcutPlugin(),
+          toolbarPlugin({
+            toolbarContents: () => (
+              <>
+                <UndoRedo />
+                <EditorSeparator />
+                <BlockTypeSelect />
+                <EditorSeparator />
+                <BoldItalicUnderlineToggles options={["Bold", "Italic"]} />
+                <EditorSeparator />
+                <ListsToggle options={["bullet"]} />
+              </>
+            ),
+          }),
+        ]}
+      />
+    </div>
+  );
+}
+
 // ─── Main report view ────────────────────────────────────────────────────────
 
 interface ReportViewProps {
@@ -1027,6 +1146,9 @@ export function ReportView({ artifactId }: ReportViewProps) {
   const { data: report, isLoading, error } = useReportArtifact(artifactId);
   const [template, setTemplate] = useState<ReportTemplate>("standard");
   const [isExporting, setIsExporting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const router = useRouter();
+  const queryClient = useQueryClient();
 
   // Track report view for value attribution
   useEffect(() => {
@@ -1038,6 +1160,11 @@ export function ReportView({ artifactId }: ReportViewProps) {
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [report?.id]);
+
+  const handleSaved = useCallback((newArtifactId: string) => {
+    queryClient.invalidateQueries({ queryKey: ["report_artifact_versions"] });
+    router.push(`/reports/${newArtifactId}`);
+  }, [queryClient, router]);
 
   const handleDownloadPDF = useCallback(async () => {
     if (!report) return;
@@ -1101,6 +1228,17 @@ export function ReportView({ artifactId }: ReportViewProps) {
 
   const consultationCount =
     report.consultations.length || report.consultationTitles.length;
+
+  // ── Edit mode ─────────────────────────────────────────────────────────────
+  if (isEditing) {
+    return (
+      <ReportEditor
+        report={report}
+        onExit={() => setIsEditing(false)}
+        onSaved={handleSaved}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -1240,6 +1378,16 @@ export function ReportView({ artifactId }: ReportViewProps) {
 
         {/* Sidebar */}
         <aside className="space-y-6 print:hidden">
+          {/* Edit report button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => setIsEditing(true)}
+          >
+            Edit report
+          </Button>
+
           <VersionHistory report={report} currentId={artifactId} />
 
           {/* Metadata callout */}

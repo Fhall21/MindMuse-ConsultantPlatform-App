@@ -35,6 +35,7 @@ const MAJOR_EVENT_ACTIONS = new Set([
   "theme.rejected",
   "evidence_email.generated",
   "evidence_email.sent",
+  "report.manually_edited",
 ]);
 
 const EVENT_LABELS: Record<string, string> = {
@@ -53,6 +54,7 @@ const EVENT_LABELS: Record<string, string> = {
   "theme.rejected": "Theme rejected",
   "evidence_email.generated": "Evidence email generated",
   "evidence_email.sent": "Evidence email sent",
+  "report.manually_edited": "Report manually edited",
 };
 
 /** Events within this window sharing the same action prefix are merged into one cluster */
@@ -77,6 +79,7 @@ export function getAuditDotColor(action: string): string {
   if (action.startsWith("person.")) return "bg-amber-500";
   if (action.startsWith("evidence_email.")) return "bg-sky-500";
   if (action.startsWith("round.")) return "bg-violet-500";
+  if (action.startsWith("report.")) return "bg-orange-500";
   if (
     action.startsWith("transcript.") ||
     action.startsWith("audio.") ||

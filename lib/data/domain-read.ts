@@ -139,18 +139,43 @@ export async function listMeetingsForUser(
     .select({
       meeting: meetings,
       consultationLabel: consultations.label,
+      personName: people.name,
     })
     .from(meetings)
     .leftJoin(consultations, eq(meetings.consultationId, consultations.id))
+    .leftJoin(consultationPeople, eq(consultationPeople.meetingId, meetings.id))
+    .leftJoin(people, eq(consultationPeople.personId, people.id))
     .where(and(...conditions))
-    .orderBy(desc(meetings.createdAt));
+    .orderBy(desc(meetings.createdAt), desc(people.createdAt));
 
-  return rows.map(({ meeting, consultationLabel }) =>
-    mapMeetingRecord({
-      ...meeting,
-      consultationLabel: consultationLabel ?? null,
-    })
-  );
+  const meetingsById = new Map<string, Meeting>();
+
+  for (const row of rows) {
+    const existing = meetingsById.get(row.meeting.id);
+    if (existing) {
+      if (row.personName) {
+        const currentPeople = existing.people_names ?? [];
+        if (!currentPeople.includes(row.personName)) {
+          currentPeople.push(row.personName);
+          existing.people_names = currentPeople;
+        }
+      }
+      continue;
+    }
+
+    const mappedMeeting = mapMeetingRecord({
+      ...row.meeting,
+      consultationLabel: row.consultationLabel ?? null,
+      peopleNames: row.personName ? [row.personName] : [],
+    });
+
+    meetingsById.set(row.meeting.id, mappedMeeting);
+  }
+
+  return Array.from(meetingsById.values()).map((meeting) => ({
+    ...meeting,
+    people_names: (meeting.people_names ?? []).sort((left, right) => left.localeCompare(right)),
+  }));
 }
 
 export async function getMeetingForUser(

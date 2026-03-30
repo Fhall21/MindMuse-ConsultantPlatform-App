@@ -88,7 +88,7 @@ import {
   addTemplateSuggestion,
   createReportTemplate,
   deleteReportTemplate,
-  getActiveReportTemplate,
+  getDefaultReportTemplate,
   listReportTemplates,
   removeTemplateSuggestion,
   updateReportTemplate,
@@ -107,6 +107,8 @@ function makeTemplateRow(overrides: Partial<Record<string, unknown>> = {}) {
     sourceFileNames: [],
     suggestions: [],
     isActive: true,
+    isDefault: false,
+    builderConfig: {},
     createdBy: "user-1",
     createdAt: new Date("2026-03-30T00:00:00.000Z"),
     updatedAt: new Date("2026-03-30T00:00:00.000Z"),
@@ -132,14 +134,14 @@ describe("lib/actions/report-templates", () => {
     await expect(listReportTemplates()).resolves.toEqual([]);
   });
 
-  it("returns null when the active report template table is missing", async () => {
+  it("returns null when the default report template table is missing", async () => {
     testState.selectError = makeMissingTableError();
 
-    await expect(getActiveReportTemplate()).resolves.toBeNull();
+    await expect(getDefaultReportTemplate()).resolves.toBeNull();
   });
 
   it("normalizes missing table errors for create, update, and delete", async () => {
-    testState.updateError = makeMissingTableError();
+    testState.insertError = makeMissingTableError();
 
     await expect(
       createReportTemplate({

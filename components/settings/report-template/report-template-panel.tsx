@@ -20,6 +20,7 @@ import {
   deleteReportTemplate,
   listReportTemplates,
   removeTemplateSuggestion,
+  setDefaultTemplate,
   updateReportTemplate,
   updateTemplateSuggestion,
   saveBuilderTemplate,
@@ -136,11 +137,15 @@ function SectionPreview({ section, index }: { section: ReportTemplateSection; in
 
 function ActiveTemplateCard({
   template,
+  isDefault,
+  onSetDefault,
   onDeactivate,
   onDelete,
   onEditInBuilder,
 }: {
   template: ReportTemplate;
+  isDefault: boolean;
+  onSetDefault: () => void;
   onDeactivate: () => void;
   onDelete: () => void;
   onEditInBuilder: () => void;
@@ -160,6 +165,14 @@ function ActiveTemplateCard({
               >
                 Active
               </Badge>
+              {isDefault && (
+                <Badge
+                  variant="outline"
+                  className="border-sky-300 text-[10px] text-sky-700 dark:border-sky-700 dark:text-sky-400"
+                >
+                  Default
+                </Badge>
+              )}
               <Badge variant="outline" className="text-[10px]">
                 {template.prescriptiveness}
               </Badge>
@@ -169,6 +182,16 @@ function ActiveTemplateCard({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {!isDefault && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onSetDefault}
+                className="text-xs"
+              >
+                Set as default
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -729,7 +752,7 @@ export function ReportTemplatePanel() {
     queryFn: () => listReportTemplates(),
   });
 
-  const activeTemplate = templates.find((t) => t.is_active) ?? null;
+  const activeTemplates = templates.filter((t) => t.is_active);
 
   const deactivateMutation = useMutation({
     mutationFn: (id: string) => updateReportTemplate({ id, isActive: false }),
@@ -739,6 +762,17 @@ export function ReportTemplatePanel() {
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Failed to deactivate template");
+    },
+  });
+
+  const setDefaultMutation = useMutation({
+    mutationFn: (id: string) => setDefaultTemplate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["report-templates"] });
+      toast.success("Default template updated");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to set default template");
     },
   });
 
@@ -784,27 +818,34 @@ export function ReportTemplatePanel() {
           Upload example reports you&apos;ve written previously. The AI will analyse their
           structure and style, then use that as a template when generating future reports.
           Supported formats: plain text (.txt), Markdown (.md), CSV (.csv), and PDF text.
-          Only one template can be active at a time.
+          Multiple templates can be active at once; mark one as the default to pre-select it
+          in the report generation dropdown.
         </p>
       </div>
 
-      {/* Active template */}
+      {/* Active templates */}
       {isLoading ? (
         <div className="h-24 rounded-lg border border-border/50 bg-muted/10 animate-pulse" />
-      ) : activeTemplate ? (
+      ) : activeTemplates.length > 0 ? (
         <div className="space-y-4">
-          <ActiveTemplateCard
-            template={activeTemplate}
-            onDeactivate={() => deactivateMutation.mutate(activeTemplate.id)}
-            onDelete={() => deleteMutation.mutate(activeTemplate.id)}
-            onEditInBuilder={() => openBuilder(activeTemplate)}
-          />
-          <GenerationGuidanceCard template={activeTemplate} />
+          {activeTemplates.map((t) => (
+            <div key={t.id} className="space-y-4">
+              <ActiveTemplateCard
+                template={t}
+                isDefault={t.is_default}
+                onSetDefault={() => setDefaultMutation.mutate(t.id)}
+                onDeactivate={() => deactivateMutation.mutate(t.id)}
+                onDelete={() => deleteMutation.mutate(t.id)}
+                onEditInBuilder={() => openBuilder(t)}
+              />
+              <GenerationGuidanceCard template={t} />
+            </div>
+          ))}
         </div>
       ) : (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-10 text-center">
-            <p className="text-sm font-medium text-foreground">No active template</p>
+            <p className="text-sm font-medium text-foreground">No active templates</p>
             <p className="mt-1 text-xs text-muted-foreground">
               Upload example reports to generate a custom template.
             </p>
@@ -812,7 +853,7 @@ export function ReportTemplatePanel() {
         </Card>
       )}
 
-      {/* Add / replace template */}
+      {/* Add template */}
       {showForm === "none" ? (
         <div className="flex gap-2">
           <Button
@@ -820,7 +861,7 @@ export function ReportTemplatePanel() {
             onClick={() => setShowForm("analyse")}
             className="flex-1"
           >
-            {activeTemplate ? "Replace template" : "Create from examples"}
+            Create from examples
           </Button>
           <Button
             variant="outline"
@@ -834,7 +875,7 @@ export function ReportTemplatePanel() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {activeTemplate ? "Replace template" : "Create template from examples"}
+              Create template from examples
             </CardTitle>
             <CardDescription>
               Upload 1–3 example reports. The AI will analyse their structure and generate

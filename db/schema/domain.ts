@@ -688,6 +688,7 @@ export const reportTemplates = pgTable(
       .default(sql`'{}'::jsonb`)
       .notNull(),
     isActive: boolean("is_active").default(true).notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
     createdBy: uuid("created_by")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),

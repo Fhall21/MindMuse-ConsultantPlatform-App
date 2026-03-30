@@ -116,6 +116,7 @@ function mapReportTemplateRecord(row: typeof reportTemplates.$inferSelect): Repo
     suggestions: normalizeTemplateSuggestions(row.suggestions),
     builder_config: normalizeBuilderConfig(row.builderConfig),
     is_active: row.isActive,
+    is_default: row.isDefault,
     created_by: row.createdBy,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
@@ -161,7 +162,7 @@ export async function getReportTemplate(
   return row ? mapReportTemplateRecord(row) : null;
 }
 
-export async function getActiveReportTemplate(): Promise<ReportTemplate | null> {
+export async function getDefaultReportTemplate(): Promise<ReportTemplate | null> {
   const userId = await requireCurrentUserId();
 
   try {
@@ -171,7 +172,7 @@ export async function getActiveReportTemplate(): Promise<ReportTemplate | null> 
       .where(
         and(
           eq(reportTemplates.userId, userId),
-          eq(reportTemplates.isActive, true)
+          eq(reportTemplates.isDefault, true)
         )
       )
       .orderBy(desc(reportTemplates.updatedAt))
@@ -202,17 +203,6 @@ export async function createReportTemplate(
   const userId = await requireCurrentUserId();
 
   try {
-    // Deactivate any existing active template for this user
-    await db
-      .update(reportTemplates)
-      .set({ isActive: false })
-      .where(
-        and(
-          eq(reportTemplates.userId, userId),
-          eq(reportTemplates.isActive, true)
-        )
-      );
-
     const [created] = await db
       .insert(reportTemplates)
       .values({
@@ -260,20 +250,8 @@ export async function updateReportTemplate(
   if (params.builderConfig !== undefined) updates.builderConfig = params.builderConfig;
 
   try {
-    if (params.isActive === true) {
-      // Deactivate all others first
-      await db
-        .update(reportTemplates)
-        .set({ isActive: false })
-        .where(
-          and(
-            eq(reportTemplates.userId, userId),
-            eq(reportTemplates.isActive, true)
-          )
-        );
-      updates.isActive = true;
-    } else if (params.isActive === false) {
-      updates.isActive = false;
+    if (params.isActive !== undefined) {
+      updates.isActive = params.isActive;
     }
 
     if (Object.keys(updates).length === 0) return;
@@ -448,17 +426,6 @@ export async function saveBuilderTemplate(
   const userId = await requireCurrentUserId();
 
   try {
-    // Deactivate any existing active template for this user
-    await db
-      .update(reportTemplates)
-      .set({ isActive: false })
-      .where(
-        and(
-          eq(reportTemplates.userId, userId),
-          eq(reportTemplates.isActive, true)
-        )
-      );
-
     const [created] = await db
       .insert(reportTemplates)
       .values({
@@ -477,6 +444,31 @@ export async function saveBuilderTemplate(
       .returning({ id: reportTemplates.id });
 
     return created.id;
+  } catch (error) {
+    normalizeReportTemplatesWriteError(error);
+  }
+}
+
+export async function setDefaultTemplate(templateId: string): Promise<void> {
+  const userId = await requireCurrentUserId();
+
+  try {
+    // Clear default from all templates for this user
+    await db
+      .update(reportTemplates)
+      .set({ isDefault: false })
+      .where(eq(reportTemplates.userId, userId));
+
+    // Set the chosen template as default
+    await db
+      .update(reportTemplates)
+      .set({ isDefault: true })
+      .where(
+        and(
+          eq(reportTemplates.id, templateId),
+          eq(reportTemplates.userId, userId)
+        )
+      );
   } catch (error) {
     normalizeReportTemplatesWriteError(error);
   }

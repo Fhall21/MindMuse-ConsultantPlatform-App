@@ -16,7 +16,7 @@ import {
   themes,
 } from "@/db/schema";
 import { callAIService } from "@/lib/openai/client";
-import { getActiveReportTemplate, getReportTemplate } from "@/lib/actions/report-templates";
+import { getDefaultReportTemplate, getReportTemplate } from "@/lib/actions/report-templates";
 import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";
 import { emitAuditEvent } from "@/lib/actions/audit";
 import { getServerSession } from "@/lib/auth/session";
@@ -2328,10 +2328,10 @@ async function generateRoundOutput(
     throw new Error("Accept at least one round or consultation theme before generating a round output.");
   }
 
-  // Load report template: explicit override > active template > none
+  // Load report template: explicit override > default template > none
   const activeTemplate =
     templateIdOverride === undefined
-      ? await getActiveReportTemplate()
+      ? await getDefaultReportTemplate()
       : typeof templateIdOverride === "string"
         ? await getReportTemplate(templateIdOverride)
         : null;

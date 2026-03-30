@@ -270,6 +270,7 @@ export interface ReportTemplate {
   }>;
   builder_config: BuilderConfig;
   is_active: boolean;
+  is_default: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;

@@ -155,6 +155,13 @@
       "when": 1774874930031,
       "tag": "0021_yielding_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1774905286376,
+      "tag": "0022_adorable_doctor_doom",
+      "breakpoints": true
     }
   ]
 }

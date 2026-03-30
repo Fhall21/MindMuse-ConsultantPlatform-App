@@ -69,8 +69,9 @@ export function RoundOutputsSection({
 
   useEffect(() => {
     if (!initialized && templates.length > 0) {
-      const active = templates.find((t) => t.is_active);
-      setReportTemplateId(active?.id ?? null);
+      const activeTemplates = templates.filter((t) => t.is_active);
+      const defaultTemplate = activeTemplates.find((t) => t.is_default);
+      setReportTemplateId(defaultTemplate?.id ?? activeTemplates[0]?.id ?? null);
       setInitialized(true);
     }
   }, [templates, initialized]);
@@ -133,7 +134,7 @@ export function RoundOutputsSection({
                     ) : null}
                   </div>
 
-                  {type === "report" && templates.length > 0 ? (
+                  {type === "report" && templates.some((t) => t.is_active) ? (
                     <div className="max-w-xs space-y-1.5">
                       <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                         Report template
@@ -151,10 +152,10 @@ export function RoundOutputsSection({
                           <SelectItem value="__none__" className="text-xs">
                             No template
                           </SelectItem>
-                          {templates.map((t) => (
+                          {templates.filter((t) => t.is_active).map((t) => (
                             <SelectItem key={t.id} value={t.id} className="text-xs">
                               {t.name}
-                              {t.is_active ? " ★" : ""}
+                              {t.is_default ? " (default)" : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>

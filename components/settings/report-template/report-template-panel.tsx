@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useId, type ReactNode } from "react";
 import { toast } from "sonner";
+import { ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
   createReportTemplate,
   addTemplateSuggestion,
@@ -45,6 +47,9 @@ interface AnalysedTemplate {
     formatting_notes: string | null;
   };
 }
+
+const ALLOWED_EXTENSIONS = [".txt", ".md", ".csv", ".pdf"];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 // ─── Prescriptiveness selector ────────────────────────────────────────────────
 
@@ -138,19 +143,27 @@ function SectionPreview({ section, index }: { section: ReportTemplateSection; in
 function ActiveTemplateCard({
   template,
   isDefault,
+  isBuilderOpen,
+  builderContent,
   onSetDefault,
   onDeactivate,
   onDelete,
   onEditInBuilder,
+  onCloseBuilder,
 }: {
   template: ReportTemplate;
   isDefault: boolean;
+  isBuilderOpen: boolean;
+  builderContent?: ReactNode;
   onSetDefault: () => void;
   onDeactivate: () => void;
   onDelete: () => void;
   onEditInBuilder: () => void;
+  onCloseBuilder: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [guidanceExpanded, setGuidanceExpanded] = useState(false);
+  const guidanceContentId = useId();
 
   return (
     <Card>
@@ -198,7 +211,7 @@ function ActiveTemplateCard({
               onClick={onEditInBuilder}
               className="text-xs"
             >
-              Edit in builder
+              {isBuilderOpen ? "Builder open" : "Edit in builder"}
             </Button>
             <Button
               size="sm"
@@ -222,8 +235,9 @@ function ActiveTemplateCard({
           </div>
         </div>
       </CardHeader>
-      {expanded && (
-        <CardContent className="space-y-2 pt-0">
+      <CardContent className="space-y-4 pt-0">
+        {expanded && (
+          <div className="space-y-2">
           {template.sections.map((section, i) => (
             <SectionPreview key={i} section={section} index={i} />
           ))}
@@ -250,13 +264,81 @@ function ActiveTemplateCard({
               )}
             </div>
           )}
-        </CardContent>
-      )}
+
+          </div>
+        )}
+
+        {isBuilderOpen && builderContent ? (
+          <div className="rounded-lg border border-border/60 bg-background px-4 py-4 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Builder</p>
+                <p className="text-xs text-muted-foreground">
+                  Edit this template in place without leaving the card.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={onCloseBuilder}
+                className="text-xs"
+              >
+                Close builder
+              </Button>
+            </div>
+            {builderContent}
+          </div>
+        ) : null}
+
+        <div className="rounded-lg border border-border/60 bg-muted/5 px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-foreground">Generation Guidance</p>
+                {template.suggestions?.length ? (
+                  <Badge variant="outline" className="text-[10px]">
+                    {template.suggestions.length} of 10
+                  </Badge>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Add short reminders that should be threaded into every generated report.
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setGuidanceExpanded((value) => !value)}
+              className="h-8 shrink-0 gap-1 text-xs"
+              aria-expanded={guidanceExpanded}
+              aria-controls={guidanceContentId}
+            >
+              {guidanceExpanded ? "Hide" : "Show"}
+              <ChevronDown
+                className={cn(
+                  "size-3.5 transition-transform",
+                  guidanceExpanded && "rotate-180"
+                )}
+                aria-hidden="true"
+              />
+            </Button>
+          </div>
+
+          {guidanceExpanded ? (
+            <div id={guidanceContentId} className="mt-3 space-y-3">
+              <GenerationGuidanceDetails template={template} />
+            </div>
+          ) : null}
+        </div>
+      </CardContent>
     </Card>
   );
 }
 
-function GenerationGuidanceCard({ template }: { template: ReportTemplate }) {
+function GenerationGuidanceDetails({ template }: { template: ReportTemplate }) {
   const queryClient = useQueryClient();
   const suggestions = [...(template.suggestions ?? [])].sort(
     (left, right) => Date.parse(left.created_at) - Date.parse(right.created_at)
@@ -309,175 +391,153 @@ function GenerationGuidanceCard({ template }: { template: ReportTemplate }) {
     },
   });
 
-  const suggestionCountLabel = `${suggestions.length} of 10`;
-  const showCounter = suggestions.length >= 5;
   const canAddMore = suggestions.length < 10;
 
   return (
-    <Card className="border-border/60 bg-muted/5">
-      <CardHeader className="space-y-2">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle className="text-base">Generation Guidance</CardTitle>
-            <CardDescription className="mt-1">
-              Add short reminders that should be threaded into every generated report.
-            </CardDescription>
-          </div>
-          {showCounter && (
-            <Badge variant="outline" className="text-[10px]">
-              {suggestionCountLabel}
-            </Badge>
-          )}
+    <>
+      {suggestions.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border/60 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+          No guidance notes yet.
         </div>
-        {!showCounter && canAddMore && (
-          <p className="text-xs text-muted-foreground">Add up to 10 guidance notes.</p>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-3 pt-0">
-        {suggestions.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border/60 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
-            No guidance notes yet.
-          </div>
-        ) : (
-          suggestions.map((suggestion) => {
-            const isEditing = editingSuggestionId === suggestion.id;
+      ) : (
+        suggestions.map((suggestion) => {
+          const isEditing = editingSuggestionId === suggestion.id;
 
-            return (
-              <div key={suggestion.id} className="rounded-lg border border-border/50 bg-background px-4 py-3">
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                        {new Date(suggestion.created_at).toLocaleString()}
-                      </p>
-                      {isEditing ? (
-                        <Textarea
-                          value={editingSuggestionText}
-                          onChange={(event) => setEditingSuggestionText(event.target.value)}
-                          className="min-h-[88px] text-sm"
-                          autoFocus
-                        />
-                      ) : (
-                        <button
+          return (
+            <div key={suggestion.id} className="rounded-lg border border-border/50 bg-background px-4 py-3">
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                      {new Date(suggestion.created_at).toLocaleString()}
+                    </p>
+                    {isEditing ? (
+                      <Textarea
+                        value={editingSuggestionText}
+                        onChange={(event) => setEditingSuggestionText(event.target.value)}
+                        className="min-h-[88px] text-sm"
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSuggestionId(suggestion.id);
+                          setEditingSuggestionText(suggestion.text);
+                        }}
+                        className="w-full rounded-md text-left text-sm leading-relaxed text-foreground transition-colors hover:text-foreground/80"
+                      >
+                        {suggestion.text}
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {isEditing ? (
+                      <>
+                        <Button
                           type="button"
-                          onClick={() => {
-                            setEditingSuggestionId(suggestion.id);
-                            setEditingSuggestionText(suggestion.text);
-                          }}
-                          className="w-full rounded-md text-left text-sm leading-relaxed text-foreground transition-colors hover:text-foreground/80"
+                          size="sm"
+                          onClick={() =>
+                            updateMutation.mutate({
+                              suggestionId: suggestion.id,
+                              text: editingSuggestionText,
+                            })
+                          }
+                          disabled={updateMutation.isPending}
+                          className="h-8 text-xs"
                         >
-                          {suggestion.text}
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {isEditing ? (
-                        <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() =>
-                              updateMutation.mutate({
-                                suggestionId: suggestion.id,
-                                text: editingSuggestionText,
-                              })
-                            }
-                            disabled={updateMutation.isPending}
-                            className="h-8 text-xs"
-                          >
-                            Save
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingSuggestionId(null);
-                              setEditingSuggestionText("");
-                            }}
-                            className="h-8 text-xs"
-                          >
-                            Cancel
-                          </Button>
-                        </>
-                      ) : (
+                          Save
+                        </Button>
                         <Button
                           type="button"
                           size="sm"
                           variant="ghost"
                           onClick={() => {
-                            setEditingSuggestionId(suggestion.id);
-                            setEditingSuggestionText(suggestion.text);
+                            setEditingSuggestionId(null);
+                            setEditingSuggestionText("");
                           }}
                           className="h-8 text-xs"
                         >
-                          Edit
+                          Cancel
                         </Button>
-                      )}
+                      </>
+                    ) : (
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
-                        onClick={() => removeMutation.mutate(suggestion.id)}
-                        disabled={removeMutation.isPending}
-                        className="h-8 text-xs text-destructive hover:text-destructive"
+                        onClick={() => {
+                          setEditingSuggestionId(suggestion.id);
+                          setEditingSuggestionText(suggestion.text);
+                        }}
+                        className="h-8 text-xs"
                       >
-                        Delete
+                        Edit
                       </Button>
-                    </div>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => removeMutation.mutate(suggestion.id)}
+                      disabled={removeMutation.isPending}
+                      className="h-8 text-xs text-destructive hover:text-destructive"
+                    >
+                      Delete
+                    </Button>
                   </div>
                 </div>
               </div>
-            );
-          })
-        )}
-
-        {isAddFormVisible ? (
-          <div className="rounded-lg border border-dashed border-border/60 bg-background px-4 py-3 space-y-3">
-            <Textarea
-              value={newSuggestionText}
-              onChange={(event) => setNewSuggestionText(event.target.value)}
-              className="min-h-[88px] text-sm"
-              placeholder="Add guidance for every generated report"
-              autoFocus
-            />
-            <div className="flex items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setIsAddFormVisible(false);
-                  setNewSuggestionText("");
-                }}
-                className="text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => addMutation.mutate(newSuggestionText)}
-                disabled={addMutation.isPending || newSuggestionText.trim().length === 0}
-                className="text-xs"
-              >
-                Add note
-              </Button>
             </div>
-          </div>
-        ) : null}
+          );
+        })
+      )}
 
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setIsAddFormVisible(true)}
-          disabled={!canAddMore}
-          className="w-full"
-        >
-          {canAddMore ? "Add guidance note" : "Maximum 10 guidance notes reached"}
-        </Button>
-      </CardContent>
-    </Card>
+      {isAddFormVisible ? (
+        <div className="rounded-lg border border-dashed border-border/60 bg-background px-4 py-3 space-y-3">
+          <Textarea
+            value={newSuggestionText}
+            onChange={(event) => setNewSuggestionText(event.target.value)}
+            className="min-h-[88px] text-sm"
+            placeholder="Add guidance for every generated report"
+            autoFocus
+          />
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setIsAddFormVisible(false);
+                setNewSuggestionText("");
+              }}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => addMutation.mutate(newSuggestionText)}
+              disabled={addMutation.isPending || newSuggestionText.trim().length === 0}
+              className="text-xs"
+            >
+              Add note
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => setIsAddFormVisible(true)}
+        disabled={!canAddMore}
+        className="w-full"
+      >
+        {canAddMore ? "Add guidance note" : "Maximum 10 guidance notes reached"}
+      </Button>
+    </>
   );
 }
 
@@ -493,9 +553,6 @@ function AnalyseForm({ onDone }: { onDone: () => void }) {
   const [analysed, setAnalysed] = useState<AnalysedTemplate | null>(null);
   const [templateName, setTemplateName] = useState("");
   const queryClient = useQueryClient();
-
-  const ALLOWED_EXTENSIONS = [".txt", ".md", ".csv", ".pdf"];
-  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -746,6 +803,7 @@ export function ReportTemplatePanel() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState<"none" | "analyse" | "builder">("none");
   const [builderTemplate, setBuilderTemplate] = useState<ReportTemplate | null>(null);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ["report-templates"],
@@ -794,6 +852,7 @@ export function ReportTemplatePanel() {
       queryClient.invalidateQueries({ queryKey: ["report-templates"] });
       setShowForm("none");
       setBuilderTemplate(null);
+      setEditingTemplateId(null);
       toast.success("Template saved");
     },
     onError: (error) => {
@@ -804,7 +863,8 @@ export function ReportTemplatePanel() {
   const openBuilder = useCallback(
     (template: ReportTemplate | null) => {
       setBuilderTemplate(template);
-      setShowForm("builder");
+      setEditingTemplateId(template?.id ?? null);
+      setShowForm(template ? "none" : "builder");
     },
     []
   );
@@ -833,12 +893,29 @@ export function ReportTemplatePanel() {
               <ActiveTemplateCard
                 template={t}
                 isDefault={t.is_default}
+                isBuilderOpen={editingTemplateId === t.id}
+                builderContent={
+                  editingTemplateId === t.id ? (
+                    <ReportBuilder
+                      template={t}
+                      onSave={(params) => builderSaveMutation.mutate(params)}
+                      onCancel={() => {
+                        setEditingTemplateId(null);
+                        setBuilderTemplate(null);
+                      }}
+                      isSaving={builderSaveMutation.isPending}
+                    />
+                  ) : null
+                }
                 onSetDefault={() => setDefaultMutation.mutate(t.id)}
                 onDeactivate={() => deactivateMutation.mutate(t.id)}
                 onDelete={() => deleteMutation.mutate(t.id)}
                 onEditInBuilder={() => openBuilder(t)}
+                onCloseBuilder={() => {
+                  setEditingTemplateId(null);
+                  setBuilderTemplate(null);
+                }}
               />
-              <GenerationGuidanceCard template={t} />
             </div>
           ))}
         </div>
@@ -890,7 +967,7 @@ export function ReportTemplatePanel() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {builderTemplate ? "Edit template" : "Build report template"}
+              Build report template
             </CardTitle>
             <CardDescription>
               Select, order, and configure the sections for your report template.

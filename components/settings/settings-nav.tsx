@@ -28,6 +28,11 @@ const settingsSections = [
     href: "/settings/meeting-types",
   },
   {
+    title: "Report Sharing",
+    description: "Manage the passcode used to unlock stakeholder share links.",
+    href: "/settings/report-sharing",
+  },
+  {
     title: "Integrations",
     href: "/settings/integrations",
   },

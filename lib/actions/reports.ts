@@ -497,6 +497,13 @@ export async function getReportArtifact(
   artifactId: string
 ): Promise<ReportArtifactDetail | null> {
   const userId = await requireCurrentUserId();
+  return getReportArtifactForUserId(artifactId, userId);
+}
+
+export async function getReportArtifactForUserId(
+  artifactId: string,
+  userId: string
+): Promise<ReportArtifactDetail | null> {
   const artifact = await getRoundOutputArtifactForUser(artifactId, userId);
 
   if (!artifact) {

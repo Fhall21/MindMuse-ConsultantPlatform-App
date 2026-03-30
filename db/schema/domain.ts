@@ -517,6 +517,57 @@ export const consultationOutputArtifacts = pgTable(
   })
 );
 
+export const userReportShareSettings = pgTable(
+  "user_report_share_settings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+    passcodeHash: text("passcode_hash").notNull(),
+    passcodeUpdatedAt: timestamp("passcode_updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedBy: uuid("updated_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    ...timestamps,
+  },
+  (table) => ({
+    userIdx: index("idx_user_report_share_settings_user_id").on(table.userId),
+  })
+);
+
+export const reportShareLinks = pgTable(
+  "report_share_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    artifactId: uuid("artifact_id")
+      .notNull()
+      .references(() => consultationOutputArtifacts.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    consultantName: text("consultant_name"),
+    consultantEmail: text("consultant_email").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    viewCount: integer("view_count").default(0).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    tokenUnique: uniqueIndex("report_share_links_token_key").on(table.token),
+    artifactIdx: index("idx_report_share_links_artifact_id").on(table.artifactId),
+    userIdx: index("idx_report_share_links_user_id").on(table.userId),
+    expiryIdx: index("idx_report_share_links_expires_at").on(table.expiresAt),
+  })
+);
+
 export const meetingGroups = pgTable(
   "meeting_groups",
   {

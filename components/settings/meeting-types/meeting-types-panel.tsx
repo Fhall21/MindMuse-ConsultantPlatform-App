@@ -118,7 +118,7 @@ function MeetingTypeRow({ meetingType }: { meetingType: MeetingType }) {
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/5 px-4 py-2.5">
+    <div className="flex items-center gap-3 py-2.5">
       <span className="flex-1 text-sm font-medium">{meetingType.label}</span>
       <Badge variant="outline" className="font-mono text-[11px]">
         {meetingType.code}
@@ -180,7 +180,7 @@ function AddMeetingTypeForm({ onDone }: { onDone: () => void }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-dashed border-border p-4">
+    <form onSubmit={handleSubmit} className="space-y-3 pb-2">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="mt-label" className="text-xs">Label</Label>
@@ -247,17 +247,24 @@ export function MeetingTypesPanel() {
             )}
           </div>
         </CardHeader>
-        <CardContent className="space-y-2">
-          {adding && <AddMeetingTypeForm onDone={() => setAdding(false)} />}
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground py-2">Loading…</p>
-          ) : types.length === 0 && !adding ? (
-            <p className="text-sm text-muted-foreground py-2">
-              No active meeting types. Add one above.
-            </p>
-          ) : (
-            types.map((t) => <MeetingTypeRow key={t.id} meetingType={t} />)
+        <CardContent>
+          {adding && (
+            <>
+              <AddMeetingTypeForm onDone={() => setAdding(false)} />
+              {types.length > 0 && <div className="border-t border-border/60 mb-1" />}
+            </>
           )}
+          <div className="divide-y divide-border/60">
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground py-2">Loading…</p>
+            ) : types.length === 0 && !adding ? (
+              <p className="text-sm text-muted-foreground py-2">
+                No active meeting types. Add one above.
+              </p>
+            ) : (
+              types.map((t) => <MeetingTypeRow key={t.id} meetingType={t} />)
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

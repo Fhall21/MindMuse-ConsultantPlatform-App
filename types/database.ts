@@ -244,6 +244,8 @@ export interface ReportTemplateSection {
   purpose: string;
   prose_guidance: string;
   example_excerpt: string | null;
+  depth?: "brief" | "detailed";
+  section_note?: string | null;
 }
 
 export interface ReportTemplateStyleNotes {
@@ -266,10 +268,29 @@ export interface ReportTemplate {
     text: string;
     created_at: string;
   }>;
+  builder_config: BuilderConfig;
   is_active: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface BuilderSectionConfig {
+  sectionId: string;
+  depth: "brief" | "detailed";
+  note: string | null;
+  position: number;
+}
+
+export interface CustomSectionDef {
+  id: string;
+  heading: string;
+  description: string;
+}
+
+export interface BuilderConfig {
+  sections: BuilderSectionConfig[];
+  customSections: CustomSectionDef[];
 }
 
 export interface IngestionArtifact {

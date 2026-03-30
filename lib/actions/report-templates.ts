@@ -9,7 +9,11 @@ import type {
   ReportTemplateSection,
   ReportTemplateStyleNotes,
   ReportTemplatePrescriptiveness,
+  BuilderConfig,
+  BuilderSectionConfig,
+  CustomSectionDef,
 } from "@/types/db";
+import { sanitizeSectionNote } from "@/lib/sanitize-section-note";
 
 type ReportTemplateSuggestion = {
   id: string;
@@ -88,6 +92,17 @@ async function getOwnedReportTemplateRow(templateId: string, userId: string) {
   return row;
 }
 
+function normalizeBuilderConfig(value: unknown): BuilderConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { sections: [], customSections: [] };
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    sections: Array.isArray(record.sections) ? (record.sections as BuilderSectionConfig[]) : [],
+    customSections: Array.isArray(record.customSections) ? (record.customSections as CustomSectionDef[]) : [],
+  };
+}
+
 function mapReportTemplateRecord(row: typeof reportTemplates.$inferSelect): ReportTemplate {
   return {
     id: row.id,
@@ -99,6 +114,7 @@ function mapReportTemplateRecord(row: typeof reportTemplates.$inferSelect): Repo
     prescriptiveness: row.prescriptiveness as ReportTemplatePrescriptiveness,
     source_file_names: (row.sourceFileNames ?? []) as string[],
     suggestions: normalizeTemplateSuggestions(row.suggestions),
+    builder_config: normalizeBuilderConfig(row.builderConfig),
     is_active: row.isActive,
     created_by: row.createdBy,
     created_at: row.createdAt.toISOString(),
@@ -226,6 +242,7 @@ interface UpdateReportTemplateParams {
   sections?: ReportTemplateSection[];
   styleNotes?: ReportTemplateStyleNotes;
   prescriptiveness?: ReportTemplatePrescriptiveness;
+  builderConfig?: BuilderConfig;
   isActive?: boolean;
 }
 
@@ -240,6 +257,7 @@ export async function updateReportTemplate(
   if (params.sections !== undefined) updates.sections = params.sections;
   if (params.styleNotes !== undefined) updates.styleNotes = params.styleNotes;
   if (params.prescriptiveness !== undefined) updates.prescriptiveness = params.prescriptiveness;
+  if (params.builderConfig !== undefined) updates.builderConfig = params.builderConfig;
 
   try {
     if (params.isActive === true) {
@@ -386,6 +404,79 @@ export async function removeTemplateSuggestion(
       .update(reportTemplates)
       .set({ suggestions: nextSuggestions })
       .where(and(eq(reportTemplates.id, templateId), eq(reportTemplates.userId, userId)));
+  } catch (error) {
+    normalizeReportTemplatesWriteError(error);
+  }
+}
+
+interface SaveBuilderTemplateParams {
+  templateId?: string;
+  name: string;
+  description?: string | null;
+  sections: ReportTemplateSection[];
+  styleNotes: ReportTemplateStyleNotes;
+  prescriptiveness: ReportTemplatePrescriptiveness;
+  builderConfig: BuilderConfig;
+}
+
+export async function saveBuilderTemplate(
+  params: SaveBuilderTemplateParams
+): Promise<string> {
+  // Sanitize any section notes before persisting
+  const sanitizedSections = params.sections.map((section) => ({
+    ...section,
+    section_note: section.section_note
+      ? sanitizeSectionNote(section.section_note)
+      : null,
+  }));
+
+  if (params.templateId) {
+    await updateReportTemplate({
+      id: params.templateId,
+      name: params.name,
+      description: params.description,
+      sections: sanitizedSections,
+      styleNotes: params.styleNotes,
+      prescriptiveness: params.prescriptiveness,
+      builderConfig: params.builderConfig,
+      isActive: true,
+    });
+    return params.templateId;
+  }
+
+  // Create new template
+  const userId = await requireCurrentUserId();
+
+  try {
+    // Deactivate any existing active template for this user
+    await db
+      .update(reportTemplates)
+      .set({ isActive: false })
+      .where(
+        and(
+          eq(reportTemplates.userId, userId),
+          eq(reportTemplates.isActive, true)
+        )
+      );
+
+    const [created] = await db
+      .insert(reportTemplates)
+      .values({
+        userId,
+        name: params.name,
+        description: params.description ?? null,
+        sections: sanitizedSections,
+        styleNotes: params.styleNotes,
+        prescriptiveness: params.prescriptiveness,
+        builderConfig: params.builderConfig,
+        sourceFileNames: [],
+        suggestions: [],
+        isActive: true,
+        createdBy: userId,
+      })
+      .returning({ id: reportTemplates.id });
+
+    return created.id;
   } catch (error) {
     normalizeReportTemplatesWriteError(error);
   }

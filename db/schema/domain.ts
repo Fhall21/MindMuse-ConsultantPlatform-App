@@ -642,6 +642,8 @@ export const reportTemplates = pgTable(
           purpose: string;
           prose_guidance: string;
           example_excerpt: string | null;
+          depth?: "brief" | "detailed";
+          section_note?: string | null;
         }>
       >()
       .default(sql`'[]'::jsonb`)
@@ -668,6 +670,22 @@ export const reportTemplates = pgTable(
         }>
       >()
       .default(sql`'[]'::jsonb`)
+      .notNull(),
+    builderConfig: jsonb("builder_config")
+      .$type<{
+        sections: Array<{
+          sectionId: string;
+          depth: "brief" | "detailed";
+          note: string | null;
+          position: number;
+        }>;
+        customSections: Array<{
+          id: string;
+          heading: string;
+          description: string;
+        }>;
+      }>()
+      .default(sql`'{}'::jsonb`)
       .notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     createdBy: uuid("created_by")

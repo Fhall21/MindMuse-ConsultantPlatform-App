@@ -1,0 +1,1 @@
+ALTER TABLE "report_templates" ADD COLUMN "builder_config" jsonb DEFAULT '{}'::jsonb NOT NULL;

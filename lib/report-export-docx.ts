@@ -39,8 +39,10 @@ import type { ContentBlock } from "@/lib/report-content-blocks";
 import type {
   ExportSection,
   ExportTheme,
+  ExportThemeMember,
   ExportConsultation,
   ExportAuditEvent,
+  ExportConnection,
 } from "@/lib/report-export-content";
 
 // ─── Inline text parsing ──────────────────────────────────────────────────────
@@ -127,6 +129,33 @@ function themeToLabel(status: ExportTheme["status"]): string {
   }
 }
 
+function memberToParagraphs(member: ExportThemeMember): Paragraph[] {
+  const paras: Paragraph[] = [];
+  paras.push(
+    new Paragraph({
+      indent: { left: 360 },
+      children: [
+        new TextRun({ text: "\u2013 ", color: "888888" }),
+        new TextRun({ text: member.label }),
+        member.sourceConsultationTitle
+          ? new TextRun({ text: `  (${member.sourceConsultationTitle})`, color: "888888", italics: true })
+          : new TextRun({ text: "" }),
+      ],
+      spacing: { after: 40 },
+    })
+  );
+  if (member.description) {
+    paras.push(
+      new Paragraph({
+        indent: { left: 540 },
+        children: [new TextRun({ text: member.description, italics: true, color: "666666" })],
+        spacing: { after: 40 },
+      })
+    );
+  }
+  return paras;
+}
+
 function themesToParagraphs(themes: ExportTheme[]): Paragraph[] {
   const paras: Paragraph[] = [];
   for (const theme of themes) {
@@ -147,21 +176,30 @@ function themesToParagraphs(themes: ExportTheme[]): Paragraph[] {
         })
       );
     }
-    if (theme.memberCount > 0) {
-      paras.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `${theme.memberCount} supporting insight${theme.memberCount === 1 ? "" : "s"}`,
-              color: "888888",
-            }),
-          ],
-          spacing: { after: 160 },
-        })
-      );
+    if (theme.members.length > 0) {
+      for (const member of theme.members) {
+        paras.push(...memberToParagraphs(member));
+      }
     }
+    // trailing spacer after each group
+    paras.push(new Paragraph({ children: [], spacing: { after: 120 } }));
   }
   return paras;
+}
+
+function connectionsToParagraphs(connections: ExportConnection[]): Paragraph[] {
+  return connections.map((conn) => {
+    const label = `${conn.fromLabel}  \u2192  ${conn.toLabel}`;
+    const sub = [conn.connectionType, conn.notes].filter(Boolean).join("  \u00b7  ");
+    return new Paragraph({
+      bullet: { level: 0 },
+      children: [
+        new TextRun({ text: label }),
+        ...(sub ? [new TextRun({ text: `  \u2014  ${sub}`, color: "888888" })] : []),
+      ],
+      spacing: { after: 80 },
+    });
+  });
 }
 
 function consultationsToParagraphs(consultations: ExportConsultation[]): Paragraph[] {
@@ -249,6 +287,9 @@ function sectionToChildren(section: ExportSection): FileChild[] {
         break;
       case "audit":
         children.push(...auditEventsToParagraphs(section.data.events));
+        break;
+      case "connections":
+        children.push(...connectionsToParagraphs(section.data.connections));
         break;
     }
   }

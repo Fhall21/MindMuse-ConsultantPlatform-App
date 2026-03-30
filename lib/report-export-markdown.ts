@@ -14,6 +14,7 @@ import type {
   ExportTheme,
   ExportConsultation,
   ExportAuditEvent,
+  ExportConnection,
   ExportSectionData,
 } from "@/lib/report-export-content";
 import { formatDate } from "@/lib/report-formatting";
@@ -58,12 +59,29 @@ function serializeThemes(themes: ExportTheme[]): string {
     if (theme.description) {
       lines.push(theme.description);
     }
-    if (theme.memberCount > 0) {
-      lines.push(`_${theme.memberCount} supporting insight${theme.memberCount === 1 ? "" : "s"}_`);
+    if (theme.members.length > 0) {
+      for (const member of theme.members) {
+        const src = member.sourceConsultationTitle
+          ? ` _(${member.sourceConsultationTitle})_`
+          : "";
+        lines.push(`  - ${member.label}${src}`);
+        if (member.description) {
+          lines.push(`    ${member.description}`);
+        }
+      }
     }
     lines.push("");
   }
   return lines.join("\n").trimEnd();
+}
+
+function serializeConnections(connections: ExportConnection[]): string {
+  return connections
+    .map((c) => {
+      const notes = c.notes ? `  · ${c.notes}` : "";
+      return `- ${c.fromLabel} → ${c.toLabel} _(${c.connectionType}${notes})_`;
+    })
+    .join("\n");
 }
 
 function serializeConsultations(consultations: ExportConsultation[]): string {
@@ -101,6 +119,8 @@ function serializeSectionData(data: ExportSectionData): string {
       return serializeConsultations(data.consultations);
     case "audit":
       return serializeAuditEvents(data.events);
+    case "connections":
+      return serializeConnections(data.connections);
   }
 }
 

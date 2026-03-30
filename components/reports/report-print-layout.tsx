@@ -704,13 +704,40 @@ function KeyThemesContent({
         <>
           <Text style={s.sectionSubheading}>Pending Review ({pending.length})</Text>
           {pending.map((group, i) => (
-            <View key={i} style={[s.themeCard, s.themeCardMuted]} wrap={false}>
-              <View style={s.themeLabelRow}>
-                <Text style={s.themeLabel}>{group.label}</Text>
-                <Text style={[s.themeBadge, s.themeBadgeMuted]}>Pending</Text>
+            <View key={i}>
+              <View style={[s.themeCard, s.themeCardMuted]} wrap={false}>
+                <View style={s.themeLabelRow}>
+                  <Text style={s.themeLabel}>{group.label}</Text>
+                  <Text style={[s.themeBadge, s.themeBadgeMuted]}>Pending</Text>
+                </View>
+                {group.description && (
+                  <Text style={s.themeDescription}>{group.description}</Text>
+                )}
               </View>
-              {group.description && (
-                <Text style={s.themeDescription}>{group.description}</Text>
+              {group.members.length > 0 && (
+                <View style={{ marginLeft: 12, marginTop: 2 }}>
+                  {[...group.members]
+                    .sort((a, b) => a.position - b.position)
+                    .map((member, j) => (
+                      <View
+                        key={j}
+                        style={[s.themeCard, s.themeCardMuted, { marginBottom: 3 }]}
+                        wrap={false}
+                      >
+                        <View style={s.themeLabelRow}>
+                          <Text style={s.themeLabel}>{member.label}</Text>
+                          {member.sourceConsultationTitle ? (
+                            <Text style={[s.themeBadge, s.themeBadgeMuted]}>
+                              {member.sourceConsultationTitle}
+                            </Text>
+                          ) : null}
+                        </View>
+                        {member.description && (
+                          <Text style={s.themeDescription}>{member.description}</Text>
+                        )}
+                      </View>
+                    ))}
+                </View>
               )}
             </View>
           ))}
@@ -731,13 +758,40 @@ function RejectedThemesContent({ report }: { report: ReportArtifactDetail }) {
       </Text>
       <View style={s.dividerAccent} />
       {rejected.map((group, i) => (
-        <View key={i} style={[s.themeCard, s.themeCardMuted]} wrap={false}>
-          <View style={s.themeLabelRow}>
-            <Text style={s.themeLabel}>{group.label}</Text>
-            <Text style={[s.themeBadge, s.themeBadgeMuted]}>Rejected</Text>
+        <View key={i}>
+          <View style={[s.themeCard, s.themeCardMuted]} wrap={false}>
+            <View style={s.themeLabelRow}>
+              <Text style={s.themeLabel}>{group.label}</Text>
+              <Text style={[s.themeBadge, s.themeBadgeMuted]}>Rejected</Text>
+            </View>
+            {group.description && (
+              <Text style={s.themeDescription}>{group.description}</Text>
+            )}
           </View>
-          {group.description && (
-            <Text style={s.themeDescription}>{group.description}</Text>
+          {group.members.length > 0 && (
+            <View style={{ marginLeft: 12, marginTop: 2 }}>
+              {[...group.members]
+                .sort((a, b) => a.position - b.position)
+                .map((member, j) => (
+                  <View
+                    key={j}
+                    style={[s.themeCard, s.themeCardMuted, { marginBottom: 3 }]}
+                    wrap={false}
+                  >
+                    <View style={s.themeLabelRow}>
+                      <Text style={s.themeLabel}>{member.label}</Text>
+                      {member.sourceConsultationTitle ? (
+                        <Text style={[s.themeBadge, s.themeBadgeMuted]}>
+                          {member.sourceConsultationTitle}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {member.description && (
+                      <Text style={s.themeDescription}>{member.description}</Text>
+                    )}
+                  </View>
+                ))}
+            </View>
           )}
         </View>
       ))}

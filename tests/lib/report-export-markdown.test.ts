@@ -196,7 +196,7 @@ describe("serializeToMarkdown — structured data", () => {
             data: {
               kind: "themes",
               themes: [
-                { label: "Governance", description: null, status: "accepted", memberCount: 3 },
+                { label: "Governance", description: null, status: "accepted", memberCount: 3, members: [] },
               ],
             },
           }),
@@ -215,7 +215,7 @@ describe("serializeToMarkdown — structured data", () => {
             data: {
               kind: "themes",
               themes: [
-                { label: "Draft Theme", description: null, status: "draft", memberCount: 1 },
+                { label: "Draft Theme", description: null, status: "draft", memberCount: 1, members: [] },
               ],
             },
           }),
@@ -233,7 +233,7 @@ describe("serializeToMarkdown — structured data", () => {
             data: {
               kind: "themes",
               themes: [
-                { label: "Dropped", description: null, status: "rejected", memberCount: 0 },
+                { label: "Dropped", description: null, status: "rejected", memberCount: 0, members: [] },
               ],
             },
           }),
@@ -256,6 +256,7 @@ describe("serializeToMarkdown — structured data", () => {
                   description: "About how teams communicate.",
                   status: "accepted",
                   memberCount: 2,
+                  members: [],
                 },
               ],
             },

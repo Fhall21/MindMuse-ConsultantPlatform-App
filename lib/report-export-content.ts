@@ -22,6 +22,8 @@ import type { ReportArtifactDetail, ConsultationMeta } from "@/lib/actions/repor
 import { parseContentBlocks, type ContentBlock } from "@/lib/report-content-blocks";
 import {
   getAllThemeGroups,
+  buildReportGraphModel,
+  formatConnectionTypeLabel,
   type AllThemeGroupSnapshot,
 } from "@/lib/report-graph";
 import {
@@ -35,11 +37,18 @@ export type ReportTemplate = "standard" | "executive";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+export interface ExportThemeMember {
+  label: string;
+  description: string | null;
+  sourceConsultationTitle: string;
+}
+
 export interface ExportTheme {
   label: string;
   description: string | null;
   status: "accepted" | "draft" | "rejected";
   memberCount: number;
+  members: ExportThemeMember[];
 }
 
 export interface ExportConsultation {
@@ -54,10 +63,18 @@ export interface ExportAuditEvent {
   createdAt: string;
 }
 
+export interface ExportConnection {
+  fromLabel: string;
+  toLabel: string;
+  connectionType: string;
+  notes: string | null;
+}
+
 export type ExportSectionData =
   | { kind: "themes"; themes: ExportTheme[] }
   | { kind: "evidence"; consultations: ExportConsultation[] }
-  | { kind: "audit"; events: ExportAuditEvent[] };
+  | { kind: "audit"; events: ExportAuditEvent[] }
+  | { kind: "connections"; connections: ExportConnection[] };
 
 export interface ExportSection {
   /** Section heading. null for the preamble (content before the first # heading). */
@@ -136,12 +153,22 @@ function buildThemeSection(
   const themesToShow = template === "executive" ? accepted.slice(0, 3) : accepted;
   const showPending = template === "standard";
 
+  const toMembers = (g: AllThemeGroupSnapshot) =>
+    [...g.members]
+      .sort((a, b) => a.position - b.position)
+      .map((m) => ({
+        label: m.label,
+        description: m.description,
+        sourceConsultationTitle: m.sourceConsultationTitle,
+      }));
+
   const themes: ExportTheme[] = [
     ...themesToShow.map((g) => ({
       label: g.label,
       description: g.description,
       status: "accepted" as const,
       memberCount: g.members.length,
+      members: toMembers(g),
     })),
     ...(showPending
       ? pending.map((g) => ({
@@ -149,6 +176,7 @@ function buildThemeSection(
           description: g.description,
           status: "draft" as const,
           memberCount: g.members.length,
+          members: toMembers(g),
         }))
       : []),
   ];
@@ -180,6 +208,13 @@ function buildRejectedThemesSection(
         description: g.description,
         status: "rejected" as const,
         memberCount: g.members.length,
+        members: [...g.members]
+          .sort((a, b) => a.position - b.position)
+          .map((m) => ({
+            label: m.label,
+            description: m.description,
+            sourceConsultationTitle: m.sourceConsultationTitle,
+          })),
       })),
     },
   };
@@ -234,6 +269,27 @@ function buildAuditSection(
   };
 }
 
+function buildConnectionsSection(
+  report: ReportArtifactDetail
+): ExportSection | null {
+  const graphModel = buildReportGraphModel(report.inputSnapshot);
+  if (!graphModel || graphModel.connections.length === 0) return null;
+
+  const connections: ExportConnection[] = graphModel.connections.map((c) => ({
+    fromLabel: c.fromLabel,
+    toLabel: c.toLabel,
+    connectionType: formatConnectionTypeLabel(c.connectionType),
+    notes: c.notes,
+  }));
+
+  return {
+    heading: "Evidence Network",
+    blocks: [],
+    isPageBreak: true,
+    data: { kind: "connections", connections },
+  };
+}
+
 // ─── Main export ─────────────────────────────────────────────────────────────
 
 /**
@@ -241,10 +297,11 @@ function buildAuditSection(
  *
  * Section order:
  *   1. Content sections (preamble + heading1-split sections from report.content)
- *   2. Key Themes (from inputSnapshot)
+ *   2. Key Themes (from inputSnapshot) — includes member insights per group
  *   3. Rejected Themes (standard template only, if any)
- *   4. Source Evidence
- *   5. Audit Trail (if any events)
+ *   4. Evidence Network (connections from graph — standard template only, if any)
+ *   5. Source Evidence
+ *   6. Audit Trail (if any events)
  */
 export function buildExportSections(
   report: ReportArtifactDetail,
@@ -267,11 +324,17 @@ export function buildExportSections(
     if (rejectedSection) sections.push(rejectedSection);
   }
 
-  // 4. Source Evidence
+  // 4. Evidence Network (standard only)
+  if (template === "standard") {
+    const connectionsSection = buildConnectionsSection(report);
+    if (connectionsSection) sections.push(connectionsSection);
+  }
+
+  // 5. Source Evidence
   const evidenceSection = buildEvidenceSection(report);
   if (evidenceSection) sections.push(evidenceSection);
 
-  // 5. Audit Trail
+  // 6. Audit Trail
   const auditSection = buildAuditSection(report);
   if (auditSection) sections.push(auditSection);
 

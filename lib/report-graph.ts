@@ -25,6 +25,25 @@ export interface SupportingMeetingThemeSnapshot {
   is_user_added?: boolean;
 }
 
+export interface AllThemeGroupMemberSnapshot {
+  insightId: string;
+  label: string;
+  description: string | null;
+  sourceConsultationTitle: string;
+  isUserAdded: boolean;
+  position: number;
+}
+
+export interface AllThemeGroupSnapshot {
+  id: string;
+  label: string;
+  description: string | null;
+  /** "accepted" | "draft" (pending) | "management_rejected" */
+  status: string;
+  origin: string;
+  members: AllThemeGroupMemberSnapshot[];
+}
+
 export interface ReportInputSnapshot {
   consultationId?: string;
   roundId?: string;
@@ -37,6 +56,9 @@ export interface ReportInputSnapshot {
   accepted_round_themes?: AcceptedConsultationThemeSnapshot[];
   supporting_meeting_themes?: SupportingMeetingThemeSnapshot[];
   supporting_consultation_themes?: SupportingMeetingThemeSnapshot[];
+  /** All non-discarded theme groups with their current status. Present in snapshots
+   *  generated after Sprint 11.2. Falls back to accepted_round_themes for older artifacts. */
+  all_theme_groups?: AllThemeGroupSnapshot[];
   graphNetwork?: GraphNetworkSnapshot;
 }
 
@@ -216,6 +238,29 @@ export function getSupportingMeetingThemes(
   return Array.isArray(snapshot.supporting_meeting_themes)
     ? snapshot.supporting_meeting_themes
     : [];
+}
+
+export function getAllThemeGroups(
+  value: Record<string, unknown> | ReportInputSnapshot
+): AllThemeGroupSnapshot[] {
+  const snapshot = toReportInputSnapshot(value);
+  if (Array.isArray(snapshot.all_theme_groups)) {
+    return snapshot.all_theme_groups as AllThemeGroupSnapshot[];
+  }
+  // Fallback for older artifacts: synthesise from accepted_round_themes with no members
+  const accepted = Array.isArray(snapshot.accepted_consultation_themes)
+    ? snapshot.accepted_consultation_themes
+    : Array.isArray(snapshot.accepted_round_themes)
+      ? snapshot.accepted_round_themes
+      : [];
+  return accepted.map((t) => ({
+    id: t.label, // no id in old snapshots — use label as key
+    label: t.label,
+    description: t.description ?? null,
+    status: "accepted",
+    origin: "ai_refined",
+    members: [],
+  }));
 }
 
 export function getGraphSnapshot(

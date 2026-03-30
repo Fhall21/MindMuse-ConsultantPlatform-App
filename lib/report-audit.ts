@@ -114,10 +114,10 @@ export function clusterAuditEvents(
 
   for (const event of sorted) {
     const eventTime = new Date(event.createdAt).getTime();
-    const actionPrefix = event.action.split(".")[0];
+    const actionPrefix = event.action;
     const last = clusters[clusters.length - 1];
 
-    const samePrefix = last?.action.split(".")[0] === actionPrefix;
+    const samePrefix = last?.action === actionPrefix;
     const withinWindow =
       last !== undefined &&
       Math.abs(new Date(last.createdAt).getTime() - eventTime) <

@@ -10,9 +10,9 @@ import type { ReportArtifactDetail } from "@/lib/actions/reports";
 import {
   buildReportGraphModel,
   formatConnectionTypeLabel,
-  getAcceptedConsultationThemes,
-  getSupportingMeetingThemes,
+  getAllThemeGroups,
   type ReportGraphModel,
+  type AllThemeGroupSnapshot,
 } from "@/lib/report-graph";
 import { parseContentBlocks } from "@/lib/report-content-blocks";
 
@@ -602,6 +602,125 @@ function PdfGraphNodes({
 
 // ─── Document component ──────────────────────────────────────────────────────
 
+function PdfThemeHierarchy({
+  report,
+  template,
+}: {
+  report: ReportPrintLayoutProps["report"];
+  template: ReportTemplate;
+}) {
+  const allGroups = getAllThemeGroups(report.inputSnapshot);
+  const accepted = allGroups.filter((g) => g.status === "accepted");
+  const pending = allGroups.filter((g) => g.status === "draft");
+  const rejected = allGroups.filter((g) => g.status === "management_rejected");
+
+  const acceptedToShow = template === "executive" ? accepted.slice(0, 3) : accepted;
+  const showNonAccepted = template !== "executive";
+
+  if (allGroups.length === 0) return null;
+
+  return (
+    <>
+      {/* ─── Key Findings ─── */}
+      {acceptedToShow.length > 0 && (
+        <View wrap={false}>
+          <View style={s.divider} />
+          <Text style={s.sectionHeading}>
+            Key Findings
+            {template === "executive" &&
+              accepted.length > 3 &&
+              ` (Top 3 of ${accepted.length})`}
+          </Text>
+        </View>
+      )}
+      {acceptedToShow.map((group, i) => (
+        <View key={i} wrap={false}>
+          <View style={s.themeCard}>
+            <View style={s.themeLabelRow}>
+              <Text style={s.themeLabel}>{group.label}</Text>
+              <Text style={s.themeBadge}>Accepted</Text>
+            </View>
+            {group.description && (
+              <Text style={s.themeDescription}>{group.description}</Text>
+            )}
+          </View>
+          {/* Child insights */}
+          {group.members.length > 0 && (
+            <View style={{ marginLeft: 12, marginTop: 2 }}>
+              {[...group.members]
+                .sort((a, b) => a.position - b.position)
+                .map((member, j) => (
+                  <View
+                    key={j}
+                    style={[s.themeCard, s.themeCardSupporting, { marginBottom: 3 }]}
+                    wrap={false}
+                  >
+                    <View style={s.themeLabelRow}>
+                      <Text style={s.themeLabel}>{member.label}</Text>
+                      {member.sourceConsultationTitle ? (
+                        <Text style={[s.themeBadge, s.themeBadgeSupporting]}>
+                          {member.sourceConsultationTitle}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {member.description && (
+                      <Text style={s.themeDescription}>{member.description}</Text>
+                    )}
+                  </View>
+                ))}
+            </View>
+          )}
+        </View>
+      ))}
+
+      {/* ─── Pending themes ─── */}
+      {showNonAccepted && pending.length > 0 && (
+        <>
+          <View wrap={false} style={{ marginTop: 12 }}>
+            <Text style={s.sectionSubheading}>
+              Pending Review ({pending.length})
+            </Text>
+          </View>
+          {pending.map((group, i) => (
+            <View key={i} style={s.themeCard} wrap={false}>
+              <View style={s.themeLabelRow}>
+                <Text style={s.themeLabel}>{group.label}</Text>
+                <Text style={[s.themeBadge, s.themeBadgeSupporting]}>Pending</Text>
+              </View>
+              {group.description && (
+                <Text style={s.themeDescription}>{group.description}</Text>
+              )}
+            </View>
+          ))}
+        </>
+      )}
+
+      {/* ─── Management-Rejected themes (standard/custom only) ─── */}
+      {showNonAccepted && rejected.length > 0 && (
+        <>
+          <View wrap={false} style={{ marginTop: 12 }}>
+            <View style={s.divider} />
+            <Text style={s.sectionHeading}>
+              Management-Rejected Themes ({rejected.length})
+            </Text>
+          </View>
+          {rejected.map((group, i) => (
+            <View key={i} style={[s.themeCard, s.themeCardSupporting]} wrap={false}>
+              <View style={s.themeLabelRow}>
+                <Text style={s.themeLabel}>{group.label}</Text>
+                <Text style={[s.themeBadge, s.themeBadgeSupporting]}>Rejected</Text>
+              </View>
+              {group.description && (
+                <Text style={s.themeDescription}>{group.description}</Text>
+              )}
+            </View>
+          ))}
+        </>
+      )}
+    </>
+  );
+}
+
 export function ReportPrintLayout({
   report,
   template,
@@ -612,12 +731,6 @@ export function ReportPrintLayout({
   const generatedDate = formatPdfDate(report.generatedAt);
   const graphModel = buildReportGraphModel(report.inputSnapshot);
 
-  const inputThemes = getAcceptedConsultationThemes(report.inputSnapshot);
-  const supportingThemes = getSupportingMeetingThemes(report.inputSnapshot);
-
-  const acceptedToShow =
-    template === "executive" ? inputThemes?.slice(0, 3) : inputThemes;
-  const showSupporting = template === "standard";
   const showEvidence = template === "standard";
 
   return (
@@ -701,71 +814,8 @@ export function ReportPrintLayout({
             {/* ─── Report content ─── */}
             <PdfContentBlocks content={report.content} />
 
-            {/* ─── Key Findings ─── */}
-            {acceptedToShow && acceptedToShow.length > 0 && (
-              <View wrap={false}>
-                <View style={s.divider} />
-                <Text style={s.sectionHeading}>
-                  Key Findings
-                  {template === "executive" &&
-                    inputThemes &&
-                    inputThemes.length > 3 &&
-                    ` (Top 3 of ${inputThemes.length})`}
-                </Text>
-              </View>
-            )}
-            {acceptedToShow?.map((theme, i) => (
-              <View key={i} style={s.themeCard} wrap={false}>
-                <View style={s.themeLabelRow}>
-                  <Text style={s.themeLabel}>{theme.label}</Text>
-                  <Text style={s.themeBadge}>Accepted</Text>
-                </View>
-                {theme.description && (
-                  <Text style={s.themeDescription}>{theme.description}</Text>
-                )}
-              </View>
-            ))}
-
-            {/* ─── Supporting Themes ─── */}
-            {showSupporting &&
-              supportingThemes &&
-              supportingThemes.length > 0 && (
-                <>
-                  <View wrap={false} style={{ marginTop: 12 }}>
-                    <Text style={s.sectionSubheading}>
-                      Supporting Themes ({supportingThemes.length})
-                    </Text>
-                  </View>
-                  {supportingThemes.map((theme, i) => (
-                    <View
-                      key={i}
-                      style={[s.themeCard, s.themeCardSupporting]}
-                      wrap={false}
-                    >
-                      <View style={s.themeLabelRow}>
-                        <Text style={s.themeLabel}>{theme.label}</Text>
-                        <Text style={[s.themeBadge, s.themeBadgeSupporting]}>
-                          Supporting
-                        </Text>
-                        {theme.consultation_title && (
-                          <Text
-                            style={[
-                              s.themeBadge,
-                              s.themeBadgeSupporting,
-                              { marginLeft: 4 },
-                            ]}
-                          >
-                            {"\u2014"} {theme.consultation_title}
-                          </Text>
-                        )}
-                      </View>
-                      {theme.description && (
-                        <Text style={s.themeDescription}>{theme.description}</Text>
-                      )}
-                    </View>
-                  ))}
-                </>
-              )}
+            {/* ─── Theme hierarchy ─── */}
+            <PdfThemeHierarchy report={report} template={template} />
           </>
         )}
 

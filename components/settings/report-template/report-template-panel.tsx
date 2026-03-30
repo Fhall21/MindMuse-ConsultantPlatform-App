@@ -22,6 +22,7 @@ import {
   removeTemplateSuggestion,
   updateReportTemplate,
   updateTemplateSuggestion,
+  saveBuilderTemplate,
 } from "@/lib/actions/report-templates";
 import type {
   ReportTemplate,
@@ -29,6 +30,7 @@ import type {
   ReportTemplatePrescriptiveness,
 } from "@/types/db";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ReportBuilder } from "./report-builder";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -136,10 +138,12 @@ function ActiveTemplateCard({
   template,
   onDeactivate,
   onDelete,
+  onEditInBuilder,
 }: {
   template: ReportTemplate;
   onDeactivate: () => void;
   onDelete: () => void;
+  onEditInBuilder: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -165,6 +169,14 @@ function ActiveTemplateCard({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onEditInBuilder}
+              className="text-xs"
+            >
+              Edit in builder
+            </Button>
             <Button
               size="sm"
               variant="ghost"
@@ -709,7 +721,8 @@ function AnalyseForm({ onDone }: { onDone: () => void }) {
 
 export function ReportTemplatePanel() {
   const queryClient = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState<"none" | "analyse" | "builder">("none");
+  const [builderTemplate, setBuilderTemplate] = useState<ReportTemplate | null>(null);
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ["report-templates"],
@@ -740,6 +753,28 @@ export function ReportTemplatePanel() {
     },
   });
 
+  const builderSaveMutation = useMutation({
+    mutationFn: (params: Parameters<typeof saveBuilderTemplate>[0]) =>
+      saveBuilderTemplate(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["report-templates"] });
+      setShowForm("none");
+      setBuilderTemplate(null);
+      toast.success("Template saved");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to save template");
+    },
+  });
+
+  const openBuilder = useCallback(
+    (template: ReportTemplate | null) => {
+      setBuilderTemplate(template);
+      setShowForm("builder");
+    },
+    []
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -762,6 +797,7 @@ export function ReportTemplatePanel() {
             template={activeTemplate}
             onDeactivate={() => deactivateMutation.mutate(activeTemplate.id)}
             onDelete={() => deleteMutation.mutate(activeTemplate.id)}
+            onEditInBuilder={() => openBuilder(activeTemplate)}
           />
           <GenerationGuidanceCard template={activeTemplate} />
         </div>
@@ -777,15 +813,24 @@ export function ReportTemplatePanel() {
       )}
 
       {/* Add / replace template */}
-      {!showForm ? (
-        <Button
-          variant="outline"
-          onClick={() => setShowForm(true)}
-          className="w-full"
-        >
-          {activeTemplate ? "Replace template" : "Create template from examples"}
-        </Button>
-      ) : (
+      {showForm === "none" ? (
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowForm("analyse")}
+            className="flex-1"
+          >
+            {activeTemplate ? "Replace template" : "Create from examples"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => openBuilder(null)}
+            className="flex-1"
+          >
+            Build from scratch
+          </Button>
+        </div>
+      ) : showForm === "analyse" ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
@@ -797,10 +842,32 @@ export function ReportTemplatePanel() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <AnalyseForm onDone={() => setShowForm(false)} />
+            <AnalyseForm onDone={() => setShowForm("none")} />
           </CardContent>
         </Card>
-      )}
+      ) : showForm === "builder" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              {builderTemplate ? "Edit template" : "Build report template"}
+            </CardTitle>
+            <CardDescription>
+              Select, order, and configure the sections for your report template.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ReportBuilder
+              template={builderTemplate}
+              onSave={(params) => builderSaveMutation.mutate(params)}
+              onCancel={() => {
+                setShowForm("none");
+                setBuilderTemplate(null);
+              }}
+              isSaving={builderSaveMutation.isPending}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Past templates */}
       {templates.filter((t) => !t.is_active).length > 0 && (

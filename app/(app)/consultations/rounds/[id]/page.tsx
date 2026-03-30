@@ -14,6 +14,7 @@ import { RoundDetailHeader } from "@/components/consultations/rounds/round-detai
 import { RoundOutputsSection } from "@/components/consultations/rounds/round-outputs-section";
 import { ThemeGroupingWorkspace } from "@/components/consultations/rounds/theme-grouping-workspace";
 import { Button } from "@/components/ui/button";
+import { SectionHeading } from "@/components/ui/section-heading";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRoundDetail } from "@/hooks/use-consultations";
@@ -24,14 +25,6 @@ import {
   generateRoundSummary,
 } from "@/lib/actions/consultation-workflow";
 import type { RoundConsultationSummary, SourceTheme } from "@/types/round-detail";
-
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-      {children}
-    </h2>
-  );
-}
 
 export default function RoundDetailPage({
   params,

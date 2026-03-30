@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SectionHeading } from "@/components/ui/section-heading";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -44,14 +45,6 @@ import {
 } from "@/lib/actions/consultations";
 import { buildMeetingTitle } from "@/lib/meeting-title";
 import { cn } from "@/lib/utils";
-
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-      {children}
-    </h2>
-  );
-}
 
 const SECTION_LINKS = [
   { id: "transcript", label: "Transcript" },

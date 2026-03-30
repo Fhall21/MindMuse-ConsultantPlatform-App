@@ -161,6 +161,20 @@ def _format_template_instructions(template, template_suggestions: list[str] | No
             if excerpt and prescriptiveness != "flexible":
                 lines.append(f"   Example style: \"{excerpt}\"")
 
+            depth = section.get("depth")
+            if depth == "brief":
+                lines.append(
+                    "   Depth: Keep this section concise — 2-3 sentences or a short paragraph."
+                )
+            elif depth == "detailed":
+                lines.append(
+                    "   Depth: Write this section in full detail with supporting evidence."
+                )
+
+            section_note = section.get("section_note")
+            if section_note and isinstance(section_note, str) and section_note.strip():
+                lines.append(f"   <section_note>{section_note.strip()}</section_note>")
+
     if template_suggestions:
         lines.append("")
         lines.append("The user has provided the following guidance for this report:")

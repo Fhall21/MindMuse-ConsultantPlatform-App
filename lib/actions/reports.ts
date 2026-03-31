@@ -18,6 +18,7 @@ import {
   listInsightsForConsultations,
 } from "@/lib/data/domain-read";
 import type { AuditLogEntry, Consultation, Insight, Meeting } from "@/types/db";
+import { meetingTypes } from "@/db/schema";
 import {
   buildReportGraphModel,
   toReportInputSnapshot,
@@ -36,7 +37,9 @@ import type {
   ThemeProvenanceContext,
 } from "@/types/report-artifact";
 
-type ConsultationContext = Pick<Meeting, "id" | "title" | "consultation_id" | "created_at">;
+type ConsultationContext = Pick<Meeting, "id" | "title" | "consultation_id" | "created_at"> & {
+  meetingTypeLabel: string | null;
+};
 type RoundContext = Pick<Consultation, "id" | "label" | "description">;
 
 async function loadMeetingContext(params: {
@@ -45,8 +48,9 @@ async function loadMeetingContext(params: {
 }): Promise<ConsultationContext | null> {
   const { consultationId, userId } = params;
   const [meeting] = await db
-    .select()
+    .select({ meeting: meetings, meetingTypeLabel: meetingTypes.label })
     .from(meetings)
+    .leftJoin(meetingTypes, eq(meetings.meetingTypeId, meetingTypes.id))
     .where(and(eq(meetings.id, consultationId), eq(meetings.userId, userId)))
     .limit(1);
 
@@ -55,10 +59,11 @@ async function loadMeetingContext(params: {
   }
 
   return {
-    id: meeting.id,
-    title: meeting.title,
-    consultation_id: meeting.consultationId,
-    created_at: meeting.createdAt.toISOString(),
+    id: meeting.meeting.id,
+    title: meeting.meeting.title,
+    consultation_id: meeting.meeting.consultationId,
+    created_at: meeting.meeting.createdAt.toISOString(),
+    meetingTypeLabel: meeting.meetingTypeLabel,
   };
 }
 
@@ -68,15 +73,17 @@ async function loadMeetingsForRound(params: {
 }): Promise<ConsultationContext[]> {
   const { roundId, userId } = params;
   const rows = await db
-    .select()
+    .select({ meeting: meetings, meetingTypeLabel: meetingTypes.label })
     .from(meetings)
+    .leftJoin(meetingTypes, eq(meetings.meetingTypeId, meetingTypes.id))
     .where(and(eq(meetings.consultationId, roundId), eq(meetings.userId, userId)));
 
-  return rows.map((meeting) => ({
+  return rows.map(({ meeting, meetingTypeLabel }) => ({
     id: meeting.id,
     title: meeting.title,
     consultation_id: meeting.consultationId,
     created_at: meeting.createdAt.toISOString(),
+    meetingTypeLabel,
   }));
 }
 
@@ -483,12 +490,28 @@ export async function getReportArtifactForUserId(
       people.map((person) => person.name),
     ])
   );
+  const participantLabelsByConsultationId = new Map(
+    consultationPeople.map(({ consultationId, people }) => [
+      consultationId,
+      people
+        .map((person) => person.working_group?.trim() || person.name.trim())
+        .filter((value): value is string => Boolean(value))
+        .reduce<string[]>((acc, value) => {
+          if (!acc.some((existing) => existing.toLowerCase() === value.toLowerCase())) {
+            acc.push(value);
+          }
+          return acc;
+        }, []),
+    ])
+  );
 
   const consultations: ConsultationMeta[] = liveConsultations.map((c) => ({
     id: c.id,
     title: c.title,
     date: c.created_at,
     people: peopleByConsultationId.get(c.id) ?? [],
+    meetingTypeLabel: c.meetingTypeLabel,
+    participantLabels: participantLabelsByConsultationId.get(c.id) ?? [],
   }));
 
   // Load draft (unapproved) theme groups for the round
@@ -573,6 +596,7 @@ export async function getConsultationReportData(
     title: consultation.title,
     consultation_id: consultation.consultation_id,
     created_at: consultation.created_at,
+    meetingTypeLabel: consultation.meetingTypeLabel,
   };
 
   let localAcceptedThemes: Insight[] = [];

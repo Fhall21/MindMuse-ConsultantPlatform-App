@@ -21,29 +21,72 @@ function evt(
 function consultation(
   title: string,
   date: string,
-  people: string[] = []
+  people: string[] = [],
+  participantLabels: string[] = people,
+  meetingTypeLabel: string | null = null
 ) {
   return {
     id: `${title}-${date}`,
     title,
     date,
     people,
+    participantLabels,
+    meetingTypeLabel,
   };
 }
 
 describe("lib/report-audit - buildComplianceAuditTrail", () => {
-  it("sorts consultation sessions newest-first and excludes people", () => {
+  it("sorts consultation sessions newest-first and derives workgroup labels", () => {
     const trail = buildComplianceAuditTrail({
       consultations: [
-        consultation("Working Group B", "2026-01-10T10:00:00.000Z", ["Alice"]),
-        consultation("Leadership Team", "2026-01-12T10:00:00.000Z", ["Bob"]),
+        consultation(
+          "Working Group B",
+          "2026-01-10T10:00:00.000Z",
+          ["Alice Smith"],
+          ["Operations"],
+          "Focus Group"
+        ),
+        consultation(
+          "Leadership Team",
+          "2026-01-12T10:00:00.000Z",
+          ["Bob Jones"],
+          ["Strategy"],
+          "1-1 Interview"
+        ),
       ],
       auditSummary: [],
     });
 
     expect(trail.sessions).toEqual([
-      { title: "Leadership Team", date: "2026-01-12T10:00:00.000Z" },
-      { title: "Working Group B", date: "2026-01-10T10:00:00.000Z" },
+      { title: "1-1 with Strategy (1 person)", date: "2026-01-12T10:00:00.000Z" },
+      {
+        title: "Focus group with Operations (1 person)",
+        date: "2026-01-10T10:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("falls back to participant names and then title when working groups are missing", () => {
+    const trail = buildComplianceAuditTrail({
+      consultations: [
+        consultation(
+          "Fallback Title",
+          "2026-01-12T10:00:00.000Z",
+          ["Alice Smith", "Bob Jones"],
+          ["Alice Smith", "Bob Jones"],
+          "Focus Group"
+        ),
+        consultation("No Metadata", "2026-01-11T10:00:00.000Z", [], [], null),
+      ],
+      auditSummary: [],
+    });
+
+    expect(trail.sessions).toEqual([
+      {
+        title: "Focus group with Alice Smith, Bob Jones (2 people)",
+        date: "2026-01-12T10:00:00.000Z",
+      },
+      { title: "No Metadata", date: "2026-01-11T10:00:00.000Z" },
     ]);
   });
 
@@ -105,7 +148,15 @@ describe("lib/report-audit - buildComplianceAuditTrail", () => {
       auditSummary: [evt("transcript.parsed", 0)],
     });
     const populatedTrail = buildComplianceAuditTrail({
-      consultations: [consultation("Leadership Team", "2026-01-12T10:00:00.000Z")],
+      consultations: [
+        consultation(
+          "Leadership Team",
+          "2026-01-12T10:00:00.000Z",
+          ["Alice Smith"],
+          ["Operations"],
+          "Focus Group"
+        ),
+      ],
       auditSummary: [],
     });
 

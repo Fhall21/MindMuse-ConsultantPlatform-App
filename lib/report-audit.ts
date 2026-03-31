@@ -21,6 +21,65 @@ export interface ComplianceAuditMilestone {
   createdAt: string;
 }
 
+function uniqueLabels(values: string[] = []): string[] {
+  const seen = new Set<string>();
+
+  return values.reduce<string[]>((acc, value) => {
+    const normalized = value.trim();
+    const key = normalized.toLowerCase();
+
+    if (!normalized || seen.has(key)) {
+      return acc;
+    }
+
+    seen.add(key);
+    acc.push(normalized);
+    return acc;
+  }, []);
+}
+
+function formatMeetingTypeLabel(label: string | null): string | null {
+  const trimmed = label?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (/^1-1(\s+interview)?$/i.test(trimmed)) {
+    return "1-1";
+  }
+
+  if (/^focus\s+group$/i.test(trimmed)) {
+    return "Focus group";
+  }
+
+  return trimmed;
+}
+
+function formatParticipantCount(count: number): string {
+  return count === 1 ? "1 person" : `${count} people`;
+}
+
+export function buildComplianceSessionLabel(consultation: ConsultationMeta): string {
+  const meetingTypeLabel = formatMeetingTypeLabel(consultation.meetingTypeLabel);
+  const participantLabels = uniqueLabels(
+    consultation.participantLabels ?? consultation.people ?? []
+  );
+  const participantLabel = participantLabels.join(", ");
+  const participantCount = consultation.people?.length ?? 0;
+  const countSuffix = participantCount > 0 ? ` (${formatParticipantCount(participantCount)})` : "";
+
+  if (meetingTypeLabel && participantLabel) {
+    return `${meetingTypeLabel} with ${participantLabel}${countSuffix}`;
+  }
+
+  if (participantLabel) {
+    return `${participantLabel}${countSuffix}`;
+  }
+
+  return consultation.title;
+}
+
 export interface ComplianceAuditTrail {
   sessions: ComplianceAuditSession[];
   milestones: ComplianceAuditMilestone[];
@@ -119,7 +178,7 @@ export function buildComplianceAuditTrail(params: {
     .filter((consultation) => consultation.date)
     .sort((left, right) => right.date.localeCompare(left.date))
     .map((consultation) => ({
-      title: consultation.title,
+      title: buildComplianceSessionLabel(consultation),
       date: consultation.date,
     }));
 

@@ -60,6 +60,8 @@ export interface ConsultationMeta {
   title: string;
   date: string;
   people: string[];
+  meetingTypeLabel: string | null;
+  participantLabels: string[];
 }
 
 export interface AuditSummaryEvent {

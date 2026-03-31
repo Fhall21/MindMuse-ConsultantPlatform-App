@@ -294,7 +294,7 @@ describe("serializeToMarkdown — structured data", () => {
             data: {
               kind: "audit",
               sessions: [
-                { title: "Leadership Team", date: "2026-01-15T10:00:00Z" },
+                { title: "1-1 with Strategy (1 person)", date: "2026-01-15T10:00:00Z" },
               ],
               milestones: [
                 {
@@ -316,7 +316,7 @@ describe("serializeToMarkdown — structured data", () => {
       })
     );
     expect(md).toContain("## Consultation sessions");
-    expect(md).toContain("- **Leadership Team**");
+    expect(md).toContain("- **1-1 with Strategy (1 person)**");
     expect(md).toContain("## Process record");
     expect(md).toContain("- **Report generated**");
     expect(md).toContain("- **3 themes validated** (×3)");

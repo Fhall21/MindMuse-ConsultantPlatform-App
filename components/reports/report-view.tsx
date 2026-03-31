@@ -771,7 +771,14 @@ export function DraftGroupsSection({ report }: { report: ReportArtifactDetail })
 export function EvidenceSection({ report }: { report: ReportArtifactDetail }) {
   const consultations: ConsultationMeta[] = report.consultations.length > 0
     ? report.consultations
-    : report.consultationTitles.map((title) => ({ id: title, title, date: "", people: [] }));
+    : report.consultationTitles.map((title) => ({
+        id: title,
+        title,
+        date: "",
+        people: [],
+        meetingTypeLabel: null,
+        participantLabels: [],
+      }));
 
   if (consultations.length === 0) return null;
 

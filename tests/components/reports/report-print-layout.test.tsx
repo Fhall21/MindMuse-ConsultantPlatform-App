@@ -86,6 +86,8 @@ function makeReport(
           "Weekly team consultation covering repeated rota failures and safeguarding escalation follow-ups",
         date: "2026-01-12T10:00:00Z",
         people: ["Alice Smith", "Jordan Patel", "Morgan Chen"],
+        meetingTypeLabel: "Focus Group",
+        participantLabels: ["Operations"],
       },
     ],
     acceptedThemeCount: 1,
@@ -173,7 +175,7 @@ describe("ReportPrintLayout", () => {
     expect(auditText).toContain("Audit Trail");
     expect(auditText).toContain("Consultation sessions");
     expect(auditText).toContain("Process record");
-    expect(auditText).toContain("Weekly team consultation covering repeated rota failures");
+    expect(auditText).toContain("Focus group with Operations (3 people)");
     expect(auditText).toContain("Evidence email sent");
   });
 

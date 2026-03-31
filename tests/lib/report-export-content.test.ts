@@ -223,7 +223,14 @@ describe("buildExportSections — Source Evidence section", () => {
     const report = makeReport({
       consultationTitles: ["Fallback title"],
       consultations: [
-        { id: "c-1", title: "Interview with Alice", date: "2026-01-10", people: ["Alice Smith"] },
+        {
+          id: "c-1",
+          title: "Interview with Alice",
+          date: "2026-01-10",
+          people: ["Alice Smith"],
+          meetingTypeLabel: "1-1 Interview",
+          participantLabels: ["Sales"],
+        },
       ],
     });
     const sections = buildExportSections(report, "standard");
@@ -243,8 +250,22 @@ describe("buildExportSections — Audit Trail section", () => {
   it("builds the two-tier compliance audit trail for standard exports", () => {
     const report = makeReport({
       consultations: [
-        { id: "c-1", title: "Leadership Team", date: "2026-01-12T10:00:00Z", people: ["Alice"] },
-        { id: "c-2", title: "Working Group B", date: "2026-01-10T10:00:00Z", people: ["Bob"] },
+        {
+          id: "c-1",
+          title: "Leadership Team",
+          date: "2026-01-12T10:00:00Z",
+          people: ["Alice", "Eve"],
+          meetingTypeLabel: "1-1 Interview",
+          participantLabels: ["Strategy"],
+        },
+        {
+          id: "c-2",
+          title: "Working Group B",
+          date: "2026-01-10T10:00:00Z",
+          people: ["Bob", "Cara"],
+          meetingTypeLabel: "Focus Group",
+          participantLabels: ["Operations", "Operations"],
+        },
       ],
       auditSummary: [
         { action: "transcript.parsed", createdAt: "2026-01-09T10:00:00Z", entityType: null },
@@ -260,8 +281,8 @@ describe("buildExportSections — Audit Trail section", () => {
     expect(audit?.data?.kind).toBe("audit");
     if (audit?.data?.kind === "audit") {
       expect(audit.data.sessions.map((session) => session.title)).toEqual([
-        "Leadership Team",
-        "Working Group B",
+        "1-1 with Strategy (2 people)",
+        "Focus group with Operations (2 people)",
       ]);
       expect(audit.data.milestones.map((milestone) => milestone.label)).toEqual([
         "Report revised",
@@ -273,7 +294,14 @@ describe("buildExportSections — Audit Trail section", () => {
   it("omits the audit trail from executive exports", () => {
     const report = makeReport({
       consultations: [
-        { id: "c-1", title: "Leadership Team", date: "2026-01-12T10:00:00Z", people: [] },
+        {
+          id: "c-1",
+          title: "Leadership Team",
+          date: "2026-01-12T10:00:00Z",
+          people: [],
+          meetingTypeLabel: null,
+          participantLabels: [],
+        },
       ],
       auditSummary: [
         { action: "evidence_email.sent", createdAt: "2026-01-12T12:00:00Z", entityType: null },

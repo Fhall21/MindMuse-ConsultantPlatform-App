@@ -43,6 +43,8 @@ describe("AuditTrailSection", () => {
               title: "Leadership Team",
               date: "2026-01-12T10:00:00Z",
               people: ["Alice Smith"],
+              meetingTypeLabel: "1-1 Interview",
+              participantLabels: ["Strategy"],
             },
           ],
           auditSummary: [
@@ -74,7 +76,7 @@ describe("AuditTrailSection", () => {
     expect(screen.getByText("Audit Trail")).toBeInTheDocument();
     expect(screen.getByText("Consultation sessions")).toBeInTheDocument();
     expect(screen.getByText("Process record")).toBeInTheDocument();
-    expect(screen.getByText("Leadership Team")).toBeInTheDocument();
+    expect(screen.getByText("1-1 with Strategy (1 person)")).toBeInTheDocument();
     expect(screen.getByText("2 themes validated")).toBeInTheDocument();
     expect(screen.getByText("Evidence email sent")).toBeInTheDocument();
     expect(screen.queryByText("Transcript parsed")).not.toBeInTheDocument();

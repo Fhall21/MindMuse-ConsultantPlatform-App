@@ -42,3 +42,21 @@ Items explicitly deferred during engineering review. Each entry includes the mot
 
 **Blocked by:** Nothing — ready to build. Phase 2 scope.
 
+---
+
+## PDF Export: Custom Template Section Boundaries
+
+**What:** The PDF export treats the entire `report.content` as one "Executive Summary" section, regardless of how many `# Heading` sections the AI generated from the custom report template. Custom sections (e.g. `# Recommendations`, `# Risk Analysis`) appear buried inside a single page with no TOC entry, no page break, and no running header. The live view renders them correctly as headings.
+
+**Why:** The `buildSectionElements` function in `components/reports/report-print-layout.tsx` hardcodes the section structure and passes all of `report.content` to `ExecutiveSummaryContent` as a single block. The Word and Markdown exports (Sprint 12) handle this correctly by splitting on `heading1` blocks. The PDF should match.
+
+**How to start:**
+- In `buildSectionElements`, parse `report.content` with `parseContentBlocks`
+- Detect `heading1` blocks as section boundaries — each becomes a separate `SectionElement` with its own `Page` in the PDF
+- Update the two-pass TOC page counter to account for variable page counts per section
+- Verify the running header reflects each section's heading (not always "Executive Summary")
+
+**Depends on:** Sprint 12 `buildExportSections` being built first — it solves the same splitting logic and can serve as a reference implementation.
+
+**Blocked by:** Nothing technical. Medium complexity rework of the two-pass TOC renderer.
+

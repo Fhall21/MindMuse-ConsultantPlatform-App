@@ -19,8 +19,8 @@ export default function ReportsPage() {
       <Tabs defaultValue="reports">
         <TabsList>
           <TabsTrigger value="reports">Reports</TabsTrigger>
-          <TabsTrigger value="audit-exports">Audit Exports</TabsTrigger>
           <TabsTrigger value="custom-templates">Custom Templates</TabsTrigger>
+          <TabsTrigger value="audit-exports">Audit Exports</TabsTrigger>
         </TabsList>
 
         <TabsContent value="reports" className="space-y-6">

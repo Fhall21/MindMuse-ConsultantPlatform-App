@@ -1,4 +1,7 @@
-import type { AuditSummaryEvent } from "@/types/report-artifact";
+import type {
+  AuditSummaryEvent,
+  ConsultationMeta,
+} from "@/types/report-artifact";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -11,6 +14,23 @@ export interface AuditCluster {
   action: string;
   /** Most recent event timestamp in the cluster */
   createdAt: string;
+}
+
+export interface ComplianceAuditSession {
+  title: string;
+  date: string;
+}
+
+export interface ComplianceAuditMilestone {
+  action: string;
+  label: string;
+  count: number;
+  createdAt: string;
+}
+
+export interface ComplianceAuditTrail {
+  sessions: ComplianceAuditSession[];
+  milestones: ComplianceAuditMilestone[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -57,6 +77,20 @@ const EVENT_LABELS: Record<string, string> = {
   "report.manually_edited": "Report manually edited",
 };
 
+const COMPLIANCE_MILESTONE_ACTIONS = new Set([
+  "evidence_email.sent",
+  "round.output_generated",
+  "report.manually_edited",
+  "round.target_accepted",
+]);
+
+const COMPLIANCE_MILESTONE_LABELS: Record<string, string> = {
+  "evidence_email.sent": "Evidence email sent",
+  "round.output_generated": "Report generated",
+  "report.manually_edited": "Report revised",
+  "round.target_accepted": "Theme validated",
+};
+
 /** Events within this window sharing the same action prefix are merged into one cluster */
 const TWO_MINUTES_MS = 2 * 60 * 1000;
 
@@ -87,6 +121,65 @@ export function getAuditDotColor(action: string): string {
   )
     return "bg-teal-500";
   return "bg-muted-foreground/40";
+}
+
+export function buildComplianceAuditTrail(params: {
+  consultations: ConsultationMeta[];
+  auditSummary: AuditSummaryEvent[];
+}): ComplianceAuditTrail {
+  const sessions = [...params.consultations]
+    .filter((consultation) => consultation.date)
+    .sort((left, right) => right.date.localeCompare(left.date))
+    .map((consultation) => ({
+      title: consultation.title,
+      date: consultation.date,
+    }));
+
+  const acceptedEvents = params.auditSummary.filter(
+    (event) => event.action === "round.target_accepted"
+  );
+  const otherMilestones = params.auditSummary.filter(
+    (event) =>
+      COMPLIANCE_MILESTONE_ACTIONS.has(event.action) &&
+      event.action !== "round.target_accepted"
+  );
+
+  const milestones: ComplianceAuditMilestone[] = [];
+
+  if (acceptedEvents.length > 0) {
+    const mostRecent = acceptedEvents.reduce((latest, event) =>
+      latest.createdAt > event.createdAt ? latest : event
+    );
+
+    milestones.push({
+      action: "round.target_accepted",
+      label:
+        acceptedEvents.length === 1
+          ? "1 theme validated"
+          : `${acceptedEvents.length} themes validated`,
+      count: acceptedEvents.length,
+      createdAt: mostRecent.createdAt,
+    });
+  }
+
+  for (const event of otherMilestones) {
+    milestones.push({
+      action: event.action,
+      label: COMPLIANCE_MILESTONE_LABELS[event.action] ?? event.action,
+      count: 1,
+      createdAt: event.createdAt,
+    });
+  }
+
+  milestones.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+  return { sessions, milestones };
+}
+
+export function hasComplianceAuditTrailContent(
+  trail: ComplianceAuditTrail
+): boolean {
+  return trail.sessions.length > 0 || trail.milestones.length > 0;
 }
 
 /** Remove micro-actions, keeping only major lifecycle milestones */

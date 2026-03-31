@@ -27,10 +27,8 @@ import {
   type AllThemeGroupSnapshot,
 } from "@/lib/report-graph";
 import {
-  filterMajorEvents,
-  clusterAuditEvents,
-  buildReportEventLabel,
-  type AuditCluster,
+  buildComplianceAuditTrail,
+  hasComplianceAuditTrailContent,
 } from "@/lib/report-audit";
 
 export type ReportTemplate = "standard" | "executive";
@@ -58,7 +56,13 @@ export interface ExportConsultation {
 }
 
 export interface ExportAuditEvent {
+  title: string;
+  date: string;
+}
+
+export interface ExportAuditMilestone {
   label: string;
+  action: string;
   count: number;
   createdAt: string;
 }
@@ -73,7 +77,11 @@ export interface ExportConnection {
 export type ExportSectionData =
   | { kind: "themes"; themes: ExportTheme[] }
   | { kind: "evidence"; consultations: ExportConsultation[] }
-  | { kind: "audit"; events: ExportAuditEvent[] }
+  | {
+      kind: "audit";
+      sessions: ExportAuditEvent[];
+      milestones: ExportAuditMilestone[];
+    }
   | { kind: "connections"; connections: ExportConnection[] };
 
 export interface ExportSection {
@@ -249,10 +257,12 @@ function buildEvidenceSection(
 function buildAuditSection(
   report: ReportArtifactDetail
 ): ExportSection | null {
-  const major = filterMajorEvents(report.auditSummary ?? []);
-  const clusters: AuditCluster[] = clusterAuditEvents(major);
+  const trail = buildComplianceAuditTrail({
+    consultations: report.consultations,
+    auditSummary: report.auditSummary ?? [],
+  });
 
-  if (clusters.length === 0) return null;
+  if (!hasComplianceAuditTrailContent(trail)) return null;
 
   return {
     heading: "Audit Trail",
@@ -260,10 +270,15 @@ function buildAuditSection(
     isPageBreak: true,
     data: {
       kind: "audit",
-      events: clusters.map((c) => ({
-        label: buildReportEventLabel(c.action),
-        count: c.count,
-        createdAt: c.createdAt,
+      sessions: trail.sessions.map((session) => ({
+        title: session.title,
+        date: session.date,
+      })),
+      milestones: trail.milestones.map((milestone) => ({
+        label: milestone.label,
+        action: milestone.action,
+        count: milestone.count,
+        createdAt: milestone.createdAt,
       })),
     },
   };
@@ -301,7 +316,7 @@ function buildConnectionsSection(
  *   3. Rejected Themes (standard template only, if any)
  *   4. Evidence Network (connections from graph — standard template only, if any)
  *   5. Source Evidence
- *   6. Audit Trail (if any events)
+ *   6. Audit Trail (standard template only, if any compliance content)
  */
 export function buildExportSections(
   report: ReportArtifactDetail,
@@ -334,9 +349,11 @@ export function buildExportSections(
   const evidenceSection = buildEvidenceSection(report);
   if (evidenceSection) sections.push(evidenceSection);
 
-  // 6. Audit Trail
-  const auditSection = buildAuditSection(report);
-  if (auditSection) sections.push(auditSection);
+  // 6. Audit Trail (standard only)
+  if (template === "standard") {
+    const auditSection = buildAuditSection(report);
+    if (auditSection) sections.push(auditSection);
+  }
 
   return sections;
 }

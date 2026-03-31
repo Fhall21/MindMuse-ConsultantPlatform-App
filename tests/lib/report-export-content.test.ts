@@ -239,6 +239,52 @@ describe("buildExportSections — Source Evidence section", () => {
   });
 });
 
+describe("buildExportSections — Audit Trail section", () => {
+  it("builds the two-tier compliance audit trail for standard exports", () => {
+    const report = makeReport({
+      consultations: [
+        { id: "c-1", title: "Leadership Team", date: "2026-01-12T10:00:00Z", people: ["Alice"] },
+        { id: "c-2", title: "Working Group B", date: "2026-01-10T10:00:00Z", people: ["Bob"] },
+      ],
+      auditSummary: [
+        { action: "transcript.parsed", createdAt: "2026-01-09T10:00:00Z", entityType: null },
+        { action: "round.target_accepted", createdAt: "2026-01-11T10:00:00Z", entityType: null },
+        { action: "round.target_accepted", createdAt: "2026-01-12T11:00:00Z", entityType: null },
+        { action: "report.manually_edited", createdAt: "2026-01-12T12:00:00Z", entityType: null },
+      ],
+    });
+
+    const sections = buildExportSections(report, "standard");
+    const audit = sections.find((section) => section.heading === "Audit Trail");
+
+    expect(audit?.data?.kind).toBe("audit");
+    if (audit?.data?.kind === "audit") {
+      expect(audit.data.sessions.map((session) => session.title)).toEqual([
+        "Leadership Team",
+        "Working Group B",
+      ]);
+      expect(audit.data.milestones.map((milestone) => milestone.label)).toEqual([
+        "Report revised",
+        "2 themes validated",
+      ]);
+    }
+  });
+
+  it("omits the audit trail from executive exports", () => {
+    const report = makeReport({
+      consultations: [
+        { id: "c-1", title: "Leadership Team", date: "2026-01-12T10:00:00Z", people: [] },
+      ],
+      auditSummary: [
+        { action: "evidence_email.sent", createdAt: "2026-01-12T12:00:00Z", entityType: null },
+      ],
+    });
+
+    const sections = buildExportSections(report, "executive");
+    expect(sections.find((section) => section.heading === "Audit Trail")).toBeUndefined();
+  });
+});
+
 // ─── Section ordering ─────────────────────────────────────────────────────────
 
 describe("buildExportSections — section ordering", () => {

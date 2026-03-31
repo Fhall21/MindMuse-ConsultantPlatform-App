@@ -42,6 +42,7 @@ import type {
   ExportThemeMember,
   ExportConsultation,
   ExportAuditEvent,
+  ExportAuditMilestone,
   ExportConnection,
 } from "@/lib/report-export-content";
 
@@ -238,21 +239,81 @@ function consultationsToParagraphs(consultations: ExportConsultation[]): Paragra
   return paras;
 }
 
-function auditEventsToParagraphs(events: ExportAuditEvent[]): Paragraph[] {
-  return events.map((event) => {
-    const dateStr = new Date(event.createdAt).toLocaleDateString("en-GB", {
+function auditSessionsToParagraphs(sessions: ExportAuditEvent[]): Paragraph[] {
+  const paras: Paragraph[] = [
+    new Paragraph({
+      heading: HeadingLevel.HEADING_2,
+      children: [new TextRun({ text: "Consultation sessions" })],
+    }),
+  ];
+
+  for (const session of sessions) {
+    const dateStr = new Date(session.date).toLocaleDateString("en-GB", {
       dateStyle: "medium",
     });
-    const countSuffix = event.count > 1 ? ` (×${event.count})` : "";
-    return new Paragraph({
-      bullet: { level: 0 },
-      children: [
-        new TextRun({ text: event.label + countSuffix, bold: true }),
-        new TextRun({ text: `  —  ${dateStr}`, color: "555555" }),
-      ],
-      spacing: { after: 80 },
+    paras.push(
+      new Paragraph({
+        bullet: { level: 0 },
+        children: [
+          new TextRun({ text: session.title, bold: true }),
+          new TextRun({ text: `  —  ${dateStr}`, color: "555555" }),
+        ],
+        spacing: { after: 80 },
+      })
+    );
+  }
+
+  return paras;
+}
+
+function auditMilestonesToParagraphs(
+  milestones: ExportAuditMilestone[]
+): Paragraph[] {
+  const paras: Paragraph[] = [
+    new Paragraph({
+      heading: HeadingLevel.HEADING_2,
+      children: [new TextRun({ text: "Process record" })],
+    }),
+  ];
+
+  for (const milestone of milestones) {
+    const dateStr = new Date(milestone.createdAt).toLocaleDateString("en-GB", {
+      dateStyle: "medium",
     });
-  });
+    const countSuffix = milestone.count > 1 ? ` (×${milestone.count})` : "";
+    paras.push(
+      new Paragraph({
+        bullet: { level: 0 },
+        children: [
+          new TextRun({ text: milestone.label + countSuffix, bold: true }),
+          new TextRun({ text: `  —  ${dateStr}`, color: "555555" }),
+        ],
+        spacing: { after: 80 },
+      })
+    );
+  }
+
+  return paras;
+}
+
+function auditTrailToParagraphs(
+  sessions: ExportAuditEvent[],
+  milestones: ExportAuditMilestone[]
+): Paragraph[] {
+  const paras: Paragraph[] = [];
+
+  if (sessions.length > 0) {
+    paras.push(...auditSessionsToParagraphs(sessions));
+  }
+
+  if (milestones.length > 0) {
+    if (paras.length > 0) {
+      paras.push(new Paragraph({ children: [], spacing: { after: 80 } }));
+    }
+    paras.push(...auditMilestonesToParagraphs(milestones));
+  }
+
+  return paras;
 }
 
 // ─── Section → FileChild[] ────────────────────────────────────────────────────
@@ -286,7 +347,12 @@ function sectionToChildren(section: ExportSection): FileChild[] {
         children.push(...consultationsToParagraphs(section.data.consultations));
         break;
       case "audit":
-        children.push(...auditEventsToParagraphs(section.data.events));
+        children.push(
+          ...auditTrailToParagraphs(
+            section.data.sessions,
+            section.data.milestones
+          )
+        );
         break;
       case "connections":
         children.push(...connectionsToParagraphs(section.data.connections));

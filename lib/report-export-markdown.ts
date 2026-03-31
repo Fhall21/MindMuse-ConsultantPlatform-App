@@ -14,6 +14,7 @@ import type {
   ExportTheme,
   ExportConsultation,
   ExportAuditEvent,
+  ExportAuditMilestone,
   ExportConnection,
   ExportSectionData,
 } from "@/lib/report-export-content";
@@ -99,15 +100,38 @@ function serializeConsultations(consultations: ExportConsultation[]): string {
   return lines.join("\n").trimEnd();
 }
 
-function serializeAuditEvents(events: ExportAuditEvent[]): string {
+function serializeAuditTrail(
+  sessions: ExportAuditEvent[],
+  milestones: ExportAuditMilestone[]
+): string {
   const lines: string[] = [];
-  for (const event of events) {
-    const dateStr = new Date(event.createdAt).toLocaleDateString("en-GB", {
-      dateStyle: "medium",
-    });
-    const countSuffix = event.count > 1 ? ` (×${event.count})` : "";
-    lines.push(`- **${event.label}**${countSuffix} — ${dateStr}`);
+
+  if (sessions.length > 0) {
+    lines.push("## Consultation sessions");
+    lines.push("");
+    for (const session of sessions) {
+      const dateStr = new Date(session.date).toLocaleDateString("en-GB", {
+        dateStyle: "medium",
+      });
+      lines.push(`- **${session.title}** — ${dateStr}`);
+    }
   }
+
+  if (milestones.length > 0) {
+    if (lines.length > 0) {
+      lines.push("");
+    }
+    lines.push("## Process record");
+    lines.push("");
+    for (const milestone of milestones) {
+      const dateStr = new Date(milestone.createdAt).toLocaleDateString("en-GB", {
+        dateStyle: "medium",
+      });
+      const countSuffix = milestone.count > 1 ? ` (×${milestone.count})` : "";
+      lines.push(`- **${milestone.label}**${countSuffix} — ${dateStr}`);
+    }
+  }
+
   return lines.join("\n");
 }
 
@@ -118,7 +142,7 @@ function serializeSectionData(data: ExportSectionData): string {
     case "evidence":
       return serializeConsultations(data.consultations);
     case "audit":
-      return serializeAuditEvents(data.events);
+      return serializeAuditTrail(data.sessions, data.milestones);
     case "connections":
       return serializeConnections(data.connections);
   }

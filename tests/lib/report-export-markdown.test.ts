@@ -293,17 +293,33 @@ describe("serializeToMarkdown — structured data", () => {
           section("Audit Trail", [], {
             data: {
               kind: "audit",
-              events: [
-                { label: "Report generated", count: 1, createdAt: "2026-01-15T10:00:00Z" },
-                { label: "Report edited", count: 3, createdAt: "2026-01-16T09:00:00Z" },
+              sessions: [
+                { title: "Leadership Team", date: "2026-01-15T10:00:00Z" },
+              ],
+              milestones: [
+                {
+                  label: "Report generated",
+                  action: "round.output_generated",
+                  count: 1,
+                  createdAt: "2026-01-15T10:00:00Z",
+                },
+                {
+                  label: "3 themes validated",
+                  action: "round.target_accepted",
+                  count: 3,
+                  createdAt: "2026-01-16T09:00:00Z",
+                },
               ],
             },
           }),
         ],
       })
     );
+    expect(md).toContain("## Consultation sessions");
+    expect(md).toContain("- **Leadership Team**");
+    expect(md).toContain("## Process record");
     expect(md).toContain("- **Report generated**");
-    expect(md).toContain("- **Report edited** (×3)");
+    expect(md).toContain("- **3 themes validated** (×3)");
   });
 
   it("omits count suffix when count is 1", () => {
@@ -313,7 +329,15 @@ describe("serializeToMarkdown — structured data", () => {
           section("Audit Trail", [], {
             data: {
               kind: "audit",
-              events: [{ label: "Report generated", count: 1, createdAt: "2026-01-15T10:00:00Z" }],
+              sessions: [],
+              milestones: [
+                {
+                  label: "Report generated",
+                  action: "round.output_generated",
+                  count: 1,
+                  createdAt: "2026-01-15T10:00:00Z",
+                },
+              ],
             },
           }),
         ],

@@ -40,15 +40,10 @@ import {
   type ReportGraphModel,
   type AllThemeGroupSnapshot,
 } from "@/lib/report-graph";
-import {
-  filterMajorEvents,
-  clusterAuditEvents,
-  getAuditDotColor,
-  type AuditCluster,
-} from "@/lib/report-audit";
 import { normalizeReportMarkdownForEditor } from "@/lib/report-editor-markdown";
 import { parseContentBlocks } from "@/lib/report-content-blocks";
 import { cn } from "@/lib/utils";
+import { AuditTrailSection } from "@/components/reports/report-audit-trail-section";
 import { ReportCoverPage, deriveMatterRef } from "@/components/reports/report-cover-page";
 import { NetworkDiagram } from "@/components/reports/network-diagram";
 import { GroupNetworkSection, CanvasPreviewSection } from "@/components/reports/theme-visualization";
@@ -818,66 +813,7 @@ export function EvidenceSection({ report }: { report: ReportArtifactDetail }) {
   );
 }
 
-// ─── Audit trail section (compliance) ────────────────────────────────────────
-
-function AuditClusterItem({
-  cluster,
-  isLast,
-}: {
-  cluster: AuditCluster;
-  isLast: boolean;
-}) {
-  return (
-    <div className="flex gap-3">
-      <div className="flex w-4 flex-col items-center">
-        <span
-          className={cn(
-            "mt-1 size-2 shrink-0 rounded-full",
-            getAuditDotColor(cluster.action)
-          )}
-        />
-        {!isLast && <span className="mt-1 h-full w-px bg-border/60" />}
-      </div>
-      <div className="flex-1 pb-3">
-        <p className="text-sm text-foreground/85">
-          {cluster.count > 1
-            ? `${cluster.label} (×${cluster.count})`
-            : cluster.label}
-        </p>
-        <time className="text-xs text-muted-foreground">
-          {formatShortDate(cluster.createdAt)}
-        </time>
-      </div>
-    </div>
-  );
-}
-
-export function AuditTrailSection({ report }: { report: ReportArtifactDetail }) {
-  const clusters = useMemo(() => {
-    const major = filterMajorEvents(report.auditSummary ?? []);
-    return clusterAuditEvents(major);
-  }, [report.auditSummary]);
-
-  if (clusters.length === 0) return null;
-
-  return (
-    // print:break-before-page ensures the audit trail starts on a fresh page in PDF
-    <section className="space-y-4 print:break-before-page">
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Audit Trail ({clusters.length} milestone{clusters.length === 1 ? "" : "s"})
-      </h3>
-      <div className="rounded-lg border border-border/50 bg-muted/5 px-4 py-4">
-        {clusters.map((cluster, i) => (
-          <AuditClusterItem
-            key={`${cluster.action}-${cluster.createdAt}`}
-            cluster={cluster}
-            isLast={i === clusters.length - 1}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
+export { AuditTrailSection };
 
 // ─── Inline bold renderer ─────────────────────────────────────────────────────
 

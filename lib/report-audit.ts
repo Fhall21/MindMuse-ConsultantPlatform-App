@@ -1,4 +1,4 @@
-import type { AuditSummaryEvent } from "@/lib/actions/reports";
+import type { AuditSummaryEvent } from "@/types/report-artifact";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -4,9 +4,11 @@ import {
   getReportArtifacts,
   getReportArtifact,
   getReportArtifactVersions,
-  type ReportArtifactListItem,
-  type ReportArtifactDetail,
 } from "@/lib/actions/reports";
+import type {
+  ReportArtifactDetail,
+  ReportArtifactListItem,
+} from "@/types/report-artifact";
 
 export function useReportArtifacts() {
   return useQuery<ReportArtifactListItem[]>({

@@ -4,7 +4,7 @@ import type {
   ConsultationReportData,
   IncludedThemeSelection,
   ReportThemeReference,
-} from "@/lib/actions/reports";
+} from "@/types/report-artifact";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,

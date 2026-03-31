@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildExportSections } from "@/lib/report-export-content";
-import type { ReportArtifactDetail } from "@/lib/actions/reports";
+import type { ReportArtifactDetail } from "@/types/report-artifact";
 
 // ─── Fixture helpers ──────────────────────────────────────────────────────────
 

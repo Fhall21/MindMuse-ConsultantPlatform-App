@@ -19,7 +19,7 @@ import {
 } from "@/components/reports/report-view";
 import { ReportCoverPage, deriveMatterRef } from "@/components/reports/report-cover-page";
 import { fetchJson } from "@/hooks/api";
-import type { ReportArtifactDetail } from "@/lib/actions/reports";
+import type { ReportArtifactDetail } from "@/types/report-artifact";
 import { buildReportGraphModel } from "@/lib/report-graph";
 import { formatDate, estimateReadTime } from "@/lib/report-formatting";
 import type { PublicReportShareMetadata } from "@/types/report-share";

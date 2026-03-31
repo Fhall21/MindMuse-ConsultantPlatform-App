@@ -12,11 +12,9 @@ import {
   markEmailSent,
   saveEmailDraft,
 } from "@/lib/actions/evidence-emails";
-import {
-  getMeetingReportData,
-  type IncludedThemeSelection,
-} from "@/lib/actions/reports";
+import { getMeetingReportData } from "@/lib/actions/reports";
 import type { EvidenceEmail } from "@/types/db";
+import type { IncludedThemeSelection } from "@/types/report-artifact";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

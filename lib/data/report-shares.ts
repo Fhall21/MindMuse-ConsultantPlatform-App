@@ -13,7 +13,8 @@ import { getAppSiteUrl } from "@/lib/env";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
 import { emitAuditEvent, insertAuditLogEntry } from "@/lib/data/audit-log";
 import { getRoundOutputArtifactForUser } from "@/lib/data/domain-read";
-import { getReportArtifactForUserId, type ReportArtifactDetail } from "@/lib/actions/reports";
+import { getReportArtifactForUserId } from "@/lib/actions/reports";
+import type { ReportArtifactDetail } from "@/types/report-artifact";
 import type {
   PublicReportShareMetadata,
   ReportShareLinkListItem,

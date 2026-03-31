@@ -18,7 +18,7 @@
  *   ExportSection[] (+ themes, evidence, audit)
  */
 
-import type { ReportArtifactDetail, ConsultationMeta } from "@/lib/actions/reports";
+import type { ConsultationMeta, ReportArtifactDetail } from "@/types/report-artifact";
 import { parseContentBlocks, type ContentBlock } from "@/lib/report-content-blocks";
 import {
   getAllThemeGroups,

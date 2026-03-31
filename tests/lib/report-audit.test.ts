@@ -3,7 +3,7 @@ import {
   clusterAuditEvents,
   filterMajorEvents,
 } from "@/lib/report-audit";
-import type { AuditSummaryEvent } from "@/lib/actions/reports";
+import type { AuditSummaryEvent } from "@/types/report-artifact";
 
 // Helper: build a minimal AuditSummaryEvent
 function evt(

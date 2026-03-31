@@ -6,7 +6,6 @@ import {
   View,
   StyleSheet,
 } from "@react-pdf/renderer";
-import type { ReportArtifactDetail } from "@/lib/actions/reports";
 import {
   buildReportGraphModel,
   formatConnectionTypeLabel,
@@ -14,6 +13,7 @@ import {
   type ReportGraphModel,
 } from "@/lib/report-graph";
 import { parseContentBlocks } from "@/lib/report-content-blocks";
+import type { ReportArtifactDetail } from "@/types/report-artifact";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

@@ -26,7 +26,7 @@ import {
   useReportArtifact,
   useReportArtifactVersions,
 } from "@/hooks/use-reports";
-import type { ReportArtifactDetail, ConsultationMeta } from "@/lib/actions/reports";
+import type { ConsultationMeta, ReportArtifactDetail } from "@/types/report-artifact";
 import {
   formatDate,
   formatShortDate,

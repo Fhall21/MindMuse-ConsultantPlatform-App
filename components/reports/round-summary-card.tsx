@@ -1,6 +1,5 @@
 "use client";
 
-import type { RoundSummaryData } from "@/lib/actions/reports";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -10,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { RoundSummaryData } from "@/types/report-artifact";
 
 interface RoundSummaryCardProps {
   summary: RoundSummaryData;

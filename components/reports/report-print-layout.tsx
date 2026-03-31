@@ -62,6 +62,42 @@ const colors = {
   white: "#ffffff",
 };
 
+const connectionPalette: Record<
+  string,
+  { accent: string; background: string; border: string }
+> = {
+  related_to: {
+    accent: "#6b7280",
+    background: "#f9fafb",
+    border: "#d1d5db",
+  },
+  supports: {
+    accent: "#059669",
+    background: "#ecfdf5",
+    border: "#a7f3d0",
+  },
+  contradicts: {
+    accent: "#dc2626",
+    background: "#fef2f2",
+    border: "#fecaca",
+  },
+  escalates: {
+    accent: "#7c3aed",
+    background: "#f5f3ff",
+    border: "#c4b5fd",
+  },
+  resolves: {
+    accent: "#0284c7",
+    background: "#eff6ff",
+    border: "#93c5fd",
+  },
+  involves: {
+    accent: "#475569",
+    background: "#f8fafc",
+    border: "#cbd5e1",
+  },
+};
+
 // ─── Content page style (exported for two-pass page counting in route.tsx) ───
 
 export const CONTENT_PAGE_STYLE = {
@@ -405,7 +441,146 @@ const s = StyleSheet.create({
     fontFamily: "Helvetica",
     fontSize: 9.5,
     color: colors.dark,
+    lineHeight: 1.35,
+  },
+  evidenceCardBody: {
     flex: 1,
+  },
+  metaStack: {
+    marginTop: 4,
+  },
+  metaLine: {
+    fontFamily: "Helvetica",
+    fontSize: 8,
+    color: colors.mid,
+    lineHeight: 1.45,
+    marginBottom: 2,
+  },
+  metaLabel: {
+    fontFamily: "Helvetica-Bold",
+    color: colors.light,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+
+  // ── Connection groups ─────────────────────────────────────────────────────
+  connectionGroupCard: {
+    borderWidth: 0.5,
+    borderColor: colors.border,
+    borderRadius: 4,
+    backgroundColor: colors.slateBg,
+    padding: 10,
+    marginBottom: 10,
+  },
+  connectionGroupHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  connectionGroupTitle: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 8,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  connectionGroupCountBox: {
+    borderWidth: 0.5,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    backgroundColor: colors.white,
+  },
+  connectionGroupCountText: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 7,
+    color: colors.mid,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  connectionCard: {
+    borderWidth: 0.5,
+    borderColor: colors.border,
+    borderRadius: 4,
+    backgroundColor: colors.white,
+    padding: 10,
+    marginBottom: 6,
+  },
+  connectionCardLast: {
+    marginBottom: 0,
+  },
+  connectionCardTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  connectionTypeBox: {
+    borderWidth: 0.5,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  connectionTypeText: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 6.5,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  connectionOriginText: {
+    fontFamily: "Helvetica",
+    fontSize: 7.5,
+    color: colors.faint,
+  },
+  connectionFlow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
+  connectionFlowRail: {
+    width: 18,
+    alignItems: "center",
+    paddingTop: 2,
+  },
+  connectionFlowDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  connectionFlowLine: {
+    width: 1,
+    flex: 1,
+    marginVertical: 3,
+  },
+  connectionFlowArrow: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 8,
+  },
+  connectionFlowBody: {
+    flex: 1,
+  },
+  connectionEndpointBlock: {
+    marginBottom: 8,
+  },
+  connectionEndpointLabel: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 6.5,
+    color: colors.light,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  connectionEndpointValue: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 9,
+    color: colors.dark,
+    lineHeight: 1.35,
+  },
+  connectionNotes: {
+    fontFamily: "Times-Roman",
+    fontSize: 8.5,
+    color: colors.mid,
+    lineHeight: 1.45,
   },
 
   // ── Audit rail ─────────────────────────────────────────────────────────────
@@ -435,6 +610,10 @@ const s = StyleSheet.create({
     marginBottom: 4,
     alignItems: "flex-start",
   },
+  railEventBody: {
+    flex: 1,
+    paddingBottom: 3,
+  },
   railDot: {
     width: 4,
     height: 4,
@@ -448,14 +627,14 @@ const s = StyleSheet.create({
     fontFamily: "Helvetica",
     fontSize: 9,
     color: colors.dark,
-    flex: 1,
+    lineHeight: 1.35,
   },
   railEntityText: {
     fontFamily: "Helvetica",
     fontSize: 8,
     color: colors.faint,
-    marginLeft: 6,
-    flexShrink: 0,
+    marginTop: 2,
+    lineHeight: 1.35,
   },
 });
 
@@ -473,6 +652,12 @@ function formatPdfDate(value: string): string {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(date);
 }
 
+function formatPdfMediumDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleDateString("en-US", { dateStyle: "medium" });
+}
+
 function renderPdfInlineContent(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   if (parts.length === 1) return text;
@@ -486,6 +671,76 @@ function renderPdfInlineContent(text: string): React.ReactNode {
     }
     return part;
   });
+}
+
+function PdfMetaLine({ label, value }: { label: string; value: string }) {
+  return (
+    <Text style={s.metaLine}>
+      <Text style={s.metaLabel}>{label}: </Text>
+      {value}
+    </Text>
+  );
+}
+
+function PdfConnectionCard({
+  connection,
+  groupLabel,
+}: {
+  connection: ReportGraphModel["connectionsByType"][number]["connections"][number];
+  groupLabel: string;
+}) {
+  const palette =
+    connectionPalette[connection.connectionType] ?? connectionPalette.related_to;
+
+  return (
+    <View style={s.connectionCard} wrap={false}>
+      <View style={s.connectionCardTopRow}>
+        <View
+          style={[
+            s.connectionTypeBox,
+            { backgroundColor: palette.background, borderColor: palette.border },
+          ]}
+        >
+          <Text style={[s.connectionTypeText, { color: palette.accent }]}>
+            {groupLabel}
+          </Text>
+        </View>
+        <Text style={s.connectionOriginText}>
+          {connection.origin === "ai_suggested" ? "AI accepted" : "Manual"}
+        </Text>
+      </View>
+
+      <View style={s.connectionFlow}>
+        <View style={s.connectionFlowRail}>
+          <View
+            style={[s.connectionFlowDot, { backgroundColor: palette.accent }]}
+          />
+          <View
+            style={[s.connectionFlowLine, { backgroundColor: palette.border }]}
+          />
+          <Text style={[s.connectionFlowArrow, { color: palette.accent }]}>
+            {"\u2193"}
+          </Text>
+        </View>
+
+        <View style={s.connectionFlowBody}>
+          <View style={s.connectionEndpointBlock}>
+            <Text style={s.connectionEndpointLabel}>From</Text>
+            <Text style={s.connectionEndpointValue}>{connection.fromLabel}</Text>
+          </View>
+
+          <View style={s.connectionEndpointBlock}>
+            <Text style={s.connectionEndpointLabel}>To</Text>
+            <Text style={s.connectionEndpointValue}>{connection.toLabel}</Text>
+          </View>
+
+          {connection.notes ? (
+            <Text style={s.connectionNotes}>{connection.notes}</Text>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  );
 }
 
 // ─── Running header / footer ─────────────────────────────────────────────────
@@ -905,26 +1160,34 @@ function NetworkContent({
             Connections ({graphModel.connectionCount})
           </Text>
           {groupsToShow.map((group) => (
-            <View key={group.type}>
-              <Text style={[s.sectionSubheading, { fontSize: 7 }]}>
-                {group.label} ({group.connections.length})
-              </Text>
-              {group.connections.map((conn) => (
-                <View key={conn.key} style={s.evidenceCard} wrap={false}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.evidenceTitle}>
-                      {conn.fromLabel}
-                      {" \u2192 "}
-                      {formatConnectionTypeLabel(conn.connectionType)}
-                      {" \u2192 "}
-                      {conn.toLabel}
-                    </Text>
-                    <Text style={s.themeDescription}>
-                      {conn.origin === "ai_suggested" ? "AI accepted" : "Manual"}
-                      {conn.notes ? `  ·  ${conn.notes}` : ""}
-                    </Text>
-                  </View>
+            <View key={group.type} style={s.connectionGroupCard}>
+              <View style={s.connectionGroupHeader}>
+                <Text
+                  style={[
+                    s.connectionGroupTitle,
+                    {
+                      color:
+                        (connectionPalette[group.type] ?? connectionPalette.related_to)
+                          .accent,
+                    },
+                  ]}
+                >
+                  {group.label}
+                </Text>
+                <View style={s.connectionGroupCountBox}>
+                  <Text style={s.connectionGroupCountText}>
+                    {group.connections.length} item
+                    {group.connections.length === 1 ? "" : "s"}
+                  </Text>
                 </View>
+              </View>
+
+              {group.connections.map((conn) => (
+                <PdfConnectionCard
+                  key={conn.key}
+                  connection={conn}
+                  groupLabel={formatConnectionTypeLabel(conn.connectionType)}
+                />
               ))}
             </View>
           ))}
@@ -1009,21 +1272,17 @@ function EvidenceContent({ report }: { report: ReportArtifactDetail }) {
           <View style={s.evidenceNumberBox}>
             <Text style={s.evidenceNumberText}>{i + 1}</Text>
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={s.evidenceCardBody}>
             <Text style={s.evidenceTitle}>{title}</Text>
             {(date || people.length > 0) && (
-              <Text style={[s.themeDescription, { marginTop: 2 }]}>
-                {[
-                  date
-                    ? new Date(date).toLocaleDateString("en-US", {
-                        dateStyle: "medium",
-                      })
-                    : null,
-                  people.length > 0 ? people.join(", ") : null,
-                ]
-                  .filter(Boolean)
-                  .join("  ·  ")}
-              </Text>
+              <View style={s.metaStack}>
+                {date ? (
+                  <PdfMetaLine label="Date" value={formatPdfMediumDate(date)} />
+                ) : null}
+                {people.length > 0 ? (
+                  <PdfMetaLine label="People" value={people.join(", ")} />
+                ) : null}
+              </View>
             )}
           </View>
         </View>
@@ -1065,16 +1324,18 @@ function AuditTrailContent({ report }: { report: ReportArtifactDetail }) {
           {trail.sessions.map((c, i) => (
             <View key={i} style={s.railEventRow} wrap={false}>
               <View style={s.railDot} />
-              <Text style={s.railEventText}>{c.title}</Text>
-              {c.date ? (
-                <Text style={s.railEntityText}>
-                  {new Date(c.date).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </Text>
-              ) : null}
+              <View style={s.railEventBody}>
+                <Text style={s.railEventText}>{c.title}</Text>
+                {c.date ? (
+                  <Text style={s.railEntityText}>
+                    {new Date(c.date).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </Text>
+                ) : null}
+              </View>
             </View>
           ))}
         </View>
@@ -1090,8 +1351,10 @@ function AuditTrailContent({ report }: { report: ReportArtifactDetail }) {
           {trail.milestones.map((m, i) => (
             <View key={i} style={s.railEventRow} wrap={false}>
               <View style={s.railDot} />
-              <Text style={s.railEventText}>{m.label}</Text>
-              <Text style={s.railEntityText}>{formatMilestoneDate(m.createdAt)}</Text>
+              <View style={s.railEventBody}>
+                <Text style={s.railEventText}>{m.label}</Text>
+                <Text style={s.railEntityText}>{formatMilestoneDate(m.createdAt)}</Text>
+              </View>
             </View>
           ))}
         </View>

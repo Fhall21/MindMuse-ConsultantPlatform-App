@@ -24,17 +24,17 @@ export function AuditExportsPanel() {
             <Badge variant="secondary">In development</Badge>
           </div>
           <CardDescription>
-            This tab will host the future compliance export once that workflow is ready.
+            A second export view is on the way for teams who need a broader compliance-focused
+            download.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            Placeholder content only. The current live export lives above as Site Actions Audit
-            Export.
+            This area is reserved for a future export that will complement Site Actions Audit
+            Export with compliance-specific reporting.
           </p>
           <p>
-            We will replace this card with the real compliance export when the backend payload is
-            ready.
+            For now, the live export above is the one you can use today.
           </p>
         </CardContent>
       </Card>

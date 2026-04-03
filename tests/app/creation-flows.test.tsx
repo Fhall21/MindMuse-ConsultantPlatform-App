@@ -49,6 +49,22 @@ describe("creation flows", () => {
     toastErrorMock.mockReset();
   });
 
+  it("explains what a consultation is when creating one", () => {
+    render(<NewConsultationPage />);
+
+    expect(
+      screen.getByText("A consultation is the project or round that groups related meetings.")
+    ).toBeInTheDocument();
+  });
+
+  it("explains the consultation picker when creating a meeting", () => {
+    render(<NewMeetingPage />);
+
+    expect(
+      screen.getByText("Choose the consultation project this meeting belongs to.")
+    ).toBeInTheDocument();
+  });
+
   it("creates a consultation record and routes to the consultation workspace", async () => {
     createRoundMock.mockResolvedValue("consultation-123");
 
@@ -75,6 +91,10 @@ describe("creation flows", () => {
     createMeetingMock.mockResolvedValue("meeting-456");
 
     render(<NewMeetingPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
+
+    expect(screen.getByPlaceholderText("Consultation project name")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Title"), {
       target: { value: "Session with Alex - March 2026" },

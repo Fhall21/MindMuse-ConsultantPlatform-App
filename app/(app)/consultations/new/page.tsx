@@ -52,7 +52,7 @@ export default function NewConsultationPage() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">New Consultation</h1>
         <p className="text-sm text-muted-foreground">
-          Create the consultation record first. Link meetings after.
+          A consultation is the project or round that groups related meetings.
         </p>
       </div>
 

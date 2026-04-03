@@ -46,7 +46,7 @@ function ConsultationField({
         <Input
           value={newLabel}
           onChange={(e) => onNewLabelChange(e.target.value)}
-          placeholder="Consultation name"
+          placeholder="Consultation project name"
           className="h-9 flex-1 text-sm"
           autoFocus
         />
@@ -714,6 +714,9 @@ export default function NewMeetingPage() {
         {/* Consultation */}
         <div className="space-y-2">
           <Label>Consultation</Label>
+          <p className="text-xs text-muted-foreground">
+            Choose the consultation project this meeting belongs to.
+          </p>
           <ConsultationField
             value={consultationId}
             onChange={setConsultationId}

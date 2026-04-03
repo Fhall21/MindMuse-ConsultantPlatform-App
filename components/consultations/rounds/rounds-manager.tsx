@@ -162,7 +162,7 @@ export function RoundsManager() {
             </form>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Rounds are a reusable label for stages of consultation work.
+              Rounds are a reusable labels for stages of consultation work.
             </p>
           )}
         </CardContent>

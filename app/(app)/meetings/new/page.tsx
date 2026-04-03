@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { X, Plus, Check, ChevronDown, FileText, PenLine, Upload } from "lucide-react";
+import { X, Plus, ChevronDown, FileText, PenLine, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -137,6 +137,8 @@ function PeopleField({
     () => getDistinctCaseInsensitiveValues(allPeople.map((p) => p.work_type)),
     [allPeople]
   );
+  const showEmptyState =
+    selected.length === 0 && suggestedExisting.length === 0 && suggestedNewNames.length === 0;
 
   const filteredPeople = useMemo(() => {
     const selectedIds = new Set(selected.map((p) => p.id));
@@ -188,6 +190,27 @@ function PeopleField({
 
   return (
     <div className="space-y-2">
+      {showEmptyState && (
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-dashed border-border bg-muted/20 p-3">
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium">No people added yet</p>
+            <p className="text-xs text-muted-foreground">
+              Add at least one person so the meeting can be created.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            onClick={() => setIsCreating(true)}
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Add person
+          </Button>
+        </div>
+      )}
+
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {selected.map((p) => (
@@ -215,31 +238,33 @@ function PeopleField({
           <p className="text-xs text-muted-foreground">Found in your contacts — confirm to add</p>
           <div className="flex flex-wrap gap-1.5">
             {suggestedExisting.map((p) => (
-              <span
+              <div
                 key={p.id}
-                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border bg-muted/20 pl-2.5 pr-1.5 py-1 text-xs"
+                className="inline-flex items-center gap-1 rounded-md border border-dashed border-border bg-muted/20 pl-1.5 pr-1 py-1 text-xs"
               >
-                {p.name.split(/\s+/)[0]}
-                <button
+                <Button
                   type="button"
-                  title="Add this person"
+                  variant="ghost"
+                  size="sm"
+                  title={`Add ${p.name}`}
                   onClick={() => {
                     onAdd(p);
                     onDismissSuggestedExisting?.(p.id);
                   }}
-                  className="rounded p-0.5 transition-colors hover:bg-green-100 dark:hover:bg-green-900/30"
+                  className="h-7 rounded-md px-2 text-xs hover:bg-green-100 dark:hover:bg-green-900/30"
                 >
-                  <Check className="h-3 w-3 text-green-600" />
-                </button>
+                  <Plus className="mr-1 h-3 w-3 text-green-600" />
+                  Add {p.name.split(/\s+/)[0]}
+                </Button>
                 <button
                   type="button"
                   title="Dismiss"
                   onClick={() => onDismissSuggestedExisting?.(p.id)}
-                  className="rounded p-0.5 transition-colors hover:bg-muted"
+                  className="rounded-md p-1 transition-colors hover:bg-muted"
                 >
                   <X className="h-3 w-3 text-muted-foreground" />
                 </button>
-              </span>
+              </div>
             ))}
           </div>
         </div>
@@ -251,19 +276,21 @@ function PeopleField({
           <p className="text-xs text-muted-foreground">New people from transcript — click to add</p>
           <div className="flex flex-wrap gap-1.5">
             {suggestedNewNames.map((name) => (
-              <button
+              <Button
                 key={name}
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => {
                   onDismissSuggestedNew?.(name);
                   setCreatingName(name);
                   setIsCreating(true);
                 }}
-                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-xs transition-colors hover:bg-muted/50"
+                className="h-8 rounded-md border-dashed px-2.5 text-xs transition-colors hover:bg-muted/50"
               >
                 <Plus className="h-3 w-3" />
-                {name}
-              </button>
+                Add {name}
+              </Button>
             ))}
           </div>
         </div>
@@ -380,7 +407,7 @@ function PeopleField({
             }}
           >
             <Plus className="mr-1 h-3.5 w-3.5" />
-            New
+            Add person
           </Button>
         </div>
       )}

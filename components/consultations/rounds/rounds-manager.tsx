@@ -88,7 +88,7 @@ export function RoundsManager() {
           <div className="space-y-1">
             <CardTitle>Consultation rounds</CardTitle>
             <CardDescription>
-              Keep recurring consultation cycles clearly labeled so records stay organized.
+              Keep recurring consultation cycles clearly labeled so records stay organised.
             </CardDescription>
           </div>
           <Button
@@ -162,7 +162,7 @@ export function RoundsManager() {
             </form>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Create a round when you need a reusable label for a stage of consultation work.
+              Rounds are a reusable label for stages of consultation work.
             </p>
           )}
         </CardContent>

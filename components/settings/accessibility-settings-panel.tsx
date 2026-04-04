@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, useState } from "react";
+import { authClient } from "@/lib/auth/client";
 import {
   applyAccessibilityPreferences,
   defaultAccessibilityPreferences,
@@ -42,6 +43,7 @@ function summarizePreferences(preferences: AccessibilityPreferences) {
 }
 
 export function AccessibilitySettingsPanel() {
+  const { data: session, isPending } = authClient.useSession();
   const [preferences, setPreferences] = useState(defaultAccessibilityPreferences);
   const [hasLoadedStoredPreferences, setHasLoadedStoredPreferences] = useState(false);
 
@@ -51,8 +53,12 @@ export function AccessibilitySettingsPanel() {
   });
 
   useEffect(() => {
-    syncStoredPreferences(loadAccessibilityPreferences());
-  }, []);
+    if (isPending) {
+      return;
+    }
+
+    syncStoredPreferences(loadAccessibilityPreferences(session?.user.id ?? null));
+  }, [isPending, session?.user.id, syncStoredPreferences]);
 
   useEffect(() => {
     if (!hasLoadedStoredPreferences) {
@@ -60,8 +66,8 @@ export function AccessibilitySettingsPanel() {
     }
 
     applyAccessibilityPreferences(preferences);
-    persistAccessibilityPreferences(preferences);
-  }, [hasLoadedStoredPreferences, preferences]);
+    persistAccessibilityPreferences(preferences, session?.user.id ?? null);
+  }, [hasLoadedStoredPreferences, preferences, session?.user.id]);
 
   return (
     <div className="space-y-6">
@@ -70,7 +76,7 @@ export function AccessibilitySettingsPanel() {
           <CardTitle>Accessibility Features</CardTitle>
           <CardDescription>
             Tune the interface for clearer reading, stronger focus states, and less motion.
-            Changes apply immediately across the app on this device.
+            Changes apply immediately across the app for your account in this browser.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">

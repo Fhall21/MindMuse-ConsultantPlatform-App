@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import { authClient } from "@/lib/auth/client";
 
-export const ACCESSIBILITY_STORAGE_KEY = "consultant-platform-accessibility";
+export const accessibilityStorageKey = (userId: string) =>
+  `consultant-platform-accessibility:${userId}`;
 
 export type AccessibilityPreferences = {
   textSize: "default" | "large";
@@ -37,20 +39,31 @@ function parseStoredPreferences(rawValue: string | null): AccessibilityPreferenc
   }
 }
 
-export function loadAccessibilityPreferences() {
+export function loadAccessibilityPreferences(userId?: string | null) {
   if (typeof window === "undefined") {
     return defaultAccessibilityPreferences;
   }
 
-  return parseStoredPreferences(window.localStorage.getItem(ACCESSIBILITY_STORAGE_KEY));
+  if (!userId) {
+    return defaultAccessibilityPreferences;
+  }
+
+  return parseStoredPreferences(window.localStorage.getItem(accessibilityStorageKey(userId)));
 }
 
-export function persistAccessibilityPreferences(preferences: AccessibilityPreferences) {
+export function persistAccessibilityPreferences(
+  preferences: AccessibilityPreferences,
+  userId?: string | null
+) {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.localStorage.setItem(ACCESSIBILITY_STORAGE_KEY, JSON.stringify(preferences));
+  if (!userId) {
+    return;
+  }
+
+  window.localStorage.setItem(accessibilityStorageKey(userId), JSON.stringify(preferences));
 }
 
 export function applyAccessibilityPreferences(
@@ -64,9 +77,15 @@ export function applyAccessibilityPreferences(
 }
 
 export function AccessibilityPreferencesSync() {
+  const { data: session, isPending } = authClient.useSession();
+
   useEffect(() => {
-    applyAccessibilityPreferences(loadAccessibilityPreferences());
-  }, []);
+    if (isPending) {
+      return;
+    }
+
+    applyAccessibilityPreferences(loadAccessibilityPreferences(session?.user.id ?? null));
+  }, [isPending, session?.user.id]);
 
   return null;
 }

@@ -5,10 +5,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UserNav } from "@/components/layout/user-nav";
 
-const { pushMock, refreshMock, signOutMock } = vi.hoisted(() => ({
+const { pushMock, refreshMock, signOutMock, posthogResetMock } = vi.hoisted(() => ({
   pushMock: vi.fn(),
   refreshMock: vi.fn(),
   signOutMock: vi.fn(),
+  posthogResetMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -21,6 +22,12 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/auth/client", () => ({
   authClient: {
     signOut: signOutMock,
+  },
+}));
+
+vi.mock("posthog-js", () => ({
+  default: {
+    reset: posthogResetMock,
   },
 }));
 
@@ -53,6 +60,7 @@ describe("UserNav", () => {
     pushMock.mockReset();
     refreshMock.mockReset();
     signOutMock.mockReset();
+    posthogResetMock.mockReset();
     signOutMock.mockResolvedValue(undefined);
   });
 
@@ -73,6 +81,7 @@ describe("UserNav", () => {
     });
 
     expect(queryClient.getQueryData(["meetings", "active"])).toBeUndefined();
+    expect(posthogResetMock).toHaveBeenCalledTimes(1);
     expect(pushMock).toHaveBeenCalledWith("/login");
     expect(refreshMock).toHaveBeenCalledTimes(1);
   });

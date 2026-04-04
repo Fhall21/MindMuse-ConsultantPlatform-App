@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +35,7 @@ export function UserNav({ email, displayName }: { email?: string; displayName?: 
 
   async function handleSignOut() {
     await authClient.signOut();
+    posthog.reset();
     queryClient.clear();
     router.push("/login");
     router.refresh();

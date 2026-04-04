@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -29,9 +30,11 @@ function getInitials(displayName?: string, email?: string) {
 
 export function UserNav({ email, displayName }: { email?: string; displayName?: string }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   async function handleSignOut() {
     await authClient.signOut();
+    queryClient.clear();
     router.push("/login");
     router.refresh();
   }

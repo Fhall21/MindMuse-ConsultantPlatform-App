@@ -325,7 +325,7 @@ export function RoundsManager() {
                             <Link
                               href={
                                 linkedCount === 0
-                                  ? "/meetings/new"
+                                  ? `/meetings/new?consultationId=${round.id}`
                                   : `/consultations/rounds/${round.id}`
                               }
                             >

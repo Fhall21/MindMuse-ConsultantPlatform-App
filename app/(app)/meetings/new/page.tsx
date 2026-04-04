@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { X, Plus, ChevronDown, FileText, PenLine, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -435,6 +435,7 @@ type Mode = "choose" | "transcript" | "manual";
 
 export default function NewMeetingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<Mode>("choose");
   const [submitting, setSubmitting] = useState(false);
 
@@ -451,7 +452,7 @@ export default function NewMeetingPage() {
   const [suggestedNewNames, setSuggestedNewNames] = useState<string[]>([]);
 
   // Form state
-  const [consultationId, setConsultationId] = useState("");
+  const [consultationId, setConsultationId] = useState(searchParams.get("consultationId") ?? "");
   const [newConsultationLabel, setNewConsultationLabel] = useState("");
   const [meetingTypeId, setMeetingTypeId] = useState("");
   const [meetingDate, setMeetingDate] = useState("");

@@ -17,11 +17,13 @@ import {
   meetingPeople as consultationPeople,
   meetings as consultationRounds,
   consultations,
+  canvasConnections,
   consultationOutputArtifacts as roundOutputArtifacts,
   evidenceEmails,
   insights,
   meetings,
   people,
+  reportTemplates,
   themes,
 } from "@/db/schema";
 import type {
@@ -749,10 +751,28 @@ export interface DashboardStats {
   totalConsultations: number;
   totalPeople: number;
   emailsSent: number;
+  // Onboarding checklist counts — derived from existing data, no separate tracking table
+  totalMeetings: number;
+  totalInsights: number;
+  totalThemes: number;
+  totalCanvasConnections: number;
+  totalReports: number;
+  totalCustomTemplates: number;
 }
 
 export async function getDashboardStats(userId: string): Promise<DashboardStats> {
-  const [consultationCountResult, peopleCountResult, emailsSentResult] = await Promise.all([
+  const [
+    consultationCountResult,
+    peopleCountResult,
+    emailsSentResult,
+    meetingsCountResult,
+    insightsCountResult,
+    themesCountResult,
+    canvasConnectionsCountResult,
+    reportsCountResult,
+    // Step 7 (download) has no audit trail action — marked optional, not derived here
+    customTemplatesCountResult,
+  ] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(consultations)
@@ -767,12 +787,48 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
       .from(evidenceEmails)
       .innerJoin(meetings, eq(evidenceEmails.meetingId, meetings.id))
       .where(and(eq(meetings.userId, userId), eq(evidenceEmails.status, "sent"))),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(meetings)
+      .where(eq(meetings.userId, userId)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(insights)
+      .innerJoin(meetings, eq(insights.meetingId, meetings.id))
+      .where(eq(meetings.userId, userId)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(themes)
+      .where(eq(themes.userId, userId)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(canvasConnections)
+      .where(eq(canvasConnections.userId, userId)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(roundOutputArtifacts)
+      .where(
+        and(
+          eq(roundOutputArtifacts.userId, userId),
+          eq(roundOutputArtifacts.artifactType, "report")
+        )
+      ),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(reportTemplates)
+      .where(and(eq(reportTemplates.userId, userId), eq(reportTemplates.isActive, true))),
   ]);
 
   return {
     totalConsultations: consultationCountResult[0]?.count ?? 0,
     totalPeople: peopleCountResult[0]?.count ?? 0,
     emailsSent: emailsSentResult[0]?.count ?? 0,
+    totalMeetings: meetingsCountResult[0]?.count ?? 0,
+    totalInsights: insightsCountResult[0]?.count ?? 0,
+    totalThemes: themesCountResult[0]?.count ?? 0,
+    totalCanvasConnections: canvasConnectionsCountResult[0]?.count ?? 0,
+    totalReports: reportsCountResult[0]?.count ?? 0,
+    totalCustomTemplates: customTemplatesCountResult[0]?.count ?? 0,
   };
 }
 

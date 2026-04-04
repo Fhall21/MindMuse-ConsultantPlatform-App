@@ -5,6 +5,13 @@ export interface DashboardStats {
   totalConsultations: number;
   totalPeople: number;
   emailsSent: number;
+  // Onboarding checklist counts
+  totalMeetings: number;
+  totalInsights: number;
+  totalThemes: number;
+  totalCanvasConnections: number;
+  totalReports: number;
+  totalCustomTemplates: number;
 }
 
 export function useDashboardStats() {

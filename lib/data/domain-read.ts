@@ -754,10 +754,12 @@ export interface DashboardStats {
   // Onboarding checklist counts — derived from existing data, no separate tracking table
   totalMeetings: number;
   totalInsights: number;
+  totalAiInsights: number;
   totalThemes: number;
   totalCanvasConnections: number;
   totalReports: number;
   totalCustomTemplates: number;
+  potentialTimeSavedMinutes: number;
 }
 
 export async function getDashboardStats(userId: string): Promise<DashboardStats> {
@@ -767,9 +769,11 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
     emailsSentResult,
     meetingsCountResult,
     insightsCountResult,
+    aiInsightsCountResult,
     themesCountResult,
     canvasConnectionsCountResult,
     reportsCountResult,
+    distinctReportFamiliesResult,
     // Step 7 (download) has no audit trail action — marked optional, not derived here
     customTemplatesCountResult,
   ] = await Promise.all([
@@ -798,6 +802,11 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
       .where(eq(meetings.userId, userId)),
     db
       .select({ count: sql<number>`count(*)::int` })
+      .from(insights)
+      .innerJoin(meetings, eq(insights.meetingId, meetings.id))
+      .where(and(eq(meetings.userId, userId), eq(insights.isUserAdded, false))),
+    db
+      .select({ count: sql<number>`count(*)::int` })
       .from(themes)
       .where(eq(themes.userId, userId)),
     db
@@ -814,10 +823,22 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
         )
       ),
     db
+      .select({ count: sql<number>`count(distinct ${roundOutputArtifacts.consultationId})::int` })
+      .from(roundOutputArtifacts)
+      .where(
+        and(
+          eq(roundOutputArtifacts.userId, userId),
+          eq(roundOutputArtifacts.artifactType, "report")
+        )
+      ),
+    db
       .select({ count: sql<number>`count(*)::int` })
       .from(reportTemplates)
       .where(and(eq(reportTemplates.userId, userId), eq(reportTemplates.isActive, true))),
   ]);
+
+  const sentEmailMinutes = (emailsSentResult[0]?.count ?? 0) * 15;
+  const reportFamilyMinutes = (distinctReportFamiliesResult[0]?.count ?? 0) * 60;
 
   return {
     totalConsultations: consultationCountResult[0]?.count ?? 0,
@@ -825,10 +846,12 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
     emailsSent: emailsSentResult[0]?.count ?? 0,
     totalMeetings: meetingsCountResult[0]?.count ?? 0,
     totalInsights: insightsCountResult[0]?.count ?? 0,
+    totalAiInsights: aiInsightsCountResult[0]?.count ?? 0,
     totalThemes: themesCountResult[0]?.count ?? 0,
     totalCanvasConnections: canvasConnectionsCountResult[0]?.count ?? 0,
     totalReports: reportsCountResult[0]?.count ?? 0,
     totalCustomTemplates: customTemplatesCountResult[0]?.count ?? 0,
+    potentialTimeSavedMinutes: sentEmailMinutes + reportFamilyMinutes,
   };
 }
 

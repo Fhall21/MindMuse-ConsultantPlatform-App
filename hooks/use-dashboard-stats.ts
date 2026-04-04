@@ -9,10 +9,12 @@ export interface DashboardStats {
   // Onboarding checklist counts
   totalMeetings: number;
   totalInsights: number;
+  totalAiInsights: number;
   totalThemes: number;
   totalCanvasConnections: number;
   totalReports: number;
   totalCustomTemplates: number;
+  potentialTimeSavedMinutes: number;
 }
 
 export function useDashboardStats() {

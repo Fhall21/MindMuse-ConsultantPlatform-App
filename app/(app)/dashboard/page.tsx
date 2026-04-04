@@ -127,15 +127,16 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      {!statsQuery.isLoading && (
+      {!statsQuery.isLoading && statsQuery.data?.userId && (
         <OnboardingChecklist
-          hasConsultation={(statsQuery.data?.totalConsultations ?? 0) > 0}
-          hasMeeting={(statsQuery.data?.totalMeetings ?? 0) > 0}
-          hasInsight={(statsQuery.data?.totalInsights ?? 0) > 0}
-          hasTheme={(statsQuery.data?.totalThemes ?? 0) > 0}
-          hasCanvasConnection={(statsQuery.data?.totalCanvasConnections ?? 0) > 0}
-          hasReport={(statsQuery.data?.totalReports ?? 0) > 0}
-          hasCustomTemplate={(statsQuery.data?.totalCustomTemplates ?? 0) > 0}
+          userId={statsQuery.data.userId}
+          hasConsultation={(statsQuery.data.totalConsultations ?? 0) > 0}
+          hasMeeting={(statsQuery.data.totalMeetings ?? 0) > 0}
+          hasInsight={(statsQuery.data.totalInsights ?? 0) > 0}
+          hasTheme={(statsQuery.data.totalThemes ?? 0) > 0}
+          hasCanvasConnection={(statsQuery.data.totalCanvasConnections ?? 0) > 0}
+          hasReport={(statsQuery.data.totalReports ?? 0) > 0}
+          hasCustomTemplate={(statsQuery.data.totalCustomTemplates ?? 0) > 0}
         />
       )}
 

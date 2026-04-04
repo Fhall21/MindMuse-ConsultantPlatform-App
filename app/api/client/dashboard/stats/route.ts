@@ -10,7 +10,7 @@ export async function GET() {
 
   try {
     const stats = await getDashboardStats(client.userId);
-    return NextResponse.json(stats);
+    return NextResponse.json({ ...stats, userId: client.userId });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Failed to load dashboard stats");
   }

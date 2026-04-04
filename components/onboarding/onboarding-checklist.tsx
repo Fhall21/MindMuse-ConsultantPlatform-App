@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 
-const DISMISSED_KEY = "onboarding_checklist_dismissed";
+const DISMISSED_KEY = (userId: string) => `onboarding_checklist_dismissed:${userId}`;
 
 export interface OnboardingChecklistProps {
+  userId: string;
   hasConsultation: boolean;
   hasMeeting: boolean;
   hasInsight: boolean;
@@ -114,9 +115,9 @@ export function OnboardingChecklist(props: OnboardingChecklistProps) {
   useEffect(() => {
     setIsMounted(true);
     if (typeof window !== "undefined") {
-      setIsDismissed(localStorage.getItem(DISMISSED_KEY) === "true");
+      setIsDismissed(localStorage.getItem(DISMISSED_KEY(props.userId)) === "true");
     }
-  }, []);
+  }, [props.userId]);
 
   const steps = buildSteps(props);
   const requiredSteps = steps.filter((s) => !s.optional);
@@ -125,7 +126,7 @@ export function OnboardingChecklist(props: OnboardingChecklistProps) {
 
   function dismiss() {
     if (typeof window !== "undefined") {
-      localStorage.setItem(DISMISSED_KEY, "true");
+      localStorage.setItem(DISMISSED_KEY(props.userId), "true");
     }
     setIsDismissed(true);
   }

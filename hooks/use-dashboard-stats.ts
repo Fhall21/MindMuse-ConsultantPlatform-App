@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchJson } from "@/hooks/api";
 
 export interface DashboardStats {
+  userId: string;
   totalConsultations: number;
   totalPeople: number;
   emailsSent: number;

@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { CheckCircle2, Circle, ChevronRight, X } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 
 const DISMISSED_KEY = "onboarding_checklist_dismissed";
 
@@ -24,6 +21,7 @@ export interface OnboardingChecklistProps {
 interface ChecklistStep {
   id: number;
   label: string;
+  hint: string;
   completed: boolean;
   optional: boolean;
   sectionHref: string;
@@ -35,67 +33,75 @@ function buildSteps(props: OnboardingChecklistProps): ChecklistStep[] {
     {
       id: 1,
       label: "Create your first consultation",
+      hint: "Use the sidebar or the New Meeting button above.",
       completed: props.hasConsultation,
       optional: false,
-      sectionHref: "/consultations/new",
-      sectionLabel: "New consultation",
+      sectionHref: "/consultations",
+      sectionLabel: "Consultations",
     },
     {
       id: 2,
       label: "Create your first meeting",
+      hint: "Go to Meetings in the sidebar, then click New Meeting.",
       completed: props.hasMeeting,
       optional: false,
-      sectionHref: "/meetings/new",
-      sectionLabel: "New meeting",
+      sectionHref: "/meetings",
+      sectionLabel: "Meetings",
     },
     {
       id: 3,
       label: "Create your first insight from a meeting",
+      hint: "Open a meeting, then use the Insights panel.",
       completed: props.hasInsight,
       optional: false,
       sectionHref: "/meetings",
-      sectionLabel: "Go to meetings",
+      sectionLabel: "Meetings",
     },
     {
       id: 4,
       label: "Create your first consultation theme",
+      hint: "Open a consultation, then go to the Themes tab.",
       completed: props.hasTheme,
       optional: false,
       sectionHref: "/consultations",
-      sectionLabel: "Go to consultations",
+      sectionLabel: "Consultations",
     },
     {
       id: 5,
-      label: "Open the Evidence Canvas and connect two nodes",
+      label: "Connect two nodes on the Evidence Canvas",
+      hint: "Open a consultation, then click Evidence Canvas.",
       completed: props.hasCanvasConnection,
       optional: false,
       sectionHref: "/consultations",
-      sectionLabel: "Go to consultations",
+      sectionLabel: "Consultations",
     },
     {
       id: 6,
-      label: "Create your first report",
+      label: "Generate your first report",
+      hint: "Open a consultation, then click Generate Report.",
       completed: props.hasReport,
       optional: false,
       sectionHref: "/consultations",
-      sectionLabel: "Go to consultations",
+      sectionLabel: "Consultations",
     },
     {
       id: 7,
       // No download audit trail — step derives as always-incomplete. Marked optional.
       label: "Download your first report",
+      hint: "Open a report, then use the Export button.",
       completed: props.hasDownloadedReport ?? false,
       optional: true,
       sectionHref: "/reports",
-      sectionLabel: "Go to reports",
+      sectionLabel: "Reports",
     },
     {
       id: 8,
       label: "Create a custom report template",
+      hint: "Go to Settings, then Report template.",
       completed: props.hasCustomTemplate,
       optional: true,
       sectionHref: "/settings/report-template",
-      sectionLabel: "Go to templates",
+      sectionLabel: "Report template",
     },
   ];
 }
@@ -130,99 +136,80 @@ export function OnboardingChecklist(props: OnboardingChecklistProps) {
   // Congratulations state — all required steps done
   if (allRequiredDone) {
     return (
-      <Card className="border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-3">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <span className="text-sm font-semibold text-green-800 dark:text-green-300">
-              You&apos;re all set!
-            </span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs text-green-700 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-900"
-            onClick={dismiss}
-          >
-            Hide this
-          </Button>
-        </CardHeader>
-        <CardContent className="pb-3 pt-0">
-          <p className="text-xs text-green-700 dark:text-green-400">
-            You&apos;ve completed the core workflow. The platform is now set up for your evidence trail.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-between border-b pb-4 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <CheckCircle2 className="h-3.5 w-3.5 text-foreground" />
+          Core workflow complete. You&apos;re all set.
+        </span>
+        <button
+          onClick={dismiss}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          Hide
+        </button>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-3">
-        <div className="space-y-0.5">
-          <h3 className="text-sm font-semibold tracking-tight">Getting started</h3>
-          <p className="text-xs text-muted-foreground">
-            {completedRequired} of {requiredSteps.length} steps complete
-          </p>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs text-muted-foreground"
+    <div className="border-b pb-5">
+      {/* Header row */}
+      <div className="mb-3 flex items-baseline justify-between">
+        <span className="text-xs text-muted-foreground">
+          Getting started &middot; {completedRequired}&thinsp;/&thinsp;{requiredSteps.length} steps
+        </span>
+        <button
           onClick={dismiss}
-          title="Hide this checklist"
+          className="text-xs text-muted-foreground hover:text-foreground"
         >
-          <X className="mr-1 h-3 w-3" />
-          Hide this
-        </Button>
-      </CardHeader>
+          Hide
+        </button>
+      </div>
 
-      <CardContent className="pb-3 pt-0">
-        <ul className="space-y-1">
-          {steps.map((step) => (
-            <li key={step.id} className="flex items-center justify-between gap-2 rounded-sm py-1">
-              <div className="flex min-w-0 items-center gap-2">
-                {step.completed ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
-                ) : (
-                  <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />
-                )}
+      {/* Step list */}
+      <ul className="space-y-2.5">
+        {steps.map((step) => (
+          <li key={step.id} className="flex items-start justify-between gap-4">
+            {/* Left: indicator + label + hint */}
+            <div className="flex min-w-0 items-start gap-2">
+              {step.completed ? (
+                <span className="mt-0.5 h-1.5 w-1.5 shrink-0 translate-y-[3px] rounded-full bg-foreground opacity-60" />
+              ) : (
+                <span className="mt-0.5 h-1.5 w-1.5 shrink-0 translate-y-[3px] rounded-full border border-muted-foreground/40" />
+              )}
+              <div className="min-w-0">
                 <span
                   className={
                     step.completed
-                      ? "truncate text-xs text-muted-foreground line-through"
-                      : "truncate text-xs"
+                      ? "text-xs text-muted-foreground line-through"
+                      : "text-xs"
                   }
                 >
                   {step.label}
+                  {step.optional && (
+                    <span className="ml-1 text-muted-foreground/60">(optional)</span>
+                  )}
                 </span>
-                {step.optional && (
-                  <Badge
-                    variant="secondary"
-                    className="shrink-0 px-1.5 py-0 text-[10px] leading-4"
-                  >
-                    Optional
-                  </Badge>
+                {!step.completed && (
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground/70">
+                    {step.hint}
+                  </p>
                 )}
               </div>
+            </div>
 
-              {!step.completed && (
-                <Button
-                  asChild
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <Link href={step.sectionHref}>
-                    {step.sectionLabel}
-                    <ChevronRight className="ml-0.5 h-3 w-3" />
-                  </Link>
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
+            {/* Right: section link */}
+            {!step.completed && (
+              <Link
+                href={step.sectionHref}
+                className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+              >
+                {step.sectionLabel} →
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

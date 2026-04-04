@@ -127,16 +127,17 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      {/* Onboarding checklist — TODO: replace mock props with live data (Phase 4) */}
-      <OnboardingChecklist
-        hasConsultation={false}
-        hasMeeting={false}
-        hasInsight={false}
-        hasTheme={false}
-        hasCanvasConnection={false}
-        hasReport={false}
-        hasCustomTemplate={false}
-      />
+      {!statsQuery.isLoading && (
+        <OnboardingChecklist
+          hasConsultation={(statsQuery.data?.totalConsultations ?? 0) > 0}
+          hasMeeting={(statsQuery.data?.totalMeetings ?? 0) > 0}
+          hasInsight={(statsQuery.data?.totalInsights ?? 0) > 0}
+          hasTheme={(statsQuery.data?.totalThemes ?? 0) > 0}
+          hasCanvasConnection={(statsQuery.data?.totalCanvasConnections ?? 0) > 0}
+          hasReport={(statsQuery.data?.totalReports ?? 0) > 0}
+          hasCustomTemplate={(statsQuery.data?.totalCustomTemplates ?? 0) > 0}
+        />
+      )}
 
       <dl className="grid gap-4 border-y py-4 sm:grid-cols-3 sm:gap-6">
         <MetricValue

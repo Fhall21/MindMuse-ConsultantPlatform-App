@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowRight, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -255,68 +256,82 @@ export function RoundsManager() {
                         </div>
                       </form>
                     ) : (
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-0.5">
-                          <Link
-                            href={`/consultations/rounds/${round.id}`}
-                            className="text-sm font-medium hover:text-primary hover:underline transition-colors"
-                          >
-                            {round.label}
-                          </Link>
-                          {round.description ? (
-                            <p className="text-sm text-muted-foreground">{round.description}</p>
-                          ) : null}
-                          <p className="text-xs text-muted-foreground">
-                            {linkedCount} consultation{linkedCount !== 1 ? "s" : ""} linked
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            asChild
-                          >
-                            <Link href={`/consultations/rounds/${round.id}`}>
-                              View
-                            </Link>
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setEditingRoundId(round.id);
-                              setEditingLabel(round.label);
-                              setEditingDescription(round.description ?? "");
-                              setEditingError(null);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={deleteMutation.isPending}
-                            onClick={async () => {
-                              const confirmed = window.confirm(
-                                linkedCount > 0
-                                  ? `Delete "${round.label}"? This round is linked to ${linkedCount} consultation(s) and cannot be deleted until unlinked.`
-                                  : `Delete "${round.label}"?`
-                              );
-                              if (!confirmed) return;
-                              try {
-                                await deleteMutation.mutateAsync(round.id);
-                              } catch (error) {
-                                setEditingError(
-                                  error instanceof Error
-                                    ? error.message
-                                    : "Unable to delete round."
+                      <div className="space-y-4">
+                        {/* Info row — management actions are secondary icon-only buttons */}
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-sm font-semibold text-foreground">{round.label}</p>
+                            {round.description ? (
+                              <p className="text-sm text-muted-foreground">{round.description}</p>
+                            ) : null}
+                            <p className="text-xs text-muted-foreground">
+                              {linkedCount} consultation{linkedCount !== 1 ? "s" : ""} linked
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 gap-1">
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground"
+                              onClick={() => {
+                                setEditingRoundId(round.id);
+                                setEditingLabel(round.label);
+                                setEditingDescription(round.description ?? "");
+                                setEditingError(null);
+                              }}
+                              aria-label="Edit round"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              disabled={deleteMutation.isPending}
+                              onClick={async () => {
+                                const confirmed = window.confirm(
+                                  linkedCount > 0
+                                    ? `Delete "${round.label}"? This round is linked to ${linkedCount} consultation(s) and cannot be deleted until unlinked.`
+                                    : `Delete "${round.label}"?`
                                 );
+                                if (!confirmed) return;
+                                try {
+                                  await deleteMutation.mutateAsync(round.id);
+                                } catch (error) {
+                                  setEditingError(
+                                    error instanceof Error
+                                      ? error.message
+                                      : "Unable to delete round."
+                                  );
+                                }
+                              }}
+                              aria-label="Delete round"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Primary CTA — dominant, changes based on whether meetings exist */}
+                        <div className="flex flex-col items-start gap-3 rounded-lg border border-border/60 bg-muted/30 p-4 md:flex-row md:items-center md:justify-between">
+                          <p className="text-sm text-muted-foreground">
+                            {linkedCount === 0
+                              ? "No meetings yet — create the first one to start building the evidence trail."
+                              : `${linkedCount} meeting${linkedCount !== 1 ? "s" : ""} linked — open to view themes, analysis, and reports.`}
+                          </p>
+                          <Button asChild className="shrink-0 gap-2 self-start md:self-auto">
+                            <Link
+                              href={
+                                linkedCount === 0
+                                  ? "/meetings/new"
+                                  : `/consultations/rounds/${round.id}`
                               }
-                            }}
-                          >
-                            Delete
+                            >
+                              {linkedCount === 0 ? "Create first meeting" : "View themes and analysis"}
+                              <ArrowRight className="h-4 w-4" />
+                            </Link>
                           </Button>
                         </div>
                       </div>

@@ -359,12 +359,19 @@ export default function MeetingsPage() {
       <ConsultationsNav />
 
       <Card className="border-border/70 shadow-xs">
-        <CardContent className="space-y-4 pt-4">
-          <div className="flex justify-end">
+        <CardHeader>
+          <div>
+            <CardTitle>Find meetings</CardTitle>
+            <CardDescription>Search by title, sort, group, and filter the list.</CardDescription>
+          </div>
+          <CardAction>
             <Button asChild>
               <Link href="/meetings/new">New Meeting</Link>
             </Button>
-          </div>
+          </CardAction>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(11rem,13rem)_minmax(11rem,13rem)] lg:items-end">
             <div className="space-y-2">

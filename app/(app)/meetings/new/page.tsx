@@ -217,15 +217,15 @@ function PeopleField({
             <Badge
               key={p.id}
               variant="secondary"
-              className="gap-1 pl-2.5 pr-1.5 py-1 text-xs"
+              className="gap-1.5 rounded-md px-3 py-1.5 text-sm"
             >
               {p.name.split(/\s+/)[0]}
               <button
                 type="button"
                 onClick={() => onRemove(p.id)}
-                className="ml-0.5 rounded hover:bg-muted"
+                className="ml-1 rounded-md p-1 transition-colors hover:bg-muted"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </Badge>
           ))}

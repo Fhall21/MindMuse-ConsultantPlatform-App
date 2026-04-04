@@ -64,21 +64,19 @@ function StatCard({
   formatter?: (currentValue: number) => string;
 }) {
   return (
-    <Card size="sm" className="h-full">
-      <div className="space-y-1 px-4">
-        <dt className="text-sm font-medium text-foreground">{label}</dt>
-        <dd className="text-sm text-muted-foreground">{description}</dd>
-        <dd className="pt-1 text-4xl font-semibold tracking-tight">
-          {isLoading ? (
-            <Skeleton className="h-10 w-24" />
-          ) : isError ? (
-            "—"
-          ) : (
-            formatter(value)
-          )}
-        </dd>
-      </div>
-    </Card>
+    <div className="space-y-1 sm:px-6 sm:first:pl-0 sm:last:pr-0">
+      <dt className="text-sm font-medium text-foreground">{label}</dt>
+      <dd className="text-xs text-muted-foreground">{description}</dd>
+      <dd className="pt-1 text-3xl font-semibold tracking-tight">
+        {isLoading ? (
+          <Skeleton className="h-8 w-20" />
+        ) : isError ? (
+          "—"
+        ) : (
+          formatter(value)
+        )}
+      </dd>
+    </div>
   );
 }
 
@@ -198,19 +196,7 @@ export default function DashboardPage() {
         <p className="text-sm text-muted-foreground">Current workspace activity.</p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button asChild size="sm">
-          <Link href="/meetings/new">New Meeting</Link>
-        </Button>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/people">People</Link>
-        </Button>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/reports">Reports</Link>
-        </Button>
-      </div>
-
-      <dl className="grid gap-4 border-y py-4 sm:grid-cols-3 sm:gap-6">
+      <dl className="grid gap-5 border-y py-5 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:py-4">
         <StatCard
           label="Consultation Projects"
           value={statsQuery.data?.totalConsultations ?? 0}
@@ -238,7 +224,7 @@ export default function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         {!statsQuery.isLoading && statsQuery.data?.userId && (
           <Card className="lg:col-span-2">
-            <CardHeader className="space-y-1 pb-4">
+            <CardHeader className="space-y-0.5 pb-2">
               <CardTitle className="text-sm font-semibold tracking-tight">
                 Onboarding
               </CardTitle>
@@ -261,8 +247,8 @@ export default function DashboardPage() {
           </Card>
         )}
 
-        <Card className="h-full">
-          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
+        <Card className="flex h-[400px] flex-col">
+          <CardHeader className="flex shrink-0 flex-row items-start justify-between space-y-0 pb-4">
             <div className="space-y-1">
               <CardTitle className="text-sm font-semibold tracking-tight">
                 Recent Meetings
@@ -273,7 +259,7 @@ export default function DashboardPage() {
               <Link href="/meetings">View all →</Link>
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="min-h-0 flex-1 overflow-y-auto">
             {isMeetingsLoading ? (
               <RecentMeetingsSkeleton />
             ) : hasNoMeetings ? (
@@ -290,8 +276,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="h-full">
-          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
+        <Card className="flex h-[400px] flex-col">
+          <CardHeader className="flex shrink-0 flex-row items-start justify-between space-y-0 pb-4">
             <div className="space-y-1">
               <CardTitle className="text-sm font-semibold tracking-tight">
                 Recent Consultations
@@ -304,7 +290,7 @@ export default function DashboardPage() {
               <Link href="/consultations">View all →</Link>
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="min-h-0 flex-1 overflow-y-auto">
             {isConsultationsLoading ? (
               <RecentConsultationsSkeleton />
             ) : hasNoConsultations ? (

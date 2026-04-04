@@ -20,6 +20,8 @@ import type { Meeting } from "@/types/db";
 import type { Consultation } from "@/types/db";
 
 const ONBOARDING_EXIT_MS = 220;
+const ONBOARDING_DISMISSED_KEY = (userId: string) =>
+  `onboarding_checklist_dismissed:${userId}`;
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("en-GB", {
@@ -206,6 +208,20 @@ export default function DashboardPage() {
 
     return () => window.clearTimeout(timeoutId);
   }, [isOnboardingExiting]);
+
+  useEffect(() => {
+    const userId = statsQuery.data?.userId;
+    if (!userId || typeof window === "undefined") {
+      return;
+    }
+
+    const isDismissed =
+      localStorage.getItem(ONBOARDING_DISMISSED_KEY(userId)) === "true";
+    setShowOnboardingCard(!isDismissed);
+    if (isDismissed) {
+      setIsOnboardingExiting(false);
+    }
+  }, [statsQuery.data?.userId]);
 
   function handleOnboardingDismiss() {
     setIsOnboardingExiting(true);

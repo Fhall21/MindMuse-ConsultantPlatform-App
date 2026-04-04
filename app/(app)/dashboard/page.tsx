@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,8 @@ import { useDashboardStats } from "@/hooks/use-dashboard-stats";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import type { Meeting } from "@/types/db";
 import type { Consultation } from "@/types/db";
+
+const ONBOARDING_EXIT_MS = 220;
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("en-GB", {
@@ -181,6 +184,8 @@ export default function DashboardPage() {
   const meetingsQuery = useMeetings();
   const consultationsQuery = useConsultations();
   const statsQuery = useDashboardStats();
+  const [showOnboardingCard, setShowOnboardingCard] = useState(true);
+  const [isOnboardingExiting, setIsOnboardingExiting] = useState(false);
 
   const recentMeetings = (meetingsQuery.data ?? []).slice(0, 10);
   const recentConsultations = (consultationsQuery.data ?? []).slice(0, 5);
@@ -188,6 +193,23 @@ export default function DashboardPage() {
   const isConsultationsLoading = consultationsQuery.isLoading;
   const hasNoMeetings = !isMeetingsLoading && recentMeetings.length === 0;
   const hasNoConsultations = !isConsultationsLoading && recentConsultations.length === 0;
+
+  useEffect(() => {
+    if (!isOnboardingExiting) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowOnboardingCard(false);
+      setIsOnboardingExiting(false);
+    }, ONBOARDING_EXIT_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isOnboardingExiting]);
+
+  function handleOnboardingDismiss() {
+    setIsOnboardingExiting(true);
+  }
 
   return (
     <div className="space-y-6">
@@ -222,8 +244,14 @@ export default function DashboardPage() {
       </dl>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {!statsQuery.isLoading && statsQuery.data?.userId && (
-          <Card className="lg:col-span-2">
+        {!statsQuery.isLoading && statsQuery.data?.userId && showOnboardingCard && (
+          <Card
+            className={`lg:col-span-2 transition-all duration-200 ease-out ${
+              isOnboardingExiting
+                ? "-translate-y-1 opacity-0"
+                : "translate-y-0 opacity-100"
+            }`}
+          >
             <CardHeader className="space-y-0.5 pb-2">
               <CardTitle className="text-sm font-semibold tracking-tight">
                 Onboarding
@@ -242,6 +270,7 @@ export default function DashboardPage() {
                 hasCanvasConnection={(statsQuery.data.totalCanvasConnections ?? 0) > 0}
                 hasReport={(statsQuery.data.totalReports ?? 0) > 0}
                 hasCustomTemplate={(statsQuery.data.totalCustomTemplates ?? 0) > 0}
+                onDismiss={handleOnboardingDismiss}
               />
             </CardContent>
           </Card>

@@ -16,6 +16,7 @@ export interface OnboardingChecklistProps {
   /** Step 7 (download): no download audit trail exists — always false, shown as optional */
   hasDownloadedReport?: boolean;
   hasCustomTemplate: boolean;
+  onDismiss?: () => void;
 }
 
 interface ChecklistStep {
@@ -142,6 +143,7 @@ export function OnboardingChecklist(props: OnboardingChecklistProps) {
       localStorage.setItem(DISMISSED_KEY(props.userId), "true");
     }
     setIsDismissed(true);
+    props.onDismiss?.();
   }
 
   // Don't render until mounted (prevents localStorage hydration flash)

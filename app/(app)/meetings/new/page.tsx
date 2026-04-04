@@ -7,7 +7,6 @@ import { X, Plus, ChevronDown, FileText, PenLine, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { createMeeting, updateTranscript } from "@/lib/actions/consultations";
@@ -214,20 +213,19 @@ function PeopleField({
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {selected.map((p) => (
-            <Badge
+            <span
               key={p.id}
-              variant="secondary"
-              className="gap-1.5 rounded-md px-3 py-1.5 text-sm"
+              className="inline-flex min-h-9 max-w-full items-center gap-2 rounded-lg border border-border/70 bg-background px-3 py-1.5 text-sm shadow-none"
             >
-              {p.name.split(/\s+/)[0]}
+              <span className="max-w-[14rem] truncate font-medium">{p.name}</span>
               <button
                 type="button"
                 onClick={() => onRemove(p.id)}
-                className="ml-1 rounded-md p-1 transition-colors hover:bg-muted"
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
-            </Badge>
+            </span>
           ))}
         </div>
       )}

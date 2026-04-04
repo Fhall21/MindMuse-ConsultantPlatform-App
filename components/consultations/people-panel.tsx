@@ -207,8 +207,8 @@ export function PeoplePanel({ meetingId, consultationId }: PeoplePanelProps) {
       {linkedPeople && linkedPeople.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {linkedPeople.map((person) => (
-            <span key={person.id} className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm">
-              <span>{person.name}</span>
+            <span key={person.id} className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-background px-3 py-1.5 text-sm shadow-none">
+              <span className="max-w-[14rem] truncate font-medium">{person.name}</span>
               {getPersonSummary(person) ? (
                 <span className="text-muted-foreground">· {getPersonSummary(person)}</span>
               ) : null}
@@ -216,7 +216,7 @@ export function PeoplePanel({ meetingId, consultationId }: PeoplePanelProps) {
                 onClick={() => handleUnlink(person.id)}
                 disabled={unlinking === person.id}
                 aria-label={`Unlink ${person.name}`}
-                className="ml-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                className="ml-1 rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
               >
                 ×
               </button>

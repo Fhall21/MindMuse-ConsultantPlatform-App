@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMeetings } from "@/hooks/use-meetings";
 import { useDashboardStats } from "@/hooks/use-dashboard-stats";
+import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import type { Meeting } from "@/types/db";
 
 function formatDate(value: string) {
@@ -125,6 +126,17 @@ export default function DashboardPage() {
           <Link href="/reports">Reports</Link>
         </Button>
       </div>
+
+      {/* Onboarding checklist — TODO: replace mock props with live data (Phase 4) */}
+      <OnboardingChecklist
+        hasConsultation={false}
+        hasMeeting={false}
+        hasInsight={false}
+        hasTheme={false}
+        hasCanvasConnection={false}
+        hasReport={false}
+        hasCustomTemplate={false}
+      />
 
       <dl className="grid gap-4 border-y py-4 sm:grid-cols-3 sm:gap-6">
         <MetricValue

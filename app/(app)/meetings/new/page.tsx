@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { MEETINGS_QUERY_KEY } from "@/hooks/use-meetings";
 import { toast } from "sonner";
 import { X, Plus, ChevronDown, FileText, PenLine, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -435,6 +437,7 @@ type Mode = "choose" | "transcript" | "manual";
 
 export default function NewMeetingPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const [mode, setMode] = useState<Mode>("choose");
   const [submitting, setSubmitting] = useState(false);
@@ -588,6 +591,7 @@ export default function NewMeetingPage() {
         intake_mode: mode,
       });
 
+      queryClient.invalidateQueries({ queryKey: MEETINGS_QUERY_KEY });
       router.push(`/meetings/${id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create meeting");

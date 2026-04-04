@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v4";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,7 @@ type NewConsultationFormData = z.infer<typeof newConsultationSchema>;
 
 export default function NewConsultationPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
 
   const {
@@ -38,6 +40,7 @@ export default function NewConsultationPage() {
         label: data.label,
         description: data.description?.trim() || undefined,
       });
+      queryClient.invalidateQueries({ queryKey: ["consultations"] });
       router.push(`/consultations/rounds/${id}`);
     } catch (err) {
       console.error(err);

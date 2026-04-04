@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
+import Link from "next/link";
+import { ChevronLeft, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import posthog from "posthog-js";
 import { Badge } from "@/components/ui/badge";
@@ -287,6 +288,13 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     <div className="flex h-full flex-col">
       {/* Toolbar */}
       <div className="flex items-center gap-3 border-b px-4 py-3">
+        <Button variant="ghost" size="sm" asChild className="-ml-1 gap-1 text-muted-foreground hover:text-foreground">
+          <Link href={`/consultations/rounds/${roundId}`} aria-label="Back to Consultation">
+            <ChevronLeft className="h-4 w-4" />
+            <span>Back to Consultation</span>
+          </Link>
+        </Button>
+        <Separator orientation="vertical" className="h-4" />
         <span className="text-sm font-medium text-muted-foreground">{roundLabel}</span>
         <Separator orientation="vertical" className="h-4" />
 

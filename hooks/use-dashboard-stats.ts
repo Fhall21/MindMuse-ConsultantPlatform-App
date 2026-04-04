@@ -19,5 +19,8 @@ export function useDashboardStats() {
   return useQuery({
     queryKey: ["dashboard_stats"],
     queryFn: () => fetchJson<DashboardStats>("/api/client/dashboard/stats"),
+    // Always refetch on mount and window focus so checklist reflects
+    // completions made on other pages within the same session.
+    staleTime: 0,
   });
 }

@@ -180,9 +180,9 @@ export function OnboardingChecklist(props: OnboardingChecklistProps) {
       </div>
 
       {/* Step list */}
-      <ul className="space-y-3">
+      <ul className="grid gap-3 md:grid-cols-2">
         {visibleSteps.map((step) => (
-          <li key={step.id} className="flex items-start gap-2.5">
+          <li key={step.id} className="flex items-start gap-2.5 rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
             <StepDot completed={step.completed} />
 
             {/* Label + hint block */}

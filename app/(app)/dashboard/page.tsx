@@ -12,9 +12,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useMeetings } from "@/hooks/use-meetings";
+import { useConsultations } from "@/hooks/use-consultations";
 import { useDashboardStats } from "@/hooks/use-dashboard-stats";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import type { Meeting } from "@/types/db";
+import type { Consultation } from "@/types/db";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("en-GB", {
@@ -61,26 +63,26 @@ function MetricValue({
   );
 }
 
-function RecentConsultationRow({ consultation }: { consultation: Meeting }) {
+function RecentMeetingRow({ meeting }: { meeting: Meeting }) {
   return (
     <div className="flex items-center justify-between py-3">
       <div className="min-w-0 flex-1">
         <Link
-          href={`/meetings/${consultation.id}`}
+          href={`/meetings/${meeting.id}`}
           className="truncate text-sm font-medium hover:underline"
         >
-          {consultation.title}
+          {meeting.title}
         </Link>
-        <p className="text-xs text-muted-foreground">{formatDate(consultation.created_at)}</p>
+        <p className="text-xs text-muted-foreground">{formatDate(meeting.created_at)}</p>
       </div>
       <div className="ml-4 flex-shrink-0">
-        <StatusBadge status={consultation.status} />
+        <StatusBadge status={meeting.status} />
       </div>
     </div>
   );
 }
 
-function RecentConsultationsSkeleton() {
+function RecentMeetingsSkeleton() {
   return (
     <div className="space-y-3">
       {Array.from({ length: 5 }).map((_, i) => (
@@ -96,10 +98,10 @@ function RecentConsultationsSkeleton() {
   );
 }
 
-function EmptyState() {
+function RecentMeetingEmptyState() {
   return (
     <div className="py-10 text-center">
-      <p className="text-sm text-muted-foreground">No consultations yet.</p>
+      <p className="text-sm text-muted-foreground">No meetings yet.</p>
       <Button asChild size="sm" className="mt-4">
         <Link href="/meetings/new">New Meeting</Link>
       </Button>
@@ -107,12 +109,67 @@ function EmptyState() {
   );
 }
 
+function RecentConsultationRow({ consultation }: { consultation: Consultation }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-3">
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <Link
+          href={`/consultations/rounds/${consultation.id}`}
+          className="block truncate text-sm font-medium hover:underline"
+        >
+          {consultation.label}
+        </Link>
+        <p className="text-xs text-muted-foreground">
+          {formatDate(consultation.created_at)}
+        </p>
+      </div>
+      <Link
+        href={`/consultations/rounds/${consultation.id}`}
+        className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+      >
+        Themes and analysis →
+      </Link>
+    </div>
+  );
+}
+
+function RecentConsultationsSkeleton() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="flex items-start justify-between gap-4 py-3">
+          <div className="space-y-1">
+            <Skeleton className="h-4 w-52" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+          <Skeleton className="h-4 w-32" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RecentConsultationEmptyState() {
+  return (
+    <div className="py-10 text-center">
+      <p className="text-sm text-muted-foreground">No consultation projects yet.</p>
+      <Button asChild size="sm" className="mt-4">
+        <Link href="/consultations">Open Consultations</Link>
+      </Button>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
-  const consultationsQuery = useMeetings();
+  const meetingsQuery = useMeetings();
+  const consultationsQuery = useConsultations();
   const statsQuery = useDashboardStats();
 
-  const recentConsultations = (consultationsQuery.data ?? []).slice(0, 10);
+  const recentMeetings = (meetingsQuery.data ?? []).slice(0, 10);
+  const recentConsultations = (consultationsQuery.data ?? []).slice(0, 5);
+  const isMeetingsLoading = meetingsQuery.isLoading;
   const isConsultationsLoading = consultationsQuery.isLoading;
+  const hasNoMeetings = !isMeetingsLoading && recentMeetings.length === 0;
   const hasNoConsultations = !isConsultationsLoading && recentConsultations.length === 0;
 
   return (
@@ -159,37 +216,8 @@ export default function DashboardPage() {
       </dl>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="h-full">
-          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
-            <div className="space-y-1">
-              <CardTitle className="text-sm font-semibold tracking-tight">
-                Recent consultations
-              </CardTitle>
-              <CardDescription>Latest recorded work.</CardDescription>
-            </div>
-            <Button asChild variant="ghost" size="sm" className="text-xs">
-              <Link href="/meetings">View all →</Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {isConsultationsLoading ? (
-              <RecentConsultationsSkeleton />
-            ) : hasNoConsultations ? (
-              <EmptyState />
-            ) : (
-              <div className="divide-y border-t">
-                {recentConsultations.map((consultation) => (
-                  <div key={consultation.id} className="px-1">
-                    <RecentConsultationRow consultation={consultation} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {!statsQuery.isLoading && statsQuery.data?.userId && (
-          <Card className="h-full">
+          <Card className="lg:col-span-2">
             <CardHeader className="space-y-1 pb-4">
               <CardTitle className="text-sm font-semibold tracking-tight">
                 Onboarding
@@ -212,6 +240,66 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         )}
+
+        <Card className="h-full">
+          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
+            <div className="space-y-1">
+              <CardTitle className="text-sm font-semibold tracking-tight">
+                Recent Meetings
+              </CardTitle>
+              <CardDescription>Latest recorded work.</CardDescription>
+            </div>
+            <Button asChild variant="ghost" size="sm" className="text-xs">
+              <Link href="/meetings">View all →</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {isMeetingsLoading ? (
+              <RecentMeetingsSkeleton />
+            ) : hasNoMeetings ? (
+              <RecentMeetingEmptyState />
+            ) : (
+              <div className="divide-y border-t">
+                {recentMeetings.map((meeting) => (
+                  <div key={meeting.id} className="px-1">
+                    <RecentMeetingRow meeting={meeting} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="h-full">
+          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
+            <div className="space-y-1">
+              <CardTitle className="text-sm font-semibold tracking-tight">
+                Recent Consultations
+              </CardTitle>
+              <CardDescription>
+                Jump straight to themes and analysis for each project.
+              </CardDescription>
+            </div>
+            <Button asChild variant="ghost" size="sm" className="text-xs">
+              <Link href="/consultations">View all →</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {isConsultationsLoading ? (
+              <RecentConsultationsSkeleton />
+            ) : hasNoConsultations ? (
+              <RecentConsultationEmptyState />
+            ) : (
+              <div className="divide-y border-t">
+                {recentConsultations.map((consultation) => (
+                  <div key={consultation.id} className="px-1">
+                    <RecentConsultationRow consultation={consultation} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

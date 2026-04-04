@@ -4,6 +4,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useMeetings } from "@/hooks/use-meetings";
 import { useDashboardStats } from "@/hooks/use-dashboard-stats";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
@@ -127,19 +134,6 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      {!statsQuery.isLoading && statsQuery.data?.userId && (
-        <OnboardingChecklist
-          userId={statsQuery.data.userId}
-          hasConsultation={(statsQuery.data.totalConsultations ?? 0) > 0}
-          hasMeeting={(statsQuery.data.totalMeetings ?? 0) > 0}
-          hasInsight={(statsQuery.data.totalInsights ?? 0) > 0}
-          hasTheme={(statsQuery.data.totalThemes ?? 0) > 0}
-          hasCanvasConnection={(statsQuery.data.totalCanvasConnections ?? 0) > 0}
-          hasReport={(statsQuery.data.totalReports ?? 0) > 0}
-          hasCustomTemplate={(statsQuery.data.totalCustomTemplates ?? 0) > 0}
-        />
-      )}
-
       <dl className="grid gap-4 border-y py-4 sm:grid-cols-3 sm:gap-6">
         <MetricValue
           label="Consultations"
@@ -164,26 +158,59 @@ export default function DashboardPage() {
         />
       </dl>
 
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold tracking-tight">Recent consultations</h2>
-          <Button asChild variant="ghost" size="sm" className="text-xs">
-            <Link href="/meetings">View all →</Link>
-          </Button>
-        </div>
-
-        {isConsultationsLoading ? (
-          <RecentConsultationsSkeleton />
-        ) : hasNoConsultations ? (
-          <EmptyState />
-        ) : (
-          <div className="divide-y border-t">
-            {recentConsultations.map((consultation) => (
-              <div key={consultation.id} className="px-1">
-                <RecentConsultationRow consultation={consultation} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="h-full">
+          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
+            <div className="space-y-1">
+              <CardTitle className="text-sm font-semibold tracking-tight">
+                Recent consultations
+              </CardTitle>
+              <CardDescription>Latest recorded work.</CardDescription>
+            </div>
+            <Button asChild variant="ghost" size="sm" className="text-xs">
+              <Link href="/meetings">View all →</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {isConsultationsLoading ? (
+              <RecentConsultationsSkeleton />
+            ) : hasNoConsultations ? (
+              <EmptyState />
+            ) : (
+              <div className="divide-y border-t">
+                {recentConsultations.map((consultation) => (
+                  <div key={consultation.id} className="px-1">
+                    <RecentConsultationRow consultation={consultation} />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {!statsQuery.isLoading && statsQuery.data?.userId && (
+          <Card className="h-full">
+            <CardHeader className="space-y-1 pb-4">
+              <CardTitle className="text-sm font-semibold tracking-tight">
+                Onboarding
+              </CardTitle>
+              <CardDescription>
+                Keep the first-time path visible until the core flow is complete.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <OnboardingChecklist
+                userId={statsQuery.data.userId}
+                hasConsultation={(statsQuery.data.totalConsultations ?? 0) > 0}
+                hasMeeting={(statsQuery.data.totalMeetings ?? 0) > 0}
+                hasInsight={(statsQuery.data.totalInsights ?? 0) > 0}
+                hasTheme={(statsQuery.data.totalThemes ?? 0) > 0}
+                hasCanvasConnection={(statsQuery.data.totalCanvasConnections ?? 0) > 0}
+                hasReport={(statsQuery.data.totalReports ?? 0) > 0}
+                hasCustomTemplate={(statsQuery.data.totalCustomTemplates ?? 0) > 0}
+              />
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2 } from "lucide-react";
 
 const DISMISSED_KEY = (userId: string) => `onboarding_checklist_dismissed:${userId}`;
 
@@ -34,7 +33,7 @@ function buildSteps(props: OnboardingChecklistProps): ChecklistStep[] {
     {
       id: 1,
       label: "Create your first consultation",
-      hint: "Use the sidebar or the New Meeting button above.",
+      hint: "Use the New Consultation button in the Consultations section.",
       completed: props.hasConsultation,
       optional: false,
       sectionHref: "/consultations",
@@ -43,7 +42,7 @@ function buildSteps(props: OnboardingChecklistProps): ChecklistStep[] {
     {
       id: 2,
       label: "Create your first meeting",
-      hint: "Go to Meetings in the sidebar, then click New Meeting.",
+      hint: 'Click "New Meeting" above or go to Meetings in the sidebar.',
       completed: props.hasMeeting,
       optional: false,
       sectionHref: "/meetings",
@@ -52,7 +51,7 @@ function buildSteps(props: OnboardingChecklistProps): ChecklistStep[] {
     {
       id: 3,
       label: "Create your first insight from a meeting",
-      hint: "Open a meeting, then use the Insights panel.",
+      hint: "Open a meeting, then use the Insights panel on the right.",
       completed: props.hasInsight,
       optional: false,
       sectionHref: "/meetings",
@@ -107,9 +106,21 @@ function buildSteps(props: OnboardingChecklistProps): ChecklistStep[] {
   ];
 }
 
+function StepDot({ completed }: { completed: boolean }) {
+  if (completed) {
+    return (
+      <span className="mt-[5px] h-3 w-3 shrink-0 rounded-full bg-foreground/50" />
+    );
+  }
+  return (
+    <span className="mt-[5px] h-3 w-3 shrink-0 rounded-full border-2 border-muted-foreground/35 bg-background" />
+  );
+}
+
 export function OnboardingChecklist(props: OnboardingChecklistProps) {
   const [isDismissed, setIsDismissed] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [showOptional, setShowOptional] = useState(false);
 
   // Read localStorage only on client to avoid SSR mismatch
   useEffect(() => {
@@ -119,10 +130,12 @@ export function OnboardingChecklist(props: OnboardingChecklistProps) {
     }
   }, [props.userId]);
 
-  const steps = buildSteps(props);
-  const requiredSteps = steps.filter((s) => !s.optional);
+  const allSteps = buildSteps(props);
+  const requiredSteps = allSteps.filter((s) => !s.optional);
+  const optionalSteps = allSteps.filter((s) => s.optional);
   const completedRequired = requiredSteps.filter((s) => s.completed).length;
   const allRequiredDone = completedRequired === requiredSteps.length;
+  const visibleSteps = showOptional ? allSteps : requiredSteps;
 
   function dismiss() {
     if (typeof window !== "undefined") {
@@ -137,14 +150,11 @@ export function OnboardingChecklist(props: OnboardingChecklistProps) {
   // Congratulations state — all required steps done
   if (allRequiredDone) {
     return (
-      <div className="flex items-center justify-between border-b pb-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <CheckCircle2 className="h-3.5 w-3.5 text-foreground" />
-          Core workflow complete. You&apos;re all set.
-        </span>
+      <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
+        <span>Core workflow complete. You&apos;re all set.</span>
         <button
           onClick={dismiss}
-          className="text-muted-foreground hover:text-foreground"
+          className="text-sm text-muted-foreground hover:text-foreground"
         >
           Hide
         </button>
@@ -152,65 +162,76 @@ export function OnboardingChecklist(props: OnboardingChecklistProps) {
     );
   }
 
+  const completedOptional = optionalSteps.filter((s) => s.completed).length;
+
   return (
-    <div className="border-b pb-5">
+    <div className="space-y-4">
       {/* Header row */}
-      <div className="mb-3 flex items-baseline justify-between">
-        <span className="text-xs text-muted-foreground">
-          Getting started &middot; {completedRequired}&thinsp;/&thinsp;{requiredSteps.length} steps
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-sm text-muted-foreground">
+          {completedRequired} of {requiredSteps.length} steps complete
         </span>
         <button
           onClick={dismiss}
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="text-sm text-muted-foreground hover:text-foreground"
         >
           Hide
         </button>
       </div>
 
       {/* Step list */}
-      <ul className="space-y-2.5">
-        {steps.map((step) => (
-          <li key={step.id} className="flex items-start justify-between gap-4">
-            {/* Left: indicator + label + hint */}
-            <div className="flex min-w-0 items-start gap-2">
-              {step.completed ? (
-                <span className="mt-0.5 h-1.5 w-1.5 shrink-0 translate-y-[3px] rounded-full bg-foreground opacity-60" />
-              ) : (
-                <span className="mt-0.5 h-1.5 w-1.5 shrink-0 translate-y-[3px] rounded-full border border-muted-foreground/40" />
-              )}
-              <div className="min-w-0">
+      <ul className="space-y-3">
+        {visibleSteps.map((step) => (
+          <li key={step.id} className="flex items-start gap-2.5">
+            <StepDot completed={step.completed} />
+
+            {/* Label + hint block */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-4">
                 <span
                   className={
                     step.completed
-                      ? "text-xs text-muted-foreground line-through"
-                      : "text-xs"
+                      ? "text-sm text-muted-foreground/65"
+                      : "text-sm text-foreground"
                   }
                 >
                   {step.label}
                   {step.optional && (
-                    <span className="ml-1 text-muted-foreground/60">(optional)</span>
+                    <span className="ml-1 text-muted-foreground/50">(optional)</span>
                   )}
                 </span>
+
                 {!step.completed && (
-                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground/70">
-                    {step.hint}
-                  </p>
+                  <Link
+                    href={step.sectionHref}
+                    className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    {step.sectionLabel} →
+                  </Link>
                 )}
               </div>
-            </div>
 
-            {/* Right: section link */}
-            {!step.completed && (
-              <Link
-                href={step.sectionHref}
-                className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
-              >
-                {step.sectionLabel} →
-              </Link>
-            )}
+              {!step.completed && (
+                <p className="mt-1 text-xs leading-5 text-muted-foreground/70">
+                  {step.hint}
+                </p>
+              )}
+            </div>
           </li>
         ))}
       </ul>
+
+      {/* Optional steps toggle */}
+      <div className="mt-3">
+        <button
+          onClick={() => setShowOptional((v) => !v)}
+          className="text-xs text-muted-foreground/60 hover:text-muted-foreground"
+        >
+          {showOptional
+            ? "Hide optional steps"
+            : `${optionalSteps.length} optional steps${completedOptional > 0 ? ` (${completedOptional} done)` : ""}`}
+        </button>
+      </div>
     </div>
   );
 }

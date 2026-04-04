@@ -28,6 +28,7 @@ import {
   useMeetings,
   useRestoreMeeting,
 } from "@/hooks/use-meetings";
+import { ConsultationsNav } from "@/components/consultations/consultations-nav";
 import type { Meeting } from "@/types/db";
 import { toast } from "sonner";
 
@@ -351,18 +352,20 @@ export default function MeetingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Meetings</h1>
-          <p className="text-sm text-muted-foreground">Open, archive, or restore meetings.</p>
-        </div>
-        <Button asChild>
-          <Link href="/meetings/new">New Meeting</Link>
-        </Button>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Meetings</h1>
       </div>
+
+      <ConsultationsNav />
 
       <Card className="border-border/70 shadow-xs">
         <CardContent className="space-y-4 pt-4">
+          <div className="flex justify-end">
+            <Button asChild>
+              <Link href="/meetings/new">New Meeting</Link>
+            </Button>
+          </div>
+
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(11rem,13rem)_minmax(11rem,13rem)] lg:items-end">
             <div className="space-y-2">
               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

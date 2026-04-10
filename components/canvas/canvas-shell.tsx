@@ -10,12 +10,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { CanvasGraph } from "@/components/canvas/canvas-graph";
+import { CanvasOrganiseMenu } from "@/components/canvas/canvas-organise-menu";
 import { ConnectionTypePrompt } from "@/components/canvas/connection-type-prompt";
 import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
 import { MultiSelectionPanel } from "@/components/canvas/multi-selection-panel";
 import { useCanvas, useCreateEdge, useUpdateEdge } from "@/hooks/use-canvas";
 import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
+import type { CanvasLayoutDirection } from "@/lib/canvas-layout";
 import { createTheme, moveThemeToGroup, updateTheme } from "@/lib/actions/consultation-workflow";
 import { suggestGroupLabel } from "@/lib/actions/canvas-ai";
 import { defaultFilterState, type CanvasFilterState, type ConnectionType } from "@/types/canvas";
@@ -55,7 +57,11 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
   const [isGrouping, setIsGrouping] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isReorganising, setIsReorganising] = useState(false);
-  const [layoutRequest, setLayoutRequest] = useState<{ id: number; nodeIds: string[] } | null>(null);
+  const [layoutRequest, setLayoutRequest] = useState<{
+    id: number;
+    nodeIds: string[];
+    direction: CanvasLayoutDirection;
+  } | null>(null);
   // Track which theme group IDs were titled by AI so cards can show the indicator
   const [aiGeneratedGroupIds, setAiGeneratedGroupIds] = useState<Set<string>>(new Set());
 
@@ -88,7 +94,11 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     [nodes]
   );
   const canReorganiseCanvas = nodes.length >= 2;
-  const reorganiseLabel = selectedNodeIds.length >= 2 ? "Reorganise selected" : "Reorganise all";
+  const organiseLabel = selectedNodeIds.length >= 2 ? "Organise selected" : "Organise canvas";
+  const organiseScopeLabel =
+    selectedNodeIds.length >= 2
+      ? "Arrange the current multi-selection"
+      : "Arrange all top-level canvas nodes";
 
   const invalidateCanvas = () =>
     queryClient.invalidateQueries({ queryKey: ["canvas", roundId] });
@@ -105,7 +115,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     );
   }, []);
 
-  const requestReorganise = useCallback(() => {
+  const requestReorganise = useCallback((direction: CanvasLayoutDirection) => {
     if (!canReorganiseCanvas || isReorganising) {
       return;
     }
@@ -117,6 +127,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     setLayoutRequest((current) => ({
       id: (current?.id ?? 0) + 1,
       nodeIds: selectedNodeIds.length >= 2 ? selectedNodeIds : [],
+      direction,
     }));
   }, [canReorganiseCanvas, isReorganising, selectedNodeIds]);
 
@@ -124,8 +135,10 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     applied: boolean;
     movedNodeIds: string[];
     scope: "selected" | "all";
+    direction: CanvasLayoutDirection;
   }) => {
     setIsReorganising(false);
+    setLayoutRequest(null);
 
     if (!result.applied) {
       toast.error(
@@ -139,9 +152,31 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     posthog.capture("canvas_reorganised", {
       round_id: roundId,
       scope: result.scope,
+      direction: result.direction,
       moved_node_count: result.movedNodeIds.length,
     });
   }, [roundId]);
+
+  const toolbarOrganiseControl = (
+    <CanvasOrganiseMenu
+      disabled={!canReorganiseCanvas}
+      isOrganising={isReorganising}
+      label={organiseLabel}
+      scopeLabel={organiseScopeLabel}
+      onSelect={requestReorganise}
+    />
+  );
+
+  const panelOrganiseControl = (
+    <CanvasOrganiseMenu
+      disabled={!canReorganiseCanvas}
+      fullWidth
+      isOrganising={isReorganising}
+      label="Organise selected"
+      scopeLabel="Choose a layout direction for the current selection"
+      onSelect={requestReorganise}
+    />
+  );
 
   function handleClose() {
     setFocusedNodeId(null);
@@ -375,14 +410,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={!canReorganiseCanvas || isReorganising}
-            onClick={requestReorganise}
-          >
-            {isReorganising ? "Reorganising..." : reorganiseLabel}
-          </Button>
+          {toolbarOrganiseControl}
           <Button
             variant="outline"
             size="sm"
@@ -446,12 +474,11 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
               <MultiSelectionPanel
                 selectedNodeIds={selectedNodeIds}
                 nodes={nodes}
+                organiseControl={panelOrganiseControl}
                 isGrouping={isGrouping}
                 isConnecting={isConnecting}
-                isReorganising={isReorganising}
                 onGroup={handleGroupSelected}
                 onConnect={handleConnectSelected}
-                onReorganise={requestReorganise}
                 onClear={() => {
                   setSelectedNodeIds([]);
                   setFocusedNodeId(null);

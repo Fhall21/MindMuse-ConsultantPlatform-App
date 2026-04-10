@@ -6,10 +6,20 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CanvasShell } from "@/components/canvas/canvas-shell";
 import type { CanvasData } from "@/hooks/use-canvas";
+import type { CanvasLayoutDirection } from "@/lib/canvas-layout";
 
 const createEdgeMock = vi.fn();
 const updateEdgeMock = vi.fn();
-let lastLayoutRequest: { id: number; nodeIds: string[] } | null = null;
+let lastLayoutRequest: {
+  id: number;
+  nodeIds: string[];
+  direction: CanvasLayoutDirection;
+} | null = null;
+let lastSubmittedLayoutRequest: {
+  id: number;
+  nodeIds: string[];
+  direction: CanvasLayoutDirection;
+} | null = null;
 const { createThemeMock, moveThemeToGroupMock } = vi.hoisted(() => ({
   createThemeMock: vi.fn(),
   moveThemeToGroupMock: vi.fn(),
@@ -75,11 +85,12 @@ vi.mock("@/components/canvas/canvas-graph", () => ({
     onCreateEdge: (payload: Record<string, unknown>) => Promise<unknown>;
     onGroupDrop: (payload: { activeNodeId: string; targetNodeId: string | null }) => Promise<void>;
     onSelectionChange: (nodeIds: string[]) => void;
-    layoutRequest?: { id: number; nodeIds: string[] } | null;
+    layoutRequest?: { id: number; nodeIds: string[]; direction: CanvasLayoutDirection } | null;
     onLayoutComplete?: (result: {
       applied: boolean;
       movedNodeIds: string[];
       scope: "selected" | "all";
+      direction: CanvasLayoutDirection;
     }) => void;
   }) => (
     <CanvasGraphMock
@@ -102,15 +113,19 @@ function CanvasGraphMock({
   onCreateEdge: (payload: Record<string, unknown>) => Promise<unknown>;
   onGroupDrop: (payload: { activeNodeId: string; targetNodeId: string | null }) => Promise<void>;
   onSelectionChange: (nodeIds: string[]) => void;
-  layoutRequest?: { id: number; nodeIds: string[] } | null;
+  layoutRequest?: { id: number; nodeIds: string[]; direction: CanvasLayoutDirection } | null;
   onLayoutComplete?: (result: {
     applied: boolean;
     movedNodeIds: string[];
     scope: "selected" | "all";
+    direction: CanvasLayoutDirection;
   }) => void;
 }) {
   useEffect(() => {
     lastLayoutRequest = layoutRequest ?? null;
+    if (layoutRequest) {
+      lastSubmittedLayoutRequest = layoutRequest;
+    }
 
     if (!layoutRequest || !onLayoutComplete) {
       return;
@@ -123,6 +138,7 @@ function CanvasGraphMock({
           ? layoutRequest.nodeIds
           : canvasData.nodes.map((node) => node.id),
       scope: layoutRequest.nodeIds.length > 0 ? "selected" : "all",
+      direction: layoutRequest.direction,
     });
   }, [layoutRequest, onLayoutComplete]);
 
@@ -184,6 +200,7 @@ afterEach(() => {
   createThemeMock.mockReset();
   moveThemeToGroupMock.mockReset();
   lastLayoutRequest = null;
+  lastSubmittedLayoutRequest = null;
 });
 
 function renderShell() {
@@ -246,7 +263,7 @@ describe("CanvasShell", () => {
     expect(moveThemeToGroupMock).toHaveBeenCalledWith("insight-1", null);
   });
 
-  it("requests a selected-node reorganise from the multi-select UI", async () => {
+  it("requests a selected-node organise action with the chosen direction", async () => {
     renderShell();
 
     await act(async () => {
@@ -256,25 +273,35 @@ describe("CanvasShell", () => {
     expect(await screen.findByText("2 selected")).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(screen.getAllByRole("button", { name: "Reorganise selected" })[0]!);
+      fireEvent.pointerDown(screen.getAllByRole("button", { name: "Organise selected" })[0]!);
     });
 
-    expect(lastLayoutRequest).toEqual({
+    await act(async () => {
+      fireEvent.click(await screen.findByText("Top to bottom"));
+    });
+
+    expect(lastSubmittedLayoutRequest).toEqual({
       id: 1,
       nodeIds: ["insight-1", "insight-2"],
+      direction: "TB",
     });
   });
 
-  it("requests a full-canvas reorganise from the toolbar when nothing is selected", async () => {
+  it("requests a full-canvas organise action from the toolbar when nothing is selected", async () => {
     renderShell();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Reorganise all" }));
+      fireEvent.pointerDown(screen.getByRole("button", { name: "Organise canvas" }));
     });
 
-    expect(lastLayoutRequest).toEqual({
+    await act(async () => {
+      fireEvent.click(await screen.findByText("Left to right"));
+    });
+
+    expect(lastSubmittedLayoutRequest).toEqual({
       id: 1,
       nodeIds: [],
+      direction: "LR",
     });
   });
 });

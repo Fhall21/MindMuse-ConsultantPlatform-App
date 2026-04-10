@@ -30,6 +30,7 @@ import { CONNECTION_TYPE_LABELS } from "@/components/canvas/connection-type-prom
 import { useCanvas, useSaveLayout, type CreateEdgePayload } from "@/hooks/use-canvas";
 import {
   buildCanvasReorganiseLayout,
+  type CanvasLayoutDirection,
   getDefaultGroupedPosition,
   getGroupHeight,
   GROUP_HEADER_HEIGHT,
@@ -48,7 +49,7 @@ interface CanvasGraphProps {
   selectedNodeIds: string[];
   selectedEdgeId: string | null;
   aiGeneratedGroupIds?: Set<string>;
-  layoutRequest?: { id: number; nodeIds: string[] } | null;
+  layoutRequest?: { id: number; nodeIds: string[]; direction: CanvasLayoutDirection } | null;
   onSelectionChange: (nodeIds: string[]) => void;
   onNodeFocus: (id: string | null) => void;
   onEdgeSelect: (id: string | null) => void;
@@ -56,6 +57,7 @@ interface CanvasGraphProps {
     applied: boolean;
     movedNodeIds: string[];
     scope: "selected" | "all";
+    direction: CanvasLayoutDirection;
   }) => void;
   onCreateEdge: (payload: CreateEdgePayload) => Promise<CanvasEdge>;
   onGroupDrop: (params: {
@@ -780,15 +782,19 @@ function CanvasGraphInner({
       nodes: nodesDataRef.current,
       edges: data.edges,
       selectedNodeIds: layoutRequest.nodeIds,
+      direction: layoutRequest.direction,
       runtimePositions,
     });
 
     if (!layoutResult) {
-      onLayoutComplete?.({
-        applied: false,
-        movedNodeIds: [],
-        scope: layoutRequest.nodeIds.length > 0 ? "selected" : "all",
-      });
+      Promise.resolve().then(() =>
+        onLayoutComplete?.({
+          applied: false,
+          movedNodeIds: [],
+          scope: layoutRequest.nodeIds.length > 0 ? "selected" : "all",
+          direction: layoutRequest.direction,
+        })
+      );
       return;
     }
 
@@ -837,11 +843,14 @@ function CanvasGraphInner({
       );
     }, 320);
 
-    onLayoutComplete?.({
-      applied: true,
-      movedNodeIds: layoutResult.movedNodeIds,
-      scope: layoutResult.scope,
-    });
+    Promise.resolve().then(() =>
+      onLayoutComplete?.({
+        applied: true,
+        movedNodeIds: layoutResult.movedNodeIds,
+        scope: layoutResult.scope,
+        direction: layoutRequest.direction,
+      })
+    );
   }, [data, getViewport, layoutRequest, nodesById, onLayoutComplete, saveLayoutNow, setFlowNodes]);
 
   const handleNodeDragStart: OnNodeDrag = useCallback((_event, node) => {

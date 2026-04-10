@@ -1,5 +1,3 @@
-"use client";
-
 import dagre from "dagre";
 import type { CanvasEdge, CanvasNode, CanvasPosition } from "@/types/canvas";
 
@@ -13,6 +11,8 @@ export const GROUP_GAP_X = 24;
 export const GROUP_GAP_Y = 22;
 export const INSIGHT_WIDTH = 258;
 export const INSIGHT_HEIGHT = 110;
+
+export type CanvasLayoutDirection = "LR" | "TB" | "RL" | "BT";
 
 const LAYOUT_NODE_SEP = 72;
 const LAYOUT_RANK_SEP = 108;
@@ -37,6 +37,7 @@ interface BuildCanvasReorganiseLayoutParams {
   nodes: CanvasNode[];
   edges: CanvasEdge[];
   selectedNodeIds: string[];
+  direction?: CanvasLayoutDirection;
   runtimePositions?: Record<string, CanvasPosition>;
 }
 
@@ -163,6 +164,7 @@ export function buildCanvasReorganiseLayout({
   nodes,
   edges,
   selectedNodeIds,
+  direction = "LR",
   runtimePositions = {},
 }: BuildCanvasReorganiseLayoutParams): CanvasReorganiseLayoutResult | null {
   const { nodes: eligibleNodes, scope } = resolveEligibleNodes(
@@ -179,7 +181,7 @@ export function buildCanvasReorganiseLayout({
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({
-    rankdir: "LR",
+    rankdir: direction,
     align: "UL",
     nodesep: LAYOUT_NODE_SEP,
     ranksep: LAYOUT_RANK_SEP,

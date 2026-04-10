@@ -1,6 +1,7 @@
 "use client";
 
-import { Layers3, GitBranch, X, Loader2 } from "lucide-react";
+import type { ReactNode } from "react";
+import { GitBranch, Layers3, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -9,24 +10,22 @@ import type { CanvasNode } from "@/types/canvas";
 interface MultiSelectionPanelProps {
   selectedNodeIds: string[];
   nodes: CanvasNode[];
+  organiseControl: ReactNode;
   isGrouping: boolean;
   isConnecting: boolean;
-  isReorganising: boolean;
   onGroup: () => void;
   onConnect: () => void;
-  onReorganise: () => void;
   onClear: () => void;
 }
 
 export function MultiSelectionPanel({
   selectedNodeIds,
   nodes,
+  organiseControl,
   isGrouping,
   isConnecting,
-  isReorganising,
   onGroup,
   onConnect,
-  onReorganise,
   onClear,
 }: MultiSelectionPanelProps) {
   const selectedNodes = nodes.filter((node) => selectedNodeIds.includes(node.id));
@@ -98,20 +97,7 @@ export function MultiSelectionPanel({
           Actions
         </p>
 
-        <Button
-          variant="secondary"
-          size="sm"
-          className="w-full justify-start gap-2"
-          disabled={isReorganising}
-          onClick={onReorganise}
-        >
-          {isReorganising ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <GitBranch className="h-3.5 w-3.5" />
-          )}
-          {isReorganising ? "Reorganising..." : "Reorganise selected"}
-        </Button>
+        {organiseControl}
 
         <Button
           variant="default"

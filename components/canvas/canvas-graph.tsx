@@ -291,6 +291,7 @@ function buildFlowEdges(edges: CanvasEdge[]): Edge[] {
 
 function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds: string[]) {
   const currentById = new Map(currentNodes.map((node) => [node.id, node] as const));
+  const nextById = new Map(nextNodes.map((node) => [node.id, node] as const));
   const selectedSet = new Set(selectedNodeIds);
 
   return orderNodesParentFirst(
@@ -298,9 +299,39 @@ function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds:
       const currentNode = currentById.get(nextNode.id);
       const shouldPreservePosition = currentNode && currentNode.type === nextNode.type;
 
+      if (shouldPreservePosition) {
+        return {
+          ...nextNode,
+          position: currentNode.position,
+          selected: selectedSet.has(nextNode.id),
+        } satisfies Node;
+      }
+
+      // For grouped insights re-entering after their parent group was dragged,
+      // shift by the delta between the group's runtime position and its DB-based position.
+      const canvasNode = nextNode.data as unknown as CanvasNodeCardData | undefined;
+      const groupId = canvasNode?.node?.groupId;
+      if (groupId) {
+        const currentGroupNode = currentById.get(groupId);
+        const nextGroupNode = nextById.get(groupId);
+        if (currentGroupNode && nextGroupNode) {
+          const deltaX = currentGroupNode.position.x - nextGroupNode.position.x;
+          const deltaY = currentGroupNode.position.y - nextGroupNode.position.y;
+          if (Math.abs(deltaX) > 0.5 || Math.abs(deltaY) > 0.5) {
+            return {
+              ...nextNode,
+              position: {
+                x: nextNode.position.x + deltaX,
+                y: nextNode.position.y + deltaY,
+              },
+              selected: selectedSet.has(nextNode.id),
+            } satisfies Node;
+          }
+        }
+      }
+
       return {
         ...nextNode,
-        position: shouldPreservePosition ? currentNode.position : nextNode.position,
         selected: selectedSet.has(nextNode.id),
       } satisfies Node;
     })

@@ -11,8 +11,10 @@ interface MultiSelectionPanelProps {
   nodes: CanvasNode[];
   isGrouping: boolean;
   isConnecting: boolean;
+  isReorganising: boolean;
   onGroup: () => void;
   onConnect: () => void;
+  onReorganise: () => void;
   onClear: () => void;
 }
 
@@ -21,8 +23,10 @@ export function MultiSelectionPanel({
   nodes,
   isGrouping,
   isConnecting,
+  isReorganising,
   onGroup,
   onConnect,
+  onReorganise,
   onClear,
 }: MultiSelectionPanelProps) {
   const selectedNodes = nodes.filter((node) => selectedNodeIds.includes(node.id));
@@ -93,6 +97,21 @@ export function MultiSelectionPanel({
         <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           Actions
         </p>
+
+        <Button
+          variant="secondary"
+          size="sm"
+          className="w-full justify-start gap-2"
+          disabled={isReorganising}
+          onClick={onReorganise}
+        >
+          {isReorganising ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <GitBranch className="h-3.5 w-3.5" />
+          )}
+          {isReorganising ? "Reorganising..." : "Reorganise selected"}
+        </Button>
 
         <Button
           variant="default"

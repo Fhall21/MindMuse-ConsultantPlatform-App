@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,6 +9,7 @@ import type { CanvasData } from "@/hooks/use-canvas";
 
 const createEdgeMock = vi.fn();
 const updateEdgeMock = vi.fn();
+let lastLayoutRequest: { id: number; nodeIds: string[] } | null = null;
 const { createThemeMock, moveThemeToGroupMock } = vi.hoisted(() => ({
   createThemeMock: vi.fn(),
   moveThemeToGroupMock: vi.fn(),
@@ -66,10 +68,65 @@ vi.mock("@/components/canvas/canvas-graph", () => ({
   CanvasGraph: ({
     onCreateEdge,
     onGroupDrop,
+    onSelectionChange,
+    layoutRequest,
+    onLayoutComplete,
   }: {
     onCreateEdge: (payload: Record<string, unknown>) => Promise<unknown>;
     onGroupDrop: (payload: { activeNodeId: string; targetNodeId: string | null }) => Promise<void>;
+    onSelectionChange: (nodeIds: string[]) => void;
+    layoutRequest?: { id: number; nodeIds: string[] } | null;
+    onLayoutComplete?: (result: {
+      applied: boolean;
+      movedNodeIds: string[];
+      scope: "selected" | "all";
+    }) => void;
   }) => (
+    <CanvasGraphMock
+      onCreateEdge={onCreateEdge}
+      onGroupDrop={onGroupDrop}
+      onSelectionChange={onSelectionChange}
+      layoutRequest={layoutRequest}
+      onLayoutComplete={onLayoutComplete}
+    />
+  ),
+}));
+
+function CanvasGraphMock({
+  onCreateEdge,
+  onGroupDrop,
+  onSelectionChange,
+  layoutRequest,
+  onLayoutComplete,
+}: {
+  onCreateEdge: (payload: Record<string, unknown>) => Promise<unknown>;
+  onGroupDrop: (payload: { activeNodeId: string; targetNodeId: string | null }) => Promise<void>;
+  onSelectionChange: (nodeIds: string[]) => void;
+  layoutRequest?: { id: number; nodeIds: string[] } | null;
+  onLayoutComplete?: (result: {
+    applied: boolean;
+    movedNodeIds: string[];
+    scope: "selected" | "all";
+  }) => void;
+}) {
+  useEffect(() => {
+    lastLayoutRequest = layoutRequest ?? null;
+
+    if (!layoutRequest || !onLayoutComplete) {
+      return;
+    }
+
+    onLayoutComplete({
+      applied: true,
+      movedNodeIds:
+        layoutRequest.nodeIds.length > 0
+          ? layoutRequest.nodeIds
+          : canvasData.nodes.map((node) => node.id),
+      scope: layoutRequest.nodeIds.length > 0 ? "selected" : "all",
+    });
+  }, [layoutRequest, onLayoutComplete]);
+
+  return (
     <div>
       <button
         type="button"
@@ -91,9 +148,12 @@ vi.mock("@/components/canvas/canvas-graph", () => ({
       >
         Ungroup insight
       </button>
+      <button type="button" onClick={() => onSelectionChange(["insight-1", "insight-2"])}>
+        Select nodes
+      </button>
     </div>
-  ),
-}));
+  );
+}
 
 vi.mock("@/components/canvas/node-detail-panel", () => ({
   NodeDetailPanel: () => <div>Node detail panel</div>,
@@ -123,6 +183,7 @@ afterEach(() => {
   updateEdgeMock.mockReset();
   createThemeMock.mockReset();
   moveThemeToGroupMock.mockReset();
+  lastLayoutRequest = null;
 });
 
 function renderShell() {
@@ -183,5 +244,37 @@ describe("CanvasShell", () => {
     });
 
     expect(moveThemeToGroupMock).toHaveBeenCalledWith("insight-1", null);
+  });
+
+  it("requests a selected-node reorganise from the multi-select UI", async () => {
+    renderShell();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Select nodes"));
+    });
+
+    expect(await screen.findByText("2 selected")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole("button", { name: "Reorganise selected" })[0]!);
+    });
+
+    expect(lastLayoutRequest).toEqual({
+      id: 1,
+      nodeIds: ["insight-1", "insight-2"],
+    });
+  });
+
+  it("requests a full-canvas reorganise from the toolbar when nothing is selected", async () => {
+    renderShell();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Reorganise all" }));
+    });
+
+    expect(lastLayoutRequest).toEqual({
+      id: 1,
+      nodeIds: [],
+    });
   });
 });

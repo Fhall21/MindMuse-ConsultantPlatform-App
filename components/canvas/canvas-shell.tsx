@@ -54,6 +54,8 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
   const [connectionPrompt, setConnectionPrompt] = useState<ConnectionPromptState | null>(null);
   const [isGrouping, setIsGrouping] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isReorganising, setIsReorganising] = useState(false);
+  const [layoutRequest, setLayoutRequest] = useState<{ id: number; nodeIds: string[] } | null>(null);
   // Track which theme group IDs were titled by AI so cards can show the indicator
   const [aiGeneratedGroupIds, setAiGeneratedGroupIds] = useState<Set<string>>(new Set());
 
@@ -85,6 +87,8 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     () => new Map(nodes.map((node) => [node.id, node.position] as const)),
     [nodes]
   );
+  const canReorganiseCanvas = nodes.length >= 2;
+  const reorganiseLabel = selectedNodeIds.length >= 2 ? "Reorganise selected" : "Reorganise all";
 
   const invalidateCanvas = () =>
     queryClient.invalidateQueries({ queryKey: ["canvas", roundId] });
@@ -100,6 +104,44 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
       equalStringSets(current, nextIds) ? current : nextIds
     );
   }, []);
+
+  const requestReorganise = useCallback(() => {
+    if (!canReorganiseCanvas || isReorganising) {
+      return;
+    }
+
+    setShowSuggestions(false);
+    setSelectedEdgeId(null);
+    setConnectionPrompt(null);
+    setIsReorganising(true);
+    setLayoutRequest((current) => ({
+      id: (current?.id ?? 0) + 1,
+      nodeIds: selectedNodeIds.length >= 2 ? selectedNodeIds : [],
+    }));
+  }, [canReorganiseCanvas, isReorganising, selectedNodeIds]);
+
+  const handleLayoutComplete = useCallback((result: {
+    applied: boolean;
+    movedNodeIds: string[];
+    scope: "selected" | "all";
+  }) => {
+    setIsReorganising(false);
+
+    if (!result.applied) {
+      toast.error(
+        result.scope === "selected"
+          ? "Select 2 top-level nodes or clear the selection to reorganise the full canvas."
+          : "Need at least 2 top-level nodes to reorganise the canvas."
+      );
+      return;
+    }
+
+    posthog.capture("canvas_reorganised", {
+      round_id: roundId,
+      scope: result.scope,
+      moved_node_count: result.movedNodeIds.length,
+    });
+  }, [roundId]);
 
   function handleClose() {
     setFocusedNodeId(null);
@@ -334,6 +376,14 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
         <div className="ml-auto flex items-center gap-2">
           <Button
+            variant="secondary"
+            size="sm"
+            disabled={!canReorganiseCanvas || isReorganising}
+            onClick={requestReorganise}
+          >
+            {isReorganising ? "Reorganising..." : reorganiseLabel}
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={() => {
@@ -346,7 +396,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
             AI suggestions
           </Button>
           <span className="text-xs text-muted-foreground">
-            Shift+click to multi-select
+            Drag to box-select or Shift+click to multi-select
           </span>
         </div>
       </div>
@@ -362,9 +412,11 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
             selectedNodeIds={selectedNodeIds}
             selectedEdgeId={selectedEdgeId}
             aiGeneratedGroupIds={aiGeneratedGroupIds}
+            layoutRequest={layoutRequest}
             onSelectionChange={handleCanvasSelectionChange}
             onNodeFocus={setFocusedNodeId}
             onEdgeSelect={setSelectedEdgeId}
+            onLayoutComplete={handleLayoutComplete}
             onCreateEdge={handleCreateEdge}
             onGroupDrop={handleGroupDrop}
           />
@@ -396,8 +448,10 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
                 nodes={nodes}
                 isGrouping={isGrouping}
                 isConnecting={isConnecting}
+                isReorganising={isReorganising}
                 onGroup={handleGroupSelected}
                 onConnect={handleConnectSelected}
+                onReorganise={requestReorganise}
                 onClear={() => {
                   setSelectedNodeIds([]);
                   setFocusedNodeId(null);

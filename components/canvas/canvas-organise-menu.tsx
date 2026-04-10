@@ -20,30 +20,35 @@ const DIRECTION_OPTIONS: Array<{
   label: string;
   shortcut: string;
   description: string;
+  helper: string;
 }> = [
   {
     value: "LR",
-    label: "Left to right",
+    label: "Read left to right",
     shortcut: "LR",
-    description: "Spread the thread horizontally toward the right",
+    description: "Place the starting idea on the left and unfold the thread toward the right",
+    helper: "Best when you want the map to read like a sentence",
   },
   {
     value: "TB",
-    label: "Top to bottom",
+    label: "Read top to bottom",
     shortcut: "TB",
-    description: "Stack the thread vertically downward",
+    description: "Place the starting idea at the top and stack the thread downward",
+    helper: "Best for scan-down summaries and vertical canvases",
   },
   {
     value: "RL",
-    label: "Right to left",
+    label: "Read right to left",
     shortcut: "RL",
-    description: "Flow the thread horizontally toward the left",
+    description: "Place the starting idea on the right and unfold the thread toward the left",
+    helper: "Useful when the important anchor already sits on the right edge",
   },
   {
     value: "BT",
-    label: "Bottom to top",
+    label: "Read bottom to top",
     shortcut: "BT",
-    description: "Lift the thread vertically upward",
+    description: "Place the starting idea at the bottom and lift the thread upward",
+    helper: "Useful when there is open space above the current cluster",
   },
 ];
 
@@ -237,8 +242,14 @@ export function CanvasOrganiseMenu({
           ) : null}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={fullWidth ? "center" : "end"} className="min-w-56">
-        <DropdownMenuLabel>{scopeLabel}</DropdownMenuLabel>
+      <DropdownMenuContent align={fullWidth ? "center" : "end"} className="min-w-72">
+        <DropdownMenuLabel className="space-y-1 pr-8">
+          <span className="block text-sm font-semibold text-foreground">Choose reading direction</span>
+          <span className="block text-xs font-normal leading-snug text-muted-foreground">
+            {scopeLabel}. Connected nodes stay grouped; this only changes how the thread
+            reads across the canvas.
+          </span>
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {DIRECTION_OPTIONS.map((option) => (
           <DropdownMenuItem
@@ -254,10 +265,18 @@ export function CanvasOrganiseMenu({
               <span className="mt-1 block text-xs leading-snug text-muted-foreground">
                 {option.description}
               </span>
+              <span className="mt-1 block text-[11px] font-medium uppercase tracking-[0.12em] text-foreground/45">
+                {option.helper}
+              </span>
             </span>
             <DropdownMenuShortcut>{option.shortcut}</DropdownMenuShortcut>
           </DropdownMenuItem>
         ))}
+        <DropdownMenuSeparator />
+        <div className="px-2 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          Horizontal layouts work well for mindmap storytelling. Vertical layouts work
+          better when you want people to scan a summary top-to-bottom.
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

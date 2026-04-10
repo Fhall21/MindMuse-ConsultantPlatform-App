@@ -143,8 +143,8 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     if (!result.applied) {
       toast.error(
         result.scope === "selected"
-          ? "Select 2 top-level nodes or clear the selection to reorganise the full canvas."
-          : "Need at least 2 top-level nodes to reorganise the canvas."
+          ? "Select 2 top-level nodes or clear the selection to organise the full canvas."
+          : "Need at least 2 top-level nodes to organise the canvas."
       );
       return;
     }

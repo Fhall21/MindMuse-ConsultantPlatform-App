@@ -92,6 +92,15 @@ function edgeStyle(connectionType: ConnectionType) {
   };
 }
 
+function equalStringSets(a: string[], b: string[]) {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  const bSet = new Set(b);
+  return a.every((item) => bSet.has(item));
+}
+
 function applyFilters(nodes: CanvasNode[], edges: CanvasEdge[], filters: CanvasFilterState) {
   const query = filters.searchQuery.trim().toLowerCase();
 
@@ -528,6 +537,8 @@ function CanvasGraphInner({
 
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   selectedNodeIdsRef.current = selectedNodeIds;
+  const layoutRequestRef = useRef(layoutRequest);
+  layoutRequestRef.current = layoutRequest;
 
   const nodesDataRef = useRef(data?.nodes ?? []);
   nodesDataRef.current = data?.nodes ?? [];
@@ -536,6 +547,12 @@ function CanvasGraphInner({
     () => new Map((data?.nodes ?? []).map((node) => [node.id, node] as const)),
     [data?.nodes]
   );
+  const nodesByIdRef = useRef(nodesById);
+  nodesByIdRef.current = nodesById;
+  const getViewportRef = useRef(getViewport);
+  getViewportRef.current = getViewport;
+  const onLayoutCompleteRef = useRef(onLayoutComplete);
+  onLayoutCompleteRef.current = onLayoutComplete;
 
   const { filteredNodes, filteredEdges } = useMemo(
     () => applyFilters(data?.nodes ?? [], data?.edges ?? [], filters),
@@ -632,6 +649,8 @@ function CanvasGraphInner({
     },
     [saveLayout]
   );
+  const saveLayoutNowRef = useRef(saveLayoutNow);
+  saveLayoutNowRef.current = saveLayoutNow;
 
   useEffect(() => {
     if (!data) {
@@ -682,8 +701,14 @@ function CanvasGraphInner({
       if (dragSelectionRef.current || clickHandlingRef.current) {
         return;
       }
-      onSelectionChange(nodes.map((node) => node.id));
-      onNodeFocus(nodes.length > 0 ? nodes[nodes.length - 1]?.id ?? null : null);
+
+      const nextIds = nodes.map((node) => node.id);
+      if (equalStringSets(selectedNodeIdsRef.current, nextIds)) {
+        return;
+      }
+
+      onSelectionChange(nextIds);
+      onNodeFocus(nextIds.length > 0 ? nodes[nodes.length - 1]?.id ?? null : null);
     },
     [onNodeFocus, onSelectionChange]
   );
@@ -765,15 +790,16 @@ function CanvasGraphInner({
   );
 
   useEffect(() => {
-    if (!data || !layoutRequest) {
+    const nextLayoutRequest = layoutRequestRef.current;
+    if (!data || !nextLayoutRequest) {
       return;
     }
 
-    if (processedLayoutRequestRef.current === layoutRequest.id) {
+    if (processedLayoutRequestRef.current === nextLayoutRequest.id) {
       return;
     }
 
-    processedLayoutRequestRef.current = layoutRequest.id;
+    processedLayoutRequestRef.current = nextLayoutRequest.id;
 
     const runtimePositions = Object.fromEntries(
       flowNodesRef.current.map((node) => [node.id, node.position] as const)
@@ -781,18 +807,18 @@ function CanvasGraphInner({
     const layoutResult = buildCanvasReorganiseLayout({
       nodes: nodesDataRef.current,
       edges: data.edges,
-      selectedNodeIds: layoutRequest.nodeIds,
-      direction: layoutRequest.direction,
+      selectedNodeIds: nextLayoutRequest.nodeIds,
+      direction: nextLayoutRequest.direction,
       runtimePositions,
     });
 
     if (!layoutResult) {
       Promise.resolve().then(() =>
-        onLayoutComplete?.({
+        onLayoutCompleteRef.current?.({
           applied: false,
           movedNodeIds: [],
-          scope: layoutRequest.nodeIds.length > 0 ? "selected" : "all",
-          direction: layoutRequest.direction,
+          scope: nextLayoutRequest.nodeIds.length > 0 ? "selected" : "all",
+          direction: nextLayoutRequest.direction,
         })
       );
       return;
@@ -823,7 +849,10 @@ function CanvasGraphInner({
 
     flowNodesRef.current = nextNodes;
     setFlowNodes(nextNodes);
-    saveLayoutNow(buildLayoutPositions(nextNodes, nodesById), getViewport());
+    saveLayoutNowRef.current(
+      buildLayoutPositions(nextNodes, nodesByIdRef.current),
+      getViewportRef.current()
+    );
 
     layoutResetTimerRef.current = setTimeout(() => {
       setFlowNodes((currentNodes) =>
@@ -844,14 +873,14 @@ function CanvasGraphInner({
     }, 320);
 
     Promise.resolve().then(() =>
-      onLayoutComplete?.({
+      onLayoutCompleteRef.current?.({
         applied: true,
         movedNodeIds: layoutResult.movedNodeIds,
         scope: layoutResult.scope,
-        direction: layoutRequest.direction,
+        direction: nextLayoutRequest.direction,
       })
     );
-  }, [data, getViewport, layoutRequest, nodesById, onLayoutComplete, saveLayoutNow, setFlowNodes]);
+  }, [data, layoutRequest?.id, setFlowNodes]);
 
   const handleNodeDragStart: OnNodeDrag = useCallback((_event, node) => {
     dragRef.current = node.id;

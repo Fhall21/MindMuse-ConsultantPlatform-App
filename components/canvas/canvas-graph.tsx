@@ -694,11 +694,8 @@ function CanvasGraphInner({
       if (dragSelectionRef.current || clickHandlingRef.current) {
         return;
       }
-      if (nodes.length === 0) {
-        return;
-      }
       onSelectionChange(nodes.map((node) => node.id));
-      onNodeFocus(nodes[nodes.length - 1]?.id ?? null);
+      onNodeFocus(nodes.length > 0 ? nodes[nodes.length - 1]?.id ?? null : null);
     },
     [onNodeFocus, onSelectionChange]
   );
@@ -884,7 +881,7 @@ function CanvasGraphInner({
       onNodeDragStop={handleNodeDragStop}
       onConnect={handleConnect}
       multiSelectionKeyCode={["Meta", "Control", "Shift"]}
-      selectionOnDrag={false}
+      selectionOnDrag
       panOnScroll
       fitView={false}
       minZoom={0.15}

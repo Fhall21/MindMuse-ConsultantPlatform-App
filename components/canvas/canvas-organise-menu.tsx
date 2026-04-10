@@ -256,36 +256,35 @@ export function CanvasOrganiseMenu({
           Direction
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <TooltipProvider delayDuration={120}>
+        <TooltipProvider delayDuration={0}>
           {DIRECTION_OPTIONS.map((option) => (
-            <DropdownMenuItem
-              key={option.value}
-              onSelect={() => onSelect(option.value)}
-              className="group gap-3 rounded-md px-2 py-2"
-            >
-              <Tooltip>
-                <TooltipTrigger asChild>
+            <Tooltip key={option.value}>
+              <TooltipTrigger asChild>
+                <DropdownMenuItem
+                  onSelect={() => onSelect(option.value)}
+                  className="group gap-3 rounded-md px-2 py-2"
+                >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/40 text-foreground/75 transition-colors duration-200 group-hover:border-border group-hover:bg-background group-hover:text-foreground">
                     <OrganiseDirectionIcon direction={option.value} className="h-6 w-6" />
                   </span>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="left"
-                  sideOffset={8}
-                  className="max-w-64 flex-col items-start text-left leading-snug"
-                >
-                  <span className="block font-medium">{option.description}</span>
-                  <span className="block text-background/85">{option.helper}</span>
-                </TooltipContent>
-              </Tooltip>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium leading-none">{option.label}</span>
-                <span className="sr-only">
-                  {option.description}. {option.helper}
-                </span>
-              </span>
-              <DropdownMenuShortcut>{option.shortcut}</DropdownMenuShortcut>
-            </DropdownMenuItem>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium leading-none">{option.label}</span>
+                    <span className="sr-only">
+                      {option.description}. {option.helper}
+                    </span>
+                  </span>
+                  <DropdownMenuShortcut>{option.shortcut}</DropdownMenuShortcut>
+                </DropdownMenuItem>
+              </TooltipTrigger>
+              <TooltipContent
+                side="left"
+                sideOffset={8}
+                className="max-w-64 flex-col items-start text-left leading-snug"
+              >
+                <span className="block font-medium">{option.description}</span>
+                <span className="block text-background/85">{option.helper}</span>
+              </TooltipContent>
+            </Tooltip>
           ))}
         </TooltipProvider>
       </DropdownMenuContent>

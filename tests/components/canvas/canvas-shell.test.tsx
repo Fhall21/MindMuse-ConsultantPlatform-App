@@ -273,11 +273,11 @@ describe("CanvasShell", () => {
     expect(await screen.findByText("2 selected")).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.pointerDown(screen.getAllByRole("button", { name: "Organise selected" })[0]!);
+      fireEvent.pointerDown(screen.getAllByRole("button", { name: "Arrange selection" })[0]!);
     });
 
     await act(async () => {
-      fireEvent.click(await screen.findByText("Top to bottom"));
+      fireEvent.click(await screen.findByText("TB"));
     });
 
     expect(lastSubmittedLayoutRequest).toEqual({
@@ -291,11 +291,11 @@ describe("CanvasShell", () => {
     renderShell();
 
     await act(async () => {
-      fireEvent.pointerDown(screen.getByRole("button", { name: "Organise canvas" }));
+      fireEvent.pointerDown(screen.getByRole("button", { name: "Arrange canvas" }));
     });
 
     await act(async () => {
-      fireEvent.click(await screen.findByText("Left to right"));
+      fireEvent.click(await screen.findByText("LR"));
     });
 
     expect(lastSubmittedLayoutRequest).toEqual({
@@ -313,19 +313,19 @@ describe("CanvasShell", () => {
     });
 
     await act(async () => {
-      fireEvent.pointerDown(screen.getAllByRole("button", { name: "Organise selected" })[0]!);
+      fireEvent.pointerDown(screen.getAllByRole("button", { name: "Arrange selection" })[0]!);
     });
     await act(async () => {
-      fireEvent.click(await screen.findByText("Top to bottom"));
+      fireEvent.click(await screen.findByText("TB"));
     });
 
     expect(screen.queryByText("Organising...")).not.toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.pointerDown(screen.getAllByRole("button", { name: "Organise selected" })[0]!);
+      fireEvent.pointerDown(screen.getAllByRole("button", { name: "Arrange selection" })[0]!);
     });
     await act(async () => {
-      fireEvent.click(await screen.findByText("Left to right"));
+      fireEvent.click(await screen.findByText("LR"));
     });
 
     expect(lastSubmittedLayoutRequest).toEqual({

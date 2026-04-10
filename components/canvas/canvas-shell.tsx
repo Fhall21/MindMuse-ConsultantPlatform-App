@@ -96,11 +96,11 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     [nodes]
   );
   const canReorganiseCanvas = nodes.length >= 2;
-  const organiseLabel = selectedNodeIds.length >= 2 ? "Organise selected" : "Organise canvas";
+  const organiseLabel = selectedNodeIds.length >= 2 ? "Arrange selection" : "Arrange canvas";
   const organiseScopeLabel =
     selectedNodeIds.length >= 2
-      ? "Arrange the current multi-selection"
-      : "Arrange all top-level canvas nodes";
+      ? "Reflow the selected cluster"
+      : "Reflow the main canvas map";
 
   const invalidateCanvas = () =>
     queryClient.invalidateQueries({ queryKey: ["canvas", roundId] });
@@ -197,8 +197,8 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
       disabled={!canReorganiseCanvas}
       fullWidth
       isOrganising={isReorganising}
-      label="Organise selected"
-      scopeLabel="Choose a layout direction for the current selection"
+      label="Arrange selection"
+      scopeLabel="Choose how the selected thread should grow"
       onSelect={requestReorganise}
     />
   );

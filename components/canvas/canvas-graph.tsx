@@ -28,6 +28,17 @@ import { toast } from "sonner";
 import { CanvasNodeCard, type CanvasNodeCardData } from "@/components/canvas/canvas-node-card";
 import { CONNECTION_TYPE_LABELS } from "@/components/canvas/connection-type-prompt";
 import { useCanvas, useSaveLayout, type CreateEdgePayload } from "@/hooks/use-canvas";
+import {
+  buildCanvasReorganiseLayout,
+  getDefaultGroupedPosition,
+  getGroupHeight,
+  GROUP_HEADER_HEIGHT,
+  GROUP_PADDING_X,
+  GROUP_PADDING_TOP,
+  INSIGHT_HEIGHT,
+  INSIGHT_WIDTH,
+  GROUP_WIDTH,
+} from "@/lib/canvas-layout";
 import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
 import type { CanvasEdge, CanvasFilterState, CanvasNode, ConnectionType } from "@/types/canvas";
 
@@ -37,9 +48,15 @@ interface CanvasGraphProps {
   selectedNodeIds: string[];
   selectedEdgeId: string | null;
   aiGeneratedGroupIds?: Set<string>;
+  layoutRequest?: { id: number; nodeIds: string[] } | null;
   onSelectionChange: (nodeIds: string[]) => void;
   onNodeFocus: (id: string | null) => void;
   onEdgeSelect: (id: string | null) => void;
+  onLayoutComplete?: (result: {
+    applied: boolean;
+    movedNodeIds: string[];
+    scope: "selected" | "all";
+  }) => void;
   onCreateEdge: (payload: CreateEdgePayload) => Promise<CanvasEdge>;
   onGroupDrop: (params: {
     activeNodeId: string;
@@ -61,17 +78,6 @@ const CONNECTION_COLORS: Record<ConnectionType, string> = {
 // 1. Use React Flow local node state so drag stays locked to the cursor.
 // 2. Keep persisted DB positions absolute and manage grouping in app state so
 //    React Flow never needs nested parent/child nodes.
-const GROUP_COLUMNS = 2;
-const GROUP_WIDTH = 596;
-const GROUP_HEADER_HEIGHT = 118;
-const GROUP_PADDING_X = 28;
-const GROUP_PADDING_TOP = 24;
-const GROUP_PADDING_BOTTOM = 28;
-const GROUP_GAP_X = 24;
-const GROUP_GAP_Y = 22;
-const INSIGHT_WIDTH = 258;
-const INSIGHT_HEIGHT = 110;
-
 const nodeTypes = {
   canvasNode: CanvasNodeCard,
 };
@@ -105,30 +111,6 @@ function applyFilters(nodes: CanvasNode[], edges: CanvasEdge[], filters: CanvasF
   );
 
   return { filteredNodes, filteredEdges };
-}
-
-function getGroupHeight(memberCount: number) {
-  const visibleCount = Math.max(memberCount, 1);
-  const rowCount = Math.max(1, Math.ceil(visibleCount / GROUP_COLUMNS));
-
-  return Math.max(
-    246,
-    GROUP_HEADER_HEIGHT +
-      GROUP_PADDING_TOP +
-      GROUP_PADDING_BOTTOM +
-      rowCount * INSIGHT_HEIGHT +
-      Math.max(0, rowCount - 1) * GROUP_GAP_Y
-  );
-}
-
-function getDefaultGroupedPosition(index: number) {
-  const row = Math.floor(index / GROUP_COLUMNS);
-  const column = index % GROUP_COLUMNS;
-
-  return {
-    x: GROUP_PADDING_X + column * (INSIGHT_WIDTH + GROUP_GAP_X),
-    y: GROUP_HEADER_HEIGHT + GROUP_PADDING_TOP + row * (INSIGHT_HEIGHT + GROUP_GAP_Y),
-  };
 }
 
 function isRelativePositionInsideGroup(position: { x: number; y: number }, groupHeight: number) {
@@ -520,9 +502,11 @@ function CanvasGraphInner({
   selectedNodeIds,
   selectedEdgeId,
   aiGeneratedGroupIds = new Set(),
+  layoutRequest,
   onSelectionChange,
   onNodeFocus,
   onEdgeSelect,
+  onLayoutComplete,
   onCreateEdge,
   onGroupDrop,
 }: CanvasGraphProps) {
@@ -531,9 +515,11 @@ function CanvasGraphInner({
   const { getViewport, getIntersectingNodes } = useReactFlow();
   const dragRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const layoutResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragSelectionRef = useRef(false);
   const clickHandlingRef = useRef(false);
   const initialSeedSaveRef = useRef<string | null>(null);
+  const processedLayoutRequestRef = useRef<number | null>(null);
   const [hasQueuedSave, setHasQueuedSave] = useState(false);
   const [hasHydratedGraph, setHasHydratedGraph] = useState(false);
   const lastViewportRef = useRef(data?.viewport ?? { x: 0, y: 0, zoom: 1 });
@@ -769,9 +755,94 @@ function CanvasGraphInner({
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
       }
+      if (layoutResetTimerRef.current) {
+        clearTimeout(layoutResetTimerRef.current);
+      }
     },
     []
   );
+
+  useEffect(() => {
+    if (!data || !layoutRequest) {
+      return;
+    }
+
+    if (processedLayoutRequestRef.current === layoutRequest.id) {
+      return;
+    }
+
+    processedLayoutRequestRef.current = layoutRequest.id;
+
+    const runtimePositions = Object.fromEntries(
+      flowNodesRef.current.map((node) => [node.id, node.position] as const)
+    );
+    const layoutResult = buildCanvasReorganiseLayout({
+      nodes: nodesDataRef.current,
+      edges: data.edges,
+      selectedNodeIds: layoutRequest.nodeIds,
+      runtimePositions,
+    });
+
+    if (!layoutResult) {
+      onLayoutComplete?.({
+        applied: false,
+        movedNodeIds: [],
+        scope: layoutRequest.nodeIds.length > 0 ? "selected" : "all",
+      });
+      return;
+    }
+
+    if (layoutResetTimerRef.current) {
+      clearTimeout(layoutResetTimerRef.current);
+    }
+
+    const transition = "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)";
+    const nextNodes = orderNodesParentFirst(
+      flowNodesRef.current.map((node) => {
+        const nextPosition = layoutResult.positions[node.id];
+        if (!nextPosition) {
+          return node;
+        }
+
+        return {
+          ...node,
+          position: nextPosition,
+          style: {
+            ...node.style,
+            transition,
+          },
+        } satisfies Node;
+      })
+    );
+
+    flowNodesRef.current = nextNodes;
+    setFlowNodes(nextNodes);
+    saveLayoutNow(buildLayoutPositions(nextNodes, nodesById), getViewport());
+
+    layoutResetTimerRef.current = setTimeout(() => {
+      setFlowNodes((currentNodes) =>
+        currentNodes.map((node) => {
+          if (!(node.id in layoutResult.positions)) {
+            return node;
+          }
+
+          const nextStyle = { ...node.style };
+          delete nextStyle.transition;
+
+          return {
+            ...node,
+            style: nextStyle,
+          } satisfies Node;
+        })
+      );
+    }, 320);
+
+    onLayoutComplete?.({
+      applied: true,
+      movedNodeIds: layoutResult.movedNodeIds,
+      scope: layoutResult.scope,
+    });
+  }, [data, getViewport, layoutRequest, nodesById, onLayoutComplete, saveLayoutNow, setFlowNodes]);
 
   const handleNodeDragStart: OnNodeDrag = useCallback((_event, node) => {
     dragRef.current = node.id;

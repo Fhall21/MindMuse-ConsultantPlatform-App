@@ -12,6 +12,12 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { CanvasLayoutDirection } from "@/lib/canvas-layout";
 import { cn } from "@/lib/utils";
 
@@ -24,30 +30,30 @@ const DIRECTION_OPTIONS: Array<{
 }> = [
   {
     value: "LR",
-    label: "Read left to right",
+    label: "Left to right",
     shortcut: "LR",
-    description: "Place the starting idea on the left and unfold the thread toward the right",
-    helper: "Best when you want the map to read like a sentence",
+    description: "Start on the left and let the thread unfold to the right",
+    helper: "Best for a mindmap that reads like a sentence",
   },
   {
     value: "TB",
-    label: "Read top to bottom",
+    label: "Top to bottom",
     shortcut: "TB",
-    description: "Place the starting idea at the top and stack the thread downward",
+    description: "Start at the top and stack the thread downward",
     helper: "Best for scan-down summaries and vertical canvases",
   },
   {
     value: "RL",
-    label: "Read right to left",
+    label: "Right to left",
     shortcut: "RL",
-    description: "Place the starting idea on the right and unfold the thread toward the left",
-    helper: "Useful when the important anchor already sits on the right edge",
+    description: "Start on the right and let the thread unfold to the left",
+    helper: "Useful when the anchor already sits on the right edge",
   },
   {
     value: "BT",
-    label: "Read bottom to top",
+    label: "Bottom to top",
     shortcut: "BT",
-    description: "Place the starting idea at the bottom and lift the thread upward",
+    description: "Start at the bottom and lift the thread upward",
     helper: "Useful when there is open space above the current cluster",
   },
 ];
@@ -242,41 +248,46 @@ export function CanvasOrganiseMenu({
           ) : null}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={fullWidth ? "center" : "end"} className="min-w-72">
-        <DropdownMenuLabel className="space-y-1 pr-8">
-          <span className="block text-sm font-semibold text-foreground">Choose reading direction</span>
-          <span className="block text-xs font-normal leading-snug text-muted-foreground">
-            {scopeLabel}. Connected nodes stay grouped; this only changes how the thread
-            reads across the canvas.
-          </span>
+      <DropdownMenuContent align={fullWidth ? "center" : "end"} className="min-w-56">
+        <DropdownMenuLabel
+          className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
+          title={scopeLabel}
+        >
+          Direction
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {DIRECTION_OPTIONS.map((option) => (
-          <DropdownMenuItem
-            key={option.value}
-            onSelect={() => onSelect(option.value)}
-            className="group gap-3 rounded-md px-2 py-2.5"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/40 text-foreground/75 transition-colors duration-200 group-hover:border-border group-hover:bg-background group-hover:text-foreground">
-              <OrganiseDirectionIcon direction={option.value} className="h-6 w-6" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium leading-none">{option.label}</span>
-              <span className="mt-1 block text-xs leading-snug text-muted-foreground">
-                {option.description}
+        <TooltipProvider delayDuration={120}>
+          {DIRECTION_OPTIONS.map((option) => (
+            <DropdownMenuItem
+              key={option.value}
+              onSelect={() => onSelect(option.value)}
+              className="group gap-3 rounded-md px-2 py-2"
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/40 text-foreground/75 transition-colors duration-200 group-hover:border-border group-hover:bg-background group-hover:text-foreground">
+                    <OrganiseDirectionIcon direction={option.value} className="h-6 w-6" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="left"
+                  sideOffset={8}
+                  className="max-w-56 text-left leading-snug"
+                >
+                  <span className="block">{option.description}</span>
+                  <span className="mt-1 block text-background/75">{option.helper}</span>
+                </TooltipContent>
+              </Tooltip>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium leading-none">{option.label}</span>
+                <span className="sr-only">
+                  {option.description}. {option.helper}
+                </span>
               </span>
-              <span className="mt-1 block text-[11px] font-medium uppercase tracking-[0.12em] text-foreground/45">
-                {option.helper}
-              </span>
-            </span>
-            <DropdownMenuShortcut>{option.shortcut}</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        ))}
-        <DropdownMenuSeparator />
-        <div className="px-2 py-2 text-[11px] leading-relaxed text-muted-foreground">
-          Horizontal layouts work well for mindmap storytelling. Vertical layouts work
-          better when you want people to scan a summary top-to-bottom.
-        </div>
+              <DropdownMenuShortcut>{option.shortcut}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          ))}
+        </TooltipProvider>
       </DropdownMenuContent>
     </DropdownMenu>
   );

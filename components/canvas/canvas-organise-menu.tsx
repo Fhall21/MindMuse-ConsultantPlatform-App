@@ -272,10 +272,10 @@ export function CanvasOrganiseMenu({
                 <TooltipContent
                   side="left"
                   sideOffset={8}
-                  className="max-w-56 text-left leading-snug"
+                  className="max-w-64 flex-col items-start text-left leading-snug"
                 >
-                  <span className="block">{option.description}</span>
-                  <span className="mt-1 block text-background/75">{option.helper}</span>
+                  <span className="block font-medium">{option.description}</span>
+                  <span className="block text-background/85">{option.helper}</span>
                 </TooltipContent>
               </Tooltip>
               <span className="min-w-0 flex-1">

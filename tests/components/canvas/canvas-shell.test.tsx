@@ -304,4 +304,34 @@ describe("CanvasShell", () => {
       direction: "LR",
     });
   });
+
+  it("resets organising state after completion so a second organise action can run", async () => {
+    renderShell();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Select nodes"));
+    });
+
+    await act(async () => {
+      fireEvent.pointerDown(screen.getAllByRole("button", { name: "Organise selected" })[0]!);
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByText("Top to bottom"));
+    });
+
+    expect(screen.queryByText("Organising...")).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.pointerDown(screen.getAllByRole("button", { name: "Organise selected" })[0]!);
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByText("Left to right"));
+    });
+
+    expect(lastSubmittedLayoutRequest).toEqual({
+      id: 2,
+      nodeIds: ["insight-1", "insight-2"],
+      direction: "LR",
+    });
+  });
 });

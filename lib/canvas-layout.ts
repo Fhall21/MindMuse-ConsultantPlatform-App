@@ -16,7 +16,9 @@ export type CanvasLayoutDirection = "LR" | "TB" | "RL" | "BT";
 
 const LAYOUT_NODE_SEP = 72;
 const LAYOUT_RANK_SEP = 108;
+const LAYOUT_EDGE_SEP = 40;
 const LAYOUT_MARGIN = 24;
+const COMPONENT_GAP = 136;
 
 interface ReorganisableNode {
   id: string;
@@ -39,6 +41,11 @@ interface BuildCanvasReorganiseLayoutParams {
   selectedNodeIds: string[];
   direction?: CanvasLayoutDirection;
   runtimePositions?: Record<string, CanvasPosition>;
+}
+
+interface EntityEdge {
+  source: string;
+  target: string;
 }
 
 function getNodePosition(
@@ -160,6 +167,154 @@ function computeEntityId(
   return null;
 }
 
+function dedupeEntityEdges(edges: EntityEdge[]) {
+  const seen = new Set<string>();
+
+  return edges.filter((edge) => {
+    const key = `${edge.source}->${edge.target}`;
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildEntityEdges(
+  edges: CanvasEdge[],
+  nodesById: Map<string, CanvasNode>,
+  eligibleNodeIds: Set<string>
+) {
+  return dedupeEntityEdges(
+    edges
+      .map((edge) => {
+        const sourceEntityId = computeEntityId(edge.source_node_id, nodesById, eligibleNodeIds);
+        const targetEntityId = computeEntityId(edge.target_node_id, nodesById, eligibleNodeIds);
+
+        if (!sourceEntityId || !targetEntityId || sourceEntityId === targetEntityId) {
+          return null;
+        }
+
+        return {
+          source: sourceEntityId,
+          target: targetEntityId,
+        } satisfies EntityEdge;
+      })
+      .filter((edge): edge is EntityEdge => Boolean(edge))
+  );
+}
+
+function getSecondaryAxisValue(
+  node: ReorganisableNode,
+  direction: CanvasLayoutDirection
+) {
+  return direction === "LR" || direction === "RL" ? node.position.y : node.position.x;
+}
+
+function findConnectedComponents(
+  nodes: ReorganisableNode[],
+  edges: EntityEdge[]
+) {
+  const adjacency = new Map<string, Set<string>>();
+  const nodesById = new Map(nodes.map((node) => [node.id, node] as const));
+
+  nodes.forEach((node) => {
+    adjacency.set(node.id, new Set());
+  });
+
+  edges.forEach((edge) => {
+    adjacency.get(edge.source)?.add(edge.target);
+    adjacency.get(edge.target)?.add(edge.source);
+  });
+
+  const visited = new Set<string>();
+  const components: ReorganisableNode[][] = [];
+
+  for (const node of nodes) {
+    if (visited.has(node.id)) {
+      continue;
+    }
+
+    const stack = [node.id];
+    const component: ReorganisableNode[] = [];
+    visited.add(node.id);
+
+    while (stack.length > 0) {
+      const nextId = stack.pop();
+      if (!nextId) {
+        continue;
+      }
+
+      const nextNode = nodesById.get(nextId);
+      if (nextNode) {
+        component.push(nextNode);
+      }
+
+      adjacency.get(nextId)?.forEach((adjacentId) => {
+        if (visited.has(adjacentId)) {
+          return;
+        }
+
+        visited.add(adjacentId);
+        stack.push(adjacentId);
+      });
+    }
+
+    components.push(component);
+  }
+
+  return components;
+}
+
+function layoutComponent(
+  nodes: ReorganisableNode[],
+  edges: EntityEdge[],
+  direction: CanvasLayoutDirection
+) {
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+  dagreGraph.setGraph({
+    rankdir: direction,
+    align: "UL",
+    nodesep: LAYOUT_NODE_SEP,
+    ranksep: LAYOUT_RANK_SEP,
+    edgesep: LAYOUT_EDGE_SEP,
+    marginx: LAYOUT_MARGIN,
+    marginy: LAYOUT_MARGIN,
+    ranker: "tight-tree",
+    acyclicer: "greedy",
+  });
+
+  nodes.forEach((node) => {
+    dagreGraph.setNode(node.id, { width: node.width, height: node.height });
+  });
+
+  edges.forEach((edge) => {
+    dagreGraph.setEdge(edge.source, edge.target, {
+      minlen: 1,
+      weight: 3,
+    });
+  });
+
+  dagre.layout(dagreGraph);
+
+  return nodes.map((node) => {
+    const positioned = dagreGraph.node(node.id) ?? {
+      x: node.width / 2,
+      y: node.height / 2,
+    };
+
+    return {
+      ...node,
+      position: {
+        x: positioned.x - node.width / 2,
+        y: positioned.y - node.height / 2,
+      },
+    };
+  });
+}
+
 export function buildCanvasReorganiseLayout({
   nodes,
   edges,
@@ -178,37 +333,7 @@ export function buildCanvasReorganiseLayout({
 
   const nodesById = new Map(nodes.map((node) => [node.id, node] as const));
   const eligibleNodeIds = new Set(eligibleNodes.map((node) => node.id));
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({
-    rankdir: direction,
-    align: "UL",
-    nodesep: LAYOUT_NODE_SEP,
-    ranksep: LAYOUT_RANK_SEP,
-    marginx: LAYOUT_MARGIN,
-    marginy: LAYOUT_MARGIN,
-  });
-
-  eligibleNodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: node.width, height: node.height });
-  });
-
-  edges.forEach((edge) => {
-    const sourceEntityId = computeEntityId(edge.source_node_id, nodesById, eligibleNodeIds);
-    const targetEntityId = computeEntityId(edge.target_node_id, nodesById, eligibleNodeIds);
-
-    if (
-      !sourceEntityId ||
-      !targetEntityId ||
-      sourceEntityId === targetEntityId
-    ) {
-      return;
-    }
-
-    dagreGraph.setEdge(sourceEntityId, targetEntityId);
-  });
-
-  dagre.layout(dagreGraph);
+  const entityEdges = buildEntityEdges(edges, nodesById, eligibleNodeIds);
 
   const currentBounds = computeBoundingBox(eligibleNodes);
   const currentNodeById = new Map(eligibleNodes.map((node) => [node.id, node] as const));
@@ -217,20 +342,47 @@ export function buildCanvasReorganiseLayout({
     y: (currentBounds.minY + currentBounds.maxY) / 2,
   };
 
-  const laidOutNodes = eligibleNodes.map((node) => {
-    const positioned = dagreGraph.node(node.id) ?? {
-      x: node.width / 2,
-      y: node.height / 2,
-    };
+  let secondaryOffset = 0;
+  const laidOutNodes = findConnectedComponents(eligibleNodes, entityEdges)
+    .sort((left, right) => {
+      const leftAnchor = Math.min(...left.map((node) => getSecondaryAxisValue(node, direction)));
+      const rightAnchor = Math.min(...right.map((node) => getSecondaryAxisValue(node, direction)));
+      return leftAnchor - rightAnchor;
+    })
+    .flatMap((componentNodes) => {
+      const componentIds = new Set(componentNodes.map((node) => node.id));
+      const componentEdges = entityEdges.filter(
+        (edge) => componentIds.has(edge.source) && componentIds.has(edge.target)
+      );
+      const laidOutComponent = layoutComponent(componentNodes, componentEdges, direction);
+      const componentBounds = computeBoundingBox(laidOutComponent);
+      const adjustedComponent = laidOutComponent.map((node) => {
+        if (direction === "LR" || direction === "RL") {
+          return {
+            ...node,
+            position: {
+              x: node.position.x,
+              y: node.position.y - componentBounds.minY + secondaryOffset,
+            },
+          };
+        }
 
-    return {
-      ...node,
-      position: {
-        x: positioned.x - node.width / 2,
-        y: positioned.y - node.height / 2,
-      },
-    };
-  });
+        return {
+          ...node,
+          position: {
+            x: node.position.x - componentBounds.minX + secondaryOffset,
+            y: node.position.y,
+          },
+        };
+      });
+
+      secondaryOffset +=
+        (direction === "LR" || direction === "RL"
+          ? componentBounds.maxY - componentBounds.minY
+          : componentBounds.maxX - componentBounds.minX) + COMPONENT_GAP;
+
+      return adjustedComponent;
+    });
 
   const laidOutBounds = computeBoundingBox(laidOutNodes);
   const laidOutCenter = {

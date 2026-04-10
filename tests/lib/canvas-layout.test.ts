@@ -116,6 +116,46 @@ describe("buildCanvasReorganiseLayout", () => {
     expect(result?.positions["insight-a"].y).toBeLessThan(result?.positions["insight-b"].y ?? 0);
   });
 
+  it("keeps a connected three-node thread in visual order", () => {
+    const nodes = [
+      createInsightNode("insight-a", { x: 540, y: 340 }),
+      createInsightNode("insight-b", { x: 140, y: 120 }),
+      createInsightNode("insight-c", { x: 760, y: 200 }),
+    ];
+    const edges: CanvasEdge[] = [
+      {
+        id: "edge-a-b",
+        source_node_id: "insight-a",
+        target_node_id: "insight-b",
+        connection_type: "causes",
+        note: null,
+        created_by: "user-1",
+        created_at: "2026-04-10T00:00:00.000Z",
+        updated_at: "2026-04-10T00:00:00.000Z",
+      },
+      {
+        id: "edge-b-c",
+        source_node_id: "insight-b",
+        target_node_id: "insight-c",
+        connection_type: "supports",
+        note: null,
+        created_by: "user-1",
+        created_at: "2026-04-10T00:00:00.000Z",
+        updated_at: "2026-04-10T00:00:00.000Z",
+      },
+    ];
+
+    const result = buildCanvasReorganiseLayout({
+      nodes,
+      edges,
+      selectedNodeIds: ["insight-a", "insight-b", "insight-c"],
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.positions["insight-a"].x).toBeLessThan(result?.positions["insight-b"].x ?? 0);
+    expect(result?.positions["insight-b"].x).toBeLessThan(result?.positions["insight-c"].x ?? 0);
+  });
+
   it("moves grouped members with their selected theme and uses member edges for direction", () => {
     const nodes = [
       createThemeNode("theme-a", { x: 520, y: 260 }, ["insight-a"]),

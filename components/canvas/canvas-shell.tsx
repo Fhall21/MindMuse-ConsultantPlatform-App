@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { ChevronLeft, Sparkles } from "lucide-react";
@@ -62,6 +62,8 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     nodeIds: string[];
     direction: CanvasLayoutDirection;
   } | null>(null);
+  const nextLayoutRequestIdRef = useRef(1);
+  const organiseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track which theme group IDs were titled by AI so cards can show the indicator
   const [aiGeneratedGroupIds, setAiGeneratedGroupIds] = useState<Set<string>>(new Set());
 
@@ -108,6 +110,15 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     posthog.capture("canvas_opened", { round_id: roundId });
   }, [roundId]);
 
+  useEffect(
+    () => () => {
+      if (organiseTimeoutRef.current) {
+        clearTimeout(organiseTimeoutRef.current);
+      }
+    },
+    []
+  );
+
   // Stable — prevents ReactFlow from rebuilding its selection handler on every render
   const handleCanvasSelectionChange = useCallback((nextIds: string[]) => {
     setSelectedNodeIds((current) =>
@@ -120,15 +131,24 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
       return;
     }
 
+    if (organiseTimeoutRef.current) {
+      clearTimeout(organiseTimeoutRef.current);
+    }
+
     setShowSuggestions(false);
     setSelectedEdgeId(null);
     setConnectionPrompt(null);
     setIsReorganising(true);
-    setLayoutRequest((current) => ({
-      id: (current?.id ?? 0) + 1,
+    setLayoutRequest({
+      id: nextLayoutRequestIdRef.current++,
       nodeIds: selectedNodeIds.length >= 2 ? selectedNodeIds : [],
       direction,
-    }));
+    });
+    organiseTimeoutRef.current = setTimeout(() => {
+      setIsReorganising(false);
+      setLayoutRequest(null);
+      toast.error("Canvas organise took too long. Try again.");
+    }, 4000);
   }, [canReorganiseCanvas, isReorganising, selectedNodeIds]);
 
   const handleLayoutComplete = useCallback((result: {
@@ -137,6 +157,11 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     scope: "selected" | "all";
     direction: CanvasLayoutDirection;
   }) => {
+    if (organiseTimeoutRef.current) {
+      clearTimeout(organiseTimeoutRef.current);
+      organiseTimeoutRef.current = null;
+    }
+
     setIsReorganising(false);
     setLayoutRequest(null);
 

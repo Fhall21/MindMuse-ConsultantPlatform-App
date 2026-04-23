@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import {
@@ -203,6 +203,25 @@ export async function listDigitalInterviewFlowsForUser(userId: string) {
     .orderBy(desc(digitalInterviewFlows.createdAt));
 
   return rows.map(mapFlowRow);
+}
+
+export async function countUnreadDigitalInterviewCompletionsForUser(userId: string) {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(digitalInterviewResponses)
+    .innerJoin(digitalInterviewFlows, eq(digitalInterviewResponses.flowId, digitalInterviewFlows.id))
+    .where(
+      and(
+        eq(digitalInterviewFlows.userId, userId),
+        eq(digitalInterviewFlows.status, "active"),
+        eq(digitalInterviewResponses.status, "completed"),
+        gte(digitalInterviewResponses.createdAt, since)
+      )
+    );
+
+  return row?.count ?? 0;
 }
 
 export async function createDigitalInterviewFlow(

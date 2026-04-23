@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { responseToTranscript } from "@/lib/digital-interviews";
+import { formatDigitalInterviewFramework, responseToTranscript } from "@/lib/digital-interviews";
 
 describe("responseToTranscript", () => {
   it("keeps only user turns", () => {
@@ -13,5 +13,13 @@ describe("responseToTranscript", () => {
         ],
       } as never)
     ).toBe("First answer\n\nSecond answer");
+  });
+});
+
+describe("formatDigitalInterviewFramework", () => {
+  it("formats framework labels", () => {
+    expect(formatDigitalInterviewFramework("appreciative_inquiry")).toBe("Appreciative Inquiry");
+    expect(formatDigitalInterviewFramework("psychological_safety")).toBe("Psychological Safety");
+    expect(formatDigitalInterviewFramework("custom")).toBe("Custom");
   });
 });

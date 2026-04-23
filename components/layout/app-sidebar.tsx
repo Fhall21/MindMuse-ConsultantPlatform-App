@@ -18,6 +18,7 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { useDigitalInterviewUnreadCount } from "@/hooks/use-digital-interviews";
 
 const consultationsSubItems = [
   { title: "All Meetings", href: "/meetings" },
@@ -33,6 +34,8 @@ const settingsSubItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const unreadCountQuery = useDigitalInterviewUnreadCount();
+  const unreadCount = unreadCountQuery.data ?? 0;
   const isInConsultations =
     pathname.startsWith("/meetings") || pathname.startsWith("/consultations");
   const isInSettings = pathname.startsWith("/settings");
@@ -87,6 +90,21 @@ export function AppSidebar() {
                   </Collapsible.Content>
                 </SidebarMenuItem>
               </Collapsible.Root>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.startsWith("/digital-interviews")}>
+                  <Link href="/digital-interviews">
+                    <span className="flex w-full items-center justify-between gap-2">
+                      <span>Digital Interviews</span>
+                      {unreadCount > 0 ? (
+                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted-foreground px-1.5 text-[10px] font-medium text-background">
+                          {unreadCount > 9 ? "9+" : unreadCount}
+                        </span>
+                      ) : null}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname.startsWith("/people")}>

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 
-const PUBLIC_PATH_PREFIXES = ["/login", "/callback", "/share"];
+const PUBLIC_PATH_PREFIXES = ["/login", "/callback", "/share", "/interview"];
 
 export async function proxy(request: NextRequest) {
   const isPublicPath = PUBLIC_PATH_PREFIXES.some((prefix) =>

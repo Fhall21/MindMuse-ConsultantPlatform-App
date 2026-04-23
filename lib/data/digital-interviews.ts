@@ -477,7 +477,7 @@ export async function completeDigitalInterviewSession(params: {
   });
 }
 
-export function formatInterviewSessionTurn(content: string, role: "user" | "assistant") {
+export async function formatInterviewSessionTurn(content: string, role: "user" | "assistant") {
   return {
     role,
     content,

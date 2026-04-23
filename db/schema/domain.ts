@@ -94,6 +94,21 @@ export const meetings = pgTable(
   })
 );
 
+export const organisations = pgTable(
+  "organisations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    ...timestamps,
+  },
+  (table) => ({
+    userIdx: index("idx_organisations_user_id").on(table.userId),
+  })
+);
+
 export const insights = pgTable(
   "insights",
   {
@@ -123,6 +138,9 @@ export const people = pgTable(
     workType: text("work_type"),
     role: text("role"),
     email: text("email"),
+    organisationId: uuid("organisation_id").references(() => organisations.id, {
+      onDelete: "set null",
+    }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -130,6 +148,103 @@ export const people = pgTable(
   },
   (table) => ({
     userIdx: index("idx_people_user_id").on(table.userId),
+  })
+);
+
+export const digitalInterviewFlows = pgTable(
+  "digital_interview_flows",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    consultationId: uuid("consultation_id").references(() => consultations.id, {
+      onDelete: "set null",
+    }),
+    title: text("title").notNull(),
+    framework: text("framework").notNull(),
+    customFrameworkPrompt: text("custom_framework_prompt"),
+    topics: jsonb("topics")
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    depthLevel: text("depth_level").default("moderate").notNull(),
+    status: text("status").default("draft").notNull(),
+    completedCount: integer("completed_count").default(0).notNull(),
+    shareToken: uuid("share_token").defaultRandom().notNull().unique(),
+    ...timestamps,
+  },
+  (table) => ({
+    statusCheck: check(
+      "digital_interview_flows_status_check",
+      sql`${table.status} in ('draft', 'active', 'closed')`
+    ),
+    depthCheck: check(
+      "digital_interview_flows_depth_check",
+      sql`${table.depthLevel} in ('surface', 'moderate', 'deep')`
+    ),
+    frameworkCheck: check(
+      "digital_interview_flows_framework_check",
+      sql`${table.framework} in ('appreciative_inquiry', 'psychological_safety', 'custom')`
+    ),
+    userIdx: index("idx_digital_interview_flows_user_id").on(table.userId),
+    consultationIdx: index("idx_digital_interview_flows_consultation_id").on(table.consultationId),
+    shareTokenIdx: uniqueIndex("idx_digital_interview_flows_share_token").on(table.shareToken),
+  })
+);
+
+export const digitalInterviewResponses = pgTable(
+  "digital_interview_responses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    flowId: uuid("flow_id")
+      .notNull()
+      .references(() => digitalInterviewFlows.id, { onDelete: "cascade" }),
+    sessionToken: uuid("session_token").defaultRandom().notNull().unique(),
+    intervieweeName: text("interviewee_name"),
+    intervieweeEmail: text("interviewee_email"),
+    intervieweeRole: text("interviewee_role"),
+    intervieweeWorkGroup: text("interviewee_work_group"),
+    intervieweeOrganisation: text("interviewee_organisation"),
+    personId: uuid("person_id").references(() => people.id, { onDelete: "set null" }),
+    personMatchConfidence: text("person_match_confidence"),
+    conversationHistory: jsonb("conversation_history")
+      .$type<Array<{ role: "user" | "assistant"; content: string; timestamp: string }>>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    status: text("status").default("in_progress").notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => ({
+    statusCheck: check(
+      "digital_interview_responses_status_check",
+      sql`${table.status} in ('in_progress', 'completed', 'abandoned')`
+    ),
+    flowIdx: index("idx_digital_interview_responses_flow_id").on(table.flowId),
+    sessionTokenIdx: uniqueIndex("idx_digital_interview_responses_session_token").on(
+      table.sessionToken
+    ),
+    statusIdx: index("idx_digital_interview_responses_status").on(table.status),
+    personIdx: index("idx_digital_interview_responses_person_id").on(table.personId),
+  })
+);
+
+export const featureInterests = pgTable(
+  "feature_interests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    featureKey: text("feature_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userFeatureUnique: unique("feature_interests_user_feature_key").on(
+      table.userId,
+      table.featureKey
+    ),
   })
 );
 

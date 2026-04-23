@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # --- Learning signals (Stage 4: user-scoped theme personalization) ---
@@ -115,6 +115,36 @@ class EmailDraftRequest(BaseModel):
 class EmailDraftResponse(BaseModel):
     subject: str
     body: str
+
+
+# --- Digital interview chat ---
+
+
+class InterviewChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class InterviewTopicProgress(BaseModel):
+    topic: str
+    covered: bool
+
+
+class InterviewChatRequest(BaseModel):
+    system_prompt: str = Field(alias="systemPrompt")
+    messages: List[InterviewChatMessage]
+    tools: List[Dict[str, Any]] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class InterviewChatResponse(BaseModel):
+    assistant_message: str = Field(alias="assistantMessage")
+    is_complete: bool = Field(alias="isComplete")
+    topics_covered: List[str] = Field(default_factory=list, alias="topicsCovered")
+    coverage_note: Optional[str] = Field(default=None, alias="coverageNote")
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 # --- Round workflow drafts and outputs ---

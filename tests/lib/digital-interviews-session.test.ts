@@ -97,6 +97,8 @@ vi.mock("@/db/client", () => ({
 import { responseToTranscript } from "@/lib/digital-interviews";
 import {
   createOrResumeDigitalInterviewSession,
+  appendDigitalInterviewMessage,
+  getPublicDigitalInterviewSessionContext,
   updateDigitalInterviewSessionDetails,
 } from "@/lib/data/digital-interviews";
 
@@ -207,5 +209,88 @@ describe("lib/data/digital-interviews", () => {
         intervieweeEmail: "alex@example.com",
       }),
     });
+  });
+
+  it("returns the public session context for chat", async () => {
+    testState.selectQueue = [
+      [
+        {
+          id: "flow-1",
+          userId: "user-1",
+          consultationId: null,
+          title: "Digital interview",
+          framework: "appreciative_inquiry",
+          customFrameworkPrompt: null,
+          topics: ["Workload", "Support"],
+          depthLevel: "moderate",
+          status: "active",
+          completedCount: 0,
+          shareToken: "share-1",
+          createdAt: new Date("2026-04-23T10:00:00.000Z"),
+          updatedAt: new Date("2026-04-23T10:00:00.000Z"),
+        },
+      ],
+      [
+        {
+          id: "response-1",
+          flowId: "flow-1",
+          sessionToken: "session-1",
+          intervieweeName: "Alex",
+          intervieweeEmail: null,
+          intervieweeRole: "Manager",
+          intervieweeWorkGroup: "Operations",
+          intervieweeOrganisation: "Example Org",
+          personId: null,
+          personMatchConfidence: null,
+          conversationHistory: [{ role: "assistant", content: "Welcome", timestamp: "2026-04-23T10:00:00.000Z" }],
+          status: "in_progress",
+          completedAt: null,
+          createdAt: new Date("2026-04-23T10:00:00.000Z"),
+          updatedAt: new Date("2026-04-23T10:00:00.000Z"),
+        },
+      ],
+    ];
+
+    await expect(getPublicDigitalInterviewSessionContext("share-1", "session-1")).resolves.toMatchObject({
+      flow: {
+        title: "Digital interview",
+        topics: ["Workload", "Support"],
+      },
+      session: {
+        interviewee_name: "Alex",
+        status: "in_progress",
+      },
+    });
+  });
+
+  it("does not append messages to completed sessions", async () => {
+    testState.selectQueue = [
+      [
+        {
+          id: "flow-1",
+          status: "active",
+        },
+      ],
+      [
+        {
+          id: "response-1",
+          status: "completed",
+        },
+      ],
+    ];
+
+    await expect(
+      appendDigitalInterviewMessage({
+        shareToken: "share-1",
+        sessionToken: "session-1",
+        message: {
+          role: "user",
+          content: "Hello",
+          timestamp: "2026-04-23T10:00:00.000Z",
+        },
+      })
+    ).resolves.toBeNull();
+
+    expect(testState.updateCalls).toHaveLength(0);
   });
 });

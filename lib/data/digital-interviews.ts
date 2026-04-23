@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import {
@@ -112,6 +112,11 @@ export interface DigitalInterviewResponseRecord {
   updated_at: string;
 }
 
+export interface PublicDigitalInterviewSessionContext {
+  flow: PublicDigitalInterviewFlow;
+  session: DigitalInterviewResponseRecord;
+}
+
 function toIsoString(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
 }
@@ -203,6 +208,26 @@ async function getSessionRow(flowId: string, sessionToken: string) {
     .limit(1);
 
   return response ?? null;
+}
+
+export async function getPublicDigitalInterviewSessionContext(
+  shareToken: string,
+  sessionToken: string
+): Promise<PublicDigitalInterviewSessionContext | null> {
+  const flow = await getPublicFlowRow(shareToken);
+  if (!flow) {
+    return null;
+  }
+
+  const session = await getSessionRow(flow.id, sessionToken);
+  if (!session) {
+    return null;
+  }
+
+  return {
+    flow: mapPublicFlowRow(flow),
+    session: mapResponseRow(session),
+  };
 }
 
 export async function listDigitalInterviewFlowsForUser(userId: string) {
@@ -359,7 +384,7 @@ export async function appendDigitalInterviewMessage(params: {
   }
 
   const session = await getSessionRow(flow.id, params.sessionToken);
-  if (!session) {
+  if (!session || session.status !== "in_progress") {
     return null;
   }
 
@@ -424,7 +449,7 @@ export async function completeDigitalInterviewSession(params: {
     await transaction
       .update(digitalInterviewFlows)
       .set({
-        completedCount: flow.completedCount + 1,
+        completedCount: sql`${digitalInterviewFlows.completedCount} + 1`,
         updatedAt: now,
       })
       .where(eq(digitalInterviewFlows.id, flow.id));

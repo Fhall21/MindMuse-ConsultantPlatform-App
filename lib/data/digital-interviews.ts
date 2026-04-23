@@ -47,6 +47,14 @@ export const digitalInterviewSessionCreateSchema = z.object({
   sessionToken: z.string().uuid().optional().nullable(),
 });
 
+export const digitalInterviewSessionDetailsSchema = z.object({
+  name: z.string().trim().min(1),
+  role: z.string().trim().min(1),
+  workGroup: z.string().trim().min(1),
+  organisation: z.string().trim().min(1),
+  email: z.string().trim().email().optional().nullable(),
+});
+
 export const digitalInterviewMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.string().trim().min(1),
@@ -83,6 +91,7 @@ export interface PublicDigitalInterviewFlow {
   custom_framework_prompt: string | null;
   topics: string[];
   depth_level: z.infer<typeof digitalInterviewDepthSchema>;
+  status: "draft" | "active" | "closed";
 }
 
 export interface DigitalInterviewResponseRecord {
@@ -133,6 +142,7 @@ function mapPublicFlowRow(row: DigitalInterviewFlowRow): PublicDigitalInterviewF
     custom_framework_prompt: row.customFrameworkPrompt,
     topics: row.topics ?? [],
     depth_level: row.depthLevel as PublicDigitalInterviewFlow["depth_level"],
+    status: row.status as PublicDigitalInterviewFlow["status"],
   };
 }
 
@@ -174,7 +184,7 @@ async function getPublicFlowRow(shareToken: string) {
   const [flow] = await db
     .select()
     .from(digitalInterviewFlows)
-    .where(and(eq(digitalInterviewFlows.shareToken, shareToken), eq(digitalInterviewFlows.status, "active")))
+    .where(eq(digitalInterviewFlows.shareToken, shareToken))
     .limit(1);
 
   return flow ?? null;
@@ -281,11 +291,16 @@ export async function createOrResumeDigitalInterviewSession(
     return null;
   }
 
-  const sessionToken = input.sessionToken ?? randomUUID();
-  const existing = await getSessionRow(flow.id, sessionToken);
-  if (existing) {
+  if (flow.status !== "active") {
+    return null;
+  }
+
+  const existing = input.sessionToken ? await getSessionRow(flow.id, input.sessionToken) : null;
+  if (existing && (existing.status === "in_progress" || existing.status === "completed")) {
     return mapResponseRow(existing);
   }
+
+  const sessionToken = randomUUID();
 
   const [response] = await db
     .insert(digitalInterviewResponses)
@@ -298,6 +313,37 @@ export async function createOrResumeDigitalInterviewSession(
   return response ? mapResponseRow(response) : null;
 }
 
+export async function updateDigitalInterviewSessionDetails(params: {
+  shareToken: string;
+  sessionToken: string;
+  details: z.infer<typeof digitalInterviewSessionDetailsSchema>;
+}) {
+  const flow = await getPublicFlowRow(params.shareToken);
+  if (!flow || flow.status !== "active") {
+    return null;
+  }
+
+  const session = await getSessionRow(flow.id, params.sessionToken);
+  if (!session || session.status !== "in_progress") {
+    return null;
+  }
+
+  const [updated] = await db
+    .update(digitalInterviewResponses)
+    .set({
+      intervieweeName: params.details.name,
+      intervieweeRole: params.details.role,
+      intervieweeWorkGroup: params.details.workGroup,
+      intervieweeOrganisation: params.details.organisation,
+      intervieweeEmail: params.details.email ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(digitalInterviewResponses.id, session.id))
+    .returning();
+
+  return updated ? mapResponseRow(updated) : null;
+}
+
 export async function appendDigitalInterviewMessage(params: {
   shareToken: string;
   sessionToken: string;
@@ -305,6 +351,10 @@ export async function appendDigitalInterviewMessage(params: {
 }) {
   const flow = await getPublicFlowRow(params.shareToken);
   if (!flow) {
+    return null;
+  }
+
+  if (flow.status !== "active") {
     return null;
   }
 
@@ -333,6 +383,10 @@ export async function completeDigitalInterviewSession(params: {
 }) {
   const flow = await getPublicFlowRow(params.shareToken);
   if (!flow) {
+    return null;
+  }
+
+  if (flow.status !== "active") {
     return null;
   }
 

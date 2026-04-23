@@ -1,22 +1,46 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 const digitalInterviewMock = vi.hoisted(() => ({
   getPublicDigitalInterviewFlow: vi.fn(),
   createOrResumeDigitalInterviewSession: vi.fn(),
+  updateDigitalInterviewSessionDetails: vi.fn(),
   appendDigitalInterviewMessage: vi.fn(),
   completeDigitalInterviewSession: vi.fn(),
 }));
 
-vi.mock("@/lib/data/digital-interviews", async () => ({
-  ...(await vi.importActual<typeof import("@/lib/data/digital-interviews")>(
-    "@/lib/data/digital-interviews"
-  )),
+vi.mock("@/db/client", () => ({
+  db: {},
+}));
+vi.mock("@/app/api/client/_helpers", () => ({
+  jsonError: (detail: string, status = 500) => new Response(JSON.stringify({ detail }), { status }),
+}));
+vi.mock("@/lib/api/route-helpers", () => ({
+  parseJsonBodyOrResponse: async (request: Request) => request.json(),
+}));
+vi.mock("@/lib/data/digital-interviews", () => ({
+  digitalInterviewSessionCreateSchema: z.object({
+    sessionToken: z.string().uuid().optional().nullable(),
+  }),
+  digitalInterviewMessageSchema: z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string().trim().min(1),
+    timestamp: z.string().datetime().optional(),
+  }),
+  digitalInterviewSessionDetailsSchema: z.object({
+    name: z.string().trim().min(1),
+    role: z.string().trim().min(1),
+    workGroup: z.string().trim().min(1),
+    organisation: z.string().trim().min(1),
+    email: z.string().trim().email().optional().nullable(),
+  }),
   ...digitalInterviewMock,
 }));
 
 import { GET as GETPublicDigitalInterviewFlow } from "@/app/api/public/digital-interviews/[shareToken]/route";
 import { POST as POSTDigitalInterviewSession } from "@/app/api/public/digital-interviews/[shareToken]/session/route";
+import { PATCH as PATCHDigitalInterviewSessionDetails } from "@/app/api/public/digital-interviews/[shareToken]/session/[sessionToken]/details/route";
 import { POST as POSTDigitalInterviewMessage } from "@/app/api/public/digital-interviews/[shareToken]/session/[sessionToken]/message/route";
 import { POST as POSTDigitalInterviewComplete } from "@/app/api/public/digital-interviews/[shareToken]/session/[sessionToken]/complete/route";
 
@@ -48,6 +72,16 @@ describe("digital interview public routes", () => {
     await expect(readJson(response)).resolves.toEqual({ data: { id: "flow-1" } });
   });
 
+  it("returns 404 when the public flow is missing", async () => {
+    digitalInterviewMock.getPublicDigitalInterviewFlow.mockResolvedValue(null);
+
+    const response = (await GETPublicDigitalInterviewFlow(jsonRequest("http://test") as NextRequest, {
+      params: Promise.resolve({ shareToken: "share-1" }),
+    })) as Response;
+
+    expect(response.status).toBe(404);
+  });
+
   it("creates or resumes session", async () => {
     digitalInterviewMock.createOrResumeDigitalInterviewSession.mockResolvedValue({ session_token: "session-1" });
 
@@ -58,6 +92,37 @@ describe("digital interview public routes", () => {
 
     expect(response.status).toBe(200);
     await expect(readJson(response)).resolves.toEqual({ data: { session_token: "session-1" } });
+  });
+
+  it("saves onboarding details for a session", async () => {
+    digitalInterviewMock.updateDigitalInterviewSessionDetails.mockResolvedValue({
+      session_token: "session-1",
+      interviewee_name: "Alex",
+    });
+
+    const response = (await PATCHDigitalInterviewSessionDetails(
+      jsonRequest("http://test", {
+        name: "Alex",
+        role: "Manager",
+        work_group: "Operations",
+        organisation: "Example Org",
+        email: "alex@example.com",
+      }) as NextRequest,
+      { params: Promise.resolve({ shareToken: "share-1", sessionToken: "session-1" }) }
+    )) as Response;
+
+    expect(response.status).toBe(200);
+    expect(digitalInterviewMock.updateDigitalInterviewSessionDetails).toHaveBeenCalledWith({
+      shareToken: "share-1",
+      sessionToken: "session-1",
+      details: {
+        name: "Alex",
+        role: "Manager",
+        workGroup: "Operations",
+        organisation: "Example Org",
+        email: "alex@example.com",
+      },
+    });
   });
 
   it("appends message", async () => {

@@ -1,24 +1,12 @@
 "use client";
 
+import { InterviewChatPage } from "@/components/interview/interview-chat-page";
 import { InterviewOnboardingForm } from "@/components/interview/interview-onboarding-form";
 import { InterviewStateScreen } from "@/components/interview/interview-state-screen";
 import { InterviewSessionContext, useInterviewSession } from "@/hooks/use-interview-session";
 
 interface InterviewSessionPageProps {
   shareToken: string;
-}
-
-function InterviewChatPlaceholder() {
-  return (
-    <div className="mx-auto flex min-h-[70vh] max-w-md items-center px-4 py-12 sm:py-16">
-      <div className="w-full space-y-3 border border-border/60 bg-background p-6 shadow-xs">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Interview ready</h1>
-        <p className="text-sm leading-6 text-muted-foreground">
-          Your guided conversation will appear here.
-        </p>
-      </div>
-    </div>
-  );
 }
 
 export function InterviewSessionPage({ shareToken }: InterviewSessionPageProps) {
@@ -83,7 +71,7 @@ export function InterviewSessionPage({ shareToken }: InterviewSessionPageProps) 
 
   return (
     <InterviewSessionContext.Provider value={session.contextValue}>
-      <InterviewChatPlaceholder />
+      <InterviewChatPage shareToken={shareToken} />
     </InterviewSessionContext.Provider>
   );
 }

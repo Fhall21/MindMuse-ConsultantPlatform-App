@@ -1,5 +1,3 @@
-"use server";
-
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -8,6 +6,12 @@ import {
   digitalInterviewFlows,
   digitalInterviewResponses,
 } from "@/db/schema";
+import {
+  digitalInterviewGuardrailConfigSchema,
+  normalizeGuardrailConfig,
+  type DigitalInterviewGuardrailConfig,
+  type DigitalInterviewGuardrailSource,
+} from "@/lib/digital-interview-guardrails";
 import type { DigitalInterviewConversationTurn } from "@/lib/digital-interviews";
 
 export const digitalInterviewFrameworkSchema = z.enum([
@@ -26,6 +30,7 @@ export const digitalInterviewFlowCreateSchema = z
     framework: digitalInterviewFrameworkSchema,
     customFrameworkPrompt: z.string().trim().min(1).optional().nullable(),
     topics: z.array(z.string().trim().min(1)).default([]),
+    guardrailsConfig: digitalInterviewGuardrailConfigSchema.optional(),
     depthLevel: digitalInterviewDepthSchema.default("moderate"),
     consultationId: z.string().uuid().optional().nullable(),
   })
@@ -72,6 +77,7 @@ export interface DigitalInterviewFlowListItem {
   framework: z.infer<typeof digitalInterviewFrameworkSchema>;
   custom_framework_prompt: string | null;
   topics: string[];
+  guardrails_config: DigitalInterviewGuardrailConfig;
   depth_level: z.infer<typeof digitalInterviewDepthSchema>;
   status: "draft" | "active" | "closed";
   completed_count: number;
@@ -90,6 +96,7 @@ export interface DigitalInterviewResponseSummary {
   status: "in_progress" | "completed" | "abandoned";
   completed_at: string | null;
   created_at: string;
+  boundary_moments: DigitalInterviewBoundaryMoment[];
 }
 
 export interface DigitalInterviewFlowDetail extends DigitalInterviewFlowListItem {
@@ -102,6 +109,7 @@ export interface PublicDigitalInterviewFlow {
   framework: z.infer<typeof digitalInterviewFrameworkSchema>;
   custom_framework_prompt: string | null;
   topics: string[];
+  guardrails_config: DigitalInterviewGuardrailConfig;
   depth_level: z.infer<typeof digitalInterviewDepthSchema>;
   status: "draft" | "active" | "closed";
 }
@@ -124,6 +132,14 @@ export interface DigitalInterviewResponseRecord {
   updated_at: string;
 }
 
+export interface DigitalInterviewBoundaryMoment {
+  source: DigitalInterviewGuardrailSource;
+  label: string;
+  reason: string | null;
+  turn_index: number;
+  timestamp: string | null;
+}
+
 export interface PublicDigitalInterviewSessionContext {
   flow: PublicDigitalInterviewFlow;
   session: DigitalInterviewResponseRecord;
@@ -142,6 +158,7 @@ function mapFlowRow(row: DigitalInterviewFlowRow): DigitalInterviewFlowListItem 
     framework: row.framework as DigitalInterviewFlowListItem["framework"],
     custom_framework_prompt: row.customFrameworkPrompt,
     topics: row.topics ?? [],
+    guardrails_config: normalizeGuardrailConfig(row.guardrailsConfig),
     depth_level: row.depthLevel as DigitalInterviewFlowListItem["depth_level"],
     status: row.status as DigitalInterviewFlowListItem["status"],
     completed_count: row.completedCount,
@@ -158,6 +175,7 @@ function mapPublicFlowRow(row: DigitalInterviewFlowRow): PublicDigitalInterviewF
     framework: row.framework as PublicDigitalInterviewFlow["framework"],
     custom_framework_prompt: row.customFrameworkPrompt,
     topics: row.topics ?? [],
+    guardrails_config: normalizeGuardrailConfig(row.guardrailsConfig),
     depth_level: row.depthLevel as PublicDigitalInterviewFlow["depth_level"],
     status: row.status as PublicDigitalInterviewFlow["status"],
   };
@@ -183,7 +201,29 @@ function mapResponseRow(row: DigitalInterviewResponseRow): DigitalInterviewRespo
   };
 }
 
+function extractBoundaryMoments(
+  history: DigitalInterviewConversationTurn[]
+): DigitalInterviewBoundaryMoment[] {
+  return history.flatMap((turn, index) => {
+    const metadata = turn.metadata;
+    if (!metadata?.boundaryLabel || !metadata.boundarySource) {
+      return [];
+    }
+
+    return [
+      {
+        source: metadata.boundarySource,
+        label: metadata.boundaryLabel,
+        reason: metadata.boundaryReason ?? null,
+        turn_index: index + 1,
+        timestamp: turn.timestamp ?? null,
+      },
+    ];
+  });
+}
+
 function mapResponseRowSummary(row: DigitalInterviewResponseRow): DigitalInterviewResponseSummary {
+  const conversationHistory = row.conversationHistory as DigitalInterviewConversationTurn[];
   return {
     id: row.id,
     flow_id: row.flowId,
@@ -194,6 +234,7 @@ function mapResponseRowSummary(row: DigitalInterviewResponseRow): DigitalIntervi
     status: row.status as DigitalInterviewResponseSummary["status"],
     completed_at: toIsoString(row.completedAt),
     created_at: row.createdAt.toISOString(),
+    boundary_moments: extractBoundaryMoments(conversationHistory),
   };
 }
 
@@ -299,6 +340,7 @@ export async function createDigitalInterviewFlow(
       customFrameworkPrompt:
         input.framework === "custom" ? input.customFrameworkPrompt ?? null : null,
       topics: input.topics,
+      guardrailsConfig: normalizeGuardrailConfig(input.guardrailsConfig),
       depthLevel: input.depthLevel,
     })
     .returning();

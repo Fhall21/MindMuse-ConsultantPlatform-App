@@ -15,6 +15,12 @@ export type DigitalInterviewConversationTurn = {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  metadata?: {
+    boundaryId?: string;
+    boundaryLabel?: string;
+    boundarySource?: "universal" | "recommended" | "custom";
+    boundaryReason?: string;
+  };
 };
 
 export function formatDigitalInterviewFramework(framework: DigitalInterviewFramework) {

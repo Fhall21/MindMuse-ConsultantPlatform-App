@@ -1,0 +1,1 @@
+ALTER TABLE "digital_interview_flows" ADD COLUMN "guardrails_config" jsonb DEFAULT '{"acceptedRecommendedIds":[],"dismissedRecommendedIds":[],"customGuardrails":[]}'::jsonb NOT NULL;

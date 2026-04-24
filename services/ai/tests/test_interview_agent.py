@@ -22,12 +22,15 @@ from models.schemas import InterviewChatRequest  # noqa: E402
 
 class FakeCompletions:
     def __init__(self, response):
-        self._response = response
+        self._responses = response if isinstance(response, list) else [response]
         self.calls = []
 
     def create(self, **kwargs):
         self.calls.append(kwargs)
-        return self._response
+        response = self._responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 class FakeClient:
@@ -123,3 +126,93 @@ def test_create_completion_forces_completion_at_limit(monkeypatch):
     assert result.is_complete is True
     assert result.coverage_note == "Conversation reached the 40-turn limit."
     assert result.assistant_message == "Final check-in"
+
+
+def test_create_completion_falls_back_on_empty_model_response(monkeypatch):
+    settings.openai_api_key = "sk-test"
+    response = SimpleNamespace(choices=[])
+    fake_client = FakeClient(response)
+    monkeypatch.setattr("routers.interview.get_client", lambda: fake_client)
+
+    result = _run(
+        _create_completion(
+            InterviewChatRequest(
+                systemPrompt="You are a qualitative interviewer.",
+                messages=[
+                    {"role": "assistant", "content": "What has helped recently?"},
+                    {"role": "user", "content": "Support from my manager."},
+                ],
+            )
+        )
+    )
+
+    assert result.is_complete is False
+    assert result.assistant_message == "What has helped recently? Could you tell me more?"
+
+
+def test_create_completion_maps_refusal_to_safe_follow_up(monkeypatch):
+    settings.openai_api_key = "sk-test"
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="",
+                    refusal="I cannot help with that.",
+                    tool_calls=[],
+                )
+            )
+        ]
+    )
+    fake_client = FakeClient(response)
+    monkeypatch.setattr("routers.interview.get_client", lambda: fake_client)
+
+    result = _run(_create_completion(_build_request()))
+
+    assert result.is_complete is False
+    assert result.assistant_message == "I'd like to explore that differently. Could you tell me a bit more about that?"
+
+
+def test_create_completion_retries_connection_once(monkeypatch):
+    class FakeAPIConnectionError(Exception):
+        pass
+
+    async def no_sleep(*_args):
+        return None
+
+    settings.openai_api_key = "sk-test"
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="Recovered", tool_calls=[]))]
+    )
+    fake_client = FakeClient([FakeAPIConnectionError("timeout"), response])
+    monkeypatch.setattr("routers.interview.APIConnectionError", FakeAPIConnectionError)
+    monkeypatch.setattr("routers.interview.get_client", lambda: fake_client)
+    monkeypatch.setattr("routers.interview.asyncio.sleep", no_sleep)
+
+    result = _run(_create_completion(_build_request()))
+
+    assert result.assistant_message == "Recovered"
+    assert len(fake_client.chat.completions.calls) == 2
+
+
+def test_create_completion_retries_529_overload(monkeypatch):
+    class FakeAPIStatusError(Exception):
+        def __init__(self, status_code: int):
+            super().__init__("overloaded")
+            self.status_code = status_code
+
+    async def no_sleep(*_args):
+        return None
+
+    settings.openai_api_key = "sk-test"
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="Recovered", tool_calls=[]))]
+    )
+    fake_client = FakeClient([FakeAPIStatusError(529), response])
+    monkeypatch.setattr("routers.interview.APIStatusError", FakeAPIStatusError)
+    monkeypatch.setattr("routers.interview.get_client", lambda: fake_client)
+    monkeypatch.setattr("routers.interview.asyncio.sleep", no_sleep)
+
+    result = _run(_create_completion(_build_request()))
+
+    assert result.assistant_message == "Recovered"
+    assert len(fake_client.chat.completions.calls) == 2

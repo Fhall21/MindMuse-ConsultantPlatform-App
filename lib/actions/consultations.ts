@@ -198,11 +198,21 @@ export async function updateNotes({
   notes: string;
 }) {
   const userId = await requireCurrentUserId();
-  await requireOwnedMeeting(id, userId);
-  void notes;
-  throw new Error(
-    "Meeting notes are not available yet in the Drizzle schema. Add the notes column migration before using this action."
-  );
+  const meeting = await requireOwnedMeeting(id, userId);
+  ensureMeetingIsEditable(meeting);
+
+  await db
+    .update(meetings)
+    .set({ notes })
+    .where(and(eq(meetings.id, id), eq(meetings.userId, userId)));
+
+  await emitAuditEvent({
+    consultationId: id,
+    action: AUDIT_ACTIONS.MEETING_NOTES_EDITED,
+    entityType: "meeting",
+    entityId: id,
+    metadata: { notes_length: notes.length },
+  });
 }
 
 export async function markMeetingComplete(id: string) {

@@ -209,10 +209,11 @@ export async function rejectTheme(
     })
     .returning({ id: insightDecisionLogs.id });
 
-  // Delete the theme
+  // Soft-delete the theme so it persists for the Rejected tab and audit trail
   try {
     await db
-      .delete(insights)
+      .update(insights)
+      .set({ rejected: true, rejectedAt: new Date() })
       .where(and(eq(insights.id, id), eq(insights.meetingId, normalizedMeetingId)));
   } catch (error) {
     await db.delete(insightDecisionLogs).where(eq(insightDecisionLogs.id, logRecord.id));
@@ -291,4 +292,43 @@ export async function addUserTheme(
   await triggerLearningAnalysisIfReady(userId);
 
   return themeData;
+}
+
+/**
+ * Restore a previously rejected theme back to pending review.
+ */
+export async function restoreTheme(
+  id: string,
+  meetingId: string,
+) {
+  const userId = await requireCurrentUserId();
+  const normalizedMeetingId = normalizeRequiredId(meetingId, "Meeting ID");
+  const { meeting, theme } = await requireOwnedTheme(id, normalizedMeetingId, userId);
+
+  await db
+    .update(insights)
+    .set({ rejected: false, rejectedAt: null, accepted: false })
+    .where(and(eq(insights.id, id), eq(insights.meetingId, normalizedMeetingId)));
+
+  await db.insert(insightDecisionLogs).values({
+    userId,
+    meetingId: normalizedMeetingId,
+    insightId: id,
+    insightLabel: theme.label,
+    consultationId: meeting.consultationId ?? null,
+    decisionType: "restore",
+    rationale: null,
+  });
+
+  await emitAuditEvent({
+    consultationId: normalizedMeetingId,
+    action: AUDIT_ACTIONS.THEME_RESTORED,
+    entityType: "theme",
+    entityId: id,
+    metadata: {
+      decision_type: "restore",
+      theme_label: theme.label,
+      consultation_id: meeting.consultationId,
+    },
+  });
 }

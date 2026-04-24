@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v4";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, ShieldCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,8 +29,23 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  DIGITAL_INTERVIEW_CUSTOM_FRAMEWORK,
+  DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_LABELS,
+  DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_ORDER,
+  DIGITAL_INTERVIEW_FRAMEWORK_LABELS,
+  DIGITAL_INTERVIEW_FRAMEWORKS,
+  DIGITAL_INTERVIEW_FRAMEWORK_VALUES,
+  getDigitalInterviewFrameworkById,
+  type DigitalInterviewFrameworkCategory,
+} from "@/lib/digital-interview-frameworks";
 import { fetchJson } from "@/hooks/api";
 import { useConsultations } from "@/hooks/use-consultations";
+import {
+  UNIVERSAL_DIGITAL_INTERVIEW_GUARDRAILS,
+  recommendDigitalInterviewGuardrails,
+  type DigitalInterviewGuardrail,
+} from "@/lib/digital-interview-guardrails";
 import type { DigitalInterviewFlowListItem } from "@/lib/data/digital-interviews";
 import type { Consultation } from "@/types/db";
 
@@ -39,44 +55,8 @@ const STEPS = [
   { label: "Consultation & title", hint: "Link to a project and name this round." },
   { label: "Framework", hint: "Choose how the AI interviewer will approach the conversation." },
   { label: "Topics & depth", hint: "Define what to cover and how deeply to probe." },
+  { label: "Boundaries", hint: "Review fixed rules and add project-specific limits." },
   { label: "Review", hint: "Confirm your settings before creating." },
-] as const;
-
-const FRAMEWORK_DEFAULTS: Record<string, string[]> = {
-  appreciative_inquiry: [
-    "Peak experiences",
-    "Core values",
-    "Future vision",
-    "Enabling conditions",
-  ],
-  psychological_safety: [
-    "Voice and speaking up",
-    "Failure and learning",
-    "Inclusion and belonging",
-    "Leadership behaviour",
-  ],
-  custom: [],
-};
-
-const FRAMEWORK_OPTIONS = [
-  {
-    value: "appreciative_inquiry",
-    label: "Appreciative Inquiry",
-    description:
-      "Focuses on strengths, successes, and what is working well. Best for change programmes and culture work.",
-  },
-  {
-    value: "psychological_safety",
-    label: "Psychological Safety",
-    description:
-      "Explores team dynamics, speaking up, and interpersonal risk-taking. Best for team health assessments.",
-  },
-  {
-    value: "custom",
-    label: "Custom",
-    description:
-      "You define the interview's focus. Provide a brief description and the AI will use it as its guiding intent.",
-  },
 ] as const;
 
 const DEPTH_OPTIONS = [
@@ -100,12 +80,6 @@ const DEPTH_OPTIONS = [
   },
 ] as const;
 
-const FRAMEWORK_LABELS: Record<string, string> = {
-  appreciative_inquiry: "Appreciative Inquiry",
-  psychological_safety: "Psychological Safety",
-  custom: "Custom",
-};
-
 const DEPTH_LABELS: Record<string, string> = {
   surface: "Surface — 5–10 min",
   moderate: "Moderate — 15–20 min",
@@ -118,13 +92,18 @@ const formSchema = z
   .object({
     title: z.string().trim().min(1, "Title is required").max(255),
     consultationId: z.string().nullable().optional(),
-    framework: z.enum(["appreciative_inquiry", "psychological_safety", "custom"]),
+    framework: z.enum(DIGITAL_INTERVIEW_FRAMEWORK_VALUES),
     customFrameworkPrompt: z.string().trim().min(1).nullable().optional(),
     topics: z
       .array(z.object({ value: z.string().trim().min(1, "Topic cannot be empty") }))
       .min(1, "At least one topic is required")
       .max(8),
     depthLevel: z.enum(["surface", "moderate", "deep"]),
+    acceptedRecommendedGuardrailIds: z.array(z.string()),
+    dismissedRecommendedGuardrailIds: z.array(z.string()),
+    customGuardrails: z
+      .array(z.object({ value: z.string().trim().min(1, "Boundary cannot be empty").max(240) }))
+      .max(8),
   })
   .superRefine((val, ctx) => {
     if (val.framework === "custom" && !val.customFrameworkPrompt?.trim()) {
@@ -142,6 +121,7 @@ const STEP_FIELDS: Record<number, (keyof FormData)[]> = {
   0: ["title"],
   1: ["framework", "customFrameworkPrompt"],
   2: ["topics", "depthLevel"],
+  3: ["acceptedRecommendedGuardrailIds", "dismissedRecommendedGuardrailIds", "customGuardrails"],
 };
 
 // ─── Root component ───────────────────────────────────────────────────────────
@@ -162,8 +142,13 @@ export function FlowBuilder() {
       consultationId: null,
       framework: "appreciative_inquiry",
       customFrameworkPrompt: null,
-      topics: FRAMEWORK_DEFAULTS.appreciative_inquiry.map((v) => ({ value: v })),
+      topics: (getDigitalInterviewFrameworkById("appreciative_inquiry")?.defaultTopics ?? []).map(
+        (topic) => ({ value: topic })
+      ),
       depthLevel: "moderate",
+      acceptedRecommendedGuardrailIds: [],
+      dismissedRecommendedGuardrailIds: [],
+      customGuardrails: [],
     },
     mode: "onTouched",
   });
@@ -182,10 +167,24 @@ export function FlowBuilder() {
     control,
     name: "topics",
   });
+  const {
+    fields: customGuardrailFields,
+    append: appendCustomGuardrail,
+    remove: removeCustomGuardrail,
+  } = useFieldArray({
+    control,
+    name: "customGuardrails",
+  });
 
   const framework = watch("framework");
   const consultationId = watch("consultationId");
   const formValues = watch();
+  const recommendedGuardrails = recommendDigitalInterviewGuardrails({
+    title: formValues.title,
+    framework,
+    customFrameworkPrompt: formValues.customFrameworkPrompt,
+    topics: formValues.topics.map((topic) => topic.value),
+  });
 
   const selectedConsultation = (consultations as Consultation[]).find(
     (c) => c.id === consultationId
@@ -193,8 +192,8 @@ export function FlowBuilder() {
 
   function handleFrameworkChange(value: string) {
     setValue("framework", value as FormData["framework"]);
-    const defaults = FRAMEWORK_DEFAULTS[value] ?? [];
-    setValue("topics", defaults.map((v) => ({ value: v })));
+    const defaults = getDigitalInterviewFrameworkById(value as FormData["framework"]);
+    setValue("topics", (defaults?.defaultTopics ?? []).map((v) => ({ value: v })));
     if (value !== "custom") {
       setValue("customFrameworkPrompt", null);
     }
@@ -217,6 +216,11 @@ export function FlowBuilder() {
         framework: data.framework,
         customFrameworkPrompt: data.customFrameworkPrompt ?? null,
         topics: data.topics.map((t) => t.value),
+        guardrailsConfig: {
+          acceptedRecommendedIds: data.acceptedRecommendedGuardrailIds,
+          dismissedRecommendedIds: data.dismissedRecommendedGuardrailIds,
+          customGuardrails: data.customGuardrails.map((item) => item.value),
+        },
         depthLevel: data.depthLevel,
         consultationId: data.consultationId ?? null,
       };
@@ -291,6 +295,39 @@ export function FlowBuilder() {
 
             {step === 3 && (
               <Step4
+                recommendedGuardrails={recommendedGuardrails}
+                acceptedRecommendedIds={formValues.acceptedRecommendedGuardrailIds}
+                dismissedRecommendedIds={formValues.dismissedRecommendedGuardrailIds}
+                customGuardrailFields={customGuardrailFields}
+                errors={errors}
+                register={register}
+                onAcceptRecommended={(id) => {
+                  setValue("acceptedRecommendedGuardrailIds", [
+                    ...new Set([...formValues.acceptedRecommendedGuardrailIds, id]),
+                  ]);
+                  setValue(
+                    "dismissedRecommendedGuardrailIds",
+                    formValues.dismissedRecommendedGuardrailIds.filter((item) => item !== id)
+                  );
+                }}
+                onDismissRecommended={(id) => {
+                  setValue("dismissedRecommendedGuardrailIds", [
+                    ...new Set([...formValues.dismissedRecommendedGuardrailIds, id]),
+                  ]);
+                  setValue(
+                    "acceptedRecommendedGuardrailIds",
+                    formValues.acceptedRecommendedGuardrailIds.filter((item) => item !== id)
+                  );
+                }}
+                onAddCustomGuardrail={() => {
+                  if (customGuardrailFields.length < 8) appendCustomGuardrail({ value: "" });
+                }}
+                onRemoveCustomGuardrail={removeCustomGuardrail}
+              />
+            )}
+
+            {step === 4 && (
+              <Step5
                 values={formValues}
                 selectedConsultation={selectedConsultation}
               />
@@ -443,9 +480,9 @@ function Step1({
                   {consultations.length === 0 ? (
                     <span className="text-sm">
                       No consultations yet.{" "}
-                      <a href="/consultations/new" className="underline underline-offset-2">
+                      <Link href="/consultations/new" className="underline underline-offset-2">
                         Create one
-                      </a>
+                      </Link>
                     </span>
                   ) : (
                     "No results."
@@ -498,6 +535,29 @@ interface Step2Props {
 }
 
 function Step2({ framework, errors, onFrameworkChange, register }: Step2Props) {
+  const [frameworkOpen, setFrameworkOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<DigitalInterviewFrameworkCategory | "all">(
+    "all"
+  );
+
+  const selectedFramework = getDigitalInterviewFrameworkById(framework) ?? DIGITAL_INTERVIEW_CUSTOM_FRAMEWORK;
+  const categoryGroups =
+    categoryFilter === "all"
+      ? DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_ORDER.map((category) => ({
+          category,
+          frameworks: DIGITAL_INTERVIEW_FRAMEWORKS.filter(
+            (definition) => definition.categories[0] === category
+          ),
+        })).filter((group) => group.frameworks.length > 0)
+      : [
+          {
+            category: categoryFilter,
+            frameworks: DIGITAL_INTERVIEW_FRAMEWORKS.filter((definition) =>
+              definition.categories.some((frameworkCategory) => frameworkCategory === categoryFilter)
+            ),
+          },
+        ];
+
   return (
     <div className="space-y-7">
       <SectionHeading
@@ -505,34 +565,121 @@ function Step2({ framework, errors, onFrameworkChange, register }: Step2Props) {
         description="Choose the approach the AI interviewer will use to guide the conversation."
       />
 
-      <RadioGroup
-        value={framework}
-        onValueChange={onFrameworkChange}
-        className="gap-2"
-      >
-        {FRAMEWORK_OPTIONS.map((opt) => (
-          <label
-            key={opt.value}
-            htmlFor={`framework-${opt.value}`}
-            className={cn(
-              "flex cursor-pointer items-start gap-3 rounded-md border p-4 transition-colors",
-              framework === opt.value
-                ? "border-primary bg-primary/5"
-                : "border-border hover:border-foreground/25"
-            )}
-          >
-            <RadioGroupItem
-              id={`framework-${opt.value}`}
-              value={opt.value}
-              className="mt-0.5 shrink-0"
-            />
-            <div className="min-w-0 space-y-1">
-              <p className="text-sm font-medium leading-none">{opt.label}</p>
-              <p className="text-sm text-muted-foreground">{opt.description}</p>
-            </div>
-          </label>
-        ))}
-      </RadioGroup>
+      <div className="space-y-2">
+        <Label>Framework</Label>
+        <Popover open={frameworkOpen} onOpenChange={setFrameworkOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={frameworkOpen}
+              className="w-full max-w-2xl justify-between font-normal"
+            >
+              <span className={cn(!selectedFramework && "text-muted-foreground")}>{selectedFramework?.label ?? "Select a framework"}</span>
+              <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-40" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search frameworks…" />
+              <div className="flex flex-wrap gap-2 border-b px-3 py-3">
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilter("all")}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs transition-colors",
+                    categoryFilter === "all"
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-border text-muted-foreground hover:border-foreground/25 hover:text-foreground"
+                  )}
+                >
+                  All categories
+                </button>
+                {DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_ORDER.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => setCategoryFilter(category)}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs transition-colors",
+                      categoryFilter === category
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border text-muted-foreground hover:border-foreground/25 hover:text-foreground"
+                    )}
+                  >
+                    {DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_LABELS[category]}
+                  </button>
+                ))}
+              </div>
+              <CommandList>
+                <CommandEmpty>No frameworks match this search.</CommandEmpty>
+                {categoryGroups.map(({ category, frameworks }) => (
+                  <CommandGroup key={category} heading={DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_LABELS[category]}>
+                    {frameworks.map((opt) => (
+                      <CommandItem
+                        key={opt.id}
+                        value={`${opt.label} ${opt.description} ${opt.categories
+                          .map((cat) => DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_LABELS[cat])
+                          .join(" ")}`}
+                        onSelect={() => {
+                          onFrameworkChange(opt.id);
+                          setFrameworkOpen(false);
+                        }}
+                        className="items-start py-2.5"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 mt-0.5 size-4 shrink-0",
+                            framework === opt.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium leading-none">{opt.label}</span>
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_LABELS[category]}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{opt.description}</p>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                ))}
+                <CommandGroup heading="Custom">
+                  <CommandItem
+                    value={`${DIGITAL_INTERVIEW_CUSTOM_FRAMEWORK.label} ${DIGITAL_INTERVIEW_CUSTOM_FRAMEWORK.description}`}
+                    onSelect={() => {
+                      onFrameworkChange("custom");
+                      setFrameworkOpen(false);
+                    }}
+                    className="items-start py-2.5"
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 mt-0.5 size-4 shrink-0",
+                        framework === "custom" ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium leading-none">Custom</span>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Freeform
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        You define the interview&apos;s focus. Provide a brief description and the AI will use it as its guiding intent.
+                      </p>
+                    </div>
+                  </CommandItem>
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
 
       {errors.framework && (
         <p className="text-sm text-destructive">{errors.framework.message}</p>
@@ -693,14 +840,181 @@ function Step3({
   );
 }
 
-// ─── Step 4: Review ───────────────────────────────────────────────────────────
+// ─── Step 4: Boundaries ───────────────────────────────────────────────────────
 
 interface Step4Props {
+  recommendedGuardrails: DigitalInterviewGuardrail[];
+  acceptedRecommendedIds: string[];
+  dismissedRecommendedIds: string[];
+  customGuardrailFields: ReturnType<typeof useFieldArray<FormData, "customGuardrails">>["fields"];
+  errors: ReturnType<typeof useForm<FormData>>["formState"]["errors"];
+  register: ReturnType<typeof useForm<FormData>>["register"];
+  onAcceptRecommended: (id: string) => void;
+  onDismissRecommended: (id: string) => void;
+  onAddCustomGuardrail: () => void;
+  onRemoveCustomGuardrail: (index: number) => void;
+}
+
+function Step4({
+  recommendedGuardrails,
+  acceptedRecommendedIds,
+  dismissedRecommendedIds,
+  customGuardrailFields,
+  errors,
+  register,
+  onAcceptRecommended,
+  onDismissRecommended,
+  onAddCustomGuardrail,
+  onRemoveCustomGuardrail,
+}: Step4Props) {
+  const visibleRecommended = recommendedGuardrails.filter(
+    (guardrail) => !dismissedRecommendedIds.includes(guardrail.id)
+  );
+
+  return (
+    <div className="space-y-8">
+      <SectionHeading
+        title="Interview boundaries"
+        description="Fixed protections are always active. Add only boundaries that help this interview stay inside its intended scope."
+      />
+
+      <div className="space-y-3">
+        <BoundarySectionTitle title="Always on" />
+        <div className="space-y-2">
+          {UNIVERSAL_DIGITAL_INTERVIEW_GUARDRAILS.map((guardrail) => (
+            <div key={guardrail.id} className="rounded-md border border-border/70 p-3">
+              <div className="flex items-start gap-2">
+                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 space-y-1">
+                  <p className="text-sm font-medium">{guardrail.label}</p>
+                  <p className="text-sm text-muted-foreground">{guardrail.description}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <BoundarySectionTitle title="Recommended" />
+        {visibleRecommended.length === 0 ? (
+          <p className="rounded-md border border-dashed border-border/80 bg-muted/20 p-3 text-sm text-muted-foreground">
+            No extra boundaries recommended from these settings.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {visibleRecommended.map((guardrail) => {
+              const accepted = acceptedRecommendedIds.includes(guardrail.id);
+              return (
+                <div key={guardrail.id} className="rounded-md border border-border/70 p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-medium">{guardrail.label}</p>
+                      <p className="text-sm text-muted-foreground">{guardrail.description}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={accepted ? "ghost" : "outline"}
+                        disabled={accepted}
+                        onClick={() => onAcceptRecommended(guardrail.id)}
+                      >
+                        {accepted ? "Accepted" : "Accept"}
+                      </Button>
+                      {!accepted ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onDismissRecommended(guardrail.id)}
+                          className="text-muted-foreground"
+                        >
+                          Dismiss
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <BoundarySectionTitle title="Custom" />
+        <div className="space-y-2">
+          {customGuardrailFields.map((field, index) => (
+            <div key={field.id} className="flex items-start gap-2">
+              <Textarea
+                placeholder="e.g. Do not ask participants to name specific managers."
+                rows={2}
+                className="min-h-16 flex-1 resize-none"
+                {...register(`customGuardrails.${index}.value`)}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => onRemoveCustomGuardrail(index)}
+                aria-label="Remove custom boundary"
+                className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+          ))}
+
+          {Array.isArray(errors.customGuardrails) &&
+            errors.customGuardrails.map(
+              (error, index) =>
+                error?.value && (
+                  <p key={index} className="text-sm text-destructive">
+                    Boundary {index + 1}: {error.value.message}
+                  </p>
+                )
+            )}
+
+          {customGuardrailFields.length < 8 ? (
+            <button
+              type="button"
+              onClick={onAddCustomGuardrail}
+              className="flex items-center gap-1.5 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Plus className="size-3.5" />
+              Add custom boundary
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BoundarySectionTitle({ title }: { title: string }) {
+  return (
+    <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      {title}
+    </h3>
+  );
+}
+
+// ─── Step 5: Review ───────────────────────────────────────────────────────────
+
+interface Step5Props {
   values: FormData;
   selectedConsultation: Consultation | undefined;
 }
 
-function Step4({ values, selectedConsultation }: Step4Props) {
+function Step5({ values, selectedConsultation }: Step5Props) {
+  const activeRecommendationCount = values.acceptedRecommendedGuardrailIds.length;
+  const customGuardrailCount = values.customGuardrails.filter((item) => item.value.trim()).length;
+
   return (
     <div className="space-y-7">
       <SectionHeading
@@ -717,7 +1031,7 @@ function Step4({ values, selectedConsultation }: Step4Props) {
         />
         <ReviewRow
           label="Framework"
-          value={FRAMEWORK_LABELS[values.framework] ?? values.framework}
+          value={DIGITAL_INTERVIEW_FRAMEWORK_LABELS[values.framework] ?? values.framework}
         />
         {values.framework === "custom" && values.customFrameworkPrompt && (
           <ReviewRow label="Interview focus" value={values.customFrameworkPrompt} multiline />
@@ -730,6 +1044,14 @@ function Step4({ values, selectedConsultation }: Step4Props) {
         <ReviewRow
           label="Depth"
           value={DEPTH_LABELS[values.depthLevel] ?? values.depthLevel}
+        />
+        <ReviewRow
+          label="Boundaries"
+          value={[
+            `${UNIVERSAL_DIGITAL_INTERVIEW_GUARDRAILS.length} fixed`,
+            `${activeRecommendationCount} accepted`,
+            `${customGuardrailCount} custom`,
+          ].join(", ")}
           last
         />
       </div>

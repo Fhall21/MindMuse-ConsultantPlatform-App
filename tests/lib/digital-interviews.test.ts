@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatDigitalInterviewFramework, responseToTranscript } from "@/lib/digital-interviews";
+import {
+  DIGITAL_INTERVIEW_FRAMEWORK_LABELS,
+  formatDigitalInterviewFramework,
+  responseToTranscript,
+} from "@/lib/digital-interviews";
+import { DIGITAL_INTERVIEW_FRAMEWORKS } from "@/lib/digital-interview-frameworks";
 
 describe("responseToTranscript", () => {
   it("keeps only user turns", () => {
@@ -18,8 +23,11 @@ describe("responseToTranscript", () => {
 
 describe("formatDigitalInterviewFramework", () => {
   it("formats framework labels", () => {
-    expect(formatDigitalInterviewFramework("appreciative_inquiry")).toBe("Appreciative Inquiry");
-    expect(formatDigitalInterviewFramework("psychological_safety")).toBe("Psychological Safety");
+    for (const framework of DIGITAL_INTERVIEW_FRAMEWORKS) {
+      expect(formatDigitalInterviewFramework(framework.id)).toBe(framework.label);
+      expect(DIGITAL_INTERVIEW_FRAMEWORK_LABELS[framework.id]).toBe(framework.label);
+    }
+
     expect(formatDigitalInterviewFramework("custom")).toBe("Custom");
   });
 });

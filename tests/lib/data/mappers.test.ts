@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   mapConsultationRecord,
+  mapMeetingRecord,
   mapRoundOutputArtifactRecord,
   mapInsightRecord,
 } from "@/lib/data/mappers";
@@ -49,6 +50,45 @@ describe("lib/data/mappers", () => {
         createdAt,
       } as never).weight
     ).toBe(0.75);
+  });
+
+  it("maps meeting notes into the API-safe shape", () => {
+    const createdAt = new Date("2026-03-19T01:02:03.000Z");
+    const updatedAt = new Date("2026-03-19T04:05:06.000Z");
+
+    expect(
+      mapMeetingRecord({
+        id: "meeting-1",
+        title: "Meeting",
+        transcriptRaw: null,
+        notes: "Manual notes",
+        userId: "user-1",
+        status: "draft",
+        isArchived: false,
+        consultationId: null,
+        meetingTypeId: null,
+        meetingDate: null,
+        createdAt,
+        updatedAt,
+      } as never)
+    ).toEqual({
+      id: "meeting-1",
+      title: "Meeting",
+      label: "Meeting",
+      transcript_raw: null,
+      notes: "Manual notes",
+      description: null,
+      created_at: createdAt.toISOString(),
+      updated_at: updatedAt.toISOString(),
+      user_id: "user-1",
+      status: "draft",
+      is_archived: false,
+      consultation_id: null,
+      consultation_label: null,
+      people_names: [],
+      meeting_type_id: null,
+      meeting_date: null,
+    });
   });
 
   it("maps round output artifacts with serialized timestamps", () => {

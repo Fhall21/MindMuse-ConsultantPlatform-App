@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { fetchJson } from "@/hooks/api";
 import { useMeeting } from "@/hooks/use-meetings";
 import { useMeetingThemes } from "@/hooks/use-themes";
-import { acceptTheme, addUserTheme, rejectTheme, saveThemes } from "@/lib/actions/themes";
+import { acceptTheme, addUserTheme, rejectTheme, restoreTheme, saveThemes } from "@/lib/actions/themes";
 import { cn } from "@/lib/utils";
 import type { Insight } from "@/types/db";
 import posthog from "posthog-js";
@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeRejectionDialog } from "@/components/consultations/theme-rejection-dialog";
 
@@ -42,11 +43,6 @@ interface ThemeDetails {
   confidence?: number;
 }
 
-interface RejectedThemeSnapshot extends Insight {
-  confidence?: number;
-  rationale?: string;
-}
-
 interface ThemeDisplayItem {
   id: string;
   label: string;
@@ -54,7 +50,7 @@ interface ThemeDisplayItem {
   accepted: boolean;
   rejected: boolean;
   source: "ai" | "user";
-  rejectionRationale?: string;
+  confidence?: number;
 }
 
 function LoadingSpinner() {
@@ -78,13 +74,22 @@ async function readError(response: Response) {
   return text || `Request failed with status ${response.status}`;
 }
 
-async function extractThemes(transcript: string) {
+async function extractThemes(
+  transcript: string,
+  options?: { limit?: number; excludeLabels?: string[] }
+) {
   const response = await fetch(`/api/themes/extract`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ transcript }),
+    body: JSON.stringify({
+      transcript,
+      ...(options?.limit !== undefined && { limit: options.limit }),
+      ...(options?.excludeLabels && options.excludeLabels.length > 0 && {
+        exclude_labels: options.excludeLabels,
+      }),
+    }),
   });
 
   if (!response.ok) {
@@ -92,7 +97,18 @@ async function extractThemes(transcript: string) {
   }
 
   const payload = (await response.json()) as { themes?: ExtractedTheme[] };
-  return payload.themes ?? [];
+  let themes = payload.themes ?? [];
+
+  // Client-side fallback: filter out labels already present and enforce limit
+  if (options?.excludeLabels && options.excludeLabels.length > 0) {
+    const excluded = new Set(options.excludeLabels.map((l) => l.toLowerCase()));
+    themes = themes.filter((t) => !excluded.has(t.label.toLowerCase()));
+  }
+  if (options?.limit !== undefined) {
+    themes = themes.slice(0, options.limit);
+  }
+
+  return themes;
 }
 
 async function getClarificationQuestions(payload: { transcript: string; themes: string[] }) {
@@ -153,15 +169,16 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [isGeneratingMore, setIsGeneratingMore] = useState(false);
   const [isClarifying, setIsClarifying] = useState(false);
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
+  const [restoringThemeId, setRestoringThemeId] = useState<string | null>(null);
   const [confirmReextractOpen, setConfirmReextractOpen] = useState(false);
   const [clarificationOpen, setClarificationOpen] = useState(false);
   const [clarificationQuestions, setClarificationQuestions] = useState<string[]>([]);
   const [themeDetailsById, setThemeDetailsById] = useState<Record<string, ThemeDetails>>({});
-
-  // TODO: Agent 1 — persist rejected themes and rationale in DB/actions so this survives refresh.
-  const [rejectedThemes, setRejectedThemes] = useState<Record<string, RejectedThemeSnapshot>>({});
+  // IDs of themes currently animating out after rejection
+  const [collapsingIds, setCollapsingIds] = useState<Set<string>>(new Set());
 
   // Rejection dialog
   const [rejectionDialogTheme, setRejectionDialogTheme] = useState<Insight | null>(null);
@@ -179,7 +196,7 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
     setClarificationOpen(false);
     setClarificationQuestions([]);
     setThemeDetailsById({});
-    setRejectedThemes({});
+    setCollapsingIds(new Set());
     setAddThemeOpen(false);
     setAddThemeLabel("");
     setAddThemeDescription("");
@@ -190,74 +207,36 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
   const consultationIsLocked = meetingQuery.data?.meeting.status === "complete";
   const savedThemes = useMemo(() => themesQuery.data ?? [], [themesQuery.data]);
 
+  // Derive lists from DB-backed data (rejected is a column now)
+  const pendingThemes = useMemo(
+    () => savedThemes.filter((t) => !t.accepted && !t.rejected),
+    [savedThemes]
+  );
+  const acceptedThemes = useMemo(
+    () => savedThemes.filter((t) => t.accepted && !t.rejected),
+    [savedThemes]
+  );
   const rejectedThemeList = useMemo(
-    () => Object.values(rejectedThemes).sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)),
-    [rejectedThemes]
+    () => savedThemes.filter((t) => t.rejected),
+    [savedThemes]
+  );
+  const activeThemes = useMemo(
+    () => savedThemes.filter((t) => !t.rejected),
+    [savedThemes]
   );
 
   const acceptedThemeLabels = useMemo(
-    () =>
-      savedThemes
-        .filter((theme) => theme.accepted && !rejectedThemes[theme.id])
-        .map((theme) => theme.label),
-    [rejectedThemes, savedThemes]
+    () => acceptedThemes.map((t) => t.label),
+    [acceptedThemes]
   );
 
-  const acceptedThemeList = useMemo<ThemeDisplayItem[]>(
-    () =>
-      savedThemes
-        .filter((theme) => theme.accepted && !rejectedThemes[theme.id])
-        .map((theme) => ({
-          id: theme.id,
-          label: theme.label,
-          description: themeDetailsById[theme.id]?.description ?? theme.description ?? null,
-          accepted: true,
-          rejected: false,
-          source: theme.is_user_added ? ("user" as const) : ("ai" as const),
-        })),
-    [rejectedThemes, savedThemes, themeDetailsById]
+  const allActiveLabels = useMemo(
+    () => activeThemes.map((t) => t.label),
+    [activeThemes]
   );
 
-  const rejectedThemeDisplayList = useMemo<ThemeDisplayItem[]>(
-    () =>
-      rejectedThemeList.map((theme) => ({
-        id: theme.id,
-        label: theme.label,
-        description: theme.description ?? null,
-        accepted: false,
-        rejected: true,
-        source: theme.is_user_added ? ("user" as const) : ("ai" as const),
-        rejectionRationale: theme.rationale,
-      })),
-    [rejectedThemeList]
-  );
-
-  const reviewedCount = acceptedThemeList.length + rejectedThemeList.length;
-  const totalThemeCount = savedThemes.length + rejectedThemeList.length;
-  const pendingCount = savedThemes.filter((theme) => !theme.accepted && !rejectedThemes[theme.id]).length;
-  const allReviewed = totalThemeCount > 0 && pendingCount === 0;
-
-  const displayThemes = useMemo(() => {
-    const saved = savedThemes.map((theme) => ({
-      theme,
-      rejected: false,
-      details: themeDetailsById[theme.id],
-      source: theme.is_user_added ? ("user" as const) : ("ai" as const),
-    }));
-    const rejected = rejectedThemeList.map((theme) => ({
-      theme,
-      rejected: true,
-      details: {
-        description: theme.description,
-        confidence: theme.confidence,
-      },
-      source: theme.is_user_added ? ("user" as const) : ("ai" as const),
-    }));
-
-    return [...saved, ...rejected].sort(
-      (left, right) => Date.parse(right.theme.created_at) - Date.parse(left.theme.created_at)
-    );
-  }, [rejectedThemeList, savedThemes, themeDetailsById]);
+  const totalCount = savedThemes.length;
+  const allReviewed = activeThemes.length > 0 && pendingThemes.length === 0;
 
   async function refreshPanelData() {
     await Promise.all([
@@ -267,27 +246,34 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
     ]);
   }
 
-  async function runExtraction(options?: { replaceExisting?: boolean }) {
+  async function runExtraction(options?: { replaceExisting?: boolean; generateMore?: boolean }) {
     if (!transcript) {
       return;
     }
 
     setErrorMessage(null);
-    setIsExtracting(true);
+
+    if (options?.generateMore) {
+      setIsGeneratingMore(true);
+    } else {
+      setIsExtracting(true);
+    }
 
     try {
-      const extractedThemes = await extractThemes(transcript);
+      const extractOptions = options?.generateMore
+        ? { limit: 5, excludeLabels: allActiveLabels }
+        : undefined;
+
+      const extractedThemes = await extractThemes(transcript, extractOptions);
 
       if (extractedThemes.length === 0) {
-        throw new Error("The AI service did not return any themes.");
+        throw new Error("The AI service did not return any new themes.");
       }
 
       if (options?.replaceExisting) {
         await fetchJson<{ ok: true }>(
           `/api/client/themes/consultations/${resolvedMeetingId}`,
-          {
-            method: "DELETE",
-          }
+          { method: "DELETE" }
         );
       }
 
@@ -300,7 +286,7 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
         }))
       )) as Array<{ id: string }> | null;
 
-      const nextDetails: Record<string, ThemeDetails> = {};
+      const nextDetails: Record<string, ThemeDetails> = { ...themeDetailsById };
       savedThemeIds?.forEach((savedTheme, index) => {
         const extractedTheme = extractedThemes[index];
         if (savedTheme?.id && extractedTheme) {
@@ -312,14 +298,16 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
       });
 
       setThemeDetailsById(nextDetails);
-      setRejectedThemes({});
-      setClarificationQuestions([]);
-      setClarificationOpen(false);
-      setConfirmReextractOpen(false);
+      if (!options?.generateMore) {
+        setClarificationQuestions([]);
+        setClarificationOpen(false);
+        setConfirmReextractOpen(false);
+      }
 
       posthog.capture("themes_extracted", {
         theme_count: extractedThemes.length,
         replace_existing: options?.replaceExisting ?? false,
+        generate_more: options?.generateMore ?? false,
       });
 
       await refreshPanelData();
@@ -328,6 +316,7 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
       posthog.captureException(error instanceof Error ? error : new Error("Theme extraction failed"));
     } finally {
       setIsExtracting(false);
+      setIsGeneratingMore(false);
     }
   }
 
@@ -359,27 +348,23 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
     const theme = rejectionDialogTheme;
     if (!theme) return;
 
-    const details = themeDetailsById[theme.id];
-    const snapshot: RejectedThemeSnapshot = {
-      ...theme,
-      description: details?.description ?? theme.description ?? null,
-      confidence: details?.confidence,
-      rationale,
-    };
-
     setErrorMessage(null);
     setActiveThemeId(theme.id);
-    setRejectedThemes((current) => ({ ...current, [theme.id]: snapshot }));
     setRejectionDialogTheme(null);
+
+    // Start collapse animation
+    setCollapsingIds((prev) => new Set([...prev, theme.id]));
 
     try {
       await rejectTheme(theme.id, resolvedMeetingId!, rationale);
       posthog.capture("theme_rejected", { has_rationale: Boolean(rationale) });
+      // Brief delay so the animation has time to play before the DOM updates
+      await new Promise((r) => setTimeout(r, 250));
       await refreshPanelData();
     } catch (error) {
-      setRejectedThemes((current) => {
-        const next = { ...current };
-        delete next[theme.id];
+      setCollapsingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(theme.id);
         return next;
       });
       setErrorMessage(getErrorMessage(error));
@@ -390,6 +375,21 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
 
   function handleRejectionCancel() {
     setRejectionDialogTheme(null);
+  }
+
+  async function handleRestore(themeId: string) {
+    setRestoringThemeId(themeId);
+    setErrorMessage(null);
+
+    try {
+      await restoreTheme(themeId, resolvedMeetingId!);
+      posthog.capture("theme_restored");
+      await refreshPanelData();
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setRestoringThemeId(null);
+    }
   }
 
   async function handleAddCustomTheme() {
@@ -403,11 +403,8 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
     setIsAddingTheme(true);
 
     try {
-      // addUserTheme: sets is_user_added=true, accepted=true, weight=2.0, logs learning signal
       await addUserTheme(resolvedMeetingId!, label, addThemeDescription.trim() || undefined);
-
       posthog.capture("theme_added_manually", { has_description: Boolean(addThemeDescription.trim()) });
-
       setAddThemeLabel("");
       setAddThemeDescription("");
       setAddThemeOpen(false);
@@ -456,7 +453,7 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
           ) : null}
 
           {/* Empty state */}
-          {!meetingQuery.isPending && !themesQuery.isPending && totalThemeCount === 0 ? (
+          {!meetingQuery.isPending && !themesQuery.isPending && totalCount === 0 ? (
             <div className="space-y-3 rounded-lg border border-dashed border-border/80 bg-muted/20 p-4">
               <p className="text-sm text-muted-foreground">No themes extracted yet.</p>
               <div className="flex flex-wrap items-center gap-3">
@@ -496,283 +493,257 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
             </div>
           ) : null}
 
-          {/* In-progress review */}
-          {!meetingQuery.isPending && !themesQuery.isPending && totalThemeCount > 0 && !allReviewed ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">
-                  {reviewedCount} of {totalThemeCount} themes reviewed
-                </p>
-                {!addThemeOpen ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setAddThemeOpen(true)}
-                    disabled={isAddingTheme}
-                  >
-                    Add theme
-                  </Button>
-                ) : null}
-              </div>
-
-              {addThemeOpen ? (
-                <AddThemeForm
-                  label={addThemeLabel}
-                  error={addThemeError}
-                  isSubmitting={isAddingTheme}
-                  onLabelChange={(v) => { setAddThemeLabel(v); if (addThemeError) setAddThemeError(null); }}
-                  description={addThemeDescription}
-                  onDescriptionChange={setAddThemeDescription}
-                  onSubmit={() => void handleAddCustomTheme()}
-                  onCancel={() => { setAddThemeOpen(false); setAddThemeLabel(""); setAddThemeDescription(""); setAddThemeError(null); }}
-                />
-              ) : null}
-
-              <div className="space-y-3">
-                {displayThemes.map(({ theme, rejected, details, source }) => {
-                  const confidence = getConfidenceLabel(details?.confidence);
-                  const isAccepted = theme.accepted && !rejected;
-                  const isBusy = activeThemeId === theme.id;
-
-                  return (
-                    <div
-                      key={`${theme.id}-${rejected ? "rejected" : "current"}`}
-                      className={cn(
-                        "rounded-lg border p-4 transition-colors",
-                        isAccepted && "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20",
-                        rejected && "border-destructive/30 bg-destructive/5 opacity-75"
-                      )}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <p className={cn("font-medium", rejected && "line-through")}>{theme.label}</p>
-                          {(details?.description ?? theme.description) ? (
-                            <p className="text-sm text-muted-foreground">{details?.description ?? theme.description}</p>
-                          ) : null}
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          {/* Source badge */}
-                          {source === "user" ? (
-                            <Badge
-                              variant="outline"
-                              className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300"
-                            >
-                              User added
-                            </Badge>
-                          ) : (!isAccepted && !rejected) ? (
-                            <Badge
-                              variant="outline"
-                              className="border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-300"
-                            >
-                              AI suggested
-                            </Badge>
-                          ) : null}
-
-                          {/* Decision badges */}
-                          {isAccepted ? (
-                            <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
-                              Accepted
-                            </Badge>
-                          ) : null}
-                          {rejected ? <Badge variant="destructive">Rejected</Badge> : null}
-                          {!isAccepted && !rejected ? (
-                            <Badge variant="outline" className={confidence.className}>
-                              {confidence.label}
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      {/* Rejection rationale */}
-                      {rejected && rejectedThemes[theme.id]?.rationale ? (
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          <span className="font-medium">Rationale:</span>{" "}
-                          {rejectedThemes[theme.id].rationale}
-                        </p>
-                      ) : null}
-
-                      {!rejected ? (
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => void handleAccept(theme.id)}
-                            disabled={isAccepted || isBusy}
-                            className={cn(isAccepted && "bg-emerald-600 text-white hover:bg-emerald-600/90")}
-                          >
-                            {isBusy && !isAccepted ? <LoadingSpinner /> : null}
-                            Accept
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={isBusy}
-                            onClick={() => openRejectionDialog(theme)}
-                          >
-                            Reject
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          {/* All reviewed */}
-          {!meetingQuery.isPending && !themesQuery.isPending && allReviewed ? (
+          {/* Themes exist — show tabs */}
+          {!meetingQuery.isPending && !themesQuery.isPending && totalCount > 0 ? (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">{acceptedThemeList.length} themes accepted</p>
-                  <p className="text-xs text-muted-foreground">Review is complete for this extraction round.</p>
+              <Tabs defaultValue="active">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <TabsList>
+                    <TabsTrigger value="active">
+                      Active{activeThemes.length > 0 ? ` (${activeThemes.length})` : ""}
+                    </TabsTrigger>
+                    <TabsTrigger value="rejected">
+                      Rejected{rejectedThemeList.length > 0 ? ` (${rejectedThemeList.length})` : ""}
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* Actions alongside tabs */}
+                  <div className="flex items-center gap-2">
+                    {!addThemeOpen && !consultationIsLocked ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setAddThemeOpen(true)}
+                        disabled={isAddingTheme}
+                      >
+                        Add theme
+                      </Button>
+                    ) : null}
+                    {allReviewed ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isExtracting}
+                        onClick={() => setConfirmReextractOpen(true)}
+                      >
+                        {isExtracting ? <><LoadingSpinner />Extracting…</> : "Re-extract"}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {!addThemeOpen && !consultationIsLocked ? (
+
+                {addThemeOpen ? (
+                  <div className="mt-3">
+                    <AddThemeForm
+                      label={addThemeLabel}
+                      error={addThemeError}
+                      isSubmitting={isAddingTheme}
+                      onLabelChange={(v) => { setAddThemeLabel(v); if (addThemeError) setAddThemeError(null); }}
+                      description={addThemeDescription}
+                      onDescriptionChange={setAddThemeDescription}
+                      onSubmit={() => void handleAddCustomTheme()}
+                      onCancel={() => { setAddThemeOpen(false); setAddThemeLabel(""); setAddThemeDescription(""); setAddThemeError(null); }}
+                    />
+                  </div>
+                ) : null}
+
+                {/* ── Active tab ── */}
+                <TabsContent value="active" className="mt-3 space-y-3">
+                  {activeThemes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No active themes. All were rejected or none extracted yet.</p>
+                  ) : null}
+
+                  {!allReviewed && pendingThemes.length > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {acceptedThemes.length} of {activeThemes.length} themes reviewed
+                    </p>
+                  ) : null}
+
+                  {allReviewed && acceptedThemes.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">Review complete. {acceptedThemes.length} themes accepted.</p>
+                  ) : null}
+
+                  <div className="space-y-3">
+                    {activeThemes.map((theme) => {
+                      const details = themeDetailsById[theme.id];
+                      const confidence = getConfidenceLabel(details?.confidence);
+                      const isAccepted = theme.accepted;
+                      const isBusy = activeThemeId === theme.id;
+                      const isCollapsing = collapsingIds.has(theme.id);
+
+                      return (
+                        <div
+                          key={theme.id}
+                          className={cn(
+                            "overflow-hidden rounded-lg border p-4 transition-all duration-250",
+                            isAccepted && "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20",
+                            !isAccepted && "border-border/70",
+                            isCollapsing && "max-h-0 p-0 opacity-0 border-0"
+                          )}
+                          style={isCollapsing ? { maxHeight: 0, padding: 0, opacity: 0, borderWidth: 0 } : undefined}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <p className="font-medium">{theme.label}</p>
+                              {(details?.description ?? theme.description) ? (
+                                <p className="text-sm text-muted-foreground">{details?.description ?? theme.description}</p>
+                              ) : null}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              {theme.is_user_added ? (
+                                <Badge
+                                  variant="outline"
+                                  className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300"
+                                >
+                                  User added
+                                </Badge>
+                              ) : (!isAccepted) ? (
+                                <Badge
+                                  variant="outline"
+                                  className="border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-300"
+                                >
+                                  AI suggested
+                                </Badge>
+                              ) : null}
+
+                              {isAccepted ? (
+                                <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
+                                  Accepted
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className={confidence.className}>
+                                  {confidence.label}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => void handleAccept(theme.id)}
+                              disabled={isAccepted || isBusy}
+                              className={cn(isAccepted && "bg-emerald-600 text-white hover:bg-emerald-600/90")}
+                            >
+                              {isBusy && !isAccepted ? <LoadingSpinner /> : null}
+                              Accept
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={isBusy}
+                              onClick={() => openRejectionDialog(theme)}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Generate more — visible once themes exist */}
+                  <div className="pt-1">
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setAddThemeOpen(true)}
-                      disabled={isAddingTheme}
+                      disabled={!transcript || isExtracting || isGeneratingMore}
+                      onClick={() => void runExtraction({ generateMore: true })}
                     >
-                      Add theme
+                      {isGeneratingMore ? (
+                        <><LoadingSpinner />Generating…</>
+                      ) : (
+                        "Generate more insights"
+                      )}
                     </Button>
-                  ) : null}
-                  <Button variant="outline" disabled={isExtracting} onClick={() => setConfirmReextractOpen(true)}>
-                    {isExtracting ? (
-                      <>
-                        <LoadingSpinner />
-                        Extracting…
-                      </>
-                    ) : (
-                      "Re-extract"
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              {addThemeOpen ? (
-                <AddThemeForm
-                  label={addThemeLabel}
-                  description={addThemeDescription}
-                  error={addThemeError}
-                  isSubmitting={isAddingTheme}
-                  onLabelChange={(v) => { setAddThemeLabel(v); if (addThemeError) setAddThemeError(null); }}
-                  onDescriptionChange={setAddThemeDescription}
-                  onSubmit={() => void handleAddCustomTheme()}
-                  onCancel={() => { setAddThemeOpen(false); setAddThemeLabel(""); setAddThemeDescription(""); setAddThemeError(null); }}
-                />
-              ) : null}
-
-              {acceptedThemeList.length > 0 ? (
-                <div className="space-y-2">
-                  {acceptedThemeList.map((theme) => (
-                    <div
-                      key={theme.id}
-                      className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/20"
-                    >
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <p className="font-medium">{theme.label}</p>
-                        {theme.description ? (
-                          <p className="text-sm text-muted-foreground">{theme.description}</p>
-                        ) : null}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {theme.source === "user" ? (
-                          <Badge
-                            variant="outline"
-                            className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300"
-                          >
-                            User added
-                          </Badge>
-                        ) : null}
-                        <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
-                          Accepted
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No themes were accepted in the current review.</p>
-              )}
-
-              {rejectedThemeDisplayList.length > 0 ? (
-                <div className="space-y-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground/85">Rejected themes</p>
-                    <p className="text-xs text-muted-foreground">These stay visible in-session until the page is refreshed.</p>
+                    {!transcript ? (
+                      <p className="mt-1 text-xs text-muted-foreground">Add a transcript to generate more insights.</p>
+                    ) : null}
                   </div>
+                </TabsContent>
 
-                  <div className="space-y-2">
-                    {rejectedThemeDisplayList.map((theme) => (
-                      <div
-                        key={theme.id}
-                        className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-destructive/20 bg-background/80 p-3 opacity-75"
-                      >
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <p className="font-medium line-through">{theme.label}</p>
-                          {theme.description ? (
-                            <p className="text-sm text-muted-foreground">{theme.description}</p>
-                          ) : null}
-                          {theme.rejectionRationale ? (
-                            <p className="text-xs text-muted-foreground">
-                              <span className="font-medium">Rationale:</span> {theme.rejectionRationale}
-                            </p>
-                          ) : null}
-                        </div>
-                        <Badge variant="destructive">Rejected</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {totalThemeCount > 0 ? (
-            <div className="border-t border-border/70 pt-4">
-              <Button
-                variant="link"
-                size="sm"
-                className="h-auto px-0 text-sm"
-                disabled={isClarifying || acceptedThemeLabels.length === 0}
-                onClick={() => void handleClarificationRequest()}
-              >
-                {isClarifying ? (
-                  <>
-                    <LoadingSpinner />
-                    Loading clarification questions…
-                  </>
-                ) : (
-                  "Need clarification?"
-                )}
-              </Button>
-
-              {acceptedThemeLabels.length === 0 ? (
-                <p className="mt-1 text-xs text-muted-foreground">Accept at least one theme before requesting clarification questions.</p>
-              ) : null}
-
-              {clarificationOpen ? (
-                <div className="mt-3 rounded-lg border border-border/70 bg-muted/10 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium">Suggested clarification questions</p>
-                    <Button size="xs" variant="ghost" onClick={() => setClarificationOpen(false)}>
-                      Hide
-                    </Button>
-                  </div>
-                  {clarificationQuestions.length > 0 ? (
-                    <ol className="space-y-2 text-sm text-muted-foreground">
-                      {clarificationQuestions.map((question, index) => (
-                        <li key={`${question}-${index}`}>{index + 1}. {question}</li>
-                      ))}
-                    </ol>
+                {/* ── Rejected tab ── */}
+                <TabsContent value="rejected" className="mt-3 space-y-3">
+                  {rejectedThemeList.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No rejected themes yet.</p>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No clarification questions were returned.</p>
+                    <div className="space-y-2">
+                      {rejectedThemeList.map((theme) => {
+                        const isRestoring = restoringThemeId === theme.id;
+                        return (
+                          <div
+                            key={theme.id}
+                            className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border/50 bg-muted/20 p-3 opacity-70"
+                          >
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <p className="font-medium line-through text-muted-foreground">{theme.label}</p>
+                              {theme.description ? (
+                                <p className="text-sm text-muted-foreground">{theme.description}</p>
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-muted-foreground">
+                                Rejected
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={isRestoring}
+                                onClick={() => void handleRestore(theme.id)}
+                              >
+                                {isRestoring ? <LoadingSpinner /> : null}
+                                Restore
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
-                </div>
-              ) : null}
+                </TabsContent>
+              </Tabs>
+
+              {/* Clarification */}
+              <div className="border-t border-border/70 pt-4">
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto px-0 text-sm"
+                  disabled={isClarifying || acceptedThemeLabels.length === 0}
+                  onClick={() => void handleClarificationRequest()}
+                >
+                  {isClarifying ? (
+                    <><LoadingSpinner />Loading clarification questions…</>
+                  ) : (
+                    "Need clarification?"
+                  )}
+                </Button>
+
+                {acceptedThemeLabels.length === 0 ? (
+                  <p className="mt-1 text-xs text-muted-foreground">Accept at least one theme before requesting clarification questions.</p>
+                ) : null}
+
+                {clarificationOpen ? (
+                  <div className="mt-3 rounded-lg border border-border/70 bg-muted/10 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium">Suggested clarification questions</p>
+                      <Button size="xs" variant="ghost" onClick={() => setClarificationOpen(false)}>
+                        Hide
+                      </Button>
+                    </div>
+                    {clarificationQuestions.length > 0 ? (
+                      <ol className="space-y-2 text-sm text-muted-foreground">
+                        {clarificationQuestions.map((question, index) => (
+                          <li key={`${question}-${index}`}>{index + 1}. {question}</li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No clarification questions were returned.</p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
 
@@ -788,7 +759,7 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>Replace current themes?</DialogTitle>
-            <DialogDescription>This will replace current themes for this consultation with a new extraction.</DialogDescription>
+            <DialogDescription>This will replace active themes for this consultation with a new extraction. Previously rejected themes are preserved.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmReextractOpen(false)}>

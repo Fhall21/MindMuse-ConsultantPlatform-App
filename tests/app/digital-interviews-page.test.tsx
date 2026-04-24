@@ -3,6 +3,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import DigitalInterviewsPage from "@/app/(app)/digital-interviews/page";
+import type { DigitalInterviewFramework } from "@/lib/digital-interview-frameworks";
 
 const pageState = vi.hoisted(() => ({
   isLoading: false,
@@ -10,7 +11,7 @@ const pageState = vi.hoisted(() => ({
   data: [] as Array<{
     id: string;
     title: string;
-    framework: "appreciative_inquiry" | "psychological_safety" | "custom";
+    framework: DigitalInterviewFramework;
     status: "draft" | "active" | "closed";
     completed_count: number;
     created_at: string;

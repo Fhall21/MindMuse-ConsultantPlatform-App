@@ -19,7 +19,6 @@ export interface Meeting {
   label: string;
   transcript_raw: string | null;
   description: string | null;
-  // TODO: Agent 1 — add `notes text` column to meetings migration
   notes?: string | null;
   created_at: string;
   updated_at: string;
@@ -136,12 +135,14 @@ export interface Insight {
   label: string;
   description: string | null;
   accepted: boolean;
+  rejected: boolean;
+  rejected_at: string | null;
   is_user_added: boolean;
   weight: number;
   created_at: string;
 }
 
-export type InsightDecisionType = "accept" | "reject" | "user_added";
+export type InsightDecisionType = "accept" | "reject" | "user_added" | "restore";
 
 export interface InsightDecisionLog {
   id: string;
@@ -311,12 +312,12 @@ export interface IngestionArtifact {
 
 export interface UserAIPreferences {
   id: string;
-  user_id: string;
-  consultation_types: string[];
-  focus_areas: string[];
-  excluded_topics: string[];
-  created_at: string;
-  updated_at: string;
+  userId: string;
+  consultationTypes: string[];
+  focusAreas: string[];
+  excludedTopics: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type AILearningTopicType = "theme_generation";

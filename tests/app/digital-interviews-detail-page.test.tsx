@@ -2,12 +2,15 @@
 
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import DigitalInterviewDetailPage from "@/app/(app)/digital-interviews/[flowId]/page";
+import DigitalInterviewDetailPage, {
+  buildDigitalInterviewShareUrl,
+} from "@/app/(app)/digital-interviews/[flowId]/page";
+import type { DigitalInterviewFramework } from "@/lib/digital-interview-frameworks";
 
 type FlowDetail = {
   id: string;
   title: string;
-  framework: "appreciative_inquiry" | "psychological_safety" | "custom";
+  framework: DigitalInterviewFramework;
   status: "draft" | "active" | "closed";
   completed_count: number;
   consultation_id: string | null;
@@ -17,6 +20,11 @@ type FlowDetail = {
   user_id: string;
   custom_framework_prompt: string | null;
   topics: string[];
+  guardrails_config: {
+    acceptedRecommendedIds: string[];
+    dismissedRecommendedIds: string[];
+    customGuardrails: string[];
+  };
   depth_level: "surface" | "moderate" | "deep";
   responses: Array<{
     id: string;
@@ -28,6 +36,13 @@ type FlowDetail = {
     status: "in_progress" | "completed" | "abandoned";
     completed_at: string | null;
     created_at: string;
+    boundary_moments: Array<{
+      source: "universal" | "recommended" | "custom";
+      label: string;
+      reason: string | null;
+      turn_index: number;
+      timestamp: string | null;
+    }>;
   }>;
 };
 
@@ -79,6 +94,11 @@ beforeEach(() => {
     user_id: "user-1",
     custom_framework_prompt: null,
     topics: [],
+    guardrails_config: {
+      acceptedRecommendedIds: [],
+      dismissedRecommendedIds: [],
+      customGuardrails: [],
+    },
     depth_level: "moderate",
     responses: [
       {
@@ -91,12 +111,22 @@ beforeEach(() => {
         status: "completed",
         completed_at: "2026-04-23T11:00:00.000Z",
         created_at: "2026-04-23T10:30:00.000Z",
+        boundary_moments: [],
       },
     ],
   };
+  globalThis.fetch = vi.fn(async () =>
+    new Response(JSON.stringify({ data: [] }), { status: 200 })
+  ) as never;
 });
 
 describe("DigitalInterviewDetailPage", () => {
+  it("builds the public share URL for the route group path", () => {
+    expect(buildDigitalInterviewShareUrl("http://localhost:3000", "share-1")).toBe(
+      "http://localhost:3000/share-1"
+    );
+  });
+
   it("shows the interview title", async () => {
     render(<DigitalInterviewDetailPage />);
     expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Interview A");
@@ -110,6 +140,25 @@ describe("DigitalInterviewDetailPage", () => {
   it("renders theme panel", async () => {
     render(<DigitalInterviewDetailPage />);
     expect(await screen.findByTestId("theme-panel")).toBeInTheDocument();
+  });
+
+  it("shows active boundaries", async () => {
+    mockFlow!.guardrails_config = {
+      acceptedRecommendedIds: ["recommended-avoid-medical-detail"],
+      dismissedRecommendedIds: [],
+      customGuardrails: ["Do not ask for manager names."],
+    };
+    mockFlow!.topics = ["Burnout"];
+    render(<DigitalInterviewDetailPage />);
+    expect(await screen.findByText("Active boundaries")).toBeInTheDocument();
+    expect(await screen.findByText("Avoid private health detail")).toBeInTheDocument();
+    expect(await screen.findAllByText("Do not ask for manager names.")).toHaveLength(2);
+  });
+
+  it("renders feature placeholder cards", async () => {
+    render(<DigitalInterviewDetailPage />);
+    expect(await screen.findByText("Statement voting")).toBeInTheDocument();
+    expect(await screen.findByText("In-interview surveys")).toBeInTheDocument();
   });
 
   it("shows empty state when no responses", async () => {

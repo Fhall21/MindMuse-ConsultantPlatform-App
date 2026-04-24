@@ -7,10 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { updateNotes } from "@/lib/actions/consultations";
 
-// TODO: Agent 1 — this component depends on a `notes` column in the consultations
-// table. Add migration: ALTER TABLE consultations ADD COLUMN notes text;
-// Until then, saves will fail silently and show a "pending migration" notice.
-
 interface NotesEditorProps {
   meetingId?: string;
   consultationId?: string;
@@ -83,8 +79,8 @@ export function NotesEditor({
 
       {migrationPending && (
         <p className="text-xs text-muted-foreground">
-          Notes saving is pending a database migration (Agent 1).{" "}
-          Your notes are preserved locally until the page is refreshed.
+          Notes saving needs the latest database migration. Your notes stay in
+          the editor until you refresh.
         </p>
       )}
 

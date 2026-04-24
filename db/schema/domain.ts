@@ -17,6 +17,7 @@ import {
   vector,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import { DIGITAL_INTERVIEW_FRAMEWORK_VALUES } from "@/lib/digital-interview-frameworks";
 import { users } from "./auth";
 
 const timestamps = {
@@ -69,6 +70,7 @@ export const meetings = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     title: text("title").notNull(),
     transcriptRaw: text("transcript_raw"),
+    notes: text("notes"),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -120,6 +122,8 @@ export const insights = pgTable(
     label: text("label").notNull(),
     description: text("description"),
     accepted: boolean("accepted").default(false).notNull(),
+    rejected: boolean("rejected").default(false).notNull(),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
     isUserAdded: boolean("is_user_added").default(false).notNull(),
     weight: numeric("weight", { precision: 10, scale: 2 }).default("1.0").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -174,6 +178,14 @@ export const digitalInterviewFlows = pgTable(
       .$type<string[]>()
       .default(sql`'[]'::jsonb`)
       .notNull(),
+    guardrailsConfig: jsonb("guardrails_config")
+      .$type<{
+        acceptedRecommendedIds: string[];
+        dismissedRecommendedIds: string[];
+        customGuardrails: string[];
+      }>()
+      .default(sql`'{"acceptedRecommendedIds":[],"dismissedRecommendedIds":[],"customGuardrails":[]}'::jsonb`)
+      .notNull(),
     depthLevel: text("depth_level").default("moderate").notNull(),
     status: text("status").default("draft").notNull(),
     completedCount: integer("completed_count").default(0).notNull(),
@@ -191,7 +203,9 @@ export const digitalInterviewFlows = pgTable(
     ),
     frameworkCheck: check(
       "digital_interview_flows_framework_check",
-      sql`${table.framework} in ('appreciative_inquiry', 'psychological_safety', 'custom')`
+      sql`${table.framework} in (${sql.raw(
+        DIGITAL_INTERVIEW_FRAMEWORK_VALUES.map((framework) => `'${framework}'`).join(", ")
+      )})`
     ),
     userIdx: index("idx_digital_interview_flows_user_id").on(table.userId),
     consultationIdx: index("idx_digital_interview_flows_consultation_id").on(table.consultationId),

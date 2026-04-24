@@ -6,7 +6,7 @@ export function useMeetingThemes(meetingId: string) {
   return useQuery({
     queryKey: ["themes", "meeting", meetingId],
     queryFn: () =>
-      fetchJson<Insight[]>(`/api/client/themes/consultations/${meetingId}`),
+      fetchJson<Insight[]>(`/api/client/themes/consultations/${meetingId}?include_rejected=true`),
     enabled: !!meetingId,
   });
 }

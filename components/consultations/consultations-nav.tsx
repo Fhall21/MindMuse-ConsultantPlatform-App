@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 const consultationSections = [
   { title: "Meetings", href: "/meetings" },
+  { title: "Digital Interviews", href: "/digital-interviews" },
   { title: "Consultations", href: "/consultations" },
 ];
 
@@ -22,6 +23,8 @@ export function ConsultationsNav() {
           const isActive =
             section.href === "/meetings"
               ? pathname === section.href || pathname.startsWith("/meetings/")
+              : section.href === "/digital-interviews"
+                ? pathname.startsWith("/digital-interviews")
               : pathname.startsWith(section.href);
 
           return (

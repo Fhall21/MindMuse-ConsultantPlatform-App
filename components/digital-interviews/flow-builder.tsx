@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v4";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, ShieldCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,11 @@ import {
 } from "@/lib/digital-interview-frameworks";
 import { fetchJson } from "@/hooks/api";
 import { useConsultations } from "@/hooks/use-consultations";
+import {
+  UNIVERSAL_DIGITAL_INTERVIEW_GUARDRAILS,
+  recommendDigitalInterviewGuardrails,
+  type DigitalInterviewGuardrail,
+} from "@/lib/digital-interview-guardrails";
 import type { DigitalInterviewFlowListItem } from "@/lib/data/digital-interviews";
 import type { Consultation } from "@/types/db";
 
@@ -49,6 +55,7 @@ const STEPS = [
   { label: "Consultation & title", hint: "Link to a project and name this round." },
   { label: "Framework", hint: "Choose how the AI interviewer will approach the conversation." },
   { label: "Topics & depth", hint: "Define what to cover and how deeply to probe." },
+  { label: "Boundaries", hint: "Review fixed rules and add project-specific limits." },
   { label: "Review", hint: "Confirm your settings before creating." },
 ] as const;
 
@@ -92,6 +99,11 @@ const formSchema = z
       .min(1, "At least one topic is required")
       .max(8),
     depthLevel: z.enum(["surface", "moderate", "deep"]),
+    acceptedRecommendedGuardrailIds: z.array(z.string()),
+    dismissedRecommendedGuardrailIds: z.array(z.string()),
+    customGuardrails: z
+      .array(z.object({ value: z.string().trim().min(1, "Boundary cannot be empty").max(240) }))
+      .max(8),
   })
   .superRefine((val, ctx) => {
     if (val.framework === "custom" && !val.customFrameworkPrompt?.trim()) {
@@ -109,6 +121,7 @@ const STEP_FIELDS: Record<number, (keyof FormData)[]> = {
   0: ["title"],
   1: ["framework", "customFrameworkPrompt"],
   2: ["topics", "depthLevel"],
+  3: ["acceptedRecommendedGuardrailIds", "dismissedRecommendedGuardrailIds", "customGuardrails"],
 };
 
 // ─── Root component ───────────────────────────────────────────────────────────
@@ -133,6 +146,9 @@ export function FlowBuilder() {
         (topic) => ({ value: topic })
       ),
       depthLevel: "moderate",
+      acceptedRecommendedGuardrailIds: [],
+      dismissedRecommendedGuardrailIds: [],
+      customGuardrails: [],
     },
     mode: "onTouched",
   });
@@ -151,10 +167,24 @@ export function FlowBuilder() {
     control,
     name: "topics",
   });
+  const {
+    fields: customGuardrailFields,
+    append: appendCustomGuardrail,
+    remove: removeCustomGuardrail,
+  } = useFieldArray({
+    control,
+    name: "customGuardrails",
+  });
 
   const framework = watch("framework");
   const consultationId = watch("consultationId");
   const formValues = watch();
+  const recommendedGuardrails = recommendDigitalInterviewGuardrails({
+    title: formValues.title,
+    framework,
+    customFrameworkPrompt: formValues.customFrameworkPrompt,
+    topics: formValues.topics.map((topic) => topic.value),
+  });
 
   const selectedConsultation = (consultations as Consultation[]).find(
     (c) => c.id === consultationId
@@ -186,6 +216,11 @@ export function FlowBuilder() {
         framework: data.framework,
         customFrameworkPrompt: data.customFrameworkPrompt ?? null,
         topics: data.topics.map((t) => t.value),
+        guardrailsConfig: {
+          acceptedRecommendedIds: data.acceptedRecommendedGuardrailIds,
+          dismissedRecommendedIds: data.dismissedRecommendedGuardrailIds,
+          customGuardrails: data.customGuardrails.map((item) => item.value),
+        },
         depthLevel: data.depthLevel,
         consultationId: data.consultationId ?? null,
       };
@@ -260,6 +295,39 @@ export function FlowBuilder() {
 
             {step === 3 && (
               <Step4
+                recommendedGuardrails={recommendedGuardrails}
+                acceptedRecommendedIds={formValues.acceptedRecommendedGuardrailIds}
+                dismissedRecommendedIds={formValues.dismissedRecommendedGuardrailIds}
+                customGuardrailFields={customGuardrailFields}
+                errors={errors}
+                register={register}
+                onAcceptRecommended={(id) => {
+                  setValue("acceptedRecommendedGuardrailIds", [
+                    ...new Set([...formValues.acceptedRecommendedGuardrailIds, id]),
+                  ]);
+                  setValue(
+                    "dismissedRecommendedGuardrailIds",
+                    formValues.dismissedRecommendedGuardrailIds.filter((item) => item !== id)
+                  );
+                }}
+                onDismissRecommended={(id) => {
+                  setValue("dismissedRecommendedGuardrailIds", [
+                    ...new Set([...formValues.dismissedRecommendedGuardrailIds, id]),
+                  ]);
+                  setValue(
+                    "acceptedRecommendedGuardrailIds",
+                    formValues.acceptedRecommendedGuardrailIds.filter((item) => item !== id)
+                  );
+                }}
+                onAddCustomGuardrail={() => {
+                  if (customGuardrailFields.length < 8) appendCustomGuardrail({ value: "" });
+                }}
+                onRemoveCustomGuardrail={removeCustomGuardrail}
+              />
+            )}
+
+            {step === 4 && (
+              <Step5
                 values={formValues}
                 selectedConsultation={selectedConsultation}
               />
@@ -412,9 +480,9 @@ function Step1({
                   {consultations.length === 0 ? (
                     <span className="text-sm">
                       No consultations yet.{" "}
-                      <a href="/consultations/new" className="underline underline-offset-2">
+                      <Link href="/consultations/new" className="underline underline-offset-2">
                         Create one
-                      </a>
+                      </Link>
                     </span>
                   ) : (
                     "No results."
@@ -772,14 +840,181 @@ function Step3({
   );
 }
 
-// ─── Step 4: Review ───────────────────────────────────────────────────────────
+// ─── Step 4: Boundaries ───────────────────────────────────────────────────────
 
 interface Step4Props {
+  recommendedGuardrails: DigitalInterviewGuardrail[];
+  acceptedRecommendedIds: string[];
+  dismissedRecommendedIds: string[];
+  customGuardrailFields: ReturnType<typeof useFieldArray<FormData, "customGuardrails">>["fields"];
+  errors: ReturnType<typeof useForm<FormData>>["formState"]["errors"];
+  register: ReturnType<typeof useForm<FormData>>["register"];
+  onAcceptRecommended: (id: string) => void;
+  onDismissRecommended: (id: string) => void;
+  onAddCustomGuardrail: () => void;
+  onRemoveCustomGuardrail: (index: number) => void;
+}
+
+function Step4({
+  recommendedGuardrails,
+  acceptedRecommendedIds,
+  dismissedRecommendedIds,
+  customGuardrailFields,
+  errors,
+  register,
+  onAcceptRecommended,
+  onDismissRecommended,
+  onAddCustomGuardrail,
+  onRemoveCustomGuardrail,
+}: Step4Props) {
+  const visibleRecommended = recommendedGuardrails.filter(
+    (guardrail) => !dismissedRecommendedIds.includes(guardrail.id)
+  );
+
+  return (
+    <div className="space-y-8">
+      <SectionHeading
+        title="Interview boundaries"
+        description="Fixed protections are always active. Add only boundaries that help this interview stay inside its intended scope."
+      />
+
+      <div className="space-y-3">
+        <BoundarySectionTitle title="Always on" />
+        <div className="space-y-2">
+          {UNIVERSAL_DIGITAL_INTERVIEW_GUARDRAILS.map((guardrail) => (
+            <div key={guardrail.id} className="rounded-md border border-border/70 p-3">
+              <div className="flex items-start gap-2">
+                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 space-y-1">
+                  <p className="text-sm font-medium">{guardrail.label}</p>
+                  <p className="text-sm text-muted-foreground">{guardrail.description}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <BoundarySectionTitle title="Recommended" />
+        {visibleRecommended.length === 0 ? (
+          <p className="rounded-md border border-dashed border-border/80 bg-muted/20 p-3 text-sm text-muted-foreground">
+            No extra boundaries recommended from these settings.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {visibleRecommended.map((guardrail) => {
+              const accepted = acceptedRecommendedIds.includes(guardrail.id);
+              return (
+                <div key={guardrail.id} className="rounded-md border border-border/70 p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-medium">{guardrail.label}</p>
+                      <p className="text-sm text-muted-foreground">{guardrail.description}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={accepted ? "ghost" : "outline"}
+                        disabled={accepted}
+                        onClick={() => onAcceptRecommended(guardrail.id)}
+                      >
+                        {accepted ? "Accepted" : "Accept"}
+                      </Button>
+                      {!accepted ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onDismissRecommended(guardrail.id)}
+                          className="text-muted-foreground"
+                        >
+                          Dismiss
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <BoundarySectionTitle title="Custom" />
+        <div className="space-y-2">
+          {customGuardrailFields.map((field, index) => (
+            <div key={field.id} className="flex items-start gap-2">
+              <Textarea
+                placeholder="e.g. Do not ask participants to name specific managers."
+                rows={2}
+                className="min-h-16 flex-1 resize-none"
+                {...register(`customGuardrails.${index}.value`)}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => onRemoveCustomGuardrail(index)}
+                aria-label="Remove custom boundary"
+                className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+          ))}
+
+          {Array.isArray(errors.customGuardrails) &&
+            errors.customGuardrails.map(
+              (error, index) =>
+                error?.value && (
+                  <p key={index} className="text-sm text-destructive">
+                    Boundary {index + 1}: {error.value.message}
+                  </p>
+                )
+            )}
+
+          {customGuardrailFields.length < 8 ? (
+            <button
+              type="button"
+              onClick={onAddCustomGuardrail}
+              className="flex items-center gap-1.5 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Plus className="size-3.5" />
+              Add custom boundary
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BoundarySectionTitle({ title }: { title: string }) {
+  return (
+    <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      {title}
+    </h3>
+  );
+}
+
+// ─── Step 5: Review ───────────────────────────────────────────────────────────
+
+interface Step5Props {
   values: FormData;
   selectedConsultation: Consultation | undefined;
 }
 
-function Step4({ values, selectedConsultation }: Step4Props) {
+function Step5({ values, selectedConsultation }: Step5Props) {
+  const activeRecommendationCount = values.acceptedRecommendedGuardrailIds.length;
+  const customGuardrailCount = values.customGuardrails.filter((item) => item.value.trim()).length;
+
   return (
     <div className="space-y-7">
       <SectionHeading
@@ -809,6 +1044,14 @@ function Step4({ values, selectedConsultation }: Step4Props) {
         <ReviewRow
           label="Depth"
           value={DEPTH_LABELS[values.depthLevel] ?? values.depthLevel}
+        />
+        <ReviewRow
+          label="Boundaries"
+          value={[
+            `${UNIVERSAL_DIGITAL_INTERVIEW_GUARDRAILS.length} fixed`,
+            `${activeRecommendationCount} accepted`,
+            `${customGuardrailCount} custom`,
+          ].join(", ")}
           last
         />
       </div>

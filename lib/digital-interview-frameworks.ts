@@ -146,7 +146,7 @@ export const DIGITAL_INTERVIEW_FRAMEWORKS = [
     label: "Appreciative Inquiry",
     description: "Strengths-based inquiry cycle for discovering bright spots and designing better systems.",
     categories: ["foundational_inquiry_lenses"],
-    promptFile: "appreciative_inquiry.md",
+    promptFile: "appreciative-inquiry.md",
     defaultTopics: ["Discover bright spots", "Dream future", "Design systems", "Destiny commitments"],
   },
   {
@@ -218,7 +218,7 @@ export const DIGITAL_INTERVIEW_FRAMEWORKS = [
     label: "Psychological Safety",
     description: "Conversation ladder for speaking up, normalising mistakes, and building trust.",
     categories: ["foundational_inquiry_lenses", "group_facilitation", "organizational_strategy_assessment"],
-    promptFile: "psychological_safety.md",
+    promptFile: "psychological-safety.md",
     defaultTopics: ["Leader vulnerability", "Safe challenge", "Mistake normalisation", "Feedback loops", "Trust"],
   },
   {

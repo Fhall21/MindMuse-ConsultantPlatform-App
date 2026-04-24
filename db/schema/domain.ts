@@ -175,6 +175,14 @@ export const digitalInterviewFlows = pgTable(
       .$type<string[]>()
       .default(sql`'[]'::jsonb`)
       .notNull(),
+    guardrailsConfig: jsonb("guardrails_config")
+      .$type<{
+        acceptedRecommendedIds: string[];
+        dismissedRecommendedIds: string[];
+        customGuardrails: string[];
+      }>()
+      .default(sql`'{"acceptedRecommendedIds":[],"dismissedRecommendedIds":[],"customGuardrails":[]}'::jsonb`)
+      .notNull(),
     depthLevel: text("depth_level").default("moderate").notNull(),
     status: text("status").default("draft").notNull(),
     completedCount: integer("completed_count").default(0).notNull(),

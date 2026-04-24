@@ -183,6 +183,13 @@
       "when": 1776997000000,
       "tag": "0025_framework_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1777004430467,
+      "tag": "0026_rich_titania",
+      "breakpoints": true
     }
   ]
 }

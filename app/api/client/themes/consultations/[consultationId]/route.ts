@@ -7,7 +7,7 @@ import {
 import { jsonError, requireRouteClient } from "../../../_helpers";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ consultationId: string }> }
 ) {
   const { consultationId } = await params;
@@ -15,6 +15,9 @@ export async function GET(
   if ("response" in client) {
     return client.response;
   }
+
+  const url = new URL(request.url);
+  const includeRejected = url.searchParams.get("include_rejected") === "true";
 
   try {
     const consultation = await getMeetingForUser(consultationId, client.userId);
@@ -25,7 +28,8 @@ export async function GET(
 
     const themes = await listInsightsForMeeting(
       consultationId,
-      client.userId
+      client.userId,
+      { includeRejected }
     );
     return NextResponse.json(themes);
   } catch (error) {

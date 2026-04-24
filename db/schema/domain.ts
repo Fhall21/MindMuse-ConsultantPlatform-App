@@ -121,6 +121,8 @@ export const insights = pgTable(
     label: text("label").notNull(),
     description: text("description"),
     accepted: boolean("accepted").default(false).notNull(),
+    rejected: boolean("rejected").default(false).notNull(),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
     isUserAdded: boolean("is_user_added").default(false).notNull(),
     weight: numeric("weight", { precision: 10, scale: 2 }).default("1.0").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

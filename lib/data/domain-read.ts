@@ -247,7 +247,7 @@ export async function listConsultationsForRound(
 export async function listInsightsForMeeting(
   meetingId: string,
   userId: string,
-  options: { accepted?: boolean } = {}
+  options: { accepted?: boolean; includeRejected?: boolean } = {}
 ): Promise<Insight[]> {
   await requireOwnedMeeting(meetingId, userId);
 
@@ -255,6 +255,11 @@ export async function listInsightsForMeeting(
 
   if (options.accepted !== undefined) {
     conditions.push(eq(insights.accepted, options.accepted));
+  }
+
+  // By default hide soft-deleted (rejected) insights; pass includeRejected=true to show all
+  if (!options.includeRejected) {
+    conditions.push(eq(insights.rejected, false));
   }
 
   const rows = await db
@@ -337,7 +342,10 @@ export async function listInsightsForConsultations(
 export async function deleteInsightsForMeeting(meetingId: string, userId: string) {
   await requireOwnedMeeting(meetingId, userId);
 
-  await db.delete(insights).where(eq(insights.meetingId, meetingId));
+  // Preserve soft-deleted (rejected) insights — they represent reviewed decisions
+  await db.delete(insights).where(
+    and(eq(insights.meetingId, meetingId), eq(insights.rejected, false))
+  );
 }
 
 export async function deleteInsightsForConsultation(

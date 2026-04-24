@@ -108,6 +108,8 @@ export function mapInsightRecord(row: InsightRow): Insight {
     label: row.label,
     description: row.description,
     accepted: row.accepted,
+    rejected: row.rejected,
+    rejected_at: row.rejectedAt?.toISOString() ?? null,
     is_user_added: row.isUserAdded,
     weight: toNumber(row.weight),
     created_at: row.createdAt.toISOString(),

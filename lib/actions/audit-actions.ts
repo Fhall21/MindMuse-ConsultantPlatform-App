@@ -36,6 +36,7 @@ export const AUDIT_ACTIONS = {
   THEME_EXTRACTION_REQUESTED: "theme.extraction_requested",
   THEME_ACCEPTED: "theme.accepted",
   THEME_REJECTED: "theme.rejected",
+  THEME_RESTORED: "theme.restored",
   THEME_USER_ADDED: "theme.user_added",
   ANALYTICS_JOB_TRIGGERED: "analytics.job_triggered",
   ANALYTICS_JOB_STARTED: "analytics.job_started",

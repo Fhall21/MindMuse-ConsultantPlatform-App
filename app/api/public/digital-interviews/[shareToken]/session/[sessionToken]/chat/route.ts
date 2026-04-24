@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
+  appendDigitalInterviewMessage,
   appendDigitalInterviewExchange,
   completeDigitalInterviewSession,
   formatInterviewSessionTurn,
@@ -16,7 +17,8 @@ import {
 import { jsonError } from "@/app/api/client/_helpers";
 
 const chatRequestSchema = z.object({
-  userMessage: z.string().trim().min(1),
+  userMessage: z.string().trim().min(1).optional(),
+  start: z.literal(true).optional(),
 });
 
 const completeInterviewTool = {
@@ -50,6 +52,13 @@ type AiInterviewPayload = {
   coverageNote?: string | null;
 };
 
+function buildTopicsProgress(topics: string[], topicsCovered: string[]) {
+  return topics.map((topic) => ({
+    topic,
+    covered: topicsCovered.includes(topic),
+  }));
+}
+
 async function loadSessionContext(
   shareToken: string,
   sessionToken: string
@@ -69,6 +78,11 @@ export async function POST(
   const parsedBody = chatRequestSchema.safeParse(body);
   if (!parsedBody.success) {
     return jsonError(parsedBody.error.issues[0]?.message ?? "Invalid digital interview payload", 422);
+  }
+
+  const isStartRequest = parsedBody.data.start === true;
+  if (!isStartRequest && !parsedBody.data.userMessage) {
+    return jsonError("Invalid digital interview payload", 422);
   }
 
   const { shareToken, sessionToken } = await params;
@@ -92,10 +106,31 @@ export async function POST(
   }
 
   const systemPrompt = await buildDigitalInterviewSystemPrompt(context);
-  const userTurn = await formatInterviewSessionTurn(parsedBody.data.userMessage, "user");
+  if (isStartRequest && context.session.conversation_history.length > 0) {
+    const existingAssistant = [...context.session.conversation_history]
+      .reverse()
+      .find((turn) => turn.role === "assistant")?.content;
+
+    return NextResponse.json({
+      assistantMessage: existingAssistant ?? "Hello. Let’s begin.",
+      isComplete: false,
+      topicsProgress: buildTopicsProgress(context.flow.topics, []),
+    });
+  }
+
+  const userTurn = isStartRequest
+    ? null
+    : await formatInterviewSessionTurn(parsedBody.data.userMessage ?? "", "user");
   const messages = [
     ...context.session.conversation_history,
-    userTurn,
+    ...(userTurn ? [userTurn] : []),
+    ...(isStartRequest
+      ? [{
+          role: "user" as const,
+          content:
+            "The interview is starting now. Greet the interviewee, explain briefly that this is a consultation interview for the consultant’s review, and ask the first single open question.",
+        }]
+      : []),
   ].map((turn) => ({ role: turn.role, content: turn.content }));
 
   let aiResponse: NextResponse;
@@ -131,25 +166,32 @@ export async function POST(
   }
 
   const assistantMessage = aiPayload.assistantMessage ?? "Could you tell me more?";
-  const isComplete = Boolean(aiPayload.isComplete);
+  const isComplete = isStartRequest ? false : Boolean(aiPayload.isComplete);
   const topicsCovered = aiPayload.topicsCovered ?? [];
   const closingMessage = isComplete
     ? `Thank you, ${context.session.interviewee_name ?? "the interviewee"}. That's all I need for today. Your responses have been recorded and will be reviewed by the consultant. This conversation has now closed.`
     : assistantMessage;
 
   try {
-    const exchange = await appendDigitalInterviewExchange({
-      shareToken,
-      sessionToken,
-      userMessage: userTurn,
-      assistantMessage: await formatInterviewSessionTurn(closingMessage, "assistant"),
-    });
+    const persistedAssistantMessage = await formatInterviewSessionTurn(closingMessage, "assistant");
+    const exchange = isStartRequest
+      ? await appendDigitalInterviewMessage({
+          shareToken,
+          sessionToken,
+          message: persistedAssistantMessage,
+        })
+      : await appendDigitalInterviewExchange({
+          shareToken,
+          sessionToken,
+          userMessage: userTurn!,
+          assistantMessage: persistedAssistantMessage,
+        });
 
     if (!exchange) {
       return jsonError("The interview could not save that response. Please try again.", 503);
     }
 
-    if (isComplete) {
+    if (!isStartRequest && isComplete) {
       const completedSession = await completeDigitalInterviewSession({ shareToken, sessionToken });
       if (!completedSession) {
         return jsonError("The interview could not be completed. Please try again.", 503);
@@ -165,9 +207,6 @@ export async function POST(
   return NextResponse.json({
     assistantMessage: closingMessage,
     isComplete,
-    topicsProgress: context.flow.topics.map((topic) => ({
-      topic,
-      covered: topicsCovered.includes(topic),
-    })),
+    topicsProgress: buildTopicsProgress(context.flow.topics, topicsCovered),
   });
 }

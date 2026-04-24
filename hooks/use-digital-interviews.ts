@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchJson } from "@/hooks/api";
-import type { DigitalInterviewFlowListItem } from "@/lib/data/digital-interviews";
+import type { DigitalInterviewFlowListItem, DigitalInterviewFlowDetail } from "@/lib/data/digital-interviews";
 
 export function useDigitalInterviews() {
   return useQuery({
@@ -18,7 +18,7 @@ export function useDigitalInterviewDetail(flowId: string) {
   return useQuery({
     queryKey: ["digital-interviews", "flow", flowId],
     queryFn: async () => {
-      const response = await fetchJson<{ data: DigitalInterviewFlowListItem }>(
+      const response = await fetchJson<{ data: DigitalInterviewFlowDetail }>(
         `/api/client/digital-interviews/${flowId}`
       );
       return response.data;

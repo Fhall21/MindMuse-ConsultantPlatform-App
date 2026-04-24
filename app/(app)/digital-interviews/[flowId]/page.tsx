@@ -23,6 +23,10 @@ function StatusBadge({ status }: { status: "draft" | "active" | "closed" }) {
   return <Badge variant="secondary">Draft</Badge>;
 }
 
+export function buildDigitalInterviewShareUrl(origin: string, shareToken: string) {
+  return `${origin}/${shareToken}`;
+}
+
 type FeatureInterestKey = "polis_voting" | "survey_injection";
 
 type FeatureInterestSummary = {
@@ -63,7 +67,7 @@ export default function DigitalInterviewDetailPage() {
 
   function handleCopyShareLink() {
     if (!flow) return;
-    const url = `${window.location.origin}/interview/${flow.share_token}`;
+    const url = buildDigitalInterviewShareUrl(window.location.origin, flow.share_token);
     void navigator.clipboard.writeText(url).then(() => {
       setCopyLabel("Copied");
       toast.success("Share link copied.");

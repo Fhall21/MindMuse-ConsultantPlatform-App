@@ -2,7 +2,9 @@
 
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import DigitalInterviewDetailPage from "@/app/(app)/digital-interviews/[flowId]/page";
+import DigitalInterviewDetailPage, {
+  buildDigitalInterviewShareUrl,
+} from "@/app/(app)/digital-interviews/[flowId]/page";
 import type { DigitalInterviewFramework } from "@/lib/digital-interview-frameworks";
 
 type FlowDetail = {
@@ -119,6 +121,12 @@ beforeEach(() => {
 });
 
 describe("DigitalInterviewDetailPage", () => {
+  it("builds the public share URL for the route group path", () => {
+    expect(buildDigitalInterviewShareUrl("http://localhost:3000", "share-1")).toBe(
+      "http://localhost:3000/share-1"
+    );
+  });
+
   it("shows the interview title", async () => {
     render(<DigitalInterviewDetailPage />);
     expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Interview A");

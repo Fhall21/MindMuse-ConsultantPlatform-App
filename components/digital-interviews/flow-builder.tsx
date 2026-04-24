@@ -736,7 +736,7 @@ function Step4({ values, selectedConsultation }: Step4Props) {
 
       <p className="text-sm text-muted-foreground">
         Once created, you will be shown a shareable link to send to interviewees.
-        The interview will be active immediately.
+        You can activate it from the interview detail page.
       </p>
     </div>
   );

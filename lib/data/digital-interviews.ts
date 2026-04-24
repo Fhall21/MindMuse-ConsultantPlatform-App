@@ -7,6 +7,8 @@ import { db } from "@/db/client";
 import {
   digitalInterviewFlows,
   digitalInterviewResponses,
+  organisations,
+  people,
 } from "@/db/schema";
 import type { DigitalInterviewConversationTurn } from "@/lib/digital-interviews";
 
@@ -63,6 +65,9 @@ export const digitalInterviewMessageSchema = z.object({
 
 type DigitalInterviewFlowRow = typeof digitalInterviewFlows.$inferSelect;
 type DigitalInterviewResponseRow = typeof digitalInterviewResponses.$inferSelect;
+type DigitalInterviewDbClient = Pick<typeof db, "select" | "insert" | "update">;
+
+export type DigitalInterviewPersonMatchConfidence = "high" | "medium" | "created";
 
 export interface DigitalInterviewFlowListItem {
   id: string;
@@ -173,6 +178,196 @@ function mapResponseRow(row: DigitalInterviewResponseRow): DigitalInterviewRespo
 
 function ensureTimestamp(timestamp?: string): string {
   return timestamp ?? new Date().toISOString();
+}
+
+function normalizeInterviewValue(value: string | null | undefined): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+async function findOrganisationByName(
+  transaction: DigitalInterviewDbClient,
+  userId: string,
+  organisationName: string
+) {
+  const normalizedOrganisationName = normalizeInterviewValue(organisationName);
+
+  if (!normalizedOrganisationName) {
+    return null;
+  }
+
+  const [organisation] = await transaction
+    .select()
+    .from(organisations)
+    .where(
+      and(
+        eq(organisations.userId, userId),
+        sql`lower(${organisations.name}) = ${normalizedOrganisationName}`
+      )
+    )
+    .orderBy(desc(organisations.createdAt))
+    .limit(1);
+
+  return organisation ?? null;
+}
+
+async function findPersonByName(
+  transaction: DigitalInterviewDbClient,
+  userId: string,
+  intervieweeName: string
+) {
+  const normalizedIntervieweeName = normalizeInterviewValue(intervieweeName);
+
+  if (!normalizedIntervieweeName) {
+    return null;
+  }
+
+  const [person] = await transaction
+    .select()
+    .from(people)
+    .where(
+      and(eq(people.userId, userId), sql`lower(${people.name}) = ${normalizedIntervieweeName}`)
+    )
+    .orderBy(desc(people.createdAt))
+    .limit(1);
+
+  return person ?? null;
+}
+
+async function findPersonByNameAndOrganisation(
+  transaction: DigitalInterviewDbClient,
+  userId: string,
+  intervieweeName: string,
+  organisationId: string
+) {
+  const normalizedIntervieweeName = normalizeInterviewValue(intervieweeName);
+
+  if (!normalizedIntervieweeName) {
+    return null;
+  }
+
+  const [person] = await transaction
+    .select()
+    .from(people)
+    .where(
+      and(
+        eq(people.userId, userId),
+        eq(people.organisationId, organisationId),
+        sql`lower(${people.name}) = ${normalizedIntervieweeName}`
+      )
+    )
+    .orderBy(desc(people.createdAt))
+    .limit(1);
+
+  return person ?? null;
+}
+
+async function createOrganisation(
+  transaction: DigitalInterviewDbClient,
+  userId: string,
+  organisationName: string
+) {
+  const trimmedOrganisationName = organisationName.trim();
+
+  if (!trimmedOrganisationName) {
+    return null;
+  }
+
+  const [createdOrganisation] = await transaction
+    .insert(organisations)
+    .values({
+      name: trimmedOrganisationName,
+      userId,
+    })
+    .returning({ id: organisations.id });
+
+  return createdOrganisation?.id ?? null;
+}
+
+async function createPersonFromInterview(
+  transaction: DigitalInterviewDbClient,
+  params: {
+    userId: string;
+    organisationId: string | null;
+    interviewee: {
+      name: string;
+      email?: string | null;
+      role?: string | null;
+      workGroup?: string | null;
+    };
+  }
+) {
+  const [createdPerson] = await transaction
+    .insert(people)
+    .values({
+      name: params.interviewee.name.trim(),
+      email: params.interviewee.email?.trim() || null,
+      role: params.interviewee.role?.trim() || null,
+      workingGroup: params.interviewee.workGroup?.trim() || null,
+      organisationId: params.organisationId,
+      userId: params.userId,
+    })
+    .returning({ id: people.id });
+
+  return createdPerson?.id ?? null;
+}
+
+export async function matchOrCreatePerson(
+  transaction: DigitalInterviewDbClient,
+  params: {
+    userId: string;
+    interviewee: {
+      name: string;
+      email?: string | null;
+      role?: string | null;
+      workGroup?: string | null;
+      organisation?: string | null;
+    };
+  }
+): Promise<{ personId: string; confidence: DigitalInterviewPersonMatchConfidence }> {
+  const intervieweeName = params.interviewee.name.trim();
+  const organisationName = params.interviewee.organisation?.trim() ?? "";
+
+  if (!intervieweeName) {
+    throw new Error("Interviewee name is required for CRM matching");
+  }
+
+  const existingOrganisation = organisationName
+    ? await findOrganisationByName(transaction, params.userId, organisationName)
+    : null;
+
+  if (existingOrganisation) {
+    const exactMatch = await findPersonByNameAndOrganisation(
+      transaction,
+      params.userId,
+      intervieweeName,
+      existingOrganisation.id
+    );
+
+    if (exactMatch) {
+      return { personId: exactMatch.id, confidence: "high" };
+    }
+  }
+
+  const nameMatch = await findPersonByName(transaction, params.userId, intervieweeName);
+  if (nameMatch) {
+    return { personId: nameMatch.id, confidence: "medium" };
+  }
+
+  const organisationId = existingOrganisation
+    ? existingOrganisation.id
+    : await createOrganisation(transaction, params.userId, organisationName);
+
+  const personId = await createPersonFromInterview(transaction, {
+    userId: params.userId,
+    organisationId,
+    interviewee: params.interviewee,
+  });
+
+  if (!personId) {
+    throw new Error("Failed to create person for digital interview CRM linking");
+  }
+
+  return { personId, confidence: "created" };
 }
 
 async function getOwnedFlowRow(flowId: string, userId: string) {
@@ -477,42 +672,77 @@ export async function completeDigitalInterviewSession(params: {
     return null;
   }
 
-  if (session.status === "completed") {
-    return mapResponseRow(session);
-  }
-
   const now = new Date();
 
-  return db.transaction(async (transaction) => {
-    const [completedSession] = await transaction
-      .update(digitalInterviewResponses)
-      .set({
-        status: "completed",
-        completedAt: now,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(digitalInterviewResponses.id, session.id),
-          ne(digitalInterviewResponses.status, "completed")
-        )
-      )
-      .returning();
+  const completedSession =
+    session.status === "completed"
+      ? session
+      : await db.transaction(async (transaction) => {
+          const [completedRow] = await transaction
+            .update(digitalInterviewResponses)
+            .set({
+              status: "completed",
+              completedAt: now,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(digitalInterviewResponses.id, session.id),
+                ne(digitalInterviewResponses.status, "completed")
+              )
+            )
+            .returning();
 
-    if (!completedSession) {
-      return mapResponseRow(session);
-    }
+          if (!completedRow) {
+            return session;
+          }
 
-    await transaction
-      .update(digitalInterviewFlows)
-      .set({
-        completedCount: sql`${digitalInterviewFlows.completedCount} + 1`,
-        updatedAt: now,
-      })
-      .where(eq(digitalInterviewFlows.id, flow.id));
+          await transaction
+            .update(digitalInterviewFlows)
+            .set({
+              completedCount: sql`${digitalInterviewFlows.completedCount} + 1`,
+              updatedAt: now,
+            })
+            .where(eq(digitalInterviewFlows.id, flow.id));
 
+          return completedRow;
+        });
+
+  if (completedSession.personId) {
     return mapResponseRow(completedSession);
-  });
+  }
+
+  try {
+    const linkedSession = await db.transaction(async (transaction) => {
+      const match = await matchOrCreatePerson(transaction, {
+        userId: flow.userId,
+        interviewee: {
+          name: completedSession.intervieweeName ?? "",
+          email: completedSession.intervieweeEmail,
+          role: completedSession.intervieweeRole,
+          workGroup: completedSession.intervieweeWorkGroup,
+          organisation: completedSession.intervieweeOrganisation,
+        },
+      });
+
+      const [updatedSession] = await transaction
+        .update(digitalInterviewResponses)
+        .set({
+          personId: match.personId,
+          personMatchConfidence: match.confidence,
+          updatedAt: new Date(),
+        })
+        .where(eq(digitalInterviewResponses.id, completedSession.id))
+        .returning();
+
+      return updatedSession ?? null;
+    });
+
+    return mapResponseRow(linkedSession ?? completedSession);
+  } catch (error) {
+    console.error("Failed to link digital interview session to CRM", error);
+    return mapResponseRow(completedSession);
+  }
 }
 
 export async function formatInterviewSessionTurn(content: string, role: "user" | "assistant") {

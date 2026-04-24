@@ -97,6 +97,7 @@ vi.mock("@/db/client", () => ({
 import { responseToTranscript } from "@/lib/digital-interviews";
 import {
   createOrResumeDigitalInterviewSession,
+  appendDigitalInterviewExchange,
   appendDigitalInterviewMessage,
   getPublicDigitalInterviewSessionContext,
   updateDigitalInterviewSessionDetails,
@@ -292,5 +293,59 @@ describe("lib/data/digital-interviews", () => {
     ).resolves.toBeNull();
 
     expect(testState.updateCalls).toHaveLength(0);
+  });
+
+  it("appends a user and assistant exchange in one DB update", async () => {
+    testState.selectQueue = [
+      [
+        {
+          id: "flow-1",
+          status: "active",
+        },
+      ],
+      [
+        {
+          id: "response-1",
+          status: "in_progress",
+          conversationHistory: [
+            { role: "assistant", content: "Welcome", timestamp: "2026-04-23T09:59:00.000Z" },
+          ],
+        },
+      ],
+    ];
+
+    await expect(
+      appendDigitalInterviewExchange({
+        shareToken: "share-1",
+        sessionToken: "session-1",
+        userMessage: {
+          role: "user",
+          content: "Workload has been high.",
+          timestamp: "2026-04-23T10:00:00.000Z",
+        },
+        assistantMessage: {
+          role: "assistant",
+          content: "Can you tell me about a recent example?",
+          timestamp: "2026-04-23T10:00:01.000Z",
+        },
+      })
+    ).resolves.toMatchObject({
+      session_token: "session-1",
+    });
+
+    expect(testState.updateCalls).toHaveLength(1);
+    expect(testState.updateCalls[0]).toMatchObject({
+      values: expect.objectContaining({
+        conversationHistory: [
+          { role: "assistant", content: "Welcome", timestamp: "2026-04-23T09:59:00.000Z" },
+          { role: "user", content: "Workload has been high.", timestamp: "2026-04-23T10:00:00.000Z" },
+          {
+            role: "assistant",
+            content: "Can you tell me about a recent example?",
+            timestamp: "2026-04-23T10:00:01.000Z",
+          },
+        ],
+      }),
+    });
   });
 });

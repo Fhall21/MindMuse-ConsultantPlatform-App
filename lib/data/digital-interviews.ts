@@ -421,6 +421,44 @@ export async function appendDigitalInterviewMessage(params: {
   return updated ? mapResponseRow(updated) : null;
 }
 
+export async function appendDigitalInterviewExchange(params: {
+  shareToken: string;
+  sessionToken: string;
+  userMessage: DigitalInterviewConversationTurn;
+  assistantMessage: DigitalInterviewConversationTurn;
+}) {
+  const flow = await getPublicFlowRow(params.shareToken);
+  if (!flow) {
+    return null;
+  }
+
+  if (flow.status !== "active") {
+    return null;
+  }
+
+  const session = await getSessionRow(flow.id, params.sessionToken);
+  if (!session || session.status !== "in_progress") {
+    return null;
+  }
+
+  const nextHistory = [
+    ...session.conversationHistory,
+    params.userMessage,
+    params.assistantMessage,
+  ];
+
+  const [updated] = await db
+    .update(digitalInterviewResponses)
+    .set({
+      conversationHistory: nextHistory,
+      updatedAt: new Date(),
+    })
+    .where(eq(digitalInterviewResponses.id, session.id))
+    .returning();
+
+  return updated ? mapResponseRow(updated) : null;
+}
+
 export async function completeDigitalInterviewSession(params: {
   shareToken: string;
   sessionToken: string;

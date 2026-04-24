@@ -120,10 +120,25 @@ async def _create_completion(request: InterviewChatRequest) -> InterviewChatResp
             await asyncio.sleep(2**overload_attempts)
             overload_attempts += 1
 
-    choice = completion.choices[0]
-    message = choice.message
-    assistant_message = (message.content or "").strip()
-    tool_calls = message.tool_calls or []
+    choices = getattr(completion, "choices", None) or []
+    if not choices:
+        return InterviewChatResponse(
+            assistant_message=_fallback_message(request.messages),
+            is_complete=False,
+            topics_covered=[],
+        )
+
+    choice = choices[0]
+    message = getattr(choice, "message", None)
+    if message is None:
+        return InterviewChatResponse(
+            assistant_message=_fallback_message(request.messages),
+            is_complete=False,
+            topics_covered=[],
+        )
+
+    assistant_message = (getattr(message, "content", None) or "").strip()
+    tool_calls = getattr(message, "tool_calls", None) or []
     complete_call = next(
         (tool_call for tool_call in tool_calls if tool_call.function.name == "complete_interview"),
         None,

@@ -5,16 +5,17 @@ import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import {
+  DIGITAL_INTERVIEW_FRAMEWORK_IDS,
+  DIGITAL_INTERVIEW_FRAMEWORK_VALUES,
+  type DigitalInterviewFramework,
+} from "@/lib/digital-interview-frameworks";
+import {
   digitalInterviewFlows,
   digitalInterviewResponses,
 } from "@/db/schema";
 import type { DigitalInterviewConversationTurn } from "@/lib/digital-interviews";
 
-export const digitalInterviewFrameworkSchema = z.enum([
-  "appreciative_inquiry",
-  "psychological_safety",
-  "custom",
-]);
+export const digitalInterviewFrameworkSchema = z.enum(DIGITAL_INTERVIEW_FRAMEWORK_VALUES);
 
 export const digitalInterviewDepthSchema = z.enum(["surface", "moderate", "deep"]);
 
@@ -69,7 +70,7 @@ export interface DigitalInterviewFlowListItem {
   user_id: string;
   consultation_id: string | null;
   title: string;
-  framework: z.infer<typeof digitalInterviewFrameworkSchema>;
+  framework: DigitalInterviewFramework;
   custom_framework_prompt: string | null;
   topics: string[];
   depth_level: z.infer<typeof digitalInterviewDepthSchema>;
@@ -99,7 +100,7 @@ export interface DigitalInterviewFlowDetail extends DigitalInterviewFlowListItem
 export interface PublicDigitalInterviewFlow {
   id: string;
   title: string;
-  framework: z.infer<typeof digitalInterviewFrameworkSchema>;
+  framework: DigitalInterviewFramework;
   custom_framework_prompt: string | null;
   topics: string[];
   depth_level: z.infer<typeof digitalInterviewDepthSchema>;

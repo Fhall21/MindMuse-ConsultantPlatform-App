@@ -15,6 +15,7 @@ import {
   parseJsonBodyOrResponse,
 } from "@/lib/api/route-helpers";
 import { jsonError } from "@/app/api/client/_helpers";
+import { DIGITAL_INTERVIEW_FRAMEWORKS } from "@/lib/digital-interview-frameworks";
 
 const chatRequestSchema = z.object({
   userMessage: z.string().trim().min(1),
@@ -51,11 +52,6 @@ type AiInterviewPayload = {
   coverageNote?: string | null;
 };
 
-const frameworkPromptFiles = {
-  appreciative_inquiry: "appreciative-inquiry.md",
-  psychological_safety: "psychological-safety.md",
-} as const;
-
 async function loadFrameworkGuide(context: ChatContext) {
   if (context.flow.framework === "custom") {
     return [
@@ -65,7 +61,13 @@ async function loadFrameworkGuide(context: ChatContext) {
     ].join("\n");
   }
 
-  const filename = frameworkPromptFiles[context.flow.framework];
+  const framework = DIGITAL_INTERVIEW_FRAMEWORKS.find((definition) => definition.id === context.flow.framework);
+  const filename = framework?.promptFile;
+
+  if (!filename) {
+    throw new Error(`Unknown digital interview framework: ${context.flow.framework}`);
+  }
+
   return readFile(
     path.join(process.cwd(), "prompts", "digital-interviews", "frameworks", filename),
     "utf8"

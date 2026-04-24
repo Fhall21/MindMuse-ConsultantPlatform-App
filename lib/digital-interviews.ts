@@ -1,15 +1,10 @@
 import { digitalInterviewResponses } from "@/db/schema";
+import {
+  DIGITAL_INTERVIEW_FRAMEWORK_LABELS,
+  type DigitalInterviewFramework,
+} from "@/lib/digital-interview-frameworks";
 
-export type DigitalInterviewFramework =
-  | "appreciative_inquiry"
-  | "psychological_safety"
-  | "custom";
-
-export const DIGITAL_INTERVIEW_FRAMEWORK_LABELS: Record<DigitalInterviewFramework, string> = {
-  appreciative_inquiry: "Appreciative Inquiry",
-  psychological_safety: "Psychological Safety",
-  custom: "Custom",
-};
+export { DIGITAL_INTERVIEW_FRAMEWORK_LABELS, type DigitalInterviewFramework };
 
 export type DigitalInterviewConversationTurn = {
   role: "user" | "assistant";

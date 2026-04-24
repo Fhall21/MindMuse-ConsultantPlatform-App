@@ -76,7 +76,7 @@ describe("digital interview client routes", () => {
     const response = (await POSTDigitalInterviews(
       jsonRequest("http://test", {
         title: "Interview",
-        framework: "appreciative_inquiry",
+        framework: "care",
         topics: ["Workload"],
         depthLevel: "moderate",
       }) as NextRequest

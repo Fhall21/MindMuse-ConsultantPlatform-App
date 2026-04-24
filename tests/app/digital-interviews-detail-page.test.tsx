@@ -3,11 +3,12 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import DigitalInterviewDetailPage from "@/app/(app)/digital-interviews/[flowId]/page";
+import type { DigitalInterviewFramework } from "@/lib/digital-interview-frameworks";
 
 type FlowDetail = {
   id: string;
   title: string;
-  framework: "appreciative_inquiry" | "psychological_safety" | "custom";
+  framework: DigitalInterviewFramework;
   status: "draft" | "active" | "closed";
   completed_count: number;
   consultation_id: string | null;

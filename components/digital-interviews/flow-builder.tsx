@@ -28,6 +28,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  DIGITAL_INTERVIEW_CUSTOM_FRAMEWORK,
+  DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_LABELS,
+  DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_ORDER,
+  DIGITAL_INTERVIEW_FRAMEWORK_LABELS,
+  DIGITAL_INTERVIEW_FRAMEWORKS,
+  DIGITAL_INTERVIEW_FRAMEWORK_VALUES,
+  getDigitalInterviewFrameworkById,
+  type DigitalInterviewFrameworkCategory,
+} from "@/lib/digital-interview-frameworks";
 import { fetchJson } from "@/hooks/api";
 import { useConsultations } from "@/hooks/use-consultations";
 import type { DigitalInterviewFlowListItem } from "@/lib/data/digital-interviews";
@@ -40,43 +50,6 @@ const STEPS = [
   { label: "Framework", hint: "Choose how the AI interviewer will approach the conversation." },
   { label: "Topics & depth", hint: "Define what to cover and how deeply to probe." },
   { label: "Review", hint: "Confirm your settings before creating." },
-] as const;
-
-const FRAMEWORK_DEFAULTS: Record<string, string[]> = {
-  appreciative_inquiry: [
-    "Peak experiences",
-    "Core values",
-    "Future vision",
-    "Enabling conditions",
-  ],
-  psychological_safety: [
-    "Voice and speaking up",
-    "Failure and learning",
-    "Inclusion and belonging",
-    "Leadership behaviour",
-  ],
-  custom: [],
-};
-
-const FRAMEWORK_OPTIONS = [
-  {
-    value: "appreciative_inquiry",
-    label: "Appreciative Inquiry",
-    description:
-      "Focuses on strengths, successes, and what is working well. Best for change programmes and culture work.",
-  },
-  {
-    value: "psychological_safety",
-    label: "Psychological Safety",
-    description:
-      "Explores team dynamics, speaking up, and interpersonal risk-taking. Best for team health assessments.",
-  },
-  {
-    value: "custom",
-    label: "Custom",
-    description:
-      "You define the interview's focus. Provide a brief description and the AI will use it as its guiding intent.",
-  },
 ] as const;
 
 const DEPTH_OPTIONS = [
@@ -100,12 +73,6 @@ const DEPTH_OPTIONS = [
   },
 ] as const;
 
-const FRAMEWORK_LABELS: Record<string, string> = {
-  appreciative_inquiry: "Appreciative Inquiry",
-  psychological_safety: "Psychological Safety",
-  custom: "Custom",
-};
-
 const DEPTH_LABELS: Record<string, string> = {
   surface: "Surface — 5–10 min",
   moderate: "Moderate — 15–20 min",
@@ -118,7 +85,7 @@ const formSchema = z
   .object({
     title: z.string().trim().min(1, "Title is required").max(255),
     consultationId: z.string().nullable().optional(),
-    framework: z.enum(["appreciative_inquiry", "psychological_safety", "custom"]),
+    framework: z.enum(DIGITAL_INTERVIEW_FRAMEWORK_VALUES),
     customFrameworkPrompt: z.string().trim().min(1).nullable().optional(),
     topics: z
       .array(z.object({ value: z.string().trim().min(1, "Topic cannot be empty") }))
@@ -162,7 +129,9 @@ export function FlowBuilder() {
       consultationId: null,
       framework: "appreciative_inquiry",
       customFrameworkPrompt: null,
-      topics: FRAMEWORK_DEFAULTS.appreciative_inquiry.map((v) => ({ value: v })),
+      topics: (getDigitalInterviewFrameworkById("appreciative_inquiry")?.defaultTopics ?? []).map(
+        (topic) => ({ value: topic })
+      ),
       depthLevel: "moderate",
     },
     mode: "onTouched",
@@ -193,8 +162,8 @@ export function FlowBuilder() {
 
   function handleFrameworkChange(value: string) {
     setValue("framework", value as FormData["framework"]);
-    const defaults = FRAMEWORK_DEFAULTS[value] ?? [];
-    setValue("topics", defaults.map((v) => ({ value: v })));
+    const defaults = getDigitalInterviewFrameworkById(value as FormData["framework"]);
+    setValue("topics", (defaults?.defaultTopics ?? []).map((v) => ({ value: v })));
     if (value !== "custom") {
       setValue("customFrameworkPrompt", null);
     }
@@ -498,6 +467,29 @@ interface Step2Props {
 }
 
 function Step2({ framework, errors, onFrameworkChange, register }: Step2Props) {
+  const [frameworkOpen, setFrameworkOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<DigitalInterviewFrameworkCategory | "all">(
+    "all"
+  );
+
+  const selectedFramework = getDigitalInterviewFrameworkById(framework) ?? DIGITAL_INTERVIEW_CUSTOM_FRAMEWORK;
+  const categoryGroups =
+    categoryFilter === "all"
+      ? DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_ORDER.map((category) => ({
+          category,
+          frameworks: DIGITAL_INTERVIEW_FRAMEWORKS.filter(
+            (definition) => definition.categories[0] === category
+          ),
+        })).filter((group) => group.frameworks.length > 0)
+      : [
+          {
+            category: categoryFilter,
+            frameworks: DIGITAL_INTERVIEW_FRAMEWORKS.filter((definition) =>
+              definition.categories.some((frameworkCategory) => frameworkCategory === categoryFilter)
+            ),
+          },
+        ];
+
   return (
     <div className="space-y-7">
       <SectionHeading
@@ -505,34 +497,121 @@ function Step2({ framework, errors, onFrameworkChange, register }: Step2Props) {
         description="Choose the approach the AI interviewer will use to guide the conversation."
       />
 
-      <RadioGroup
-        value={framework}
-        onValueChange={onFrameworkChange}
-        className="gap-2"
-      >
-        {FRAMEWORK_OPTIONS.map((opt) => (
-          <label
-            key={opt.value}
-            htmlFor={`framework-${opt.value}`}
-            className={cn(
-              "flex cursor-pointer items-start gap-3 rounded-md border p-4 transition-colors",
-              framework === opt.value
-                ? "border-primary bg-primary/5"
-                : "border-border hover:border-foreground/25"
-            )}
-          >
-            <RadioGroupItem
-              id={`framework-${opt.value}`}
-              value={opt.value}
-              className="mt-0.5 shrink-0"
-            />
-            <div className="min-w-0 space-y-1">
-              <p className="text-sm font-medium leading-none">{opt.label}</p>
-              <p className="text-sm text-muted-foreground">{opt.description}</p>
-            </div>
-          </label>
-        ))}
-      </RadioGroup>
+      <div className="space-y-2">
+        <Label>Framework</Label>
+        <Popover open={frameworkOpen} onOpenChange={setFrameworkOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={frameworkOpen}
+              className="w-full max-w-2xl justify-between font-normal"
+            >
+              <span className={cn(!selectedFramework && "text-muted-foreground")}>{selectedFramework?.label ?? "Select a framework"}</span>
+              <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-40" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search frameworks…" />
+              <div className="flex flex-wrap gap-2 border-b px-3 py-3">
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilter("all")}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs transition-colors",
+                    categoryFilter === "all"
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-border text-muted-foreground hover:border-foreground/25 hover:text-foreground"
+                  )}
+                >
+                  All categories
+                </button>
+                {DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_ORDER.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => setCategoryFilter(category)}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs transition-colors",
+                      categoryFilter === category
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border text-muted-foreground hover:border-foreground/25 hover:text-foreground"
+                    )}
+                  >
+                    {DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_LABELS[category]}
+                  </button>
+                ))}
+              </div>
+              <CommandList>
+                <CommandEmpty>No frameworks match this search.</CommandEmpty>
+                {categoryGroups.map(({ category, frameworks }) => (
+                  <CommandGroup key={category} heading={DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_LABELS[category]}>
+                    {frameworks.map((opt) => (
+                      <CommandItem
+                        key={opt.id}
+                        value={`${opt.label} ${opt.description} ${opt.categories
+                          .map((cat) => DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_LABELS[cat])
+                          .join(" ")}`}
+                        onSelect={() => {
+                          onFrameworkChange(opt.id);
+                          setFrameworkOpen(false);
+                        }}
+                        className="items-start py-2.5"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 mt-0.5 size-4 shrink-0",
+                            framework === opt.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium leading-none">{opt.label}</span>
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {DIGITAL_INTERVIEW_FRAMEWORK_CATEGORY_LABELS[category]}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{opt.description}</p>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                ))}
+                <CommandGroup heading="Custom">
+                  <CommandItem
+                    value={`${DIGITAL_INTERVIEW_CUSTOM_FRAMEWORK.label} ${DIGITAL_INTERVIEW_CUSTOM_FRAMEWORK.description}`}
+                    onSelect={() => {
+                      onFrameworkChange("custom");
+                      setFrameworkOpen(false);
+                    }}
+                    className="items-start py-2.5"
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 mt-0.5 size-4 shrink-0",
+                        framework === "custom" ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium leading-none">Custom</span>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Freeform
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        You define the interview&apos;s focus. Provide a brief description and the AI will use it as its guiding intent.
+                      </p>
+                    </div>
+                  </CommandItem>
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
 
       {errors.framework && (
         <p className="text-sm text-destructive">{errors.framework.message}</p>
@@ -717,7 +796,7 @@ function Step4({ values, selectedConsultation }: Step4Props) {
         />
         <ReviewRow
           label="Framework"
-          value={FRAMEWORK_LABELS[values.framework] ?? values.framework}
+          value={DIGITAL_INTERVIEW_FRAMEWORK_LABELS[values.framework] ?? values.framework}
         />
         {values.framework === "custom" && values.customFrameworkPrompt && (
           <ReviewRow label="Interview focus" value={values.customFrameworkPrompt} multiline />

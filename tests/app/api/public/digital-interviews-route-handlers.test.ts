@@ -48,9 +48,9 @@ vi.mock("@/lib/data/digital-interviews", () => ({
   }),
   digitalInterviewSessionDetailsSchema: z.object({
     name: z.string().trim().min(1),
-    role: z.string().trim().min(1),
+    workType: z.string().trim().min(1),
     workGroup: z.string().trim().min(1),
-    organisation: z.string().trim().min(1),
+    organisation: z.string().trim().optional().nullable(),
     email: z.string().trim().email().optional().nullable(),
   }),
   ...digitalInterviewMock,
@@ -122,7 +122,7 @@ describe("digital interview public routes", () => {
     const response = (await PATCHDigitalInterviewSessionDetails(
       jsonRequest("http://test", {
         name: "Alex",
-        role: "Manager",
+        work_type: "Case manager",
         work_group: "Operations",
         organisation: "Example Org",
         email: "alex@example.com",
@@ -136,12 +136,71 @@ describe("digital interview public routes", () => {
       sessionToken: "session-1",
       details: {
         name: "Alex",
-        role: "Manager",
+        workType: "Case manager",
         workGroup: "Operations",
         organisation: "Example Org",
         email: "alex@example.com",
       },
     });
+  });
+
+  it("starts the interview with an assistant-first message", async () => {
+    digitalInterviewMock.getPublicDigitalInterviewSessionContext.mockResolvedValue({
+      flow: {
+        id: "flow-1",
+        title: "Digital interview",
+        framework: "appreciative_inquiry",
+        custom_framework_prompt: null,
+        topics: ["Workload", "Support"],
+        depth_level: "moderate",
+        status: "active",
+      },
+      session: {
+        id: "response-1",
+        flow_id: "flow-1",
+        session_token: "session-1",
+        interviewee_name: "Alex",
+        interviewee_email: null,
+        interviewee_role: "Case manager",
+        interviewee_work_group: "Operations",
+        interviewee_organisation: "Example Org",
+        person_id: null,
+        person_match_confidence: null,
+        conversation_history: [],
+        status: "in_progress",
+        completed_at: null,
+        created_at: "2026-04-23T10:00:00.000Z",
+        updated_at: "2026-04-23T10:00:00.000Z",
+      },
+    });
+
+    digitalInterviewMock.appendDigitalInterviewMessage.mockResolvedValue({ session_token: "session-1" });
+
+    const response = (await POSTDigitalInterviewChat(
+      jsonRequest("http://test", { start: true }) as NextRequest,
+      { params: Promise.resolve({ shareToken: "share-1", sessionToken: "session-1" }) }
+    )) as Response;
+
+    expect(response.status).toBe(200);
+    await expect(readJson(response)).resolves.toEqual({
+      assistantMessage: "Tell me more about workload.",
+      isComplete: false,
+      topicsProgress: [
+        { topic: "Workload", covered: false },
+        { topic: "Support", covered: false },
+      ],
+    });
+
+    expect(digitalInterviewMock.appendDigitalInterviewMessage).toHaveBeenCalledWith({
+      shareToken: "share-1",
+      sessionToken: "session-1",
+      message: {
+        role: "assistant",
+        content: "Tell me more about workload.",
+        timestamp: "2026-04-23T10:00:00.000Z",
+      },
+    });
+    expect(digitalInterviewMock.appendDigitalInterviewExchange).not.toHaveBeenCalled();
   });
 
   it("routes interview chat to the AI service and persists the response", async () => {

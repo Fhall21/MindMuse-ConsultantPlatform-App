@@ -168,31 +168,41 @@ export async function POST(
   const isComplete = Boolean(aiPayload.isComplete);
   const topicsCovered = aiPayload.topicsCovered ?? [];
   const closingMessage = isComplete
-    ? [
-        "Thank you,",
-        context.session.interviewee_name ?? "the interviewee",
-        "That's all I need for today. Your responses have been recorded and will be reviewed by the consultant. This conversation has now closed.",
-      ].join(" ")
+    ? `Thank you, ${context.session.interviewee_name ?? "the interviewee"}. That's all I need for today. Your responses have been recorded and will be reviewed by the consultant. This conversation has now closed.`
     : assistantMessage;
 
   try {
-    await appendDigitalInterviewMessage({
+    const userTurn = await appendDigitalInterviewMessage({
       shareToken,
       sessionToken,
       message: formatInterviewSessionTurn(parsedBody.data.userMessage, "user"),
     });
 
-    await appendDigitalInterviewMessage({
+    if (!userTurn) {
+      return jsonError("Failed to persist digital interview message");
+    }
+
+    const assistantTurn = await appendDigitalInterviewMessage({
       shareToken,
       sessionToken,
       message: formatInterviewSessionTurn(closingMessage, "assistant"),
     });
 
+    if (!assistantTurn) {
+      return jsonError("Failed to persist digital interview response");
+    }
+
     if (isComplete) {
-      await completeDigitalInterviewSession({ shareToken, sessionToken });
+      const completedSession = await completeDigitalInterviewSession({ shareToken, sessionToken });
+      if (!completedSession) {
+        return jsonError("Failed to complete digital interview session");
+      }
     }
   } catch (error) {
     console.error("Failed to persist digital interview chat turn", error);
+    return jsonError(
+      error instanceof Error ? error.message : "Failed to persist digital interview chat turn"
+    );
   }
 
   return NextResponse.json({

@@ -2,188 +2,181 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useParams } from "next/navigation";
+import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, Loader2, ShieldCheck, ShieldX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { SectionHeading } from "@/components/ui/section-heading";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
-import { fetchJson } from "@/hooks/api";
+import { ResponseCard } from "@/components/digital-interviews/response-card";
+import { DigitalInterviewThemePanel } from "@/components/digital-interviews/digital-interview-theme-panel";
 import { useDigitalInterviewDetail } from "@/hooks/use-digital-interviews";
 import { formatDigitalInterviewFramework } from "@/lib/digital-interviews";
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatStatus(status: "draft" | "active" | "closed") {
-  if (status === "active") {
-    return <Badge variant="default">Active</Badge>;
-  }
-
-  if (status === "closed") {
-    return <Badge variant="outline">Closed</Badge>;
-  }
-
+function StatusBadge({ status }: { status: "draft" | "active" | "closed" }) {
+  if (status === "active") return <Badge variant="default">Active</Badge>;
+  if (status === "closed") return <Badge variant="outline">Closed</Badge>;
   return <Badge variant="secondary">Draft</Badge>;
 }
 
 export default function DigitalInterviewDetailPage() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const params = useParams<{ flowId: string }>();
-  const flowId = params.flowId ?? null;
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isCopying, setIsCopying] = useState(false);
+  const flowId = params.flowId ?? "";
+  const queryClient = useQueryClient();
+  const { data: flow, isPending, isLoading, error } = useDigitalInterviewDetail(flowId);
 
-  const { data: flow, isLoading, error } = useDigitalInterviewDetail(flowId ?? "");
+  const [togglingStatus, setTogglingStatus] = useState(false);
+  const [copyLabel, setCopyLabel] = useState("Copy share link");
 
-  async function updateStatus(status: "active" | "closed") {
-    if (!flowId) {
-      return;
-    }
-
-    setIsUpdating(true);
+  async function handleStatusToggle() {
+    if (!flow) return;
+    const nextStatus = flow.status === "active" ? "closed" : "active";
+    setTogglingStatus(true);
     try {
-      await fetchJson(`/api/client/digital-interviews/${flowId}`, {
+      const res = await fetch(`/api/client/digital-interviews/${flowId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status: nextStatus }),
       });
-
+      if (!res.ok) throw new Error("Failed to update status");
       await queryClient.invalidateQueries({ queryKey: ["digital-interviews", "flow", flowId] });
       await queryClient.invalidateQueries({ queryKey: ["digital-interviews", "flows"] });
-      await queryClient.invalidateQueries({ queryKey: ["digital-interviews", "unread-count"] });
-      router.refresh();
-    } catch (updateError) {
-      toast.error(updateError instanceof Error ? updateError.message : "Failed to update interview");
-    } finally {
-      setIsUpdating(false);
-    }
-  }
-
-  async function copyShareLink() {
-    if (!flow?.share_token || typeof window === "undefined") {
-      return;
-    }
-
-    setIsCopying(true);
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/interview/${flow.share_token}`);
-      toast.success("Share link copied");
+      toast.success(nextStatus === "active" ? "Interview activated." : "Interview closed.");
     } catch {
-      toast.error("Failed to copy share link");
+      toast.error("Failed to update status.");
     } finally {
-      setIsCopying(false);
+      setTogglingStatus(false);
     }
   }
 
-  if (isLoading || !flow) {
+  function handleCopyShareLink() {
+    if (!flow) return;
+    const url = `${window.location.origin}/interview/${flow.share_token}`;
+    void navigator.clipboard.writeText(url).then(() => {
+      setCopyLabel("Copied");
+      toast.success("Share link copied.");
+      setTimeout(() => setCopyLabel("Copy share link"), 2000);
+    });
+  }
+
+  if (isPending || isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-72" />
-          <Skeleton className="h-5 w-96" />
-        </div>
-        <Card>
-          <CardContent className="space-y-3 p-6">
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-40" />
-          </CardContent>
-        </Card>
+      <div className="mx-auto max-w-2xl space-y-6">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-48 w-full" />
       </div>
     );
   }
 
-  if (error) {
+  if (error || !flow) {
     return (
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Digital Interview</h1>
-          <p className="text-sm text-destructive">Failed to load digital interview.</p>
-        </div>
-        <Button asChild variant="outline">
+      <div className="space-y-2">
+        <p className="text-sm text-destructive">
+          Failed to load interview data. Please refresh.
+        </p>
+        <Button variant="ghost" asChild>
           <Link href="/digital-interviews">Back to digital interviews</Link>
         </Button>
       </div>
     );
   }
 
-  const shareLink = `/interview/${flow.share_token}`;
-  const primaryAction = flow.status === "draft" ? "Activate Interview" : flow.status === "active" ? "Close Interview" : null;
+  const completedResponses = flow.responses ?? [];
+  const responseCount = completedResponses.length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">{flow.title}</h1>
-            {formatStatus(flow.status)}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {formatDigitalInterviewFramework(flow.framework)} · {flow.completed_count} response
-            {flow.completed_count === 1 ? "" : "s"} received · Created {formatDate(flow.created_at)}
-          </p>
-        </div>
+    <div className="mx-auto max-w-2xl space-y-8">
+      {/* Header */}
+      <div className="space-y-4">
+        <nav className="text-sm text-muted-foreground">
+          <Link href="/digital-interviews" className="hover:text-foreground">
+            Digital Interviews
+          </Link>
+          <span className="mx-2">/</span>
+          <span className="text-foreground">{flow.title}</span>
+        </nav>
 
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline">
-            <Link href="/digital-interviews">Back</Link>
-          </Button>
-          <Button variant="outline" onClick={copyShareLink} disabled={isCopying}>
-            {isCopying ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Copy className="mr-2 size-4" />}
-            Copy share link
-          </Button>
-          {primaryAction && (
-            <Button
-              onClick={() => updateStatus(flow.status === "draft" ? "active" : "closed")}
-              disabled={isUpdating}
-            >
-              {isUpdating ? (
-                <Loader2 className="mr-2 size-4 animate-spin" />
-              ) : flow.status === "draft" ? (
-                <ShieldCheck className="mr-2 size-4" />
-              ) : (
-                <ShieldX className="mr-2 size-4" />
-              )}
-              {primaryAction}
+        <div className="space-y-4 rounded-xl border border-border/50 bg-card p-4 sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 flex-1 space-y-1">
+              <h1 className="text-xl font-semibold tracking-tight">{flow.title}</h1>
+              <p className="text-sm text-muted-foreground">
+                {formatDigitalInterviewFramework(flow.framework)}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <StatusBadge status={flow.status} />
+              {flow.status !== "closed" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleStatusToggle()}
+                  disabled={togglingStatus}
+                >
+                  {togglingStatus
+                    ? "Saving…"
+                    : flow.status === "active"
+                      ? "Close interview"
+                      : "Activate"}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 border-t border-border/50 pt-3">
+            <p className="text-sm text-muted-foreground">
+              {responseCount === 0
+                ? "No responses yet"
+                : `${responseCount} response${responseCount === 1 ? "" : "s"} received`}
+            </p>
+            <Button size="sm" variant="outline" onClick={handleCopyShareLink}>
+              {copyLabel}
             </Button>
-          )}
+          </div>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Share link</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-            {shareLink}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Task 07 will add transcript review, theme extraction, and canvas linking here.
-          </p>
-        </CardContent>
-      </Card>
+      {/* Responses */}
+      <section className="space-y-3">
+        <SectionHeading>Responses</SectionHeading>
+        {responseCount === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/80 bg-muted/20 p-4 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              No responses yet. Share the interview link to start collecting data.
+            </p>
+            <Button size="sm" variant="outline" onClick={handleCopyShareLink}>
+              {copyLabel}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {completedResponses.map((response) => (
+              <ResponseCard key={response.id} flowId={flowId} response={response} />
+            ))}
+          </div>
+        )}
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Status</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>Flow status: {flow.status}</p>
-          <p>Share token: {flow.share_token}</p>
-          <p>Responses received: {flow.completed_count}</p>
-        </CardContent>
-      </Card>
+      <Separator />
+
+      {/* Theme extraction */}
+      <section className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <SectionHeading>Themes</SectionHeading>
+          {flow.consultation_id ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/canvas/round/${flow.consultation_id}`}>
+                Evidence canvas &rarr;
+              </Link>
+            </Button>
+          ) : null}
+        </div>
+        <DigitalInterviewThemePanel flowId={flowId} hasResponses={responseCount > 0} />
+      </section>
     </div>
   );
 }

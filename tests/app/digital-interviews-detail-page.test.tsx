@@ -4,70 +4,124 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import DigitalInterviewDetailPage from "@/app/(app)/digital-interviews/[flowId]/page";
 
-const pageState = vi.hoisted(() => ({
-  flowId: "flow-1",
-  isLoading: false,
-  error: null as Error | null,
-  data: null as null | {
+type FlowDetail = {
+  id: string;
+  title: string;
+  framework: "appreciative_inquiry" | "psychological_safety" | "custom";
+  status: "draft" | "active" | "closed";
+  completed_count: number;
+  consultation_id: string | null;
+  share_token: string;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  custom_framework_prompt: string | null;
+  topics: string[];
+  depth_level: "surface" | "moderate" | "deep";
+  responses: Array<{
     id: string;
-    title: string;
-    framework: "appreciative_inquiry" | "psychological_safety" | "custom";
-    status: "draft" | "active" | "closed";
-    completed_count: number;
+    flow_id: string;
+    interviewee_name: string | null;
+    interviewee_role: string | null;
+    interviewee_organisation: string | null;
+    person_id: string | null;
+    status: "in_progress" | "completed" | "abandoned";
+    completed_at: string | null;
     created_at: string;
-    share_token: string;
-  },
-  invalidateQueries: vi.fn(),
-  refresh: vi.fn(),
-}));
+  }>;
+};
+
+let mockFlow: FlowDetail | null = null;
+let mockIsPending = false;
+let mockError: Error | null = null;
 
 vi.mock("next/navigation", () => ({
-  useParams: () => ({ flowId: pageState.flowId }),
-  useRouter: () => ({
-    refresh: pageState.refresh,
-  }),
+  useRouter: () => ({ refresh: vi.fn() }),
+  useParams: () => ({ flowId: "flow-1" }),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({
-    invalidateQueries: pageState.invalidateQueries,
-  }),
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 
 vi.mock("@/hooks/use-digital-interviews", () => ({
   useDigitalInterviewDetail: () => ({
-    data: pageState.data,
-    isLoading: pageState.isLoading,
-    error: pageState.error,
+    data: mockFlow,
+    isPending: mockIsPending,
+    isLoading: false,
+    error: mockError,
   }),
 }));
 
+vi.mock("@/components/digital-interviews/response-card", () => ({
+  ResponseCard: ({ response }: { response: { id: string } }) => (
+    <div data-testid={`response-card-${response.id}`} />
+  ),
+}));
+
+vi.mock("@/components/digital-interviews/digital-interview-theme-panel", () => ({
+  DigitalInterviewThemePanel: () => <div data-testid="theme-panel" />,
+}));
+
 beforeEach(() => {
-  pageState.flowId = "flow-1";
-  pageState.isLoading = false;
-  pageState.error = null;
-  pageState.data = {
+  mockIsPending = false;
+  mockError = null;
+  mockFlow = {
     id: "flow-1",
     title: "Interview A",
     framework: "appreciative_inquiry",
     status: "draft",
-    completed_count: 2,
-    created_at: "2026-04-23T10:00:00.000Z",
+    completed_count: 1,
+    consultation_id: null,
     share_token: "share-1",
+    created_at: "2026-04-23T10:00:00.000Z",
+    updated_at: "2026-04-23T10:00:00.000Z",
+    user_id: "user-1",
+    custom_framework_prompt: null,
+    topics: [],
+    depth_level: "moderate",
+    responses: [
+      {
+        id: "resp-1",
+        flow_id: "flow-1",
+        interviewee_name: "Jane Doe",
+        interviewee_role: "Manager",
+        interviewee_organisation: "ACME",
+        person_id: null,
+        status: "completed",
+        completed_at: "2026-04-23T11:00:00.000Z",
+        created_at: "2026-04-23T10:30:00.000Z",
+      },
+    ],
   };
-  pageState.invalidateQueries.mockReset();
-  pageState.refresh.mockReset();
 });
 
 describe("DigitalInterviewDetailPage", () => {
-  it("shows the interview metadata and admin actions", () => {
+  it("shows the interview title", async () => {
     render(<DigitalInterviewDetailPage />);
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Interview A");
+  });
 
-    expect(screen.getByRole("heading", { name: "Interview A" })).toBeInTheDocument();
-    expect(screen.getByText(/Appreciative Inquiry/)).toBeInTheDocument();
-    expect(screen.getByText(/2 responses received/)).toBeInTheDocument();
-    expect(screen.getByText("/interview/share-1")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy share link" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Activate Interview" })).toBeInTheDocument();
+  it("shows response count", async () => {
+    render(<DigitalInterviewDetailPage />);
+    expect(await screen.findByText(/1 response received/)).toBeInTheDocument();
+  });
+
+  it("renders theme panel", async () => {
+    render(<DigitalInterviewDetailPage />);
+    expect(await screen.findByTestId("theme-panel")).toBeInTheDocument();
+  });
+
+  it("shows empty state when no responses", async () => {
+    mockFlow!.responses = [];
+    render(<DigitalInterviewDetailPage />);
+    expect(await screen.findByText(/Share the interview link to start collecting data/)).toBeInTheDocument();
+  });
+
+  it("shows error state", async () => {
+    mockFlow = null;
+    mockError = new Error("Network error");
+    render(<DigitalInterviewDetailPage />);
+    expect(await screen.findByText(/Failed to load interview data/)).toBeInTheDocument();
   });
 });

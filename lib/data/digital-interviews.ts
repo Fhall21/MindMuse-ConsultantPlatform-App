@@ -85,8 +85,20 @@ export interface DigitalInterviewFlowListItem {
   updated_at: string;
 }
 
+export interface DigitalInterviewResponseSummary {
+  id: string;
+  flow_id: string;
+  interviewee_name: string | null;
+  interviewee_role: string | null;
+  interviewee_organisation: string | null;
+  person_id: string | null;
+  status: "in_progress" | "completed" | "abandoned";
+  completed_at: string | null;
+  created_at: string;
+}
+
 export interface DigitalInterviewFlowDetail extends DigitalInterviewFlowListItem {
-  responses: DigitalInterviewResponseRecord[];
+  responses: DigitalInterviewResponseSummary[];
 }
 
 export interface PublicDigitalInterviewFlow {
@@ -173,6 +185,20 @@ function mapResponseRow(row: DigitalInterviewResponseRow): DigitalInterviewRespo
     completed_at: toIsoString(row.completedAt),
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
+  };
+}
+
+function mapResponseRowSummary(row: DigitalInterviewResponseRow): DigitalInterviewResponseSummary {
+  return {
+    id: row.id,
+    flow_id: row.flowId,
+    interviewee_name: row.intervieweeName,
+    interviewee_role: row.intervieweeRole,
+    interviewee_organisation: row.intervieweeOrganisation,
+    person_id: row.personId,
+    status: row.status as DigitalInterviewResponseSummary["status"],
+    completed_at: toIsoString(row.completedAt),
+    created_at: row.createdAt.toISOString(),
   };
 }
 
@@ -487,13 +513,62 @@ export async function getDigitalInterviewFlowDetailForUser(
   const responses = await db
     .select()
     .from(digitalInterviewResponses)
-    .where(eq(digitalInterviewResponses.flowId, flowId))
+    .where(
+      and(
+        eq(digitalInterviewResponses.flowId, flowId),
+        eq(digitalInterviewResponses.status, "completed")
+      )
+    )
     .orderBy(desc(digitalInterviewResponses.createdAt));
 
   return {
     ...mapFlowRow(flow),
-    responses: responses.map(mapResponseRow),
+    responses: responses.map(mapResponseRowSummary),
   };
+}
+
+export async function getDigitalInterviewResponseTranscript(
+  flowId: string,
+  responseId: string,
+  userId: string
+): Promise<DigitalInterviewResponseRecord | null> {
+  const flow = await getOwnedFlowRow(flowId, userId);
+  if (!flow) return null;
+
+  const [response] = await db
+    .select()
+    .from(digitalInterviewResponses)
+    .where(
+      and(
+        eq(digitalInterviewResponses.id, responseId),
+        eq(digitalInterviewResponses.flowId, flowId),
+        eq(digitalInterviewResponses.status, "completed")
+      )
+    )
+    .limit(1);
+
+  return response ? mapResponseRow(response) : null;
+}
+
+export async function getDigitalInterviewCompletedResponses(
+  flowId: string,
+  userId: string
+) {
+  const flow = await getOwnedFlowRow(flowId, userId);
+  if (!flow) return null;
+
+  const responses = await db
+    .select()
+    .from(digitalInterviewResponses)
+    .where(
+      and(
+        eq(digitalInterviewResponses.flowId, flowId),
+        eq(digitalInterviewResponses.status, "completed")
+      )
+    )
+    .orderBy(desc(digitalInterviewResponses.createdAt));
+
+  return { flow: mapFlowRow(flow), responses: responses.map(mapResponseRow) };
 }
 
 export async function updateDigitalInterviewFlowStatus(

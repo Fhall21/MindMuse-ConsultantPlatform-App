@@ -114,8 +114,9 @@ export const insights = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     meetingId: uuid("meeting_id")
-      .notNull()
       .references(() => meetings.id, { onDelete: "cascade" }),
+    flowId: uuid("flow_id")
+      .references(() => digitalInterviewFlows.id, { onDelete: "cascade" }),
     label: text("label").notNull(),
     description: text("description"),
     accepted: boolean("accepted").default(false).notNull(),
@@ -125,7 +126,12 @@ export const insights = pgTable(
   },
   (table) => ({
     meetingIdx: index("idx_insights_meeting_id").on(table.meetingId),
+    flowIdx: index("idx_insights_flow_id").on(table.flowId),
     userAddedIdx: index("idx_insights_user_added").on(table.isUserAdded),
+    sourceCheck: check(
+      "insights_source_check",
+      sql`(meeting_id IS NOT NULL) OR (flow_id IS NOT NULL)`
+    ),
   })
 );
 

@@ -104,7 +104,7 @@ export function mapMeetingRecord(row: MeetingRow): Meeting {
 export function mapInsightRecord(row: InsightRow): Insight {
   return {
     id: row.id,
-    meeting_id: row.meetingId,
+    meeting_id: row.meetingId ?? "",
     label: row.label,
     description: row.description,
     accepted: row.accepted,

@@ -86,6 +86,7 @@ export function mapMeetingRecord(row: MeetingRow): Meeting {
     title: row.title,
     label: row.title,
     transcript_raw: row.transcriptRaw ?? null,
+    notes: row.notes ?? null,
     description: null,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),

@@ -19,7 +19,6 @@ export interface Meeting {
   label: string;
   transcript_raw: string | null;
   description: string | null;
-  // TODO: Agent 1 — add `notes text` column to meetings migration
   notes?: string | null;
   created_at: string;
   updated_at: string;

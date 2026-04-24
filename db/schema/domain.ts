@@ -70,6 +70,7 @@ export const meetings = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     title: text("title").notNull(),
     transcriptRaw: text("transcript_raw"),
+    notes: text("notes"),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),

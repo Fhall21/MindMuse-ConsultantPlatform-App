@@ -22,6 +22,7 @@ import { useDigitalInterviewUnreadCount } from "@/hooks/use-digital-interviews";
 
 const consultationsSubItems = [
   { title: "All Meetings", href: "/meetings" },
+  { title: "Digital Interviews", href: "/digital-interviews" },
   { title: "Consultations", href: "/consultations" },
 ];
 
@@ -37,7 +38,9 @@ export function AppSidebar() {
   const unreadCountQuery = useDigitalInterviewUnreadCount();
   const unreadCount = unreadCountQuery.data ?? 0;
   const isInConsultations =
-    pathname.startsWith("/meetings") || pathname.startsWith("/consultations");
+    pathname.startsWith("/meetings") ||
+    pathname.startsWith("/digital-interviews") ||
+    pathname.startsWith("/consultations");
   const isInSettings = pathname.startsWith("/settings");
 
   return (
@@ -75,14 +78,21 @@ export function AppSidebar() {
                           <SidebarMenuSubButton
                             asChild
                             isActive={
-                              item.href === "/meetings"
-                                ? pathname === "/meetings" ||
-                                  pathname.startsWith("/meetings/") ||
-                                  false
+                              item.href === "/meetings" || item.href === "/digital-interviews"
+                                ? pathname === item.href || pathname.startsWith(`${item.href}/`)
                                 : pathname.startsWith(item.href)
                             }
                           >
-                            <Link href={item.href}>{item.title}</Link>
+                            <Link href={item.href}>
+                              <span className="flex w-full items-center justify-between gap-2">
+                                <span>{item.title}</span>
+                                {item.href === "/digital-interviews" && unreadCount > 0 ? (
+                                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted-foreground px-1.5 text-[10px] font-medium text-background">
+                                    {unreadCount > 9 ? "9+" : unreadCount}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       ))}

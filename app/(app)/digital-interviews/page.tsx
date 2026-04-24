@@ -4,6 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { ConsultationsNav } from "@/components/consultations/consultations-nav";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -41,105 +49,97 @@ export default function DigitalInterviewsPage() {
   const router = useRouter();
   const { data: flows = [], isLoading, error } = useDigitalInterviews();
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Digital Interviews</h1>
-          <p className="text-sm text-muted-foreground">Loading digital interviews.</p>
-        </div>
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Digital Interviews</h1>
+      </div>
+
+      <ConsultationsNav />
+
+      <Card className="border-border/70 shadow-xs">
+        <CardHeader>
+          <div>
+            <CardTitle>Find digital interviews</CardTitle>
+            <CardDescription>
+              Use async interviews when participants are dispersed, you need the same prompts across
+              a larger group, or live scheduling is hard.
+            </CardDescription>
+          </div>
+          <CardAction>
+            <Button asChild>
+              <Link href="/digital-interviews/new">Create Digital Interview</Link>
+            </Button>
+          </CardAction>
+        </CardHeader>
+      </Card>
+
+      {isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
         </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Digital Interviews</h1>
+      ) : error ? (
+        <div className="space-y-3 border-t border-border/80 pt-4">
           <p className="text-sm text-destructive">Failed to load digital interviews.</p>
-        </div>
-        <Button asChild>
-          <Link href="/digital-interviews/new">Create Digital Interview</Link>
-        </Button>
-      </div>
-    );
-  }
-
-  if (flows.length === 0) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-semibold tracking-tight">Digital Interviews</h1>
           <Button asChild>
             <Link href="/digital-interviews/new">Create Digital Interview</Link>
           </Button>
         </div>
-        <p className="text-sm text-muted-foreground">No digital interviews yet.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Digital Interviews</h1>
+      ) : flows.length === 0 ? (
+        <div className="space-y-3 border-t border-border/80 pt-4">
+          <p className="text-sm text-muted-foreground">No digital interviews yet.</p>
+          <Button asChild>
+            <Link href="/digital-interviews/new">Create Digital Interview</Link>
+          </Button>
         </div>
-        <Button asChild>
-          <Link href="/digital-interviews/new">Create Digital Interview</Link>
-        </Button>
-      </div>
-
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Title</TableHead>
-            <TableHead>Framework</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Responses</TableHead>
-            <TableHead>Created</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {flows.map((flow) => (
-            <TableRow
-              key={flow.id}
-              className="cursor-pointer transition-colors hover:bg-muted/40"
-              onClick={() => router.push(`/digital-interviews/${flow.id}`)}
-            >
-              <TableCell>
-                <Link
-                  href={`/digital-interviews/${flow.id}`}
-                  className="font-medium hover:underline"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  {flow.title}
-                </Link>
-              </TableCell>
-              <TableCell>
-                <span className="text-sm text-muted-foreground">
-                  {formatDigitalInterviewFramework(flow.framework)}
-                </span>
-              </TableCell>
-              <TableCell>{formatStatus(flow.status)}</TableCell>
-              <TableCell>
-                <span className="text-sm text-muted-foreground">
-                  {flow.completed_count} response{flow.completed_count === 1 ? "" : "s"}
-                </span>
-              </TableCell>
-              <TableCell>
-                <span className="text-sm text-muted-foreground">{formatDate(flow.created_at)}</span>
-              </TableCell>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Title</TableHead>
+              <TableHead>Framework</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Responses</TableHead>
+              <TableHead>Created</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {flows.map((flow) => (
+              <TableRow
+                key={flow.id}
+                className="cursor-pointer transition-colors hover:bg-muted/40"
+                onClick={() => router.push(`/digital-interviews/${flow.id}`)}
+              >
+                <TableCell>
+                  <Link
+                    href={`/digital-interviews/${flow.id}`}
+                    className="font-medium hover:underline"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {flow.title}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <span className="text-sm text-muted-foreground">
+                    {formatDigitalInterviewFramework(flow.framework)}
+                  </span>
+                </TableCell>
+                <TableCell>{formatStatus(flow.status)}</TableCell>
+                <TableCell>
+                  <span className="text-sm text-muted-foreground">
+                    {flow.completed_count} response{flow.completed_count === 1 ? "" : "s"}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="text-sm text-muted-foreground">{formatDate(flow.created_at)}</span>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
     </div>
   );
 }

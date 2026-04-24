@@ -105,9 +105,9 @@ export function PreferencesForm() {
 
   useEffect(() => {
     if (prefs) {
-      setConsultationTypes(prefs.consultation_types ?? []);
-      setFocusAreas(prefs.focus_areas ?? []);
-      setExcludedTopics(prefs.excluded_topics ?? []);
+      setConsultationTypes(prefs.consultationTypes ?? []);
+      setFocusAreas(prefs.focusAreas ?? []);
+      setExcludedTopics(prefs.excludedTopics ?? []);
     }
   }, [prefs]);
 

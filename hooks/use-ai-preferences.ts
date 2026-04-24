@@ -23,7 +23,14 @@ export function useUpdateAIPreferences() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      // Immediately write the PATCH response into the cache — prevents the form
+      // from seeing stale (or undefined) field values during the background GET.
+      queryClient.setQueryData<AIPreferencesResponse>(["ai-preferences"], (old) => ({
+        ...(old ?? ({} as AIPreferencesResponse)),
+        ...updated,
+      }));
+      // Still invalidate so signalCount and any other derived fields refresh.
       queryClient.invalidateQueries({ queryKey: ["ai-preferences"] });
     },
   });

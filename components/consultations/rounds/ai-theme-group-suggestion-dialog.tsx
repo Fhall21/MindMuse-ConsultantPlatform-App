@@ -142,40 +142,17 @@ export function AiThemeGroupSuggestionDialog({
         )}
       >
         {/* ── Header ──────────────────────────────────────────── */}
-        <DialogHeader className="shrink-0 border-b border-border/50 px-5 pb-4 pt-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-0.5">
-              <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-                <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-                Suggest theme clusters
-              </DialogTitle>
-              {phase === "setup" && (
-                <DialogDescription className="text-xs text-muted-foreground">
-                  Pick 2 or more themes — the AI will show how all themes
-                  naturally cluster around them.
-                </DialogDescription>
-              )}
-            </div>
-
-            {/* Progress pill — only in review phase */}
-            {phase === "review" && suggestions.length > 0 && (
-              <div className="flex shrink-0 items-center gap-2 pt-0.5 text-xs">
-                {acceptedCount > 0 && (
-                  <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                    {acceptedCount} added
-                  </span>
-                )}
-                {skippedCount > 0 && (
-                  <span className="text-muted-foreground">{skippedCount} skipped</span>
-                )}
-                {pendingCount > 0 && (
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
-                    {pendingCount} left
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+        <DialogHeader className="shrink-0 border-b border-border/50 px-5 pb-4 pr-12 pt-5">
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+            Suggest theme clusters
+          </DialogTitle>
+          {phase === "setup" && (
+            <DialogDescription className="text-xs text-muted-foreground">
+              Pick 2 or more themes — the AI will show how all themes
+              naturally cluster around them.
+            </DialogDescription>
+          )}
         </DialogHeader>
 
         {/* ── Scrollable body ──────────────────────────────────── */}
@@ -253,21 +230,38 @@ export function AiThemeGroupSuggestionDialog({
             /* ── Review ─────────────────────────────────────────── */
             <div>
               {/* Re-run strip */}
-              <div className="flex items-center justify-between border-b border-border/40 bg-muted/20 px-5 py-2.5">
-                <p className="truncate text-xs text-muted-foreground">
-                  Focus:{" "}
-                  <span className="font-medium text-foreground">
-                    {Array.from(selectedFocusLabels).join(" · ")}
-                  </span>
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setPhase("setup")}
-                  className="ml-4 flex shrink-0 items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                >
-                  <RotateCcw className="h-3 w-3" />
-                  Re-run
-                </button>
+              <div className="border-b border-border/40 bg-muted/20 px-5 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="truncate text-xs text-muted-foreground">
+                    Focus:{" "}
+                    <span className="font-medium text-foreground">
+                      {Array.from(selectedFocusLabels).join(" · ")}
+                    </span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPhase("setup")}
+                    className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Re-run
+                  </button>
+                </div>
+                {suggestions.length > 0 && (acceptedCount > 0 || skippedCount > 0 || pendingCount > 0) && (
+                  <div className="mt-1.5 flex items-center gap-3 text-xs">
+                    {pendingCount > 0 && (
+                      <span className="text-muted-foreground">{pendingCount} to review</span>
+                    )}
+                    {acceptedCount > 0 && (
+                      <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                        {acceptedCount} added
+                      </span>
+                    )}
+                    {skippedCount > 0 && (
+                      <span className="text-muted-foreground">{skippedCount} skipped</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {suggestions.length === 0 ? (

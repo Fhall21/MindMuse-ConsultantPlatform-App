@@ -1,33 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { useRef, useState } from "react";
+import { Check, Loader2, RotateCcw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import {
   suggestThemeGroups,
   type SuggestedThemeGroup,
 } from "@/lib/actions/consultation-workflow";
 import type { SourceTheme } from "@/types/round-detail";
 
+type Decision = "accepted" | "skipped";
+
 interface AiThemeGroupSuggestionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   roundLabel: string | null;
-  sourceThemes: SourceTheme[];           // All ungrouped source themes
-  /** Pre-selected theme IDs from the workspace — seeds the focus picker on open. */
-  initialSelectedIds?: Set<string>;
+  sourceThemes: SourceTheme[];
   onAcceptSuggestion: (suggestion: SuggestedThemeGroup) => Promise<void>;
 }
 
@@ -36,65 +34,37 @@ export function AiThemeGroupSuggestionDialog({
   onOpenChange,
   roundLabel,
   sourceThemes,
-  initialSelectedIds,
   onAcceptSuggestion,
 }: AiThemeGroupSuggestionDialogProps) {
+  const [phase, setPhase] = useState<"setup" | "review">("setup");
   const [selectedFocusLabels, setSelectedFocusLabels] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestedThemeGroup[]>([]);
-  const [acceptedLabels, setAcceptedLabels] = useState<Set<string>>(new Set());
-  const [rejectedLabels, setRejectedLabels] = useState<Set<string>>(new Set());
+  const [decisions, setDecisions] = useState<Map<string, Decision>>(new Map());
+  const [accepting, setAccepting] = useState<Set<string>>(new Set());
+  const themeByIdSnapshot = useRef<Map<string, SourceTheme>>(new Map());
 
-  // Seed focus picker from workspace selection when dialog opens.
-  useEffect(() => {
-    if (!open) return;
-    if (!initialSelectedIds || initialSelectedIds.size === 0) return;
-    const seededLabels = new Set(
-      sourceThemes
-        .filter((t) => initialSelectedIds.has(t.id))
-        .map((t) => t.label)
-    );
-    if (seededLabels.size > 0) {
-      setSelectedFocusLabels(seededLabels);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  // Unique labels across all source themes for the focus picker
-  const uniqueThemeLabels = Array.from(new Set(sourceThemes.map((t) => t.label))).sort();
-
-  const themeById = new Map(sourceThemes.map((t) => [t.id, t]));
+  const uniqueThemeLabels = Array.from(
+    new Set(sourceThemes.map((t) => t.label))
+  ).sort();
 
   const toggleFocus = (label: string) => {
     setSelectedFocusLabels((prev) => {
       const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
+      next.has(label) ? next.delete(label) : next.add(label);
       return next;
     });
   };
 
-  const handleSelectAllFocusThemes = () => {
-    setSelectedFocusLabels(new Set(uniqueThemeLabels));
-  };
-
   const handleSuggest = async () => {
     if (selectedFocusLabels.size < 2) return;
-
-    // Only send the themes the user selected — not all ungrouped themes.
-    const scopedThemes = sourceThemes.filter((t) => selectedFocusLabels.has(t.label));
-    if (scopedThemes.length < 2) {
-      toast.error("Select at least 2 themes to generate suggestions.");
-      return;
-    }
-
     setIsLoading(true);
     setSuggestions([]);
-    setAcceptedLabels(new Set());
-    setRejectedLabels(new Set());
+    setDecisions(new Map());
+    themeByIdSnapshot.current = new Map(sourceThemes.map((t) => [t.id, t]));
 
     try {
-      const themeInputs = scopedThemes.map((t) => ({
+      const themeInputs = sourceThemes.map((t) => ({
         theme_id: t.id,
         label: t.label,
         description: t.description ?? null,
@@ -109,6 +79,7 @@ export function AiThemeGroupSuggestionDialog({
       );
 
       setSuggestions(result);
+      setPhase("review");
 
       if (result.length === 0) {
         toast.info("No natural clusters found. Try different focus themes.");
@@ -121,203 +92,305 @@ export function AiThemeGroupSuggestionDialog({
   };
 
   const handleAccept = async (suggestion: SuggestedThemeGroup) => {
+    setAccepting((prev) => new Set([...prev, suggestion.label]));
     try {
       await onAcceptSuggestion(suggestion);
-      setAcceptedLabels((prev) => new Set([...prev, suggestion.label]));
+      setDecisions((prev) => new Map(prev).set(suggestion.label, "accepted"));
     } catch {
       toast.error("Failed to create theme group");
+    } finally {
+      setAccepting((prev) => {
+        const next = new Set(prev);
+        next.delete(suggestion.label);
+        return next;
+      });
     }
   };
 
-  const handleReject = (suggestion: SuggestedThemeGroup) => {
-    setRejectedLabels((prev) => new Set([...prev, suggestion.label]));
+  const handleSkip = (suggestion: SuggestedThemeGroup) => {
+    setDecisions((prev) => new Map(prev).set(suggestion.label, "skipped"));
+  };
+
+  const handleUndo = (suggestion: SuggestedThemeGroup) => {
+    setDecisions((prev) => {
+      const next = new Map(prev);
+      next.delete(suggestion.label);
+      return next;
+    });
   };
 
   const handleClose = () => {
     onOpenChange(false);
-    setSelectedFocusLabels(new Set());
-    setSuggestions([]);
-    setAcceptedLabels(new Set());
-    setRejectedLabels(new Set());
+    setTimeout(() => {
+      setPhase("setup");
+      setSelectedFocusLabels(new Set());
+      setSuggestions([]);
+      setDecisions(new Map());
+    }, 200);
   };
 
-  const activeSuggestions = suggestions.filter((s) => !rejectedLabels.has(s.label));
-
-  const undecidedCount = suggestions.length > 0
-    ? suggestions.filter((s) => !acceptedLabels.has(s.label) && !rejectedLabels.has(s.label)).length
-    : 0;
+  const acceptedCount = [...decisions.values()].filter((d) => d === "accepted").length;
+  const skippedCount = [...decisions.values()].filter((d) => d === "skipped").length;
+  const pendingCount = suggestions.length - acceptedCount - skippedCount;
+  const allDecided = suggestions.length > 0 && pendingCount === 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
-            AI Suggested Theme Groups
+      <DialogContent
+        className={cn(
+          "flex max-h-[85vh] max-w-lg flex-col gap-0 overflow-hidden p-0",
+        )}
+      >
+        {/* ── Header ──────────────────────────────────────────── */}
+        <DialogHeader className="shrink-0 border-b border-border/50 px-5 pb-4 pr-12 pt-5">
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+            Suggest theme clusters
           </DialogTitle>
-          <DialogDescription>
-            Select 2 or more themes. The AI will suggest how those themes
-            cluster into groups. Only the selected themes are analysed.
-          </DialogDescription>
+          {phase === "setup" && (
+            <DialogDescription className="text-xs text-muted-foreground">
+              Pick 2 or more themes — the AI will show how all themes
+              naturally cluster around them.
+            </DialogDescription>
+          )}
         </DialogHeader>
 
-        {/* Focus theme picker */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium">Select focus themes</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleSelectAllFocusThemes}
-              disabled={uniqueThemeLabels.length === 0}
-              className="h-7 px-2.5 text-xs"
-            >
-              Select all
-            </Button>
-          </div>
-          <div className="space-y-1.5 max-h-48 overflow-y-auto border rounded-xl p-3">
-            {uniqueThemeLabels.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No ungrouped themes available.
-              </p>
-            ) : (
-              uniqueThemeLabels.map((label) => (
-                <div key={label} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`focus-${label}`}
-                    checked={selectedFocusLabels.has(label)}
-                    onCheckedChange={() => toggleFocus(label)}
-                  />
-                  <Label
-                    htmlFor={`focus-${label}`}
-                    className="text-sm cursor-pointer leading-snug"
-                  >
-                    {label}
-                  </Label>
-                </div>
-              ))
-            )}
-          </div>
+        {/* ── Scrollable body ──────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto">
+          {phase === "setup" ? (
+            /* ── Setup ─────────────────────────────────────────── */
+            <div className="space-y-3 p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Focus themes</p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedFocusLabels(new Set(uniqueThemeLabels))
+                  }
+                  className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  Select all
+                </button>
+              </div>
 
-          {selectedFocusLabels.size >= 2 && (
-            <p className="text-xs text-muted-foreground">
-              {selectedFocusLabels.size} theme{selectedFocusLabels.size !== 1 ? "s" : ""} in scope
-            </p>
-          )}
-          <Button
-            onClick={handleSuggest}
-            disabled={selectedFocusLabels.size < 2 || isLoading}
-            className="w-full"
-            variant="secondary"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Analysing…
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4 mr-2" />
-                Suggest Groups
-                {selectedFocusLabels.size < 2 && " (select 2+ themes)"}
-              </>
-            )}
-          </Button>
-        </div>
-
-        {/* Suggestions */}
-        {activeSuggestions.length > 0 && (
-          <div className="space-y-3 pt-2 border-t">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium">
-                {suggestions.length} suggestion
-                {suggestions.length !== 1 ? "s" : ""}
-              </p>
-              <div className="flex items-center gap-2 text-xs">
-                {acceptedLabels.size > 0 && (
-                  <span className="text-green-600 font-medium">{acceptedLabels.size} accepted</span>
-                )}
-                {rejectedLabels.size > 0 && (
-                  <span className="text-destructive font-medium">{rejectedLabels.size} rejected</span>
-                )}
-                {undecidedCount > 0 && (
-                  <span className="text-amber-600 font-medium">{undecidedCount} undecided</span>
+              <div className="max-h-52 overflow-y-auto rounded-xl border border-border/60 bg-muted/20">
+                {uniqueThemeLabels.length === 0 ? (
+                  <p className="px-4 py-3 text-xs text-muted-foreground">
+                    No ungrouped themes available.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-border/40">
+                    {uniqueThemeLabels.map((label) => (
+                      <label
+                        key={label}
+                        className="flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/40"
+                      >
+                        <Checkbox
+                          checked={selectedFocusLabels.has(label)}
+                          onCheckedChange={() => toggleFocus(label)}
+                          className="shrink-0"
+                        />
+                        <span className="text-sm leading-snug">{label}</span>
+                      </label>
+                    ))}
+                  </div>
                 )}
               </div>
+
+              {selectedFocusLabels.size === 1 && (
+                <p className="text-xs text-muted-foreground">
+                  Select one more theme to generate clusters.
+                </p>
+              )}
+
+              <Button
+                onClick={handleSuggest}
+                disabled={selectedFocusLabels.size < 2 || isLoading}
+                className="w-full"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Analysing themes…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate clusters
+                    {selectedFocusLabels.size >= 2 && (
+                      <span className="ml-1.5 opacity-50">
+                        ({selectedFocusLabels.size} selected)
+                      </span>
+                    )}
+                  </>
+                )}
+              </Button>
             </div>
-            {activeSuggestions.map((suggestion) => {
-              const isAccepted = acceptedLabels.has(suggestion.label);
-              const isUndecided = !isAccepted && !rejectedLabels.has(suggestion.label);
-              return (
-                <div key={suggestion.label} className="rounded-xl border p-3 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <p className="text-sm font-medium">{suggestion.label}</p>
-                      {isUndecided && (
-                        <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 shrink-0">
-                          Undecided
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex gap-1.5 shrink-0">
-                      {isAccepted ? (
-                        <Badge variant="default" className="text-xs">
-                          Created
-                        </Badge>
-                      ) : (
-                        <>
-                          <Button
-                            size="sm"
-                            className="h-6 text-xs px-2"
-                            onClick={() => handleAccept(suggestion)}
-                          >
-                            Accept
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-6 text-xs px-2"
-                            onClick={() => handleReject(suggestion)}
-                          >
-                            Reject
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {suggestion.explanation}
+          ) : (
+            /* ── Review ─────────────────────────────────────────── */
+            <div>
+              {/* Re-run strip */}
+              <div className="border-b border-border/40 bg-muted/20 px-5 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="truncate text-xs text-muted-foreground">
+                    Focus:{" "}
+                    <span className="font-medium text-foreground">
+                      {Array.from(selectedFocusLabels).join(" · ")}
+                    </span>
                   </p>
-
-                  {/* Show theme labels in the suggestion */}
-                  <div className="flex flex-wrap gap-1">
-                    {suggestion.theme_ids.map((id) => {
-                      const theme = themeById.get(id);
-                      return (
-                        <Badge key={id} variant="outline" className="text-xs">
-                          {theme?.label ?? id}
-                        </Badge>
-                      );
-                    })}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPhase("setup")}
+                    className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Re-run
+                  </button>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                {suggestions.length > 0 && (acceptedCount > 0 || skippedCount > 0 || pendingCount > 0) && (
+                  <div className="mt-1.5 flex items-center gap-3 text-xs">
+                    {pendingCount > 0 && (
+                      <span className="text-muted-foreground">{pendingCount} to review</span>
+                    )}
+                    {acceptedCount > 0 && (
+                      <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                        {acceptedCount} added
+                      </span>
+                    )}
+                    {skippedCount > 0 && (
+                      <span className="text-muted-foreground">{skippedCount} skipped</span>
+                    )}
+                  </div>
+                )}
+              </div>
 
-        <DialogFooter className="flex-col items-end gap-1 sm:flex-col">
-          {undecidedCount > 0 ? (
-            <p className="text-xs text-amber-600">
-              {undecidedCount} suggestion{undecidedCount !== 1 ? "s" : ""} still need a decision
-            </p>
-          ) : null}
-          <Button variant="ghost" onClick={handleClose}>
-            {undecidedCount > 0 ? "Finish reviewing" : "Done"}
-          </Button>
-        </DialogFooter>
+              {suggestions.length === 0 ? (
+                <div className="px-5 py-10 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No clusters found for these focus themes.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPhase("setup")}
+                    className="mt-2 text-xs text-primary underline-offset-2 hover:underline"
+                  >
+                    Try different themes
+                  </button>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/40">
+                  {suggestions.map((suggestion) => {
+                    const decision = decisions.get(suggestion.label);
+                    const isAccepted = decision === "accepted";
+                    const isSkipped = decision === "skipped";
+                    const isAccepting = accepting.has(suggestion.label);
+
+                    /* Accepted — compact green row */
+                    if (isAccepted) {
+                      return (
+                        <div
+                          key={suggestion.label}
+                          className="bg-emerald-50/70 px-5 py-3.5 dark:bg-emerald-950/20"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
+                              <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                            </span>
+                            <span className="text-sm font-medium">
+                              {suggestion.label}
+                            </span>
+                            <span className="ml-auto shrink-0 text-xs text-emerald-600 dark:text-emerald-400">
+                              Added to groups
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    /* Skipped — dimmed strikethrough + undo */
+                    if (isSkipped) {
+                      return (
+                        <div
+                          key={suggestion.label}
+                          className="flex items-center justify-between gap-3 px-5 py-3 opacity-45"
+                        >
+                          <span className="text-sm line-through">
+                            {suggestion.label}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleUndo(suggestion)}
+                            className="shrink-0 text-xs text-muted-foreground underline-offset-2 opacity-100 hover:text-foreground hover:underline"
+                          >
+                            Undo
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    /* Pending — full card */
+                    return (
+                      <div key={suggestion.label} className="px-5 py-4">
+                        <h3 className="text-sm font-semibold leading-snug">
+                          {suggestion.label}
+                        </h3>
+                        <p className="mt-1.5 max-w-prose text-xs leading-relaxed text-muted-foreground">
+                          {suggestion.explanation}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {suggestion.theme_ids.map((id) => {
+                            const theme = themeByIdSnapshot.current.get(id);
+                            return (
+                              <span
+                                key={id}
+                                className="rounded-full border border-border/60 bg-muted/30 px-2.5 py-0.5 text-xs"
+                              >
+                                {theme?.label ?? id}
+                              </span>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-3">
+                          <Button
+                            size="sm"
+                            disabled={isAccepting}
+                            onClick={() => handleAccept(suggestion)}
+                            className="h-7 px-3 text-xs"
+                          >
+                            {isAccepting ? (
+                              <>
+                                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                                Adding…
+                              </>
+                            ) : (
+                              "Add to groups"
+                            )}
+                          </Button>
+                          <button
+                            type="button"
+                            onClick={() => handleSkip(suggestion)}
+                            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                          >
+                            Skip
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Footer ──────────────────────────────────────────── */}
+        <div className="shrink-0 border-t border-border/50 px-5 py-3.5">
+          <div className="flex items-center justify-end">
+            <Button variant="ghost" size="sm" onClick={handleClose}>
+              {allDecided ? "Done" : "Close"}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -75,10 +75,12 @@ async def draft_email(request: EmailDraftRequest):
 
     if email_guidance:
         system_prompt += (
-            "\n\n--- Saved email drafting guidance ---\n"
-            "The consultant has saved this preferred evidence email guidance. "
-            "Treat it as soft guidance for structure, emphasis, and tone unless "
-            "it would conflict with the transcript or the evidence purpose of the email.\n\n"
+            "\n\n--- MANDATORY consultant requirements (highest priority) ---\n"
+            "The following instructions from the consultant OVERRIDE the default "
+            "structure and formatting rules above. You MUST follow them exactly, "
+            "even if they conflict with the structure described earlier. Do not "
+            "add sections, bullet points, or length that the instructions do not "
+            "explicitly allow.\n\n"
             f"{email_guidance}"
         )
 

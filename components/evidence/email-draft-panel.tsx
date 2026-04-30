@@ -431,26 +431,20 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
             </p>
           ) : null}
 
-          <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Control email output</p>
-                <p className="text-sm text-muted-foreground">
-                  Change drafting guidance in AI personalisation settings, then generate a new draft to apply it.
-                </p>
-                {emailGuidance ? (
-                  <p className="text-xs text-muted-foreground">
-                    Current guidance: {emailGuidance}
-                  </p>
-                ) : null}
-              </div>
-              <Link
-                href="/settings/ai-personalisation"
-                className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
-              >
-                Edit guidance
-              </Link>
-            </div>
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            {emailGuidance ? (
+              <span className="truncate max-w-[70%]" title={emailGuidance}>
+                Guidance active: <span className="italic">{emailGuidance}</span>
+              </span>
+            ) : (
+              <span>No email guidance set.</span>
+            )}
+            <Link
+              href="/settings/ai-personalisation"
+              className="shrink-0 underline-offset-4 hover:underline hover:text-foreground"
+            >
+              {emailGuidance ? "Edit" : "Add guidance"}
+            </Link>
           </div>
 
           {!meetingQuery.isPending &&

@@ -492,7 +492,11 @@ async def suggest_theme_groups(request: ThemeGroupSuggestionRequest):
     """
     client = _require_client()
 
-    focus = ", ".join(request.focus_theme_labels) or "none"
+    focus_label_set = set(request.focus_theme_labels)
+
+    # Only pass the selected focus themes to the LLM — hard filter so the model
+    # cannot return IDs outside the consultant's selection.
+    selected_themes = [t for t in request.source_themes if t.label in focus_label_set]
 
     theme_lines = "\n".join(
         [
@@ -500,23 +504,20 @@ async def suggest_theme_groups(request: ThemeGroupSuggestionRequest):
                 f"- id={t.theme_id} | label={t.label}"
                 f" | description={t.description or 'none'}"
                 f" | consultation={t.consultation_title or 'unknown'}"
-                f" | user_added={'yes' if t.is_user_added else 'no'}"
             )
-            for t in request.source_themes
+            for t in selected_themes
         ]
     ) or "- none"
 
     system_prompt = (
         "You are helping a psychosocial consultant group themes from multiple consultations "
         "into meaningful round-level theme groups.\n\n"
-        "The consultant has selected a set of themes. Your job is to identify natural clusters "
-        "across these selected themes, anchored around the focus themes.\n\n"
         "Rules:\n"
         "- Each theme may appear in at most one group.\n"
         "- A group must have at least 2 themes.\n"
         "- Group labels should be concise (2-5 words) and evidence-based.\n"
         "- Explanations should be 1-2 sentences grounded in the theme content.\n"
-        "- Themes that do not fit any cluster should be omitted from the output.\n"
+        "- Themes that do not fit any natural cluster should be omitted.\n"
         "- Do not invent themes or evidence not present in the input.\n\n"
         "Return JSON with: { \"groups\": [ { \"label\": str, \"theme_ids\": [str, ...], "
         "\"explanation\": str }, ... ] }\n"
@@ -524,9 +525,8 @@ async def suggest_theme_groups(request: ThemeGroupSuggestionRequest):
     )
 
     user_content = (
-        f"Round: {request.round_label or 'Untitled round'}\n"
-        f"Focus themes selected by consultant: {focus}\n\n"
-        f"Selected source themes:\n{theme_lines}"
+        f"Round: {request.round_label or 'Untitled round'}\n\n"
+        f"Themes to cluster:\n{theme_lines}"
     )
 
     completion = client.chat.completions.create(

@@ -1,8 +1,10 @@
 export const runtime = "nodejs";
 
 import { getReportArtifact } from "@/lib/actions/reports";
+import { loadUserAIPreferences } from "@/lib/data/user-ai-preferences";
 import { buildExportSections, type ReportTemplate } from "@/lib/report-export-content";
 import { buildDocxBuffer } from "@/lib/report-export-docx";
+import { applyRenderPolicyToReport } from "@/lib/report-render-policy";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -14,23 +16,29 @@ export async function GET(
   const template: ReportTemplate = templateParam === "executive" ? "executive" : "standard";
 
   const report = await getReportArtifact(id);
+  const preferences = await loadUserAIPreferences();
 
   if (!report) {
     return NextResponse.json({ error: "Report not found" }, { status: 404 });
   }
 
+  const renderedReport = applyRenderPolicyToReport(
+    report,
+    preferences?.anonymous_mode ?? false
+  );
+
   try {
-    const sections = buildExportSections(report, template);
+    const sections = buildExportSections(renderedReport, template);
 
     const buffer = await buildDocxBuffer({
-      title: report.title,
-      roundLabel: report.roundLabel,
-      generatedAt: report.generatedAt,
-      artifactType: report.artifactType,
+      title: renderedReport.title,
+      roundLabel: renderedReport.roundLabel,
+      generatedAt: renderedReport.generatedAt,
+      artifactType: renderedReport.artifactType,
       sections,
     });
 
-    const filename = `report-${report.id.slice(0, 8)}.docx`;
+    const filename = `report-${renderedReport.id.slice(0, 8)}.docx`;
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

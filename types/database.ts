@@ -316,6 +316,8 @@ export interface UserAIPreferences {
   consultationTypes: string[];
   focusAreas: string[];
   excludedTopics: string[];
+  emailGuidance: string;
+  anonymousMode: boolean;
   createdAt: string;
   updatedAt: string;
 }

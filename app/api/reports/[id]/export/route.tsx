@@ -2,12 +2,14 @@ import React from "react";
 import { renderToBuffer, Document, Page } from "@react-pdf/renderer";
 import { PDFDocument as PdfLibDoc } from "pdf-lib";
 import { getReportArtifact } from "@/lib/actions/reports";
+import { loadUserAIPreferences } from "@/lib/data/user-ai-preferences";
 import {
   ReportPrintLayout,
   buildSectionElements,
   CONTENT_PAGE_STYLE,
   type TocPageNumbers,
 } from "@/components/reports/report-print-layout";
+import { applyRenderPolicyToReport } from "@/lib/report-render-policy";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -20,10 +22,16 @@ export async function GET(
 
   try {
     const report = await getReportArtifact(id);
+    const preferences = await loadUserAIPreferences();
 
     if (!report) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
+
+    const renderedReport = applyRenderPolicyToReport(
+      report,
+      preferences?.anonymous_mode ?? false
+    );
 
     // ── Two-pass TOC page numbers ────────────────────────────────────────────
     // Pass 1: render each section in isolation to count its pages.
@@ -35,7 +43,7 @@ export async function GET(
     let tocPageNumbers: TocPageNumbers | undefined;
 
     try {
-      const sections = buildSectionElements(report, template);
+      const sections = buildSectionElements(renderedReport, template);
       const accumulated: TocPageNumbers = {};
       let cursor = 3; // pages 1 (title) and 2 (TOC) are always present
 
@@ -67,13 +75,13 @@ export async function GET(
     // ── Pass 2: full render ──────────────────────────────────────────────────
     const buffer = await renderToBuffer(
       <ReportPrintLayout
-        report={report}
+        report={renderedReport}
         template={template}
         tocPageNumbers={tocPageNumbers}
       />
     );
 
-    const filename = `report-${report.id.slice(0, 8)}.pdf`;
+    const filename = `report-${renderedReport.id.slice(0, 8)}.pdf`;
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

@@ -17,6 +17,14 @@ export const aiPreferencesSchema = z.object({
     .array(trimmedString.pipe(z.string().min(1).max(200)))
     .max(10, "Maximum 10 excluded topics allowed")
     .default([]),
+
+  emailGuidance: z
+    .string()
+    .max(600, "Keep email guidance under 600 characters")
+    .transform((value) => value.trim())
+    .default(""),
+
+  anonymousMode: z.boolean().default(false),
 });
 
 export type AIPreferencesFormData = z.infer<typeof aiPreferencesSchema>;

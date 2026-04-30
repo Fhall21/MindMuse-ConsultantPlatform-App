@@ -5,6 +5,9 @@ import {
   parseJsonBodyOrResponse,
   requireAuthenticatedApiUser,
 } from "@/lib/api/route-helpers";
+import { loadUserAILearnings } from "@/lib/data/ai-learnings";
+import { loadRecentThemeLearningSignals } from "@/lib/data/theme-learning";
+import { loadUserAIPreferences } from "@/lib/data/user-ai-preferences";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedApiUser();
@@ -22,5 +25,24 @@ export async function POST(request: NextRequest) {
     return body;
   }
 
-  return forwardJsonToAi(aiServiceUrl, "/draft/email", body);
+  let learningSignals: Awaited<ReturnType<typeof loadRecentThemeLearningSignals>> = [];
+  let aiLearnings: Awaited<ReturnType<typeof loadUserAILearnings>> = [];
+  let userPreferences: Awaited<ReturnType<typeof loadUserAIPreferences>> = null;
+
+  try {
+    [learningSignals, aiLearnings, userPreferences] = await Promise.all([
+      loadRecentThemeLearningSignals(),
+      loadUserAILearnings(auth.id),
+      loadUserAIPreferences(),
+    ]);
+  } catch (err) {
+    console.error("Failed to load email personalization context", err);
+  }
+
+  return forwardJsonToAi(aiServiceUrl, "/draft/email", {
+    ...(body as Record<string, unknown>),
+    learning_signals: learningSignals,
+    ai_learnings: aiLearnings,
+    user_preferences: userPreferences,
+  });
 }

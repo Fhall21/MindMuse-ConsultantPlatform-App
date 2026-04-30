@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import ValidationError
 
 from core.config import settings
+from core.learning_adapter import build_personalization_prompt
 from core.openai_client import get_client
 from models.schemas import EmailDraftRequest, EmailDraftResponse
 
@@ -59,6 +60,27 @@ async def draft_email(request: EmailDraftRequest):
         "- 'body': the full email text\n\n"
         "Return only valid JSON, no markdown wrapping."
     )
+
+    personalization = build_personalization_prompt(
+        request.learning_signals,
+        request.user_preferences,
+        request.ai_learnings,
+    )
+    if personalization:
+        system_prompt += personalization
+
+    email_guidance = ""
+    if request.user_preferences and request.user_preferences.email_guidance:
+        email_guidance = request.user_preferences.email_guidance.strip()
+
+    if email_guidance:
+        system_prompt += (
+            "\n\n--- Saved email drafting guidance ---\n"
+            "The consultant has saved this preferred evidence email guidance. "
+            "Treat it as soft guidance for structure, emphasis, and tone unless "
+            "it would conflict with the transcript or the evidence purpose of the email.\n\n"
+            f"{email_guidance}"
+        )
 
     user_content = (
         f"Consultation: {title}\n"

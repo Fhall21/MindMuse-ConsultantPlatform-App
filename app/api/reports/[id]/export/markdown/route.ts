@@ -1,8 +1,10 @@
 export const runtime = "nodejs";
 
 import { getReportArtifact } from "@/lib/actions/reports";
+import { loadUserAIPreferences } from "@/lib/data/user-ai-preferences";
 import { buildExportSections, type ReportTemplate } from "@/lib/report-export-content";
 import { serializeToMarkdown } from "@/lib/report-export-markdown";
+import { applyRenderPolicyToReport } from "@/lib/report-render-policy";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -14,23 +16,29 @@ export async function GET(
   const template: ReportTemplate = templateParam === "executive" ? "executive" : "standard";
 
   const report = await getReportArtifact(id);
+  const preferences = await loadUserAIPreferences();
 
   if (!report) {
     return NextResponse.json({ error: "Report not found" }, { status: 404 });
   }
 
-  const sections = buildExportSections(report, template);
+  const renderedReport = applyRenderPolicyToReport(
+    report,
+    preferences?.anonymous_mode ?? false
+  );
+
+  const sections = buildExportSections(renderedReport, template);
 
   const markdown = serializeToMarkdown({
-    id: report.id,
-    title: report.title,
-    roundLabel: report.roundLabel,
-    generatedAt: report.generatedAt,
-    artifactType: report.artifactType,
+    id: renderedReport.id,
+    title: renderedReport.title,
+    roundLabel: renderedReport.roundLabel,
+    generatedAt: renderedReport.generatedAt,
+    artifactType: renderedReport.artifactType,
     sections,
   });
 
-  const filename = `report-${report.id.slice(0, 8)}.md`;
+  const filename = `report-${renderedReport.id.slice(0, 8)}.md`;
 
   return new NextResponse(markdown, {
     status: 200,

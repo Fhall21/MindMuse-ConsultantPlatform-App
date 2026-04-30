@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildExportSections } from "@/lib/report-export-content";
+import { applyRenderPolicyToReport } from "@/lib/report-render-policy";
 import type { ReportArtifactDetail } from "@/types/report-artifact";
 
 // ─── Fixture helpers ──────────────────────────────────────────────────────────
@@ -243,6 +244,42 @@ describe("buildExportSections — Source Evidence section", () => {
   it("omits Source Evidence when no consultations or titles", () => {
     const sections = buildExportSections(makeReport(), "standard");
     expect(sections.find((s) => s.heading === "Source Evidence")).toBeUndefined();
+  });
+
+  it("reuses anonymised report output for content and evidence sections", () => {
+    const renderedReport = applyRenderPolicyToReport(
+      makeReport({
+        content: "# Summary\nAlice Smith raised this in Interview with Alice.",
+        consultations: [
+          {
+            id: "c-1",
+            title: "Interview with Alice",
+            date: "2026-01-10",
+            people: ["Alice Smith", "Jordan Patel"],
+            meetingTypeLabel: "1-1 Interview",
+            participantLabels: ["Strategy"],
+          },
+        ],
+      }),
+      true
+    );
+
+    const sections = buildExportSections(renderedReport, "standard");
+    const summary = sections.find((section) => section.heading === "Summary");
+    const evidence = sections.find((section) => section.heading === "Source Evidence");
+
+    expect(summary?.blocks[0]).toMatchObject({
+      type: "prose",
+      text: "Participant 1 raised this in 1-1 with Strategy.",
+    });
+
+    expect(evidence?.data?.kind).toBe("evidence");
+    if (evidence?.data?.kind === "evidence") {
+      expect(evidence.data.consultations[0]).toMatchObject({
+        title: "1-1 with Strategy",
+        people: ["Participant 1", "Participant 2"],
+      });
+    }
   });
 });
 

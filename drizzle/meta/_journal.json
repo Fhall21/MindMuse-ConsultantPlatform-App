@@ -204,6 +204,20 @@
       "when": 1777100000001,
       "tag": "0028_swift_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1777105000000,
+      "tag": "0029_email_guidance_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1777110000000,
+      "tag": "0030_anonymous_mode_preferences",
+      "breakpoints": true
     }
   ]
 }

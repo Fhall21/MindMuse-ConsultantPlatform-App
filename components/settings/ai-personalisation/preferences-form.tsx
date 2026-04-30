@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAIPreferences, useUpdateAIPreferences } from "@/hooks/use-ai-preferences";
 import { toast } from "sonner";
@@ -102,12 +104,16 @@ export function PreferencesForm() {
   const [consultationTypes, setConsultationTypes] = useState<string[]>([]);
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
   const [excludedTopics, setExcludedTopics] = useState<string[]>([]);
+  const [emailGuidance, setEmailGuidance] = useState("");
+  const [anonymousMode, setAnonymousMode] = useState(false);
 
   useEffect(() => {
     if (prefs) {
       setConsultationTypes(prefs.consultationTypes ?? []);
       setFocusAreas(prefs.focusAreas ?? []);
       setExcludedTopics(prefs.excludedTopics ?? []);
+      setEmailGuidance(prefs.emailGuidance ?? "");
+      setAnonymousMode(prefs.anonymousMode ?? false);
     }
   }, [prefs]);
 
@@ -117,6 +123,8 @@ export function PreferencesForm() {
         consultationTypes,
         focusAreas,
         excludedTopics,
+        emailGuidance,
+        anonymousMode,
       },
       {
         onSuccess: () => toast.success("Preferences saved"),
@@ -144,7 +152,8 @@ export function PreferencesForm() {
         <CardTitle>Generation Preferences</CardTitle>
         <CardDescription>
           Tell the AI what types of consultations you run and where to focus.
-          These preferences guide how insights are extracted from your transcripts.
+          These preferences guide how insights are extracted, how evidence emails are drafted,
+          and how outward-facing outputs are rendered.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -177,6 +186,46 @@ export function PreferencesForm() {
           maxLength={200}
           placeholder="e.g., Administrative scheduling, Small talk"
         />
+
+        <div className="rounded-xl border p-4">
+          <div className="space-y-2">
+            <p className="font-medium">Evidence email guidance</p>
+            <p className="text-sm text-muted-foreground">
+              Add one short note about how generated evidence emails should read.
+              Use this for output shape, tone, or level of directness.
+            </p>
+          </div>
+          <Textarea
+            className="mt-4 min-h-28"
+            maxLength={600}
+            placeholder="e.g., Keep emails brief, lead with actions, and avoid repeating transcript wording."
+            value={emailGuidance}
+            onChange={(event) => setEmailGuidance(event.target.value)}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            {emailGuidance.length}/600 used
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-4">
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="anonymous-mode"
+              checked={anonymousMode}
+              onCheckedChange={(checked) => setAnonymousMode(checked === true)}
+              className="mt-0.5"
+            />
+            <div className="space-y-2">
+              <label htmlFor="anonymous-mode" className="font-medium leading-none">
+                Anonymous rendered outputs
+              </label>
+              <p className="text-sm text-muted-foreground">
+                Use work-group or work-type phrasing in reports and exports so outward-facing
+                output avoids direct person-name references while source records stay exact.
+              </p>
+            </div>
+          </div>
+        </div>
 
         <Button onClick={handleSave} disabled={isPending} className="w-full">
           {isPending ? "Saving…" : "Save preferences"}

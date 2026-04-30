@@ -5,6 +5,7 @@ import {
   ReportPrintLayout,
   buildSectionElements,
 } from "@/components/reports/report-print-layout";
+import { applyRenderPolicyToReport } from "@/lib/report-render-policy";
 import type { ReportArtifactDetail } from "@/types/report-artifact";
 
 function makeReport(
@@ -185,5 +186,22 @@ describe("ReportPrintLayout", () => {
     );
 
     expect(buffer.byteLength).toBeGreaterThan(1000);
+  });
+
+  it("renders anonymised evidence and network text after policy transform", () => {
+    const report = applyRenderPolicyToReport(makeReport(), true);
+    const sections = buildSectionElements(report, "standard");
+
+    const evidence = sections.find((section) => section.id === "evidence");
+    const network = sections.find((section) => section.id === "network");
+
+    const evidenceText = normalizeText(evidence!.element);
+    expect(evidenceText).toContain("Focus group with Operations");
+    expect(evidenceText).toContain("People : Participant 1, Participant 2, Participant 3");
+    expect(evidenceText).not.toContain("Alice Smith");
+
+    const networkText = normalizeText(network!.element);
+    expect(networkText).toContain("Weekly team consultation");
+    expect(networkText).not.toContain("Morgan Chen");
   });
 });

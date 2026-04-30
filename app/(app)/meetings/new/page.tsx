@@ -50,7 +50,24 @@ function ConsultationField({
           placeholder="Consultation project name"
           className="h-9 flex-1 text-sm"
           autoFocus
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.preventDefault();
+            if (e.key === "Escape") {
+              onNewLabelChange("");
+              setCreating(false);
+            }
+          }}
         />
+        <Button
+          type="button"
+          size="sm"
+          variant="default"
+          className="h-9 px-3 text-xs"
+          disabled={!newLabel.trim()}
+          onClick={() => setCreating(false)}
+        >
+          Done
+        </Button>
         <Button
           type="button"
           size="sm"

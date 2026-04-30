@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth/client";
 import {
   applyAccessibilityPreferences,
@@ -47,18 +47,11 @@ export function AccessibilitySettingsPanel() {
   const [preferences, setPreferences] = useState(defaultAccessibilityPreferences);
   const [hasLoadedStoredPreferences, setHasLoadedStoredPreferences] = useState(false);
 
-  const syncStoredPreferences = useEffectEvent((nextPreferences: AccessibilityPreferences) => {
-    setHasLoadedStoredPreferences(true);
-    setPreferences(nextPreferences);
-  });
-
   useEffect(() => {
-    if (isPending) {
-      return;
-    }
-
-    syncStoredPreferences(loadAccessibilityPreferences(session?.user.id ?? null));
-  }, [isPending, session?.user.id, syncStoredPreferences]);
+    if (isPending) return;
+    setHasLoadedStoredPreferences(true);
+    setPreferences(loadAccessibilityPreferences(session?.user.id ?? null));
+  }, [isPending, session?.user.id]);
 
   useEffect(() => {
     if (!hasLoadedStoredPreferences) {

@@ -30,6 +30,7 @@ const settingsSubItems = [
   { title: "General", href: "/settings" },
   { title: "Accessibility", href: "/settings/accessibility" },
   { title: "Billing", href: "/settings/billing" },
+  { title: "AI Personalisation", href: "/settings/ai-personalisation" },
   { title: "Integrations", href: "/settings/integrations" },
 ];
 

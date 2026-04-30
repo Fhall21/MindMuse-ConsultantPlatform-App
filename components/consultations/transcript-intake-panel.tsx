@@ -327,6 +327,12 @@ export function TranscriptIntakePanel({
           initialValue={transcriptValue}
           readOnly={false}
           onSaved={handleTranscriptSaved}
+          onDirtyChange={(dirty) => {
+            // Mirror file/audio protection: block the server-refetch sync effect
+            // while the user has unsaved paste content, so a refetchOnWindowFocus
+            // cannot silently clobber the pasted text before save.
+            pendingLocalRef.current = dirty;
+          }}
         />
       )}
 

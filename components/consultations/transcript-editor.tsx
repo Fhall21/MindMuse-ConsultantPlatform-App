@@ -13,6 +13,7 @@ interface TranscriptEditorProps {
   initialValue: string | null;
   readOnly?: boolean;
   onSaved?: () => void;
+  onDirtyChange?: (isDirty: boolean) => void;
 }
 
 export function TranscriptEditor({
@@ -21,6 +22,7 @@ export function TranscriptEditor({
   initialValue,
   readOnly = false,
   onSaved,
+  onDirtyChange,
 }: TranscriptEditorProps) {
   const resolvedMeetingId = meetingId ?? consultationId;
   const [text, setText] = useState(initialValue ?? "");
@@ -32,6 +34,12 @@ export function TranscriptEditor({
   const queryClient = useQueryClient();
 
   const isDirty = text !== savedText;
+
+  // Notify parent when dirty state changes so it can guard against server
+  // refetches overwriting unsaved paste content (mirrors file/audio protection).
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   // Keep local state in sync if initialValue changes (e.g. after refetch)
   useEffect(() => {
@@ -49,6 +57,8 @@ export function TranscriptEditor({
       setSavedAt(new Date());
       setShowSavedConfirm(true);
       queryClient.invalidateQueries({ queryKey: ["meetings", resolvedMeetingId] });
+      queryClient.invalidateQueries({ queryKey: ["themes", "meeting", resolvedMeetingId] });
+      queryClient.invalidateQueries({ queryKey: ["meeting-report", resolvedMeetingId] });
       onSaved?.();
       if (savedConfirmTimer.current) clearTimeout(savedConfirmTimer.current);
       savedConfirmTimer.current = setTimeout(() => setShowSavedConfirm(false), 3000);

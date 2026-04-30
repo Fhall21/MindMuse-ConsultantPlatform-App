@@ -6,9 +6,9 @@ import { jsonError } from "@/app/api/client/_helpers";
 
 const detailsPayloadSchema = z.object({
   name: z.string().trim().min(1),
-  role: z.string().trim().min(1),
+  work_type: z.string().trim().min(1),
   work_group: z.string().trim().min(1),
-  organisation: z.string().trim().min(1),
+  organisation: z.string().trim().optional().nullable(),
   email: z.string().trim().email().optional().nullable(),
 });
 
@@ -33,9 +33,9 @@ export async function PATCH(
       sessionToken,
       details: {
         name: parsed.data.name,
-        role: parsed.data.role,
+        workType: parsed.data.work_type,
         workGroup: parsed.data.work_group,
-        organisation: parsed.data.organisation,
+        organisation: parsed.data.organisation ?? null,
         email: parsed.data.email ?? null,
       },
     });

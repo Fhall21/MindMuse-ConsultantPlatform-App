@@ -138,6 +138,7 @@ function PeopleField({
     () => getDistinctCaseInsensitiveValues(allPeople.map((p) => p.work_type)),
     [allPeople]
   );
+  const hasNoPeople = allPeople.length === 0;
   const showEmptyState =
     selected.length === 0 && suggestedExisting.length === 0 && suggestedNewNames.length === 0;
 
@@ -389,27 +390,29 @@ function PeopleField({
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2">
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search people…"
-            className="h-8 flex-1 text-sm"
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 shrink-0 text-xs"
-            onClick={() => {
-              setIsCreating(true);
-              setSearch("");
-            }}
-          >
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            Add person
-          </Button>
-        </div>
+        !hasNoPeople && (
+          <div className="flex items-center gap-2">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search people…"
+              className="h-8 flex-1 text-sm"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 shrink-0 text-xs"
+              onClick={() => {
+                setIsCreating(true);
+                setSearch("");
+              }}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Add person
+            </Button>
+          </div>
+        )
       )}
 
       {!isCreating && search && filteredPeople.length > 0 && (

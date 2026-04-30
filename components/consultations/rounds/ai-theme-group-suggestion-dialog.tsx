@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Sparkles, Check, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -42,10 +42,11 @@ export function AiThemeGroupSuggestionDialog({
   const [acceptedLabels, setAcceptedLabels] = useState<Set<string>>(new Set());
   const [rejectedLabels, setRejectedLabels] = useState<Set<string>>(new Set());
 
+  // Snapshot taken at suggest-time so accepted themes removed from sourceThemes still resolve to labels
+  const themeByIdSnapshot = useRef<Map<string, SourceTheme>>(new Map());
+
   // Unique labels across all source themes for the focus picker
   const uniqueThemeLabels = Array.from(new Set(sourceThemes.map((t) => t.label))).sort();
-
-  const themeById = new Map(sourceThemes.map((t) => [t.id, t]));
 
   const toggleFocus = (label: string) => {
     setSelectedFocusLabels((prev) => {
@@ -67,6 +68,7 @@ export function AiThemeGroupSuggestionDialog({
     setSuggestions([]);
     setAcceptedLabels(new Set());
     setRejectedLabels(new Set());
+    themeByIdSnapshot.current = new Map(sourceThemes.map((t) => [t.id, t]));
 
     try {
       const themeInputs = sourceThemes.map((t) => ({
@@ -117,6 +119,10 @@ export function AiThemeGroupSuggestionDialog({
   };
 
   const activeSuggestions = suggestions.filter((s) => !rejectedLabels.has(s.label));
+
+  const undecidedCount = suggestions.length > 0
+    ? suggestions.filter((s) => !acceptedLabels.has(s.label) && !rejectedLabels.has(s.label)).length
+    : 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -195,17 +201,38 @@ export function AiThemeGroupSuggestionDialog({
         {/* Suggestions */}
         {activeSuggestions.length > 0 && (
           <div className="space-y-3 pt-2 border-t">
-            <p className="text-sm font-medium">
-              {activeSuggestions.length} suggestion
-              {activeSuggestions.length !== 1 ? "s" : ""}
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">
+                {suggestions.length} suggestion
+                {suggestions.length !== 1 ? "s" : ""}
+              </p>
+              <div className="flex items-center gap-2 text-xs">
+                {acceptedLabels.size > 0 && (
+                  <span className="text-green-600 font-medium">{acceptedLabels.size} accepted</span>
+                )}
+                {rejectedLabels.size > 0 && (
+                  <span className="text-destructive font-medium">{rejectedLabels.size} rejected</span>
+                )}
+                {undecidedCount > 0 && (
+                  <span className="text-amber-600 font-medium">{undecidedCount} undecided</span>
+                )}
+              </div>
+            </div>
             {activeSuggestions.map((suggestion) => {
               const isAccepted = acceptedLabels.has(suggestion.label);
+              const isUndecided = !isAccepted && !rejectedLabels.has(suggestion.label);
               return (
                 <div key={suggestion.label} className="rounded-xl border p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium">{suggestion.label}</p>
-                    <div className="flex gap-1 shrink-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="text-sm font-medium">{suggestion.label}</p>
+                      {isUndecided && (
+                        <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 shrink-0">
+                          Undecided
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
                       {isAccepted ? (
                         <Badge variant="default" className="text-xs">
                           Created
@@ -213,22 +240,19 @@ export function AiThemeGroupSuggestionDialog({
                       ) : (
                         <>
                           <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 text-green-600 hover:text-green-700"
+                            size="sm"
+                            className="h-6 text-xs px-2"
                             onClick={() => handleAccept(suggestion)}
-                            aria-label="Accept suggestion"
                           >
-                            <Check className="h-3.5 w-3.5" />
+                            Accept
                           </Button>
                           <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 text-destructive hover:text-destructive"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-xs px-2"
                             onClick={() => handleReject(suggestion)}
-                            aria-label="Reject suggestion"
                           >
-                            <X className="h-3.5 w-3.5" />
+                            Reject
                           </Button>
                         </>
                       )}
@@ -242,7 +266,7 @@ export function AiThemeGroupSuggestionDialog({
                   {/* Show theme labels in the suggestion */}
                   <div className="flex flex-wrap gap-1">
                     {suggestion.theme_ids.map((id) => {
-                      const theme = themeById.get(id);
+                      const theme = themeByIdSnapshot.current.get(id);
                       return (
                         <Badge key={id} variant="outline" className="text-xs">
                           {theme?.label ?? id}
@@ -256,9 +280,14 @@ export function AiThemeGroupSuggestionDialog({
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="flex-col items-end gap-1 sm:flex-col">
+          {undecidedCount > 0 ? (
+            <p className="text-xs text-amber-600">
+              {undecidedCount} suggestion{undecidedCount !== 1 ? "s" : ""} still need a decision
+            </p>
+          ) : null}
           <Button variant="ghost" onClick={handleClose}>
-            Done
+            {undecidedCount > 0 ? "Finish reviewing" : "Done"}
           </Button>
         </DialogFooter>
       </DialogContent>

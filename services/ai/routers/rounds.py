@@ -506,12 +506,19 @@ async def suggest_theme_groups(request: ThemeGroupSuggestionRequest):
         ]
     ) or "- none"
 
+    focus_count = len(request.focus_theme_labels)
+
     system_prompt = (
         "You are helping a psychosocial consultant group themes from multiple consultations "
         "into meaningful round-level theme groups.\n\n"
-        "The consultant has selected focus themes. Your job is to identify natural clusters "
-        "across all source themes, anchored around the focus themes.\n\n"
+        "The consultant has selected focus themes as anchors. Each suggested group must be "
+        "built around exactly one focus theme — focus themes are mandatory seeds, not optional.\n\n"
         "Rules:\n"
+        "- EVERY suggested group MUST include at least one of the consultant's selected focus themes.\n"
+        f"- You may suggest at most {focus_count} group(s) — one per selected focus theme.\n"
+        "- Each focus theme may anchor at most one group.\n"
+        "- Non-focus themes may be added to a group only if they naturally cluster around "
+        "that group's focus theme. Do not force unrelated themes into a group.\n"
         "- Each theme may appear in at most one group.\n"
         "- A group must have at least 2 themes.\n"
         "- Group labels should be concise (2-5 words) and evidence-based.\n"
@@ -525,8 +532,8 @@ async def suggest_theme_groups(request: ThemeGroupSuggestionRequest):
 
     user_content = (
         f"Round: {request.round_label or 'Untitled round'}\n"
-        f"Focus themes selected by consultant: {focus}\n\n"
-        f"All source themes in this round:\n{theme_lines}"
+        f"Focus themes (mandatory anchors — each group must include one): {focus}\n\n"
+        f"All source themes available to cluster:\n{theme_lines}"
     )
 
     completion = client.chat.completions.create(

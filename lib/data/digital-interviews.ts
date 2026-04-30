@@ -56,9 +56,9 @@ export const digitalInterviewSessionCreateSchema = z.object({
 
 export const digitalInterviewSessionDetailsSchema = z.object({
   name: z.string().trim().min(1),
-  role: z.string().trim().min(1),
+  workType: z.string().trim().min(1),
   workGroup: z.string().trim().min(1),
-  organisation: z.string().trim().min(1),
+  organisation: z.string().trim().optional().nullable(),
   email: z.string().trim().email().optional().nullable(),
 });
 
@@ -688,9 +688,9 @@ export async function updateDigitalInterviewSessionDetails(params: {
     .update(digitalInterviewResponses)
     .set({
       intervieweeName: params.details.name,
-      intervieweeRole: params.details.role,
+      intervieweeRole: params.details.workType,
       intervieweeWorkGroup: params.details.workGroup,
-      intervieweeOrganisation: params.details.organisation,
+      intervieweeOrganisation: params.details.organisation ?? null,
       intervieweeEmail: params.details.email ?? null,
       updatedAt: new Date(),
     })

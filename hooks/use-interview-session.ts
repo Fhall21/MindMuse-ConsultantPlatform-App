@@ -20,9 +20,9 @@ export interface InterviewSessionContextValue {
 
 export interface InterviewOnboardingValues {
   name: string;
-  role: string;
+  workType: string;
   work_group: string;
-  organisation: string;
+  organisation?: string | null;
   email?: string | null;
 }
 
@@ -73,6 +73,18 @@ function writeStoredSessionToken(shareToken: string, sessionToken: string) {
   }
 }
 
+function clearStoredSessionToken(shareToken: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(getStorageKey(shareToken));
+  } catch {
+    // Ignore storage failures in constrained browsers.
+  }
+}
+
 function toContextValue(
   flow: PublicDigitalInterviewFlow,
   session: DigitalInterviewResponseRecord
@@ -107,10 +119,28 @@ export function useInterviewSession(shareToken: string): UseInterviewSessionResu
       setFlow(null);
       setSession(null);
 
+      const storedSessionToken = readStoredSessionToken(shareToken);
+
+      async function openSession(sessionToken: string | null) {
+        const response = await fetchJson<{ data: DigitalInterviewResponseRecord }>(
+          `/api/public/digital-interviews/${shareToken}/session`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(sessionToken ? { sessionToken } : {}),
+          }
+        );
+
+        return response.data;
+      }
+
       try {
-        const loadedFlow = await fetchJson<PublicDigitalInterviewFlow>(
+        const loadedFlowResponse = await fetchJson<{ data: PublicDigitalInterviewFlow }>(
           `/api/public/digital-interviews/${shareToken}`
         );
+        const loadedFlow = loadedFlowResponse.data;
 
         if (!isActive) {
           return;
@@ -123,19 +153,23 @@ export function useInterviewSession(shareToken: string): UseInterviewSessionResu
           return;
         }
 
-        const storedSessionToken = readStoredSessionToken(shareToken);
-        const loadedSession = await fetchJson<DigitalInterviewResponseRecord>(
-          `/api/public/digital-interviews/${shareToken}/session`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(
-              storedSessionToken ? { sessionToken: storedSessionToken } : {}
-            ),
+        let loadedSession: DigitalInterviewResponseRecord;
+
+        try {
+          loadedSession = await openSession(storedSessionToken);
+        } catch (error) {
+          const message = error instanceof Error ? error.message.toLowerCase() : "";
+          const shouldRetryFreshSession =
+            Boolean(storedSessionToken) &&
+            (message.includes("invalid uuid") || message.includes("not found"));
+
+          if (!shouldRetryFreshSession) {
+            throw error;
           }
-        );
+
+          clearStoredSessionToken(shareToken);
+          loadedSession = await openSession(null);
+        }
 
         if (!isActive) {
           return;
@@ -182,20 +216,29 @@ export function useInterviewSession(shareToken: string): UseInterviewSessionResu
   }, [flow, session]);
 
   async function submitDetails(values: InterviewOnboardingValues) {
-    if (!session) {
+    const sessionToken = session?.session_token ?? readStoredSessionToken(shareToken);
+
+    if (!sessionToken) {
       throw new Error("Interview session is not ready");
     }
 
-    const updatedSession = await fetchJson<DigitalInterviewResponseRecord>(
-      `/api/public/digital-interviews/${shareToken}/session/${session.session_token}/details`,
+    const updatedSessionResponse = await fetchJson<{ data: DigitalInterviewResponseRecord }>(
+      `/api/public/digital-interviews/${shareToken}/session/${sessionToken}/details`,
       {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify({
+          name: values.name,
+          work_type: values.workType,
+          work_group: values.work_group,
+          organisation: values.organisation ?? null,
+          email: values.email ?? null,
+        }),
       }
     );
+    const updatedSession = updatedSessionResponse.data;
 
     setSession(updatedSession);
     writeStoredSessionToken(shareToken, updatedSession.session_token);

@@ -42,7 +42,7 @@ const newSession = {
 const resumedSession = {
   ...newSession,
   interviewee_name: "Alex",
-  interviewee_role: "Manager",
+  interviewee_role: "Case manager",
   interviewee_work_group: "Operations",
   interviewee_organisation: "Example Org",
   conversation_history: [{ role: "assistant", content: "Welcome", timestamp: "2026-04-23T10:00:00.000Z" }],
@@ -56,18 +56,41 @@ const updatedSession = {
 function mockFetchSessionFlow(nextSession: typeof newSession | typeof resumedSession) {
   fetchJsonMock.mockImplementation(async (url: string, options?: RequestInit) => {
     if (url === "/api/public/digital-interviews/share-1") {
-      return flow;
+      return { data: flow };
     }
 
     if (url === "/api/public/digital-interviews/share-1/session" && options?.method === "POST") {
-      return nextSession;
+      return { data: nextSession };
     }
 
     if (
       url === "/api/public/digital-interviews/share-1/session/session-1/details" &&
       options?.method === "PATCH"
     ) {
-      return updatedSession;
+      return { data: updatedSession };
+    }
+
+    throw new Error(`Unexpected request: ${url}`);
+  });
+}
+
+function mockFetchSessionFlowWithFallbackToken() {
+  let sawBadToken = false;
+
+  fetchJsonMock.mockImplementation(async (url: string, options?: RequestInit) => {
+    if (url === "/api/public/digital-interviews/share-1") {
+      return { data: flow };
+    }
+
+    if (url === "/api/public/digital-interviews/share-1/session" && options?.method === "POST") {
+      const body = options.body ? JSON.parse(String(options.body)) as { sessionToken?: string } : {};
+
+      if (body.sessionToken && !sawBadToken) {
+        sawBadToken = true;
+        throw new Error("Invalid UUID");
+      }
+
+      return { data: newSession };
     }
 
     throw new Error(`Unexpected request: ${url}`);
@@ -107,9 +130,8 @@ describe("useInterviewSession", () => {
     await act(async () => {
       await result.current.submitDetails({
         name: "Alex",
-        role: "Manager",
+        workType: "Case manager",
         work_group: "Operations",
-        organisation: "Example Org",
         email: "alex@example.com",
       });
     });
@@ -125,7 +147,16 @@ describe("useInterviewSession", () => {
     expect(fetchJsonMock).toHaveBeenNthCalledWith(
       3,
       "/api/public/digital-interviews/share-1/session/session-1/details",
-      expect.objectContaining({ method: "PATCH" })
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          name: "Alex",
+          work_type: "Case manager",
+          work_group: "Operations",
+          organisation: null,
+          email: "alex@example.com",
+        }),
+      })
     );
   });
 
@@ -148,5 +179,15 @@ describe("useInterviewSession", () => {
         body: JSON.stringify({ sessionToken: "session-1" }),
       })
     );
+  });
+
+  it("recovers from a stale stored token by creating a fresh session", async () => {
+    window.localStorage.setItem("di_session_share-1", "not-a-uuid");
+    mockFetchSessionFlowWithFallbackToken();
+
+    const { result } = renderHook(() => useInterviewSession("share-1"));
+
+    await waitFor(() => expect(result.current.phase).toBe("onboarding"));
+    expect(window.localStorage.getItem("di_session_share-1")).toBe("session-1");
   });
 });

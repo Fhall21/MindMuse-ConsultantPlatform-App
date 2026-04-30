@@ -187,9 +187,8 @@ describe("lib/data/digital-interviews", () => {
         sessionToken: "session-1",
         details: {
           name: "Alex",
-          role: "Manager",
+          workType: "Case manager",
           workGroup: "Operations",
-          organisation: "Example Org",
           email: "alex@example.com",
         },
       })
@@ -204,9 +203,9 @@ describe("lib/data/digital-interviews", () => {
     expect(testState.updateCalls[0]).toMatchObject({
       values: expect.objectContaining({
         intervieweeName: "Alex",
-        intervieweeRole: "Manager",
+          intervieweeRole: "Case manager",
         intervieweeWorkGroup: "Operations",
-        intervieweeOrganisation: "Example Org",
+          intervieweeOrganisation: null,
         intervieweeEmail: "alex@example.com",
       }),
     });

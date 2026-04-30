@@ -24,7 +24,7 @@ function StatusBadge({ status }: { status: "draft" | "active" | "closed" }) {
 }
 
 export function buildDigitalInterviewShareUrl(origin: string, shareToken: string) {
-  return `${origin}/${shareToken}`;
+  return `${origin}/interview/${shareToken}`;
 }
 
 type FeatureInterestKey = "polis_voting" | "survey_injection";

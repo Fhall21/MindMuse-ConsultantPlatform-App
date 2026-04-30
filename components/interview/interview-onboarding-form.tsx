@@ -10,9 +10,9 @@ import type { InterviewOnboardingValues } from "@/hooks/use-interview-session";
 
 const onboardingSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
-  role: z.string().trim().min(1, "Role is required"),
+  workType: z.string().trim().min(1, "Work type is required"),
   work_group: z.string().trim().min(1, "Work group is required"),
-  organisation: z.string().trim().min(1, "Organisation is required"),
+  organisation: z.string().trim().optional(),
   email: z.string().trim().email().optional(),
 });
 
@@ -25,7 +25,7 @@ export function InterviewOnboardingForm({ onSubmit }: InterviewOnboardingFormPro
     resolver: zodResolver(onboardingSchema),
     defaultValues: {
       name: "",
-      role: "",
+      workType: "",
       work_group: "",
       organisation: "",
       email: undefined,
@@ -36,11 +36,13 @@ export function InterviewOnboardingForm({ onSubmit }: InterviewOnboardingFormPro
     <form
       className="space-y-5"
       onSubmit={form.handleSubmit(async (values) => {
+        const organisation = values.organisation?.trim();
+
         await onSubmit({
           name: values.name.trim(),
-          role: values.role.trim(),
+          workType: values.workType.trim(),
           work_group: values.work_group.trim(),
-          organisation: values.organisation.trim(),
+          organisation: organisation && organisation.length > 0 ? organisation : undefined,
           email: values.email?.trim() || undefined,
         });
       })}
@@ -54,10 +56,11 @@ export function InterviewOnboardingForm({ onSubmit }: InterviewOnboardingFormPro
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="interview-role">Role / Job title</Label>
-        <Input id="interview-role" autoComplete="organization-title" {...form.register("role")} />
-        {form.formState.errors.role ? (
-          <p className="text-sm text-destructive">{form.formState.errors.role.message}</p>
+        <Label htmlFor="interview-work-type">Work type</Label>
+        <Input id="interview-work-type" autoComplete="organization-title" {...form.register("workType")} />
+        <p className="text-sm text-muted-foreground">Job title, practice type, or other role descriptor.</p>
+        {form.formState.errors.workType ? (
+          <p className="text-sm text-destructive">{form.formState.errors.workType.message}</p>
         ) : null}
       </div>
 
@@ -69,38 +72,42 @@ export function InterviewOnboardingForm({ onSubmit }: InterviewOnboardingFormPro
         ) : null}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="interview-organisation">Organisation</Label>
-        <Input id="interview-organisation" {...form.register("organisation")} />
-        {form.formState.errors.organisation ? (
-          <p className="text-sm text-destructive">{form.formState.errors.organisation.message}</p>
-        ) : null}
-      </div>
+      <details className="group rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+        <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
+          Optional details
+        </summary>
+        <div className="mt-4 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="interview-organisation">Organisation</Label>
+            <Input id="interview-organisation" {...form.register("organisation")} />
+          </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="interview-email">Email</Label>
-        <Input
-          id="interview-email"
-          type="email"
-          autoComplete="email"
-          {...form.register("email", {
-            setValueAs: (value) => {
-              if (typeof value !== "string") {
-                return undefined;
-              }
+          <div className="space-y-2">
+            <Label htmlFor="interview-email">Email</Label>
+            <Input
+              id="interview-email"
+              type="email"
+              autoComplete="email"
+              {...form.register("email", {
+                setValueAs: (value) => {
+                  if (typeof value !== "string") {
+                    return undefined;
+                  }
 
-              const trimmed = value.trim();
-              return trimmed.length > 0 ? trimmed : undefined;
-            },
-          })}
-        />
-        <p className="text-sm text-muted-foreground">
-          Optional. Only used if your consultant wants to follow up.
-        </p>
-        {form.formState.errors.email ? (
-          <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
-        ) : null}
-      </div>
+                  const trimmed = value.trim();
+                  return trimmed.length > 0 ? trimmed : undefined;
+                },
+              })}
+            />
+            <p className="text-sm text-muted-foreground">
+              Optional. Only used if your consultant wants to follow up.
+            </p>
+            {form.formState.errors.email ? (
+              <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
+            ) : null}
+          </div>
+        </div>
+      </details>
 
       <Button type="submit" disabled={form.formState.isSubmitting} className="w-full">
         {form.formState.isSubmitting ? "Starting..." : "Start Interview"}

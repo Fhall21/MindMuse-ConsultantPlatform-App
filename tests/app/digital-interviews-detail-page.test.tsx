@@ -123,7 +123,7 @@ beforeEach(() => {
 describe("DigitalInterviewDetailPage", () => {
   it("builds the public share URL for the route group path", () => {
     expect(buildDigitalInterviewShareUrl("http://localhost:3000", "share-1")).toBe(
-      "http://localhost:3000/share-1"
+      "http://localhost:3000/interview/share-1"
     );
   });
 

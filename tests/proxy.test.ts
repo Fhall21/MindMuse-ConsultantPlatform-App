@@ -36,6 +36,16 @@ describe("proxy", () => {
     expect(response.status).toBe(200);
   });
 
+  it("allows root interview share links through without loading a session", async () => {
+    const { proxy } = await import("@/proxy");
+    const request = new NextRequest("https://app.example.com/share-1");
+
+    const response = await proxy(request);
+
+    expect(getSession).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+  });
+
   it("redirects unauthenticated app requests to /login", async () => {
     getSession.mockResolvedValue(null);
 

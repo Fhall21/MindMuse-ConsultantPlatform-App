@@ -54,12 +54,17 @@ export function InterviewSessionPage({ shareToken }: InterviewSessionPageProps) 
 
   if (session.phase === "onboarding") {
     return (
-      <div className="mx-auto flex min-h-screen max-w-md items-center px-4 py-12 sm:py-16">
-        <div className="w-full space-y-6">
+      <div className="mx-auto flex min-h-screen max-w-lg items-start px-4 py-12 sm:items-center sm:py-16">
+        <div className="w-full space-y-5">
           <div className="space-y-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Tell us about yourself</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Before we start</h1>
+            <p className="max-w-prose text-sm leading-6 text-muted-foreground">
+              Tell us who this is from so the interview record is easier to analyse later.
+            </p>
           </div>
-          <InterviewOnboardingForm onSubmit={session.submitDetails} />
+          <div className="border border-border/60 bg-background p-5 shadow-xs sm:p-6">
+            <InterviewOnboardingForm onSubmit={session.submitDetails} />
+          </div>
         </div>
       </div>
     );

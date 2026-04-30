@@ -208,15 +208,8 @@
     {
       "idx": 29,
       "version": "7",
-      "when": 1777105000000,
-      "tag": "0029_email_guidance_preferences",
-      "breakpoints": true
-    },
-    {
-      "idx": 30,
-      "version": "7",
-      "when": 1777110000000,
-      "tag": "0030_anonymous_mode_preferences",
+      "when": 1777532901019,
+      "tag": "0029_rapid_valeria_richards",
       "breakpoints": true
     }
   ]

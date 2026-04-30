@@ -1,1 +1,0 @@
-ALTER TABLE "user_ai_preferences" ADD COLUMN "email_guidance" text DEFAULT '' NOT NULL;

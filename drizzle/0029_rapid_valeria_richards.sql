@@ -1,0 +1,2 @@
+ALTER TABLE "user_ai_preferences" ADD COLUMN "email_guidance" text DEFAULT '' NOT NULL;--> statement-breakpoint
+ALTER TABLE "user_ai_preferences" ADD COLUMN "anonymous_mode" boolean DEFAULT false NOT NULL;

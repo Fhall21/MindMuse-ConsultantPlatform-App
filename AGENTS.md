@@ -74,6 +74,20 @@ Branches and worktrees accumulate when agents finish but never clean up. A repo 
 
 ---
 
+## Database migrations
+
+**Never write SQL migration files by hand.** Always generate them:
+
+```bash
+bun run db:generate
+```
+
+After generating, open `drizzle/meta/_journal.json` and confirm the new entry is the highest `idx` and is in chronological order. If the journal is out of order, do not proceed — investigate before committing.
+
+Then commit the generated migration files together with the schema change that triggered them.
+
+---
+
 ## Committing
 
 - Commit to `main` after each meaningful unit of work.

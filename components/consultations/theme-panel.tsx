@@ -111,31 +111,6 @@ async function extractThemes(
   return themes;
 }
 
-async function getClarificationQuestions(payload: { transcript: string; themes: string[] }) {
-  const response = await fetch(`/api/clarification/questions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw new Error(await readError(response));
-  }
-
-  const body = (await response.json()) as { questions?: Array<{ question: string } | string> } | string[];
-  const readQuestion = (value: { question: string } | string) =>
-    typeof value === "string" ? value : value.question;
-
-  if (Array.isArray(body)) {
-    return body.map(readQuestion);
-  }
-
-  if (!Array.isArray(body.questions)) return [];
-  return body.questions.map(readQuestion);
-}
-
 function getConfidenceLabel(confidence?: number) {
   if (confidence === undefined || Number.isNaN(confidence)) {
     return { label: "Pending review", className: "text-muted-foreground" };
@@ -170,12 +145,9 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
-  const [isClarifying, setIsClarifying] = useState(false);
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
   const [restoringThemeId, setRestoringThemeId] = useState<string | null>(null);
   const [confirmReextractOpen, setConfirmReextractOpen] = useState(false);
-  const [clarificationOpen, setClarificationOpen] = useState(false);
-  const [clarificationQuestions, setClarificationQuestions] = useState<string[]>([]);
   const [themeDetailsById, setThemeDetailsById] = useState<Record<string, ThemeDetails>>({});
   // IDs of themes currently animating out after rejection
   const [collapsingIds, setCollapsingIds] = useState<Set<string>>(new Set());
@@ -193,8 +165,6 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
   useEffect(() => {
     setErrorMessage(null);
     setConfirmReextractOpen(false);
-    setClarificationOpen(false);
-    setClarificationQuestions([]);
     setThemeDetailsById({});
     setCollapsingIds(new Set());
     setAddThemeOpen(false);
@@ -223,11 +193,6 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
   const activeThemes = useMemo(
     () => savedThemes.filter((t) => !t.rejected),
     [savedThemes]
-  );
-
-  const acceptedThemeLabels = useMemo(
-    () => acceptedThemes.map((t) => t.label),
-    [acceptedThemes]
   );
 
   const allActiveLabels = useMemo(
@@ -299,8 +264,6 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
 
       setThemeDetailsById(nextDetails);
       if (!options?.generateMore) {
-        setClarificationQuestions([]);
-        setClarificationOpen(false);
         setConfirmReextractOpen(false);
       }
 
@@ -413,28 +376,6 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
       setAddThemeError(getErrorMessage(error));
     } finally {
       setIsAddingTheme(false);
-    }
-  }
-
-  async function handleClarificationRequest() {
-    if (!transcript || acceptedThemeLabels.length === 0) {
-      return;
-    }
-
-    setErrorMessage(null);
-    setIsClarifying(true);
-
-    try {
-      const questions = await getClarificationQuestions({
-        transcript,
-        themes: acceptedThemeLabels,
-      });
-      setClarificationQuestions(questions);
-      setClarificationOpen(true);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setIsClarifying(false);
     }
   }
 
@@ -704,46 +645,6 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
                 </TabsContent>
               </Tabs>
 
-              {/* Clarification */}
-              <div className="border-t border-border/70 pt-4">
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="h-auto px-0 text-sm"
-                  disabled={isClarifying || acceptedThemeLabels.length === 0}
-                  onClick={() => void handleClarificationRequest()}
-                >
-                  {isClarifying ? (
-                    <><LoadingSpinner />Loading clarification questions…</>
-                  ) : (
-                    "Need clarification?"
-                  )}
-                </Button>
-
-                {acceptedThemeLabels.length === 0 ? (
-                  <p className="mt-1 text-xs text-muted-foreground">Accept at least one theme before requesting clarification questions.</p>
-                ) : null}
-
-                {clarificationOpen ? (
-                  <div className="mt-3 rounded-lg border border-border/70 bg-muted/10 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium">Suggested clarification questions</p>
-                      <Button size="xs" variant="ghost" onClick={() => setClarificationOpen(false)}>
-                        Hide
-                      </Button>
-                    </div>
-                    {clarificationQuestions.length > 0 ? (
-                      <ol className="space-y-2 text-sm text-muted-foreground">
-                        {clarificationQuestions.map((question, index) => (
-                          <li key={`${question}-${index}`}>{index + 1}. {question}</li>
-                        ))}
-                      </ol>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No clarification questions were returned.</p>
-                    )}
-                  </div>
-                ) : null}
-              </div>
             </div>
           ) : null}
 

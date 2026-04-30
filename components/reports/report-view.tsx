@@ -26,6 +26,7 @@ import {
   useReportArtifact,
   useReportArtifactVersions,
 } from "@/hooks/use-reports";
+import { useAIPreferences } from "@/hooks/use-ai-preferences";
 import type { ConsultationMeta, ReportArtifactDetail } from "@/types/report-artifact";
 import {
   formatDate,
@@ -42,6 +43,7 @@ import {
 } from "@/lib/report-graph";
 import { normalizeReportMarkdownForEditor } from "@/lib/report-editor-markdown";
 import { parseContentBlocks } from "@/lib/report-content-blocks";
+import { applyRenderPolicyToReport } from "@/lib/report-render-policy";
 import { cn } from "@/lib/utils";
 import { AuditTrailSection } from "@/components/reports/report-audit-trail-section";
 import { ReportCoverPage, deriveMatterRef } from "@/components/reports/report-cover-page";
@@ -1102,6 +1104,7 @@ interface ReportViewProps {
 
 export function ReportView({ artifactId }: ReportViewProps) {
   const { data: report, isLoading, error } = useReportArtifact(artifactId);
+  const { data: aiPreferences } = useAIPreferences();
   const [template, setTemplate] = useState<ReportTemplate>("standard");
   const [exportingFormat, setExportingFormat] = useState<"pdf" | "markdown" | "docx" | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -1189,11 +1192,15 @@ export function ReportView({ artifactId }: ReportViewProps) {
     );
   }
 
-  const readTime = estimateReadTime(report.content);
-  const graphModel = buildReportGraphModel(report.inputSnapshot);
+  const displayReport = applyRenderPolicyToReport(
+    report,
+    aiPreferences?.anonymousMode ?? false
+  );
+  const readTime = estimateReadTime(displayReport.content);
+  const graphModel = buildReportGraphModel(displayReport.inputSnapshot);
 
   const consultationCount =
-    report.consultations.length || report.consultationTitles.length;
+    displayReport.consultations.length || displayReport.consultationTitles.length;
 
   // ── Edit mode ─────────────────────────────────────────────────────────────
   if (isEditing) {
@@ -1210,10 +1217,10 @@ export function ReportView({ artifactId }: ReportViewProps) {
     <div className="mx-auto max-w-4xl space-y-8">
       {/* Cover page — visible on screen as a styled header, full-page in PDF */}
       <ReportCoverPage
-        title={report.title}
-        roundLabel={report.roundLabel}
-        generatedAt={report.generatedAt}
-        matterRef={deriveMatterRef(report.id)}
+        title={displayReport.title}
+        roundLabel={displayReport.roundLabel}
+        generatedAt={displayReport.generatedAt}
+        matterRef={deriveMatterRef(displayReport.id)}
         consultationCount={consultationCount}
       />
 
@@ -1226,7 +1233,7 @@ export function ReportView({ artifactId }: ReportViewProps) {
           Reports
         </Link>
         <span>/</span>
-        <span className="text-foreground">{report.title ?? "Untitled"}</span>
+        <span className="text-foreground">{displayReport.title ?? "Untitled"}</span>
       </div>
 
       {/* ─── Report header ─── */}
@@ -1234,18 +1241,18 @@ export function ReportView({ artifactId }: ReportViewProps) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">
-              {artifactTypeLabels[report.artifactType] ?? report.artifactType}
+              {artifactTypeLabels[displayReport.artifactType] ?? displayReport.artifactType}
             </Badge>
-            <Badge variant="secondary">{report.roundLabel}</Badge>
-            {report.totalVersions > 1 && (
+            <Badge variant="secondary">{displayReport.roundLabel}</Badge>
+            {displayReport.totalVersions > 1 && (
               <Badge variant="outline" className="text-[10px]">
-                v{report.versionNumber} of {report.totalVersions}
+                v{displayReport.versionNumber} of {displayReport.totalVersions}
               </Badge>
             )}
           </div>
           <div className="flex items-center gap-2 print:hidden">
             <TemplateSelector value={template} onChange={setTemplate} />
-            <ReportShareDialog artifactId={report.id} />
+            <ReportShareDialog artifactId={displayReport.id} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -1289,39 +1296,39 @@ export function ReportView({ artifactId }: ReportViewProps) {
             ~{readTime} min read
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            {report.title ?? "Untitled Report"}
+            {displayReport.title ?? "Untitled Report"}
           </h1>
         </div>
 
         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-          <span>Generated {formatDate(report.generatedAt)}</span>
-          {report.consultationTitles.length > 0 && (
+          <span>Generated {formatDate(displayReport.generatedAt)}</span>
+          {displayReport.consultationTitles.length > 0 && (
             <span>
-              {report.consultationTitles.length} meeting
-              {report.consultationTitles.length === 1 ? "" : "s"}
+              {displayReport.consultationTitles.length} meeting
+              {displayReport.consultationTitles.length === 1 ? "" : "s"}
             </span>
           )}
           <span>
-            {report.acceptedThemeCount} accepted theme
-            {report.acceptedThemeCount === 1 ? "" : "s"}
+            {displayReport.acceptedThemeCount} accepted theme
+            {displayReport.acceptedThemeCount === 1 ? "" : "s"}
           </span>
-          {report.supportingThemeCount > 0 && (
+          {displayReport.supportingThemeCount > 0 && (
             <span>
-              {report.supportingThemeCount} supporting theme
-              {report.supportingThemeCount === 1 ? "" : "s"}
+              {displayReport.supportingThemeCount} supporting theme
+              {displayReport.supportingThemeCount === 1 ? "" : "s"}
             </span>
           )}
         </div>
 
-        {report.roundDescription && (
+        {displayReport.roundDescription && (
           <p className="text-sm text-muted-foreground">
-            {report.roundDescription}
+            {displayReport.roundDescription}
           </p>
         )}
       </header>
 
       {/* ─── Quick Stats ─── */}
-      <QuickStats report={report} />
+      <QuickStats report={displayReport} />
 
       <Separator />
 
@@ -1329,12 +1336,12 @@ export function ReportView({ artifactId }: ReportViewProps) {
       <div className="grid gap-8 lg:grid-cols-[1fr_260px]">
         {/* Main content */}
         <article className="min-w-0 space-y-8">
-          <ReportContent content={report.content} />
+          <ReportContent content={displayReport.content} />
 
           <Separator />
 
           {/* ─── Section 1: Theme Groups (always shown) ─── */}
-          <ThemeHierarchySection report={report} template={template} />
+          <ThemeHierarchySection report={displayReport} template={template} />
 
           {graphModel ? (
             <>
@@ -1349,8 +1356,8 @@ export function ReportView({ artifactId }: ReportViewProps) {
               {/* ─── Section 3: Full canvas preview with nested groups ─── */}
               <CanvasPreviewSection
                 graphModel={graphModel}
-                allGroups={getAllThemeGroups(report.inputSnapshot)}
-                roundId={report.roundId}
+                allGroups={getAllThemeGroups(displayReport.inputSnapshot)}
+                roundId={displayReport.roundId}
               />
 
               {/* ─── Node degree table (analytics) ─── */}
@@ -1361,19 +1368,19 @@ export function ReportView({ artifactId }: ReportViewProps) {
             </>
           ) : null}
 
-          {report.draftThemeGroups && report.draftThemeGroups.length > 0 && (
+          {displayReport.draftThemeGroups && displayReport.draftThemeGroups.length > 0 && (
             <>
               <Separator />
-              <DraftGroupsSection report={report} />
+              <DraftGroupsSection report={displayReport} />
             </>
           )}
 
           {template === "standard" && (
             <>
               <Separator />
-              <EvidenceSection report={report} />
+              <EvidenceSection report={displayReport} />
               <Separator />
-              <AuditTrailSection report={report} />
+              <AuditTrailSection report={displayReport} />
             </>
           )}
         </article>
@@ -1390,7 +1397,7 @@ export function ReportView({ artifactId }: ReportViewProps) {
             Edit report
           </Button>
 
-          <VersionHistory report={report} currentId={artifactId} />
+          <VersionHistory report={displayReport} currentId={artifactId} />
 
           {/* Metadata callout */}
           <div className="rounded-lg border border-border/50 bg-muted/5 p-4 space-y-2">
@@ -1404,22 +1411,22 @@ export function ReportView({ artifactId }: ReportViewProps) {
                   href={`/consultations/rounds/${report.roundId}`}
                   className="underline transition-colors hover:text-foreground"
                 >
-                  {report.roundLabel}
+                  {displayReport.roundLabel}
                 </Link>
               </p>
               <p>
                 <span className="font-medium text-foreground">Generated:</span>{" "}
-                {formatDate(report.generatedAt)}
+                {formatDate(displayReport.generatedAt)}
               </p>
-              {report.totalVersions > 1 && (
+              {displayReport.totalVersions > 1 && (
                 <p>
                   <span className="font-medium text-foreground">Version:</span>{" "}
-                  {report.versionNumber} of {report.totalVersions}
+                  {displayReport.versionNumber} of {displayReport.totalVersions}
                 </p>
               )}
               <p className="pt-1">
                 <code className="text-[10px] text-muted-foreground/60">
-                  {report.id}
+                  {displayReport.id}
                 </code>
               </p>
             </div>

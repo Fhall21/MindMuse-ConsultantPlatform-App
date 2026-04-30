@@ -9,6 +9,8 @@ export interface UserAIPreferencesPayload {
   consultation_types: string[];
   focus_areas: string[];
   excluded_topics: string[];
+  email_guidance: string;
+  anonymous_mode: boolean;
 }
 
 export async function loadUserAIPreferences() {
@@ -22,6 +24,8 @@ export async function loadUserAIPreferences() {
       consultationTypes: userAIPreferences.consultationTypes,
       focusAreas: userAIPreferences.focusAreas,
       excludedTopics: userAIPreferences.excludedTopics,
+      emailGuidance: userAIPreferences.emailGuidance,
+      anonymousMode: userAIPreferences.anonymousMode,
     })
     .from(userAIPreferences)
     .where(eq(userAIPreferences.userId, userId))
@@ -36,5 +40,7 @@ export async function loadUserAIPreferences() {
     consultation_types: preferences.consultationTypes,
     focus_areas: preferences.focusAreas,
     excluded_topics: preferences.excludedTopics,
+    email_guidance: preferences.emailGuidance,
+    anonymous_mode: preferences.anonymousMode,
   } satisfies UserAIPreferencesPayload;
 }

@@ -26,6 +26,7 @@ class UserPreferences(BaseModel):
     consultation_types: List[str] = []
     focus_areas: List[str] = []
     excluded_topics: List[str] = []
+    email_guidance: str = ""
 
 
 class AIInsightLearning(BaseModel):
@@ -110,6 +111,9 @@ class EmailDraftRequest(BaseModel):
     people: List[str]
     consultation_title: Optional[str] = None
     consultation_date: Optional[str] = None  # ISO date, e.g. "2026-03-18"
+    learning_signals: List[LearningSignal] = []
+    ai_learnings: List[AIInsightLearning] = []
+    user_preferences: Optional[UserPreferences] = None
 
 
 class EmailDraftResponse(BaseModel):

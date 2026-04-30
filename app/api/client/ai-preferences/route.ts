@@ -26,6 +26,8 @@ export async function GET() {
           consultationTypes: [],
           focusAreas: [],
           excludedTopics: [],
+          emailGuidance: "",
+          anonymousMode: false,
         })
         .returning();
 
@@ -67,7 +69,13 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const { consultationTypes, focusAreas, excludedTopics } = parsed.data;
+    const {
+      consultationTypes,
+      focusAreas,
+      excludedTopics,
+      emailGuidance,
+      anonymousMode,
+    } = parsed.data;
 
     // Fetch current values for audit diff
     const current = await db
@@ -85,6 +93,8 @@ export async function PATCH(request: Request) {
         consultationTypes,
         focusAreas,
         excludedTopics,
+        emailGuidance,
+        anonymousMode,
       })
       .onConflictDoUpdate({
         target: userAIPreferences.userId,
@@ -92,6 +102,8 @@ export async function PATCH(request: Request) {
           consultationTypes,
           focusAreas,
           excludedTopics,
+          emailGuidance,
+          anonymousMode,
           updatedAt: new Date(),
         },
       })
@@ -107,9 +119,17 @@ export async function PATCH(request: Request) {
               consultationTypes: oldValues.consultationTypes,
               focusAreas: oldValues.focusAreas,
               excludedTopics: oldValues.excludedTopics,
+              emailGuidance: oldValues.emailGuidance,
+              anonymousMode: oldValues.anonymousMode,
             }
           : null,
-        new: { consultationTypes, focusAreas, excludedTopics },
+        new: {
+          consultationTypes,
+          focusAreas,
+          excludedTopics,
+          emailGuidance,
+          anonymousMode,
+        },
       },
     });
 

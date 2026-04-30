@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import posthog from "posthog-js";
 
+import { useAIPreferences } from "@/hooks/use-ai-preferences";
 import { useMeeting } from "@/hooks/use-meetings";
 import { useMeetingEvidenceEmails } from "@/hooks/use-evidence-email";
 import { useMeetingPeople } from "@/hooks/use-people";
@@ -175,6 +177,7 @@ function buildFallbackIncludedThemes(params: {
 export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelProps) {
   const resolvedMeetingId = meetingId ?? consultationId;
   const queryClient = useQueryClient();
+  const aiPreferencesQuery = useAIPreferences();
   const meetingQuery = useMeeting(resolvedMeetingId ?? "");
   const evidenceEmailsQuery = useMeetingEvidenceEmails(resolvedMeetingId ?? "");
   const peopleQuery = useMeetingPeople(resolvedMeetingId ?? "");
@@ -226,6 +229,7 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
     () => includedThemes.map((theme) => theme.label),
     [includedThemes]
   );
+  const emailGuidance = aiPreferencesQuery.data?.emailGuidance?.trim() ?? "";
 
   const drafts = evidenceEmailsQuery.data ?? [];
   const currentDraft = drafts[0] ?? null;
@@ -426,6 +430,28 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
               )}
             </p>
           ) : null}
+
+          <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Control email output</p>
+                <p className="text-sm text-muted-foreground">
+                  Change drafting guidance in AI personalisation settings, then generate a new draft to apply it.
+                </p>
+                {emailGuidance ? (
+                  <p className="text-xs text-muted-foreground">
+                    Current guidance: {emailGuidance}
+                  </p>
+                ) : null}
+              </div>
+              <Link
+                href="/settings/ai-personalisation"
+                className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
+              >
+                Edit guidance
+              </Link>
+            </div>
+          </div>
 
           {!meetingQuery.isPending &&
           !evidenceEmailsQuery.isPending &&

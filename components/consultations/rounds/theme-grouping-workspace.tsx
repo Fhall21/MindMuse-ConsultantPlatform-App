@@ -792,6 +792,7 @@ export function ThemeGroupingWorkspace({
         onOpenChange={setAiDialogOpen}
         roundLabel={roundLabel ?? null}
         sourceThemes={ungroupedThemes}
+        initialSelectedIds={selectedThemeIds}
         onAcceptSuggestion={handleAcceptAiSuggestion}
       />
     </>

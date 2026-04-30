@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Sparkles, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -26,6 +26,8 @@ interface AiThemeGroupSuggestionDialogProps {
   onOpenChange: (open: boolean) => void;
   roundLabel: string | null;
   sourceThemes: SourceTheme[];           // All ungrouped source themes
+  /** Pre-selected theme IDs from the workspace — seeds the focus picker on open. */
+  initialSelectedIds?: Set<string>;
   onAcceptSuggestion: (suggestion: SuggestedThemeGroup) => Promise<void>;
 }
 
@@ -34,6 +36,7 @@ export function AiThemeGroupSuggestionDialog({
   onOpenChange,
   roundLabel,
   sourceThemes,
+  initialSelectedIds,
   onAcceptSuggestion,
 }: AiThemeGroupSuggestionDialogProps) {
   const [selectedFocusLabels, setSelectedFocusLabels] = useState<Set<string>>(new Set());
@@ -41,6 +44,21 @@ export function AiThemeGroupSuggestionDialog({
   const [suggestions, setSuggestions] = useState<SuggestedThemeGroup[]>([]);
   const [acceptedLabels, setAcceptedLabels] = useState<Set<string>>(new Set());
   const [rejectedLabels, setRejectedLabels] = useState<Set<string>>(new Set());
+
+  // Seed focus picker from workspace selection when dialog opens.
+  useEffect(() => {
+    if (!open) return;
+    if (!initialSelectedIds || initialSelectedIds.size === 0) return;
+    const seededLabels = new Set(
+      sourceThemes
+        .filter((t) => initialSelectedIds.has(t.id))
+        .map((t) => t.label)
+    );
+    if (seededLabels.size > 0) {
+      setSelectedFocusLabels(seededLabels);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Unique labels across all source themes for the focus picker
   const uniqueThemeLabels = Array.from(new Set(sourceThemes.map((t) => t.label))).sort();
@@ -63,13 +81,20 @@ export function AiThemeGroupSuggestionDialog({
   const handleSuggest = async () => {
     if (selectedFocusLabels.size < 2) return;
 
+    // Only send the themes the user selected — not all ungrouped themes.
+    const scopedThemes = sourceThemes.filter((t) => selectedFocusLabels.has(t.label));
+    if (scopedThemes.length < 2) {
+      toast.error("Select at least 2 themes to generate suggestions.");
+      return;
+    }
+
     setIsLoading(true);
     setSuggestions([]);
     setAcceptedLabels(new Set());
     setRejectedLabels(new Set());
 
     try {
-      const themeInputs = sourceThemes.map((t) => ({
+      const themeInputs = scopedThemes.map((t) => ({
         theme_id: t.id,
         label: t.label,
         description: t.description ?? null,
@@ -127,8 +152,8 @@ export function AiThemeGroupSuggestionDialog({
             AI Suggested Theme Groups
           </DialogTitle>
           <DialogDescription>
-            Select 2 or more themes as focus areas. The AI will suggest how all
-            source themes naturally cluster around them.
+            Select 2 or more themes. The AI will suggest how those themes
+            cluster into groups. Only the selected themes are analysed.
           </DialogDescription>
         </DialogHeader>
 
@@ -171,6 +196,11 @@ export function AiThemeGroupSuggestionDialog({
             )}
           </div>
 
+          {selectedFocusLabels.size >= 2 && (
+            <p className="text-xs text-muted-foreground">
+              {selectedFocusLabels.size} theme{selectedFocusLabels.size !== 1 ? "s" : ""} in scope
+            </p>
+          )}
           <Button
             onClick={handleSuggest}
             disabled={selectedFocusLabels.size < 2 || isLoading}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -142,20 +143,31 @@ export function ThemeGroupCard({
               </div>
             ) : (
               <div>
-                <CardTitle
-                  className="text-sm cursor-pointer hover:text-primary transition-colors"
-                  onClick={() => {
-                    if (!isTerminal) {
-                      setIsEditing(true);
-                    }
-                  }}
-                >
-                  {group.label}
-                </CardTitle>
+                <div className="flex items-center gap-1">
+                  <CardTitle className="text-sm">{group.label}</CardTitle>
+                  {!isTerminal ? (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                      onClick={() => setIsEditing(true)}
+                      aria-label="Edit group name and description"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  ) : null}
+                </div>
                 {group.description ? (
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {group.description}
                   </p>
+                ) : !isTerminal ? (
+                  <button
+                    className="mt-0.5 text-xs text-muted-foreground/50 hover:text-muted-foreground italic"
+                    onClick={() => setIsEditing(true)}
+                  >
+                    + Add description
+                  </button>
                 ) : null}
               </div>
             )}

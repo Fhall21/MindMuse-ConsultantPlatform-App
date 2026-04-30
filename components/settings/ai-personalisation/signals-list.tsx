@@ -87,8 +87,8 @@ function SignalItem({ signal }: { signal: InsightDecisionLog }) {
   const { mutate: deleteSignal, isPending: isDeleting } = useDeleteSignal();
 
   const config =
-    decisionConfig[signal.decision_type] ?? decisionConfig.accept;
-  const dateLabel = safeFormatDate(signal.created_at);
+    decisionConfig[signal.decisionType] ?? decisionConfig.accept;
+  const dateLabel = safeFormatDate(signal.createdAt);
 
   function handleSaveRationale() {
     updateRationale(
@@ -115,8 +115,8 @@ function SignalItem({ signal }: { signal: InsightDecisionLog }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-medium leading-snug">
-            {signal.insight_label ? (
-              signal.insight_label
+            {signal.insightLabel ? (
+              signal.insightLabel
             ) : (
               <span className="italic text-muted-foreground/60">
                 Unnamed insight
@@ -160,7 +160,7 @@ function SignalItem({ signal }: { signal: InsightDecisionLog }) {
             <DialogHeader>
               <DialogTitle>Edit rationale</DialogTitle>
               <DialogDescription>
-                Why did you make this decision about "{signal.insight_label}"?
+                Why did you make this decision about "{signal.insightLabel}"?
               </DialogDescription>
             </DialogHeader>
             <Textarea
@@ -201,7 +201,7 @@ export function SignalsList() {
 
   const typeCounts = (["accept", "reject", "user_added", "restore"] as InsightDecisionType[]).reduce(
     (acc, type) => {
-      acc[type] = signals?.filter((s) => s.decision_type === type).length ?? 0;
+      acc[type] = signals?.filter((s) => s.decisionType === type).length ?? 0;
       return acc;
     },
     {} as Record<InsightDecisionType, number>
@@ -214,13 +214,13 @@ export function SignalsList() {
   const filtered =
     filter === "all"
       ? (signals ?? [])
-      : (signals ?? []).filter((s) => s.decision_type === filter);
+      : (signals ?? []).filter((s) => s.decisionType === filter);
 
   const hasSignals = signals && signals.length > 0;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="flex max-h-[480px] flex-col">
+      <CardHeader className="shrink-0 pb-3">
         <CardTitle>Decision history</CardTitle>
         <CardDescription>
           Your past accept, reject, and add decisions. These signals teach the
@@ -264,7 +264,7 @@ export function SignalsList() {
         )}
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="min-h-0 flex-1 overflow-y-auto">
         {isLoading && (
           <p className="py-6 text-center text-sm text-muted-foreground">
             Loading signals…

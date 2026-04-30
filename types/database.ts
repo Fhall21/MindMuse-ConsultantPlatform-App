@@ -146,14 +146,14 @@ export type InsightDecisionType = "accept" | "reject" | "user_added" | "restore"
 
 export interface InsightDecisionLog {
   id: string;
-  user_id: string;
-  meeting_id: string;
-  insight_id: string | null;
-  insight_label: string;
-  consultation_id: string | null;
-  decision_type: InsightDecisionType;
+  userId: string;
+  meetingId: string;
+  insightId: string | null;
+  insightLabel: string;
+  consultationId: string | null;
+  decisionType: InsightDecisionType;
   rationale: string | null;
-  created_at: string;
+  createdAt: string;
 }
 
 export interface Person {

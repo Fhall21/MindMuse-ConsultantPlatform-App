@@ -45,21 +45,32 @@ These skills are active in every session. Apply them without being asked.
 
 ## Branch and worktree hygiene
 
-**Work on `main` directly.** This is a solo-developer repo with no PR review process. Branching adds overhead and causes merge conflicts as sessions accumulate.
+Sprint tasks run as parallel agents, each in its own worktree and branch. This is intentional and correct. The rule is not "no worktrees" — it is **every worktree must be merged to `main` and deleted when the task is done**.
 
-- Do NOT create feature branches for fixes or iterative work.
-- Do NOT use `isolation: "worktree"` in Agent tool calls unless explicitly running a long-running parallel workstream.
-- If you find yourself on a non-`main` branch at session start, switch immediately: `git checkout main`.
+### Parallel sprint tasks (agents)
 
-**If a branch or worktree was created, clean it up before ending the session:**
+- Each sprint task agent works on a dedicated branch, e.g. `sprint14/task-07-description`.
+- Use `isolation: "worktree"` in Agent tool calls for parallel sprint tasks.
+- When the task is complete: merge to `main`, delete the branch, remove the worktree.
+
 ```bash
 git checkout main
-git merge <branch>          # if work is worth keeping
-git branch -D <branch>      # delete it regardless
-git worktree prune           # clean up dangling worktree refs
+git merge <branch>
+git branch -D <branch>
+git worktree remove --force <path>
+git worktree prune
 ```
 
-**Never leave a branch with unmerged commits behind.** If it's not in `main`, it will be treated as abandoned.
+### Direct / interactive work (this session, small fixes, UI tweaks)
+
+- Commit directly to `main`. Do not create a branch.
+- If you find yourself on a non-`main` branch for direct work, switch before starting: `git checkout main`.
+
+### The failure mode to avoid
+
+Branches and worktrees accumulate when agents finish but never clean up. A repo with 50 stale branches and 15 open worktrees causes conflicts in every future session. **Never end a task session without merging and deleting its branch.**
+
+**If it's not in `main`, it will be treated as abandoned.**
 
 ---
 

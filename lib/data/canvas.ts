@@ -1,13 +1,15 @@
 "use server";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   canvasConnections,
+  canvasFrames,
   canvasLayoutState,
 } from "@/db/schema";
 import type {
   CanvasEdge,
+  CanvasFrame,
   CanvasLayoutPosition,
   CanvasPosition,
   CanvasViewport,
@@ -265,6 +267,144 @@ export async function deleteCanvasConnection(
     entityId: edgeId,
     metadata: existing,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Canvas frames
+// ---------------------------------------------------------------------------
+
+type CanvasFrameInsert = typeof canvasFrames.$inferInsert;
+
+function rowToFrame(row: typeof canvasFrames.$inferSelect): CanvasFrame {
+  return {
+    id: row.id,
+    consultation_id: row.consultationId,
+    name: row.name,
+    node_ids: row.nodeIds as string[],
+    viewport: row.viewport as CanvasViewport,
+    position: row.position,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+  };
+}
+
+export async function listCanvasFrames(
+  consultationId: string,
+  userId: string
+): Promise<CanvasFrame[]> {
+  await requireOwnedConsultation(consultationId, userId);
+
+  const rows = await db
+    .select()
+    .from(canvasFrames)
+    .where(
+      and(
+        eq(canvasFrames.consultationId, consultationId),
+        eq(canvasFrames.userId, userId)
+      )
+    )
+    .orderBy(asc(canvasFrames.position), asc(canvasFrames.createdAt));
+
+  return rows.map(rowToFrame);
+}
+
+export async function createCanvasFrame(
+  consultationId: string,
+  userId: string,
+  data: { name: string; nodeIds: string[]; viewport: CanvasViewport; position?: number }
+): Promise<CanvasFrame> {
+  await requireOwnedConsultation(consultationId, userId);
+
+  const now = new Date();
+  const id = crypto.randomUUID();
+
+  await db.insert(canvasFrames).values({
+    id,
+    consultationId,
+    userId,
+    name: data.name,
+    nodeIds: data.nodeIds,
+    viewport: data.viewport,
+    position: data.position ?? 0,
+    createdAt: now,
+    updatedAt: now,
+  } satisfies CanvasFrameInsert);
+
+  const row = await db
+    .select()
+    .from(canvasFrames)
+    .where(eq(canvasFrames.id, id))
+    .then((rows) => rows[0]!);
+
+  return rowToFrame(row);
+}
+
+export async function updateCanvasFrame(
+  consultationId: string,
+  userId: string,
+  frameId: string,
+  updates: Partial<{ name: string; nodeIds: string[]; viewport: CanvasViewport; position: number }>
+): Promise<CanvasFrame> {
+  await requireOwnedConsultation(consultationId, userId);
+
+  const existing = await db
+    .select()
+    .from(canvasFrames)
+    .where(
+      and(
+        eq(canvasFrames.id, frameId),
+        eq(canvasFrames.consultationId, consultationId),
+        eq(canvasFrames.userId, userId)
+      )
+    )
+    .then((rows) => rows[0]);
+
+  if (!existing) {
+    throw new Error("Canvas frame not found");
+  }
+
+  const now = new Date();
+  const set: Partial<CanvasFrameInsert> = { updatedAt: now };
+  if (updates.name !== undefined) set.name = updates.name;
+  if (updates.nodeIds !== undefined) set.nodeIds = updates.nodeIds;
+  if (updates.viewport !== undefined) set.viewport = updates.viewport;
+  if (updates.position !== undefined) set.position = updates.position;
+
+  await db.update(canvasFrames).set(set).where(eq(canvasFrames.id, frameId));
+
+  const row = await db
+    .select()
+    .from(canvasFrames)
+    .where(eq(canvasFrames.id, frameId))
+    .then((rows) => rows[0]!);
+
+  return rowToFrame(row);
+}
+
+export async function deleteCanvasFrame(
+  consultationId: string,
+  userId: string,
+  frameId: string
+): Promise<void> {
+  await requireOwnedConsultation(consultationId, userId);
+
+  const existing = await db
+    .select()
+    .from(canvasFrames)
+    .where(
+      and(
+        eq(canvasFrames.id, frameId),
+        eq(canvasFrames.consultationId, consultationId),
+        eq(canvasFrames.userId, userId)
+      )
+    )
+    .then((rows) => rows[0]);
+
+  if (!existing) {
+    throw new Error("Canvas frame not found");
+  }
+
+  await db.delete(canvasFrames).where(eq(canvasFrames.id, frameId));
 }
 
 /**

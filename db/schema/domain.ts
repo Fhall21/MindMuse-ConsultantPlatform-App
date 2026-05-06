@@ -1368,3 +1368,37 @@ export const analyticsOutbox = pgTable(
     ),
   })
 );
+
+export const canvasFrames = pgTable(
+  "canvas_frames",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    consultationId: uuid("consultation_id")
+      .notNull()
+      .references(() => consultations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    nodeIds: jsonb("node_ids")
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    viewport: jsonb("viewport")
+      .$type<{ x: number; y: number; zoom: number }>()
+      .notNull(),
+    position: integer("position").default(0).notNull(),
+    ...timestamps,
+  },
+  (table) => ({
+    consultationUserIdx: index("idx_canvas_frames_consultation_user").on(
+      table.consultationId,
+      table.userId
+    ),
+    positionIdx: index("idx_canvas_frames_position").on(
+      table.consultationId,
+      table.userId,
+      table.position
+    ),
+  })
+);

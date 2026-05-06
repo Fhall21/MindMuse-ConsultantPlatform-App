@@ -161,6 +161,30 @@ export interface NetworkSnapshotEdge {
 }
 
 // ---------------------------------------------------------------------------
+// Canvas frames (curated views over the global node set)
+// ---------------------------------------------------------------------------
+
+/**
+ * A named, saved viewport + node-visibility filter over the full canvas graph.
+ * Nodes are not duplicated — frames reference node IDs from the global graph.
+ * Switching frames applies the node filter and restores the saved viewport.
+ */
+export interface CanvasFrame {
+  id: string;
+  consultation_id: string;
+  name: string;
+  /** Subset of node IDs visible in this frame. Empty = show all. */
+  node_ids: string[];
+  viewport: CanvasViewport;
+  /** Display order (ascending). */
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export const CANVAS_CLUTTER_THRESHOLD = 15;
+
+// ---------------------------------------------------------------------------
 // Quick filter state (UI-only — not persisted)
 // ---------------------------------------------------------------------------
 

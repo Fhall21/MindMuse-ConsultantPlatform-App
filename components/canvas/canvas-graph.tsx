@@ -26,6 +26,10 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { CanvasNodeCard, type CanvasNodeCardData } from "@/components/canvas/canvas-node-card";
+import {
+  CanvasFrameNode,
+  type CanvasFrameNodeData,
+} from "@/components/canvas/canvas-frame-node";
 import { CONNECTION_TYPE_LABELS } from "@/components/canvas/connection-type-prompt";
 import { useCanvas, useSaveLayout, type CreateEdgePayload } from "@/hooks/use-canvas";
 import {
@@ -41,7 +45,14 @@ import {
   GROUP_WIDTH,
 } from "@/lib/canvas-layout";
 import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
-import type { CanvasEdge, CanvasFilterState, CanvasNode, ConnectionType } from "@/types/canvas";
+import type {
+  CanvasEdge,
+  CanvasFilterState,
+  CanvasFrame,
+  CanvasNode,
+  ConnectionType,
+  FrameColor,
+} from "@/types/canvas";
 
 interface CanvasGraphProps {
   roundId: string;
@@ -54,6 +65,24 @@ interface CanvasGraphProps {
   visibleNodeIds?: Set<string> | null;
   /** When set, the viewport is restored to this position. Increment id to trigger. */
   viewportRequest?: { id: number; viewport: { x: number; y: number; zoom: number } } | null;
+  // ── Frame integration (sprint 16 task 03.5) ─────────────────────────────────
+  /** All frames for the active consultation. Rendered as background nodes. */
+  frames?: CanvasFrame[];
+  /** When true, click-drag on the pane draws a new frame rectangle. */
+  frameDrawingMode?: boolean;
+  /** ID of the frame currently highlighted as a drop target during a drag. */
+  dropTargetFrameId?: string | null;
+  /** Fired when consultant releases the rubber-band rectangle. */
+  onFrameDraw?: (bounds: { x: number; y: number; width: number; height: number }) => void;
+  /** Fired when a frame is moved/resized. */
+  onFramePersist?: (frameId: string, bounds: { x: number; y: number; width: number; height: number }) => void;
+  /** Fired after a node drag settles — checks frame membership. */
+  onNodeFrameAssign?: (nodeId: string, position: { x: number; y: number }) => void;
+  /** Fired during node drag to update drop-target highlight. */
+  onNodeFrameDragOver?: (nodeId: string, position: { x: number; y: number }) => void;
+  /** Frame-level UI callbacks. */
+  onFrameRename?: (frameId: string) => void;
+  onFrameColorChange?: (frameId: string, color: FrameColor) => void;
   onSelectionChange: (nodeIds: string[]) => void;
   onNodeFocus: (id: string | null) => void;
   onEdgeSelect: (id: string | null) => void;

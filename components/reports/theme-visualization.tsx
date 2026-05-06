@@ -130,14 +130,28 @@ function buildReportEdge(
   source: string,
   target: string,
   connectionType: string,
-  selectedEdgeId?: string | null
+  selectedEdgeId?: string | null,
+  /** Optional consultant-authored note. Shown alongside the connection type
+   *  label so the intent of the relationship survives into the report. */
+  note?: string | null
 ): Edge {
+  // Sprint 16 task 03.5 — surface the note next to the type. Truncate long
+  // notes so they don't overflow the edge label area; full text goes into
+  // aria-label for screen readers and tooltips.
+  const typeLabel = formatConnectionTypeLabel(connectionType as ConnectionType);
+  const trimmedNote = note?.trim() ?? "";
+  const label =
+    trimmedNote.length > 0
+      ? `${typeLabel} · ${trimmedNote.length > 40 ? trimmedNote.slice(0, 38).trimEnd() + "…" : trimmedNote}`
+      : typeLabel;
+
   return {
     id,
     source,
     target,
     type: "smoothstep",
-    label: formatConnectionTypeLabel(connectionType as ConnectionType),
+    label,
+    ariaLabel: trimmedNote ? `${typeLabel} — ${trimmedNote}` : typeLabel,
     animated: selectedEdgeId === id,
     selected: selectedEdgeId === id,
     labelShowBg: true,
@@ -253,7 +267,9 @@ function buildGroupNetworkElements(graphModel: ReportGraphModel): {
       e.connectionId,
       nodeKey(e.fromNodeType, e.fromNodeId),
       nodeKey(e.toNodeType, e.toNodeId),
-      e.connectionType
+      e.connectionType,
+      null,
+      e.notes
     )
   );
 
@@ -339,11 +355,12 @@ function buildCanvasPreviewElements(
 ): { nodes: Node[]; edges: Edge[] } {
   const snapshot = graphModel.snapshot;
   const snapshotNodeIds = new Set(snapshot.nodes.map((node) => node.nodeId));
-  const visibleGroups = allGroups.filter(
-    (group) =>
-      snapshotNodeIds.has(group.id) ||
-      group.members.some((member) => snapshotNodeIds.has(member.insightId))
-  );
+  // Sprint 16 task 03.5 — only render groups that are EXPLICITLY in scope.
+  // Previously this included any group whose members were in the frame,
+  // which surfaced group cards the consultant never put in the frame.
+  // Insights whose parent group isn't in scope fall through to the
+  // "ungrouped" rendering path further down.
+  const visibleGroups = allGroups.filter((group) => snapshotNodeIds.has(group.id));
 
   // Build layout positions from layoutState (may be all null for legacy)
   const layoutByKey = new Map<string, { x: number; y: number }>();
@@ -379,11 +396,14 @@ function buildCanvasPreviewElements(
     g.setNode(group.id, { width: dims.width, height: dims.height });
   }
 
-  // Add group→group edges to Dagre for better spacing
+  // Sprint 16 task 03.5 — only filter the IMPLICIT membership edges added
+  // by buildLegacyReportGraphSnapshot (those have ids prefixed `support:`).
+  // Previously this filter dropped every insight↔group edge — including
+  // user-authored typed connections (causes/influences/etc), which is why
+  // the report was rendering as "no connections drawn" even when the
+  // canvas had relationships in plain view.
   const semanticEdges = snapshot.edges.filter(
-    (e) =>
-      !(e.fromNodeType === "insight" && e.toNodeType === "group") &&
-      !(e.fromNodeType === "group" && e.toNodeType === "insight")
+    (e) => !e.connectionId.startsWith("support:")
   );
 
   for (const edge of semanticEdges) {
@@ -481,7 +501,11 @@ function buildCanvasPreviewElements(
       }
 
       insightFlowNodes.push({
-        id: member.insightId,
+        // Sprint 16 task 03.5 — match the nodeKey form so edges that target
+        // `insight:<UUID>` resolve. Previously the id was a bare UUID,
+        // which caused ReactFlow to silently drop every insight-targeted
+        // edge.
+        id: nodeKey("insight", member.insightId),
         position: nodePos,
         draggable: false,
         selectable: false,
@@ -492,6 +516,11 @@ function buildCanvasPreviewElements(
               <p className="text-xs font-medium leading-tight text-slate-800 line-clamp-2">
                 {member.label}
               </p>
+              {member.description && (
+                <p className="text-[10px] leading-snug text-slate-500 line-clamp-2">
+                  {member.description}
+                </p>
+              )}
               {member.sourceConsultationTitle && (
                 <p className="text-[10px] text-slate-400 line-clamp-1">
                   {member.sourceConsultationTitle}
@@ -507,7 +536,8 @@ function buildCanvasPreviewElements(
         },
         style: {
           width: INSIGHT_WIDTH,
-          minHeight: INSIGHT_HEIGHT,
+          // Sprint 16 task 03.5 — content-sized height so empty insights
+          // don't leave dead space. Padding + content drive the height.
           borderRadius: 10,
           border: "1px solid #d1fae5",
           borderLeft: "4px solid #10b981",
@@ -519,7 +549,9 @@ function buildCanvasPreviewElements(
     });
   }
 
-  // Build edges — skip insight→group membership edges
+  // Build edges. Group flow nodes use bare UUID ids; insight flow nodes
+  // (after the sprint 16 task 03.5 fix) use the nodeKey form. So we
+  // resolve source/target accordingly and pass the user's note through.
   const flowEdges: Edge[] = semanticEdges
     .map((e): Edge | null => {
       const sourceId =
@@ -531,7 +563,14 @@ function buildCanvasPreviewElements(
           ? e.toNodeId
           : nodeKey(e.toNodeType, e.toNodeId);
 
-      return buildReportEdge(e.connectionId, sourceId, targetId, e.connectionType);
+      return buildReportEdge(
+        e.connectionId,
+        sourceId,
+        targetId,
+        e.connectionType,
+        null,
+        e.notes
+      );
     })
     .filter((e): e is Edge => e !== null);
 

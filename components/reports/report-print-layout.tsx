@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Document,
+  Image as PdfImage,
   Page,
   Text,
   View,
@@ -1213,6 +1214,14 @@ function NetworkContent({
                   </Text>
                 </View>
               </View>
+              {/* Sprint 16 task 03.5 — render captured frame image when the
+                  snapshot pipeline supplies one. Falls back to the textual
+                  connection list for back-compat with v1 snapshots. */}
+              {frame.imageUrl ? (
+                <View style={{ marginVertical: 6 }}>
+                  <PdfImage src={frame.imageUrl} style={{ width: "100%" }} />
+                </View>
+              ) : null}
               {frame.graphModel.connections.slice(0, 4).map((conn) => (
                 <PdfConnectionCard
                   key={conn.key}

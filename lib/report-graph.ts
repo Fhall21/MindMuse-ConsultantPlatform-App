@@ -148,6 +148,14 @@ export interface ReportGraphFrameModel {
   nodeIds: string[];
   viewport: GraphFrameSnapshot["viewport"];
   graphModel: ReportGraphModel;
+  // Spatial bbox + palette + image URL passed through from GraphFrameSnapshot.
+  // Optional — older snapshots written before sprint 16 task 03.5 omit them.
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  color?: string;
+  imageUrl?: string | null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -405,6 +413,12 @@ export function buildReportGraphFrameModels(
         nodeIds: frame.nodeIds,
         viewport: frame.viewport,
         graphModel,
+        x: frame.x,
+        y: frame.y,
+        width: frame.width,
+        height: frame.height,
+        color: frame.color,
+        imageUrl: frame.imageUrl ?? null,
       };
     })
     .filter((frame): frame is ReportGraphFrameModel => frame !== null);

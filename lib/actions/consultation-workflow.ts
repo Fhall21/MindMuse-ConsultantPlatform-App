@@ -2512,6 +2512,16 @@ async function generateRoundOutput(
       nodeIds: frame.node_ids,
       position: frame.position,
       viewport: frame.viewport,
+      // Spatial bbox + palette (sprint 16 task 03.5). These let the report
+      // pipeline reproduce the on-canvas layout for each frame.
+      x: frame.x,
+      y: frame.y,
+      width: frame.width,
+      height: frame.height,
+      color: frame.color,
+      // imageUrl populated by a future client-driven capture step. See
+      // lib/canvas-snapshot.ts for the capture primitive.
+      imageUrl: null,
     }));
   }
 

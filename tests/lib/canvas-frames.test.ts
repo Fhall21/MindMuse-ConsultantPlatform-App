@@ -13,6 +13,11 @@ function makeFrame(overrides: Partial<CanvasFrame> = {}): CanvasFrame {
     id: "frame-1",
     consultation_id: "consultation-1",
     name: "Wellbeing cluster",
+    x: 0,
+    y: 0,
+    width: 600,
+    height: 400,
+    color: "blue",
     node_ids: ["node-a", "node-b"],
     viewport: { x: 10, y: 20, zoom: 0.8 },
     position: 0,
@@ -70,9 +75,9 @@ describe("CANVAS_CLUTTER_THRESHOLD", () => {
 
 describe("frame visibility filter logic", () => {
   it("null active frame means all nodes visible", () => {
-    const activeFrame = null;
-    const visibleNodeIds = activeFrame ? new Set(activeFrame.node_ids) : null;
-    expect(visibleNodeIds).toBeNull();
+    const computeVisible = (frame: CanvasFrame | null) =>
+      frame ? new Set(frame.node_ids) : null;
+    expect(computeVisible(null)).toBeNull();
   });
 
   it("frame with node_ids produces a set for filtering", () => {

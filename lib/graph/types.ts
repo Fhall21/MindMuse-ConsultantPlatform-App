@@ -210,6 +210,18 @@ export interface GraphFrameSnapshot {
     y: number;
     zoom: number;
   };
+  // Spatial bounding box in canvas flow coordinates (sprint 16 task 03.5).
+  // Optional for back-compat with snapshots written before the bbox model.
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  // Palette tint for the frame on canvas. One of FRAME_COLORS values.
+  color?: string;
+  // Captured frame image URL (cropped). Present when the report-generation
+  // pipeline includes a client-side capture step. Reports without imageUrl
+  // fall back to the live graph model rendering.
+  imageUrl?: string | null;
 }
 
 export interface GraphNetworkSnapshot {
@@ -217,6 +229,8 @@ export interface GraphNetworkSnapshot {
   nodes: GraphSnapshotNode[];
   edges: GraphSnapshotEdge[];
   layoutState: LayoutStateEntry[];
+  // Captured full-canvas image URL. Optional — see GraphFrameSnapshot.imageUrl.
+  graphImageUrl?: string | null;
   frames?: GraphFrameSnapshot[];
 }
 

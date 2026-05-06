@@ -11,6 +11,11 @@ function makeFrame(overrides: Partial<CanvasFrame> = {}): CanvasFrame {
     id: "frame-1",
     consultation_id: "consultation-1",
     name: "Wellbeing cluster",
+    x: 0,
+    y: 0,
+    width: 600,
+    height: 400,
+    color: "blue",
     node_ids: ["node-a", "node-b"],
     viewport: { x: 0, y: 0, zoom: 1 },
     position: 0,
@@ -27,6 +32,7 @@ const defaultProps = {
   onCreateFrame: vi.fn(),
   onRenameFrame: vi.fn(),
   onDeleteFrame: vi.fn(),
+  disabled: false as boolean,
 };
 
 function renderBar(props: Partial<typeof defaultProps> = {}) {

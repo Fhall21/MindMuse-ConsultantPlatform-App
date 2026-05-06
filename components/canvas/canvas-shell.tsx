@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { ChevronLeft, Sparkles } from "lucide-react";
+import { ChevronLeft, Frame, ImageDown, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import posthog from "posthog-js";
 import { Badge } from "@/components/ui/badge";
@@ -32,10 +32,19 @@ import { createTheme, moveThemeToGroup, updateTheme } from "@/lib/actions/consul
 import { suggestGroupLabel } from "@/lib/actions/canvas-ai";
 import {
   CANVAS_CLUTTER_THRESHOLD,
+  DEFAULT_FRAME_COLOR,
+  DEFAULT_FRAME_HEIGHT,
+  DEFAULT_FRAME_WIDTH,
   defaultFilterState,
   type CanvasFilterState,
   type ConnectionType,
+  type FrameColor,
 } from "@/types/canvas";
+import {
+  frameContainingPoint,
+  nodeIdsInsideFrame,
+  reconcileNodeFrameMembership,
+} from "@/lib/canvas-frame-spatial";
 
 interface CanvasShellProps {
   roundId: string;
@@ -435,6 +444,25 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
   // ─── Frame handlers ──────────────────────────────────────────────────────────
 
+  // Drawing mode UI state. Toggled by toolbar button; consumed by CanvasGraph
+  // to enable the rubber-band rectangle gesture.
+  const [frameDrawingMode, setFrameDrawingMode] = useState(false);
+  // Frame highlighted as drop target while a node is dragged over it.
+  const [dropTargetFrameId, setDropTargetFrameId] = useState<string | null>(null);
+
+  // Image export state (toolbar button → captureCanvasImages + download).
+  const [isExportingImages, setIsExportingImages] = useState(false);
+
+  // Cancel drawing mode on Escape.
+  useEffect(() => {
+    if (!frameDrawingMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFrameDrawingMode(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [frameDrawingMode]);
+
   function handleSelectFrame(frameId: string | null) {
     setActiveFrameId(frameId);
     setSelectedNodeIds([]);
@@ -451,24 +479,142 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     }
   }
 
+  /**
+   * Frame-bar create button. Creates a default-sized frame at the centre of
+   * the current viewport. Drawing-mode entry is the preferred path; this
+   * is kept for the CanvasFrameBar "+" button and the clutter-banner CTA.
+   */
   async function handleCreateFrame(name: string) {
     const currentViewport = canvasQuery.data?.viewport ?? { x: 0, y: 0, zoom: 1 };
-    const nodeIds = selectedNodeIds.length > 0 ? selectedNodeIds : nodes.map((n) => n.id);
+    // Place the frame centred on the visible viewport.
+    const x = -currentViewport.x / currentViewport.zoom;
+    const y = -currentViewport.y / currentViewport.zoom;
+    const bounds = {
+      x,
+      y,
+      width: DEFAULT_FRAME_WIDTH,
+      height: DEFAULT_FRAME_HEIGHT,
+    };
+    const auto = nodeIdsInsideFrame(nodes, bounds);
     const frame = await createFrame.mutateAsync({
       name,
-      node_ids: nodeIds,
+      node_ids: auto,
       viewport: currentViewport,
+      ...bounds,
+      color: DEFAULT_FRAME_COLOR,
     });
     setActiveFrameId(frame.id);
+  }
+
+  /**
+   * Drawing-mode entry. Called when the consultant releases a rubber-band
+   * rectangle on the canvas. Auto-assigns nodes whose centres fall inside
+   * the drawn bounds and exits drawing mode.
+   */
+  async function handleFrameDraw(bounds: { x: number; y: number; width: number; height: number }) {
+    const currentViewport = canvasQuery.data?.viewport ?? { x: 0, y: 0, zoom: 1 };
+    const auto = nodeIdsInsideFrame(nodes, bounds);
+    const name = `Frame ${frames.length + 1}`;
+    const frame = await createFrame.mutateAsync({
+      name,
+      node_ids: auto,
+      viewport: currentViewport,
+      ...bounds,
+      color: DEFAULT_FRAME_COLOR,
+    });
+    setActiveFrameId(frame.id);
+    setFrameDrawingMode(false);
+  }
+
+  /**
+   * Persist new bounds after frame drag/resize and recompute membership.
+   * Nodes inside the new bounds are added; previously-included nodes that
+   * are now outside are dropped.
+   */
+  async function handleFramePersist(
+    frameId: string,
+    bounds: { x: number; y: number; width: number; height: number }
+  ) {
+    const nextNodeIds = nodeIdsInsideFrame(nodes, bounds);
+    await updateFrame.mutateAsync({
+      id: frameId,
+      ...bounds,
+      node_ids: nextNodeIds,
+    });
+  }
+
+  /**
+   * Recompute frame membership for a node that just finished dragging.
+   * Adds the node to the frame whose bounds contain its new position; removes
+   * it from any frame it was previously a member of.
+   */
+  async function handleNodeFrameAssign(nodeId: string, position: { x: number; y: number }) {
+    setDropTargetFrameId(null);
+    const { assignTo, removeFrom } = reconcileNodeFrameMembership(nodeId, position, frames);
+    const ops: Promise<unknown>[] = [];
+    if (assignTo && !assignTo.node_ids.includes(nodeId)) {
+      ops.push(
+        updateFrame.mutateAsync({
+          id: assignTo.id,
+          node_ids: [...assignTo.node_ids, nodeId],
+        })
+      );
+    }
+    for (const frame of removeFrom) {
+      ops.push(
+        updateFrame.mutateAsync({
+          id: frame.id,
+          node_ids: frame.node_ids.filter((id) => id !== nodeId),
+        })
+      );
+    }
+    if (ops.length > 0) await Promise.all(ops);
+  }
+
+  function handleNodeFrameDragOver(_nodeId: string, position: { x: number; y: number }) {
+    const target = frameContainingPoint(frames, position);
+    setDropTargetFrameId(target?.id ?? null);
+  }
+
+  async function handleFrameRename(frameId: string) {
+    const next = window.prompt("Frame name");
+    if (!next || !next.trim()) return;
+    await updateFrame.mutateAsync({ id: frameId, name: next.trim() });
   }
 
   async function handleRenameFrame(frameId: string, name: string) {
     await updateFrame.mutateAsync({ id: frameId, name });
   }
 
+  async function handleFrameColorChange(frameId: string, color: FrameColor) {
+    await updateFrame.mutateAsync({ id: frameId, color });
+  }
+
   async function handleDeleteFrame(frameId: string) {
     await deleteFrame.mutateAsync(frameId);
     if (activeFrameId === frameId) setActiveFrameId(null);
+  }
+
+  /**
+   * Export the current canvas + per-frame images. Captures the live ReactFlow
+   * DOM via html2canvas, crops per-frame using ReactFlow viewport transform,
+   * then triggers sequential downloads. Implemented in lib/canvas-snapshot.ts.
+   */
+  async function handleExportImages() {
+    if (isExportingImages) return;
+    setIsExportingImages(true);
+    try {
+      const { downloadCanvasImages } = await import("@/lib/canvas-snapshot");
+      await downloadCanvasImages({
+        roundId,
+        frames,
+      });
+    } catch (error) {
+      console.error("[canvas-shell] export images failed", error);
+      toast.error("Failed to export images.");
+    } finally {
+      setIsExportingImages(false);
+    }
   }
 
   return (
@@ -521,6 +667,26 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
         <div className="ml-auto flex items-center gap-2">
           {toolbarOrganiseControl}
+          <Button
+            variant={frameDrawingMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFrameDrawingMode((v) => !v)}
+            aria-pressed={frameDrawingMode}
+            title="Draw a frame to group nodes by region"
+          >
+            <Frame className="mr-1.5 h-3.5 w-3.5" />
+            {frameDrawingMode ? "Drawing…" : "Draw frame"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportImages}
+            disabled={isExportingImages}
+            title="Download canvas + per-frame images"
+          >
+            <ImageDown className="mr-1.5 h-3.5 w-3.5" />
+            Export view
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -575,6 +741,15 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
             layoutRequest={layoutRequest}
             visibleNodeIds={visibleNodeIds}
             viewportRequest={viewportRequest}
+            frames={frames}
+            frameDrawingMode={frameDrawingMode}
+            dropTargetFrameId={dropTargetFrameId}
+            onFrameDraw={handleFrameDraw}
+            onFramePersist={handleFramePersist}
+            onNodeFrameAssign={handleNodeFrameAssign}
+            onNodeFrameDragOver={handleNodeFrameDragOver}
+            onFrameRename={handleFrameRename}
+            onFrameColorChange={handleFrameColorChange}
             onSelectionChange={handleCanvasSelectionChange}
             onNodeFocus={setFocusedNodeId}
             onEdgeSelect={setSelectedEdgeId}

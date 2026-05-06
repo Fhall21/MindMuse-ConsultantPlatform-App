@@ -115,7 +115,64 @@ const CONNECTION_COLORS: Record<ConnectionType, string> = {
 //    React Flow never needs nested parent/child nodes.
 const nodeTypes = {
   canvasNode: CanvasNodeCard,
+  frameNode: CanvasFrameNode,
 };
+
+const FRAME_NODE_TYPE = "frameNode";
+
+/**
+ * Build ReactFlow nodes for canvas frames. Frames render at zIndex -1 so
+ * they sit beneath theme/insight cards. Each frame is draggable and
+ * resizable in place; data carries the frameId + color + drop-target flag.
+ */
+function buildFrameFlowNodes(
+  frames: CanvasFrame[],
+  dropTargetFrameId: string | null,
+  callbacks: {
+    onColorChange?: (frameId: string, color: FrameColor) => void;
+    onRename?: (frameId: string) => void;
+  }
+): Node[] {
+  return frames.map((frame) => ({
+    id: `frame:${frame.id}`,
+    type: FRAME_NODE_TYPE,
+    position: { x: frame.x, y: frame.y },
+    width: frame.width,
+    height: frame.height,
+    style: { width: frame.width, height: frame.height },
+    draggable: true,
+    selectable: true,
+    zIndex: -1,
+    data: {
+      frameId: frame.id,
+      name: frame.name,
+      color: frame.color,
+      isDropTarget: dropTargetFrameId === frame.id,
+      onColorChange: callbacks.onColorChange,
+      onRename: callbacks.onRename,
+    } satisfies CanvasFrameNodeData,
+  } satisfies Node));
+}
+
+/** True when a node id is a frame's flow-node id (prefixed `frame:`). */
+function isFrameFlowNodeId(id: string) {
+  return id.startsWith("frame:");
+}
+
+/** Extract DB frameId from a flow-node id (`frame:<uuid>` → `<uuid>`). */
+function frameIdFromFlowId(flowId: string) {
+  return flowId.slice("frame:".length);
+}
+
+/** Test if a point is inside a frame's bounding box (canvas flow coords). */
+function pointInFrame(point: { x: number; y: number }, frame: CanvasFrame) {
+  return (
+    point.x >= frame.x &&
+    point.x <= frame.x + frame.width &&
+    point.y >= frame.y &&
+    point.y <= frame.y + frame.height
+  );
+}
 
 function edgeStyle(connectionType: ConnectionType) {
   return {
@@ -580,6 +637,15 @@ function CanvasGraphInner({
   layoutRequest,
   visibleNodeIds,
   viewportRequest,
+  frames = [],
+  frameDrawingMode = false,
+  dropTargetFrameId = null,
+  onFrameDraw,
+  onFramePersist,
+  onNodeFrameAssign,
+  onNodeFrameDragOver,
+  onFrameRename,
+  onFrameColorChange,
   onSelectionChange,
   onNodeFocus,
   onEdgeSelect,
@@ -589,7 +655,8 @@ function CanvasGraphInner({
 }: CanvasGraphProps) {
   const { data, isLoading } = useCanvas(roundId);
   const saveLayout = useSaveLayout(roundId);
-  const { getViewport, getIntersectingNodes, setViewport } = useReactFlow();
+  const { getViewport, getIntersectingNodes, setViewport, screenToFlowPosition } =
+    useReactFlow();
   const dragRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const layoutResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -690,17 +757,91 @@ function CanvasGraphInner({
 
   const [flowNodes, setFlowNodes] = useNodesState(nextFlowNodes);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(nextFlowEdges);
-  const renderedFlowNodes = useMemo(() => orderNodesParentFirst(flowNodes), [flowNodes]);
+
+  // Frame flow nodes — built fresh from props each render. Frame node positions
+  // and sizes live in DB and are pushed back via onFramePersist after a drag/
+  // resize. We don't merge into useNodesState because frames are simpler:
+  // ReactFlow tracks their position locally during drag, then we read from
+  // the dragged node in onNodeDragStop and persist.
+  const frameFlowNodes = useMemo(
+    () =>
+      buildFrameFlowNodes(frames, dropTargetFrameId, {
+        onColorChange: onFrameColorChange,
+        onRename: onFrameRename,
+      }),
+    [frames, dropTargetFrameId, onFrameColorChange, onFrameRename]
+  );
+  // Render frames first (lower z-index) so node-card hit tests work normally
+  // for theme/insight nodes, then theme/insight nodes on top.
+  const renderedFlowNodes = useMemo(
+    () => [...frameFlowNodes, ...orderNodesParentFirst(flowNodes)],
+    [frameFlowNodes, flowNodes]
+  );
   const flowNodesRef = useRef(flowNodes);
   flowNodesRef.current = flowNodes;
 
+  // Latest frame definitions for use inside drag/resize callbacks. Avoids
+  // capturing stale frames in useCallback closures.
+  const framesRef = useRef(frames);
+  framesRef.current = frames;
+  // Track frame node positions during drag so we can compute the final
+  // bounds at drag-end without depending on ReactFlow internal state.
+  const frameRuntimeBoundsRef = useRef<
+    Record<string, { x: number; y: number; width: number; height: number }>
+  >({});
+  // Reset runtime bounds when the underlying frames list changes.
+  useEffect(() => {
+    frameRuntimeBoundsRef.current = Object.fromEntries(
+      frames.map((f) => [f.id, { x: f.x, y: f.y, width: f.width, height: f.height }])
+    );
+  }, [frames]);
+
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      setFlowNodes((currentNodes) =>
-        orderNodesParentFirst(applyThemeDragTranslations(changes, currentNodes))
-      );
+      // Split frame-related changes off from theme/insight changes.
+      const themeInsightChanges: NodeChange[] = [];
+
+      for (const change of changes) {
+        const changeId = (change as { id?: string }).id;
+        if (!changeId || !isFrameFlowNodeId(changeId)) {
+          themeInsightChanges.push(change);
+          continue;
+        }
+        const frameId = frameIdFromFlowId(changeId);
+        const current = frameRuntimeBoundsRef.current[frameId];
+        if (!current) continue;
+
+        if (change.type === "position" && change.position) {
+          // Update runtime bounds; persist when drag settles.
+          const next = {
+            ...current,
+            x: change.position.x,
+            y: change.position.y,
+          };
+          frameRuntimeBoundsRef.current[frameId] = next;
+          if (change.dragging === false) {
+            onFramePersist?.(frameId, next);
+          }
+        } else if (change.type === "dimensions" && change.dimensions) {
+          const next = {
+            ...current,
+            width: change.dimensions.width,
+            height: change.dimensions.height,
+          };
+          frameRuntimeBoundsRef.current[frameId] = next;
+          if (change.resizing === false) {
+            onFramePersist?.(frameId, next);
+          }
+        }
+      }
+
+      if (themeInsightChanges.length > 0) {
+        setFlowNodes((currentNodes) =>
+          orderNodesParentFirst(applyThemeDragTranslations(themeInsightChanges, currentNodes))
+        );
+      }
     },
-    [setFlowNodes]
+    [setFlowNodes, onFramePersist]
   );
 
   // Preserve runtime positions while dragging/selecting. Recomputing from server
@@ -976,12 +1117,38 @@ function CanvasGraphInner({
   }, [data, layoutRequest?.id, setFlowNodes]);
 
   const handleNodeDragStart: OnNodeDrag = useCallback((_event, node) => {
+    // Frame nodes follow their own persistence path via handleNodesChange —
+    // skip the theme/insight drag bookkeeping for them.
+    if (isFrameFlowNodeId(node.id)) return;
     dragRef.current = node.id;
     dragSelectionRef.current = true;
   }, []);
 
+  // Notify parent of drop-target frame highlights as the consultant drags
+  // a regular (theme/insight) node across frames.
+  const handleNodeDrag: OnNodeDrag = useCallback(
+    (_event, node) => {
+      if (isFrameFlowNodeId(node.id)) return;
+      onNodeFrameDragOver?.(node.id, node.position);
+    },
+    [onNodeFrameDragOver]
+  );
+
   const handleNodeDragStop: OnNodeDrag = useCallback(
     async (_event, node, allNodes) => {
+      // Frame node drag end is handled in handleNodesChange via the
+      // onFramePersist callback — exit early so we don't run the
+      // theme/insight grouping pipeline on frame nodes.
+      if (isFrameFlowNodeId(node.id)) {
+        // Membership recalculation happens in canvas-shell after persist —
+        // here we only need to clear the drop highlight.
+        onNodeFrameDragOver?.(node.id, node.position);
+        return;
+      }
+      // After the drag settles, ask the parent to recalculate frame
+      // membership for this node based on its final canvas position.
+      onNodeFrameAssign?.(node.id, node.position);
+
       const draggedNodeId = dragRef.current ?? node.id;
       const draggedNodeBeforeDrag = nodesDataRef.current.find((candidate) => candidate.id === draggedNodeId);
       const runtimeNodes = flowNodesRef.current;
@@ -1056,7 +1223,77 @@ function CanvasGraphInner({
         void onGroupDrop({ activeNodeId: draggedNodeId, targetNodeId: null });
       }
     },
-    [getIntersectingNodes, onGroupDrop, persistLayout, setFlowNodes]
+    [
+      getIntersectingNodes,
+      onGroupDrop,
+      onNodeFrameAssign,
+      onNodeFrameDragOver,
+      persistLayout,
+      setFlowNodes,
+    ]
+  );
+
+  // ─── Frame drawing mode ──────────────────────────────────────────────────
+  // When `frameDrawingMode` is on, mouse-down on the pane background starts
+  // a rubber-band rect. Releasing fires `onFrameDraw` with flow-space bounds.
+  // Mouse-down on existing nodes/frames is ignored (lets resize/drag still
+  // work even while drawing mode is technically active).
+  const [drawState, setDrawState] = useState<
+    | null
+    | {
+        startScreen: { x: number; y: number };
+        currentScreen: { x: number; y: number };
+        startFlow: { x: number; y: number };
+      }
+  >(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  const handleDrawMouseDown = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!frameDrawingMode) return;
+      const target = event.target as HTMLElement;
+      // Only initiate drawing when the pane background is the target —
+      // ignores clicks on existing nodes/frames so they still respond.
+      if (!target.classList.contains("react-flow__pane")) return;
+      event.preventDefault();
+      const rect = wrapperRef.current?.getBoundingClientRect();
+      const localX = event.clientX - (rect?.left ?? 0);
+      const localY = event.clientY - (rect?.top ?? 0);
+      const flow = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      setDrawState({
+        startScreen: { x: localX, y: localY },
+        currentScreen: { x: localX, y: localY },
+        startFlow: { x: flow.x, y: flow.y },
+      });
+    },
+    [frameDrawingMode, screenToFlowPosition]
+  );
+
+  const handleDrawMouseMove = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!drawState) return;
+      const rect = wrapperRef.current?.getBoundingClientRect();
+      const localX = event.clientX - (rect?.left ?? 0);
+      const localY = event.clientY - (rect?.top ?? 0);
+      setDrawState({ ...drawState, currentScreen: { x: localX, y: localY } });
+    },
+    [drawState]
+  );
+
+  const handleDrawMouseUp = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!drawState) return;
+      const endFlow = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const x = Math.min(drawState.startFlow.x, endFlow.x);
+      const y = Math.min(drawState.startFlow.y, endFlow.y);
+      const width = Math.abs(endFlow.x - drawState.startFlow.x);
+      const height = Math.abs(endFlow.y - drawState.startFlow.y);
+      setDrawState(null);
+      // Ignore tiny drags (treat as accidental click).
+      if (width < 40 || height < 40) return;
+      onFrameDraw?.({ x, y, width, height });
+    },
+    [drawState, onFrameDraw, screenToFlowPosition]
   );
 
   if (!hasHydratedGraph && (isLoading || !data)) {
@@ -1067,43 +1304,79 @@ function CanvasGraphInner({
     );
   }
 
+  // Rubber-band rect overlay (frame drawing). Rendered as a div over the
+  // canvas wrapper while a drag is in progress.
+  const drawOverlay = drawState ? (() => {
+    const left = Math.min(drawState.startScreen.x, drawState.currentScreen.x);
+    const top = Math.min(drawState.startScreen.y, drawState.currentScreen.y);
+    const width = Math.abs(drawState.currentScreen.x - drawState.startScreen.x);
+    const height = Math.abs(drawState.currentScreen.y - drawState.startScreen.y);
+    return (
+      <div
+        className="pointer-events-none absolute z-50 rounded-lg border-2 border-blue-500/70 bg-blue-500/8"
+        style={{ left, top, width, height }}
+      />
+    );
+  })() : null;
+
   return (
-    <ReactFlow
-      nodes={renderedFlowNodes}
-      edges={flowEdges}
-      nodeTypes={nodeTypes}
-      defaultViewport={data?.viewport ?? lastViewportRef.current}
-      onNodesChange={handleNodesChange}
-      onEdgesChange={onEdgesChange}
-      onNodeClick={handleNodeClick}
-      onEdgeClick={handleEdgeClick}
-      onPaneClick={handlePaneClick}
-      onSelectionChange={handleSelectionChange}
-      onNodeDragStart={handleNodeDragStart}
-      onNodeDragStop={handleNodeDragStop}
-      onConnect={handleConnect}
-      multiSelectionKeyCode={["Meta", "Control", "Shift"]}
-      selectionOnDrag
-      panOnScroll
-      fitView={false}
-      minZoom={0.15}
-      maxZoom={2}
-      defaultEdgeOptions={{
-        style: edgeStyle("related_to"),
-      }}
+    <div
+      ref={wrapperRef}
+      className="relative h-full w-full"
+      onMouseDown={handleDrawMouseDown}
+      onMouseMove={handleDrawMouseMove}
+      onMouseUp={handleDrawMouseUp}
+      style={frameDrawingMode ? { cursor: "crosshair" } : undefined}
     >
-      <Background gap={16} size={1} />
-      {hasQueuedSave || saveLayout.isPending ? (
-        <Panel position="top-right">
-          <div className="flex items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Saving layout…
-          </div>
-        </Panel>
-      ) : null}
-      <Controls />
-      <MiniMap nodeStrokeWidth={3} zoomable pannable />
-    </ReactFlow>
+      <ReactFlow
+        nodes={renderedFlowNodes}
+        edges={flowEdges}
+        nodeTypes={nodeTypes}
+        defaultViewport={data?.viewport ?? lastViewportRef.current}
+        onNodesChange={handleNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick}
+        onEdgeClick={handleEdgeClick}
+        onPaneClick={handlePaneClick}
+        onSelectionChange={handleSelectionChange}
+        onNodeDragStart={handleNodeDragStart}
+        onNodeDrag={handleNodeDrag}
+        onNodeDragStop={handleNodeDragStop}
+        onConnect={handleConnect}
+        multiSelectionKeyCode={["Meta", "Control", "Shift"]}
+        // Disable selection-on-drag and pan-on-drag while drawing a frame so
+        // the rubber-band gesture isn't intercepted.
+        selectionOnDrag={!frameDrawingMode}
+        panOnDrag={!frameDrawingMode}
+        panOnScroll
+        fitView={false}
+        minZoom={0.15}
+        maxZoom={2}
+        defaultEdgeOptions={{
+          style: edgeStyle("related_to"),
+        }}
+      >
+        <Background gap={16} size={1} />
+        {hasQueuedSave || saveLayout.isPending ? (
+          <Panel position="top-right">
+            <div className="flex items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Saving layout…
+            </div>
+          </Panel>
+        ) : null}
+        {frameDrawingMode ? (
+          <Panel position="top-left">
+            <div className="rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium text-foreground shadow-sm backdrop-blur">
+              Click and drag to draw a frame · press Esc to cancel
+            </div>
+          </Panel>
+        ) : null}
+        <Controls />
+        <MiniMap nodeStrokeWidth={3} zoomable pannable />
+      </ReactFlow>
+      {drawOverlay}
+    </div>
   );
 }
 

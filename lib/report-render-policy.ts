@@ -221,9 +221,9 @@ function maskGraphEdge(edge: GraphSnapshotEdge, policy: ReportRenderPolicy): Gra
 function maskGraphSnapshot(
   snapshot: GraphNetworkSnapshot | null | undefined,
   policy: ReportRenderPolicy
-) {
+): GraphNetworkSnapshot | undefined {
   if (!snapshot) {
-    return snapshot ?? null;
+    return undefined;
   }
 
   return {
@@ -333,7 +333,7 @@ export function createReportRenderPolicy(
 
   const firstNameEntries = Array.from(firstNameBuckets.entries())
     .filter(([, people]) => people.length === 1)
-    .map(([firstName, [person]]) => ({
+    .map(([, [person]]) => ({
       key: person.split(/\s+/)[0] ?? person,
       replacement: personReplacementMap.get(normalizeKey(person)) ?? person,
     }));

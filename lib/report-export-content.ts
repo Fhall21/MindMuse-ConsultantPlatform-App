@@ -22,6 +22,7 @@ import type { ConsultationMeta, ReportArtifactDetail } from "@/types/report-arti
 import { parseContentBlocks, type ContentBlock } from "@/lib/report-content-blocks";
 import {
   getAllThemeGroups,
+  buildReportGraphFrameModels,
   buildReportGraphModel,
   formatConnectionTypeLabel,
   type AllThemeGroupSnapshot,
@@ -74,6 +75,13 @@ export interface ExportConnection {
   notes: string | null;
 }
 
+export interface ExportFrameSnapshot {
+  name: string;
+  nodeCount: number;
+  connectionCount: number;
+  connections: ExportConnection[];
+}
+
 export type ExportSectionData =
   | { kind: "themes"; themes: ExportTheme[] }
   | { kind: "evidence"; consultations: ExportConsultation[] }
@@ -82,7 +90,8 @@ export type ExportSectionData =
       sessions: ExportAuditEvent[];
       milestones: ExportAuditMilestone[];
     }
-  | { kind: "connections"; connections: ExportConnection[] };
+  | { kind: "connections"; connections: ExportConnection[] }
+  | { kind: "frameSnapshots"; frames: ExportFrameSnapshot[] };
 
 export interface ExportSection {
   /** Section heading. null for the preamble (content before the first # heading). */
@@ -305,6 +314,31 @@ function buildConnectionsSection(
   };
 }
 
+function buildFrameSnapshotsSection(report: ReportArtifactDetail): ExportSection | null {
+  const frames = buildReportGraphFrameModels(report.inputSnapshot);
+  if (frames.length === 0) return null;
+
+  return {
+    heading: "Curated Frame Snapshots",
+    blocks: [],
+    isPageBreak: true,
+    data: {
+      kind: "frameSnapshots",
+      frames: frames.map((frame) => ({
+        name: frame.name,
+        nodeCount: frame.graphModel.nodeCount,
+        connectionCount: frame.graphModel.connectionCount,
+        connections: frame.graphModel.connections.map((connection) => ({
+          fromLabel: connection.fromLabel,
+          toLabel: connection.toLabel,
+          connectionType: formatConnectionTypeLabel(connection.connectionType),
+          notes: connection.notes,
+        })),
+      })),
+    },
+  };
+}
+
 // ─── Main export ─────────────────────────────────────────────────────────────
 
 /**
@@ -343,6 +377,9 @@ export function buildExportSections(
   if (template === "standard") {
     const connectionsSection = buildConnectionsSection(report);
     if (connectionsSection) sections.push(connectionsSection);
+
+    const frameSnapshotsSection = buildFrameSnapshotsSection(report);
+    if (frameSnapshotsSection) sections.push(frameSnapshotsSection);
   }
 
   // 5. Source Evidence

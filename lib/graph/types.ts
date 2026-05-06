@@ -200,11 +200,24 @@ export interface LayoutStateEntry {
   panY: number | null;
 }
 
+export interface GraphFrameSnapshot {
+  frameId: string;
+  name: string;
+  nodeIds: string[];
+  position: number;
+  viewport: {
+    x: number;
+    y: number;
+    zoom: number;
+  };
+}
+
 export interface GraphNetworkSnapshot {
   snapshotAt: string; // ISO timestamp — pinned at report generation time
   nodes: GraphSnapshotNode[];
   edges: GraphSnapshotEdge[];
   layoutState: LayoutStateEntry[];
+  frames?: GraphFrameSnapshot[];
 }
 
 // ============================================================

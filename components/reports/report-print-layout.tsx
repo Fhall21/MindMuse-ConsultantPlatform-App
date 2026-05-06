@@ -7,10 +7,12 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 import {
+  buildReportGraphFrameModels,
   buildReportGraphModel,
   formatConnectionTypeLabel,
   getAllThemeGroups,
   type ReportGraphModel,
+  type ReportGraphFrameModel,
 } from "@/lib/report-graph";
 import {
   buildComplianceAuditTrail,
@@ -1114,9 +1116,11 @@ function RejectedThemesContent({ report }: { report: ReportArtifactDetail }) {
 
 function NetworkContent({
   graphModel,
+  frameModels = [],
   template,
 }: {
   graphModel: ReportGraphModel;
+  frameModels?: ReportGraphFrameModel[];
   template: ReportTemplate;
 }) {
   const groupsToShow =
@@ -1189,6 +1193,38 @@ function NetworkContent({
                   groupLabel={formatConnectionTypeLabel(conn.connectionType)}
                 />
               ))}
+            </View>
+          ))}
+        </>
+      )}
+
+      {frameModels.length > 0 && (
+        <>
+          <Text style={s.sectionSubheading}>
+            Curated frame snapshots ({frameModels.length})
+          </Text>
+          {frameModels.map((frame) => (
+            <View key={frame.id} style={s.connectionGroupCard} wrap={false}>
+              <View style={s.connectionGroupHeader}>
+                <Text style={s.connectionGroupTitle}>{frame.name}</Text>
+                <View style={s.connectionGroupCountBox}>
+                  <Text style={s.connectionGroupCountText}>
+                    {frame.graphModel.nodeCount} nodes · {frame.graphModel.connectionCount} links
+                  </Text>
+                </View>
+              </View>
+              {frame.graphModel.connections.slice(0, 4).map((conn) => (
+                <PdfConnectionCard
+                  key={conn.key}
+                  connection={conn}
+                  groupLabel={formatConnectionTypeLabel(conn.connectionType)}
+                />
+              ))}
+              {frame.graphModel.connections.length === 0 ? (
+                <Text style={s.themeDescription}>
+                  No connections inside this saved frame.
+                </Text>
+              ) : null}
             </View>
           ))}
         </>
@@ -1372,6 +1408,7 @@ export function buildSectionElements(
 ): SectionElement[] {
   const sections: SectionElement[] = [];
   const graphModel = buildReportGraphModel(report.inputSnapshot);
+  const frameModels = buildReportGraphFrameModels(report.inputSnapshot);
 
   sections.push({
     id: "executiveSummary",
@@ -1401,7 +1438,13 @@ export function buildSectionElements(
       sections.push({
         id: "network",
         label: "Evidence Network",
-        element: <NetworkContent graphModel={graphModel} template={template} />,
+        element: (
+          <NetworkContent
+            graphModel={graphModel}
+            frameModels={frameModels}
+            template={template}
+          />
+        ),
       });
     }
 

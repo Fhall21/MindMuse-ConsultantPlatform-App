@@ -44,6 +44,7 @@ import type {
   ExportAuditEvent,
   ExportAuditMilestone,
   ExportConnection,
+  ExportFrameSnapshot,
 } from "@/lib/report-export-content";
 
 // ─── Inline text parsing ──────────────────────────────────────────────────────
@@ -203,6 +204,36 @@ function connectionsToParagraphs(connections: ExportConnection[]): Paragraph[] {
   });
 }
 
+function frameSnapshotsToParagraphs(frames: ExportFrameSnapshot[]): Paragraph[] {
+  const paras: Paragraph[] = [];
+
+  for (const frame of frames) {
+    paras.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_2,
+        children: [new TextRun({ text: frame.name })],
+      })
+    );
+    paras.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `${frame.nodeCount} nodes  ·  ${frame.connectionCount} connections`,
+            color: "666666",
+          }),
+        ],
+        spacing: { after: 80 },
+      })
+    );
+    if (frame.connections.length > 0) {
+      paras.push(...connectionsToParagraphs(frame.connections));
+    }
+    paras.push(new Paragraph({ children: [], spacing: { after: 120 } }));
+  }
+
+  return paras;
+}
+
 function consultationsToParagraphs(consultations: ExportConsultation[]): Paragraph[] {
   const paras: Paragraph[] = [];
   for (const c of consultations) {
@@ -356,6 +387,9 @@ function sectionToChildren(section: ExportSection): FileChild[] {
         break;
       case "connections":
         children.push(...connectionsToParagraphs(section.data.connections));
+        break;
+      case "frameSnapshots":
+        children.push(...frameSnapshotsToParagraphs(section.data.frames));
         break;
     }
   }

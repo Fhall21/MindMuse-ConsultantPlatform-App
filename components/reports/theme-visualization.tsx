@@ -32,7 +32,6 @@ import {
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Badge } from "@/components/ui/badge";
 import {
   formatConnectionTypeLabel,
   type ReportGraphModel,
@@ -339,14 +338,12 @@ function buildCanvasPreviewElements(
   allGroups: AllThemeGroupSnapshot[]
 ): { nodes: Node[]; edges: Edge[] } {
   const snapshot = graphModel.snapshot;
-
-  // Build membership: insightId → groupId
-  const insightGroupMap = new Map<string, string>();
-  for (const group of allGroups) {
-    for (const member of group.members) {
-      insightGroupMap.set(member.insightId, group.id);
-    }
-  }
+  const snapshotNodeIds = new Set(snapshot.nodes.map((node) => node.nodeId));
+  const visibleGroups = allGroups.filter(
+    (group) =>
+      snapshotNodeIds.has(group.id) ||
+      group.members.some((member) => snapshotNodeIds.has(member.insightId))
+  );
 
   // Build layout positions from layoutState (may be all null for legacy)
   const layoutByKey = new Map<string, { x: number; y: number }>();
@@ -363,10 +360,12 @@ function buildCanvasPreviewElements(
 
   // Compute group dimensions
   const groupDimensions = new Map<string, { width: number; height: number }>();
-  for (const group of allGroups) {
+  for (const group of visibleGroups) {
     groupDimensions.set(group.id, {
       width: GROUP_WIDTH,
-      height: getGroupHeight(group.members.length),
+      height: getGroupHeight(
+        group.members.filter((member) => snapshotNodeIds.has(member.insightId)).length
+      ),
     });
   }
 
@@ -375,7 +374,7 @@ function buildCanvasPreviewElements(
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: "LR", nodesep: 80, ranksep: 120, marginx: 48, marginy: 48 });
 
-  for (const group of allGroups) {
+  for (const group of visibleGroups) {
     const dims = groupDimensions.get(group.id)!;
     g.setNode(group.id, { width: dims.width, height: dims.height });
   }
@@ -397,7 +396,7 @@ function buildCanvasPreviewElements(
 
   // Group absolute positions
   const groupPositions = new Map<string, { x: number; y: number }>();
-  for (const group of allGroups) {
+  for (const group of visibleGroups) {
     if (hasRealPositions && layoutByKey.has(nodeKey("group", group.id))) {
       groupPositions.set(group.id, layoutByKey.get(nodeKey("group", group.id))!);
     } else {
@@ -411,9 +410,12 @@ function buildCanvasPreviewElements(
   }
 
   // Build group React Flow nodes
-  const groupFlowNodes: Node[] = allGroups.map((group) => {
+  const groupFlowNodes: Node[] = visibleGroups.map((group) => {
     const pos = groupPositions.get(group.id) ?? { x: 0, y: 0 };
     const dims = groupDimensions.get(group.id)!;
+    const visibleMembers = group.members.filter((member) =>
+      snapshotNodeIds.has(member.insightId)
+    );
 
     return {
       id: group.id,
@@ -429,7 +431,7 @@ function buildCanvasPreviewElements(
                 {group.label}
               </p>
               <span className="shrink-0 rounded-full border border-violet-200 bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-700">
-                {group.members.length} insight{group.members.length === 1 ? "" : "s"}
+                {visibleMembers.length} insight{visibleMembers.length === 1 ? "" : "s"}
               </span>
             </div>
             {group.description && (
@@ -457,10 +459,12 @@ function buildCanvasPreviewElements(
   // Build insight React Flow nodes
   const insightFlowNodes: Node[] = [];
 
-  for (const group of allGroups) {
+  for (const group of visibleGroups) {
     const groupPos = groupPositions.get(group.id) ?? { x: 0, y: 0 };
 
-    const sortedMembers = [...group.members].sort((a, b) => a.position - b.position);
+    const sortedMembers = group.members
+      .filter((member) => snapshotNodeIds.has(member.insightId))
+      .sort((a, b) => a.position - b.position);
 
     sortedMembers.forEach((member, index) => {
       let nodePos: { x: number; y: number };
@@ -533,8 +537,8 @@ function buildCanvasPreviewElements(
 
   // Ungrouped nodes — any snapshot nodes not in allGroups
   const knownNodeIds = new Set<string>([
-    ...allGroups.map((g) => g.id),
-    ...allGroups.flatMap((g) => g.members.map((m) => m.insightId)),
+    ...visibleGroups.map((g) => g.id),
+    ...visibleGroups.flatMap((g) => g.members.map((m) => m.insightId)),
   ]);
 
   const ungroupedNodes: Node[] = snapshot.nodes
@@ -577,11 +581,9 @@ function buildCanvasPreviewElements(
 function CanvasPreviewInner({
   graphModel,
   allGroups,
-  roundId,
 }: {
   graphModel: ReportGraphModel;
   allGroups: AllThemeGroupSnapshot[];
-  roundId: string;
 }) {
   const { nodes, edges } = useMemo(
     () => buildCanvasPreviewElements(graphModel, allGroups),
@@ -627,10 +629,14 @@ export function CanvasPreviewSection({
   graphModel,
   allGroups,
   roundId,
+  title = "Evidence Canvas",
+  description = "Visual snapshot at report generation",
 }: {
   graphModel: ReportGraphModel;
   allGroups: AllThemeGroupSnapshot[];
   roundId: string;
+  title?: string;
+  description?: string;
 }) {
   const { ref, mounted } = useLazyMount(0.05);
 
@@ -642,10 +648,10 @@ export function CanvasPreviewSection({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Evidence Canvas
+            {title}
           </h3>
           <p className="text-xs text-muted-foreground">
-            Visual snapshot at report generation
+            {description}
             {snapshotDate && (
               <>
                 {" "}·{" "}
@@ -687,7 +693,6 @@ export function CanvasPreviewSection({
               <CanvasPreviewInner
                 graphModel={graphModel}
                 allGroups={allGroups}
-                roundId={roundId}
               />
             </ReactFlowProvider>
           ) : (

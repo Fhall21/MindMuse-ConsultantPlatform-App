@@ -72,6 +72,15 @@ function makeReport(overrides: Partial<ReportArtifactDetail> = {}): ReportArtifa
           },
         ],
         layoutState: [],
+        frames: [
+          {
+            frameId: "frame-1",
+            name: "Alice Smith escalation path",
+            nodeIds: ["insight-1", "group-1"],
+            position: 0,
+            viewport: { x: 0, y: 0, zoom: 1 },
+          },
+        ],
       },
     },
     acceptedThemeCount: 1,
@@ -116,6 +125,9 @@ describe("applyRenderPolicyToReport", () => {
       "1-1 with Strategy"
     );
     expect(rendered.inputSnapshot.graphNetwork?.edges[0].notes).toContain("Participant 1");
+    expect(rendered.inputSnapshot.graphNetwork?.frames?.[0].name).toBe(
+      "Participant 1 escalation path"
+    );
     expect(rendered.draftThemeGroups[0].label).toContain("Participant 1");
   });
 

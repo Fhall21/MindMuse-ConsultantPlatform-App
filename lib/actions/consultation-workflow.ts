@@ -32,6 +32,7 @@ import {
   buildLegacyReportGraphSnapshot,
   type ReportInputSnapshot,
 } from "@/lib/report-graph";
+import { listCanvasFrames } from "@/lib/data/canvas";
 import {
   renderStructuredReportDocumentMarkdown,
   type StructuredReportDocument,
@@ -2468,6 +2469,52 @@ async function generateRoundOutput(
     generated = generated;
   }
 
+  const graphNetwork = buildLegacyReportGraphSnapshot({
+    roundId,
+    snapshotAt: new Date().toISOString(),
+    themeGroups: detail.themeGroups.map((group) => ({
+      id: group.id,
+      label: group.label,
+      description: group.description,
+      status: group.status,
+      origin: group.origin,
+      members: group.members.map((member) => ({
+        insightId: member.insightId,
+        sourceConsultationId: member.sourceConsultationId,
+        sourceConsultationTitle: member.sourceConsultationTitle,
+        sourceConsultationIds: member.sourceConsultationIds,
+        sourceConsultationTitles: member.sourceConsultationTitles,
+        label: member.label,
+        description: member.description,
+        isUserAdded: member.isUserAdded,
+        position: member.position,
+      })),
+    })),
+    sourceThemes: detail.sourceThemes.map((theme) => ({
+      sourceThemeId: theme.sourceThemeId,
+      consultationId: theme.consultationId,
+      consultationTitle: theme.consultationTitle,
+      label: theme.label,
+      description: theme.description,
+      effectiveIncluded: theme.effectiveIncluded,
+      groupId: theme.groupId,
+      groupLabel: theme.groupLabel,
+      isUserAdded: theme.isUserAdded,
+      createdAt: theme.createdAt,
+    })),
+  });
+  const canvasFrames = await listCanvasFrames(roundId, userId);
+
+  if (canvasFrames.length > 0) {
+    graphNetwork.frames = canvasFrames.map((frame) => ({
+      frameId: frame.id,
+      name: frame.name,
+      nodeIds: frame.node_ids,
+      position: frame.position,
+      viewport: frame.viewport,
+    }));
+  }
+
   const inputSnapshot = {
     roundId,
     round_id: roundId,
@@ -2493,40 +2540,7 @@ async function generateRoundOutput(
           position: member.position,
         })),
       })),
-    graphNetwork: buildLegacyReportGraphSnapshot({
-      roundId,
-      snapshotAt: new Date().toISOString(),
-      themeGroups: detail.themeGroups.map((group) => ({
-        id: group.id,
-        label: group.label,
-        description: group.description,
-        status: group.status,
-        origin: group.origin,
-        members: group.members.map((member) => ({
-          insightId: member.insightId,
-          sourceConsultationId: member.sourceConsultationId,
-          sourceConsultationTitle: member.sourceConsultationTitle,
-          sourceConsultationIds: member.sourceConsultationIds,
-          sourceConsultationTitles: member.sourceConsultationTitles,
-          label: member.label,
-          description: member.description,
-          isUserAdded: member.isUserAdded,
-          position: member.position,
-        })),
-      })),
-      sourceThemes: detail.sourceThemes.map((theme) => ({
-        sourceThemeId: theme.sourceThemeId,
-        consultationId: theme.consultationId,
-        consultationTitle: theme.consultationTitle,
-        label: theme.label,
-        description: theme.description,
-        effectiveIncluded: theme.effectiveIncluded,
-        groupId: theme.groupId,
-        groupLabel: theme.groupLabel,
-        isUserAdded: theme.isUserAdded,
-        createdAt: theme.createdAt,
-      })),
-    }),
+    graphNetwork,
   } satisfies ReportInputSnapshot;
   const [created] = await db
     .insert(roundOutputArtifacts)

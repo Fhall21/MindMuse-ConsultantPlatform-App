@@ -1,10 +1,12 @@
 import type {
   ConnectionOrigin,
   ConnectionType,
+  GraphFrameSnapshot,
   GraphNetworkSnapshot,
   GraphNodeType,
   GraphSnapshotEdge,
   GraphSnapshotNode,
+  LayoutStateEntry,
 } from "@/lib/graph/types";
 import type {
   StructuredReportDocument,
@@ -137,6 +139,15 @@ export interface ReportGraphModel {
     label: string;
     connections: ReportGraphConnectionSummary[];
   }>;
+}
+
+export interface ReportGraphFrameModel {
+  id: string;
+  name: string;
+  position: number;
+  nodeIds: string[];
+  viewport: GraphFrameSnapshot["viewport"];
+  graphModel: ReportGraphModel;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -284,6 +295,119 @@ export function getGraphSnapshot(
   }
 
   return snapshot;
+}
+
+function isGraphFrameSnapshot(value: unknown): value is GraphFrameSnapshot {
+  const record = asRecord(value);
+  const viewport = asRecord(record?.viewport);
+
+  return (
+    !!record &&
+    !!viewport &&
+    typeof record.frameId === "string" &&
+    typeof record.name === "string" &&
+    Array.isArray(record.nodeIds) &&
+    record.nodeIds.every((nodeId) => typeof nodeId === "string") &&
+    typeof record.position === "number" &&
+    typeof viewport.x === "number" &&
+    typeof viewport.y === "number" &&
+    typeof viewport.zoom === "number"
+  );
+}
+
+export function getGraphFrameSnapshots(
+  value: Record<string, unknown> | ReportInputSnapshot
+): GraphFrameSnapshot[] {
+  const snapshot = getGraphSnapshot(value);
+  if (!snapshot || !Array.isArray(snapshot.frames)) {
+    return [];
+  }
+
+  return snapshot.frames.filter(isGraphFrameSnapshot).sort((left, right) => {
+    return left.position - right.position || left.name.localeCompare(right.name);
+  });
+}
+
+function nodeIsInFrame(frameNodeIds: Set<string>, node: GraphSnapshotNode) {
+  return frameNodeIds.size === 0 || frameNodeIds.has(node.nodeId);
+}
+
+function edgeIsInFrame(frameNodeIds: Set<string>, edge: GraphSnapshotEdge) {
+  return (
+    frameNodeIds.size === 0 ||
+    (frameNodeIds.has(edge.fromNodeId) && frameNodeIds.has(edge.toNodeId))
+  );
+}
+
+function layoutIsInFrame(frameNodeIds: Set<string>, entry: LayoutStateEntry) {
+  return entry.nodeType === "viewport" || frameNodeIds.size === 0 || frameNodeIds.has(entry.nodeId);
+}
+
+export function buildFrameGraphSnapshot(
+  snapshot: GraphNetworkSnapshot,
+  frame: GraphFrameSnapshot
+): GraphNetworkSnapshot {
+  const frameNodeIds = new Set(frame.nodeIds);
+  const layoutState = snapshot.layoutState.filter((entry) => layoutIsInFrame(frameNodeIds, entry));
+  const existingViewportIndex = layoutState.findIndex((entry) => entry.nodeType === "viewport");
+  const frameViewport: LayoutStateEntry = {
+    nodeType: "viewport",
+    nodeId: frame.frameId,
+    posX: null,
+    posY: null,
+    width: null,
+    height: null,
+    zoom: frame.viewport.zoom,
+    panX: frame.viewport.x,
+    panY: frame.viewport.y,
+  };
+
+  if (existingViewportIndex >= 0) {
+    layoutState[existingViewportIndex] = frameViewport;
+  } else {
+    layoutState.push(frameViewport);
+  }
+
+  return {
+    ...snapshot,
+    nodes: snapshot.nodes.filter((node) => nodeIsInFrame(frameNodeIds, node)),
+    edges: snapshot.edges.filter((edge) => edgeIsInFrame(frameNodeIds, edge)),
+    layoutState,
+    frames: [frame],
+  };
+}
+
+export function buildReportGraphFrameModels(
+  value: Record<string, unknown> | ReportInputSnapshot
+): ReportGraphFrameModel[] {
+  const snapshot = getGraphSnapshot(value);
+  const frames = getGraphFrameSnapshots(value);
+
+  if (!snapshot || frames.length === 0) {
+    return [];
+  }
+
+  return frames
+    .map((frame): ReportGraphFrameModel | null => {
+      const graphModel = buildReportGraphModel({
+        ...toReportInputSnapshot(value),
+        graphNetwork: buildFrameGraphSnapshot(snapshot, frame),
+      });
+
+      if (!graphModel) {
+        return null;
+      }
+
+      return {
+        id: frame.frameId,
+        name: frame.name,
+        position: frame.position,
+        nodeIds: frame.nodeIds,
+        viewport: frame.viewport,
+        graphModel,
+      };
+    })
+    .filter((frame): frame is ReportGraphFrameModel => frame !== null);
 }
 
 export function buildReportGraphModel(

@@ -34,6 +34,7 @@ import {
   estimateReadTime,
 } from "@/lib/report-formatting";
 import {
+  buildReportGraphFrameModels,
   buildReportGraphModel,
   getAcceptedConsultationThemes,
   getSupportingMeetingThemes,
@@ -1198,6 +1199,8 @@ export function ReportView({ artifactId }: ReportViewProps) {
   );
   const readTime = estimateReadTime(displayReport.content);
   const graphModel = buildReportGraphModel(displayReport.inputSnapshot);
+  const graphFrameModels = buildReportGraphFrameModels(displayReport.inputSnapshot);
+  const allThemeGroups = getAllThemeGroups(displayReport.inputSnapshot);
 
   const consultationCount =
     displayReport.consultations.length || displayReport.consultationTitles.length;
@@ -1356,9 +1359,40 @@ export function ReportView({ artifactId }: ReportViewProps) {
               {/* ─── Section 3: Full canvas preview with nested groups ─── */}
               <CanvasPreviewSection
                 graphModel={graphModel}
-                allGroups={getAllThemeGroups(displayReport.inputSnapshot)}
+                allGroups={allThemeGroups}
                 roundId={displayReport.roundId}
               />
+
+              {graphFrameModels.length > 0 ? (
+                <section className="space-y-4 print:hidden">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div className="space-y-1">
+                      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        Curated Frame Snapshots
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {graphFrameModels.length} saved view
+                        {graphFrameModels.length === 1 ? "" : "s"} from the source canvas.
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] uppercase tracking-[0.16em]">
+                      Frame-derived
+                    </Badge>
+                  </div>
+                  <div className="space-y-6">
+                    {graphFrameModels.map((frame) => (
+                      <CanvasPreviewSection
+                        key={frame.id}
+                        graphModel={frame.graphModel}
+                        allGroups={allThemeGroups}
+                        roundId={displayReport.roundId}
+                        title={frame.name}
+                        description={`${frame.graphModel.nodeCount} nodes · ${frame.graphModel.connectionCount} connections`}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
 
               {/* ─── Node degree table (analytics) ─── */}
               <GraphNodesSection

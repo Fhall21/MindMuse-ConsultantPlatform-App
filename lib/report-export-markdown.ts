@@ -16,6 +16,7 @@ import type {
   ExportAuditEvent,
   ExportAuditMilestone,
   ExportConnection,
+  ExportFrameSnapshot,
   ExportSectionData,
 } from "@/lib/report-export-content";
 import { formatDate } from "@/lib/report-formatting";
@@ -85,6 +86,22 @@ function serializeConnections(connections: ExportConnection[]): string {
     .join("\n");
 }
 
+function serializeFrameSnapshots(frames: ExportFrameSnapshot[]): string {
+  const lines: string[] = [];
+
+  for (const frame of frames) {
+    lines.push(`## ${frame.name}`);
+    lines.push(`${frame.nodeCount} nodes · ${frame.connectionCount} connections`);
+    if (frame.connections.length > 0) {
+      lines.push("");
+      lines.push(serializeConnections(frame.connections));
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n").trimEnd();
+}
+
 function serializeConsultations(consultations: ExportConsultation[]): string {
   const lines: string[] = [];
   for (const c of consultations) {
@@ -145,6 +162,8 @@ function serializeSectionData(data: ExportSectionData): string {
       return serializeAuditTrail(data.sessions, data.milestones);
     case "connections":
       return serializeConnections(data.connections);
+    case "frameSnapshots":
+      return serializeFrameSnapshots(data.frames);
   }
 }
 

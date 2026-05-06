@@ -58,6 +58,15 @@ function makeReport(
           },
         ],
         layoutState: [],
+        frames: [
+          {
+            frameId: "frame-1",
+            name: "Operational pressure snapshot",
+            nodeIds: ["insight-1", "group-1"],
+            position: 0,
+            viewport: { x: 0, y: 0, zoom: 1 },
+          },
+        ],
       },
       all_theme_groups: [
         {
@@ -171,6 +180,9 @@ describe("ReportPrintLayout", () => {
     expect(networkText).toContain("To");
     expect(networkText).toContain("AI accepted");
     expect(networkText).toContain("Evidence repeated across interviews and manager follow-up.");
+    expect(networkText).toContain("Curated frame snapshots");
+    expect(networkText).toContain("Operational pressure snapshot");
+    expect(networkText).toContain("2 nodes · 1 links");
 
     const auditText = normalizeText(auditTrail!.element);
     expect(auditText).toContain("Audit Trail");

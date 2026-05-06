@@ -350,6 +350,86 @@ describe("buildExportSections — Audit Trail section", () => {
   });
 });
 
+describe("buildExportSections — frame snapshots", () => {
+  it("adds structured frame snapshot export data when saved frames exist", () => {
+    const sections = buildExportSections(
+      makeReport({
+        inputSnapshot: {
+          graphNetwork: {
+            snapshotAt: "2026-05-06T00:00:00.000Z",
+            nodes: [
+              { nodeType: "group", nodeId: "group-1", label: "Operational risk" },
+              { nodeType: "insight", nodeId: "insight-1", label: "Late handoffs" },
+            ],
+            edges: [
+              {
+                connectionId: "edge-1",
+                fromNodeType: "insight",
+                fromNodeId: "insight-1",
+                toNodeType: "group",
+                toNodeId: "group-1",
+                connectionType: "supports",
+                notes: "Evidence repeated across meetings.",
+                origin: "manual",
+              },
+            ],
+            layoutState: [],
+            frames: [
+              {
+                frameId: "frame-1",
+                name: "Risk story",
+                nodeIds: ["group-1", "insight-1"],
+                position: 0,
+                viewport: { x: 0, y: 0, zoom: 1 },
+              },
+            ],
+          },
+        },
+      }),
+      "standard"
+    );
+
+    const frameSection = sections.find((section) => section.heading === "Curated Frame Snapshots");
+
+    expect(frameSection?.data).toEqual({
+      kind: "frameSnapshots",
+      frames: [
+        {
+          name: "Risk story",
+          nodeCount: 2,
+          connectionCount: 1,
+          connections: [
+            {
+              fromLabel: "Late handoffs",
+              toLabel: "Operational risk",
+              connectionType: "Supports",
+              notes: "Evidence repeated across meetings.",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("keeps older no-frame artifacts off the frame export path", () => {
+    const sections = buildExportSections(
+      makeReport({
+        inputSnapshot: {
+          graphNetwork: {
+            snapshotAt: "2026-05-06T00:00:00.000Z",
+            nodes: [{ nodeType: "group", nodeId: "group-1", label: "Operational risk" }],
+            edges: [],
+            layoutState: [],
+          },
+        },
+      }),
+      "standard"
+    );
+
+    expect(sections.some((section) => section.heading === "Curated Frame Snapshots")).toBe(false);
+  });
+});
+
 // ─── Section ordering ─────────────────────────────────────────────────────────
 
 describe("buildExportSections — section ordering", () => {

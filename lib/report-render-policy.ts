@@ -230,6 +230,10 @@ function maskGraphSnapshot(
     ...snapshot,
     nodes: snapshot.nodes.map((node) => maskGraphNode(node, policy)),
     edges: snapshot.edges.map((edge) => maskGraphEdge(edge, policy)),
+    frames: snapshot.frames?.map((frame) => ({
+      ...frame,
+      name: policy.maskText(frame.name),
+    })),
   } satisfies GraphNetworkSnapshot;
 }
 

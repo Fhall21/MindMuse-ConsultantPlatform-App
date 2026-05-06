@@ -32,7 +32,11 @@ import {
   buildLegacyReportGraphSnapshot,
   type ReportInputSnapshot,
 } from "@/lib/report-graph";
-import { listCanvasFrames } from "@/lib/data/canvas";
+import {
+  listCanvasFrames,
+  loadCanvasConnections,
+  loadCanvasLayout,
+} from "@/lib/data/canvas";
 import {
   renderStructuredReportDocumentMarkdown,
   type StructuredReportDocument,
@@ -2469,6 +2473,22 @@ async function generateRoundOutput(
     generated = generated;
   }
 
+  // Load saved canvas layout + user-authored typed connections so the snapshot
+  // preserves the consultant's spatial arrangement and relationship model.
+  // Sprint 16 task 03.5: reports now reproduce the canvas layout instead of
+  // re-laying-out via dagre. Failures are non-fatal — the snapshot still
+  // generates, just without spatial data.
+  const [canvasLayout, canvasConnections] = await Promise.all([
+    loadCanvasLayout(roundId, userId).catch((error) => {
+      console.warn("[round-workflow] could not load canvas layout for snapshot", error);
+      return null;
+    }),
+    loadCanvasConnections(roundId, userId).catch((error) => {
+      console.warn("[round-workflow] could not load canvas connections for snapshot", error);
+      return [];
+    }),
+  ]);
+
   const graphNetwork = buildLegacyReportGraphSnapshot({
     roundId,
     snapshotAt: new Date().toISOString(),
@@ -2501,6 +2521,20 @@ async function generateRoundOutput(
       groupLabel: theme.groupLabel,
       isUserAdded: theme.isUserAdded,
       createdAt: theme.createdAt,
+    })),
+    layout: canvasLayout
+      ? { positions: canvasLayout.positions, viewport: canvasLayout.viewport }
+      : undefined,
+    // Canvas ConnectionType is a structural subset of graph ConnectionType
+    // (since sprint 16 task 03.5 widened graph types to include canvas
+    // values). The cast is safe — TS just can't see across module boundaries.
+    connections: canvasConnections.map((edge) => ({
+      id: edge.id,
+      source_node_id: edge.source_node_id,
+      target_node_id: edge.target_node_id,
+      connection_type: edge.connection_type as unknown as
+        import("@/lib/graph/types").ConnectionType,
+      note: edge.note,
     })),
   });
   const canvasFrames = await listCanvasFrames(roundId, userId);

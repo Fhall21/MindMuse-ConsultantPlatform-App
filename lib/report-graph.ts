@@ -527,13 +527,42 @@ export function buildReportGraphModel(
   };
 }
 
+/**
+ * Optional spatial inputs for the snapshot. When supplied, the report can
+ * reproduce the consultant's exact canvas layout; otherwise dagre auto-layout
+ * is used. Sprint 16 task 03.5.
+ */
+export interface SnapshotLayoutInput {
+  /** node_id → {x, y} from canvas_layout_state. */
+  positions?: Record<string, { x: number; y: number }>;
+  /** Saved viewport pan/zoom for the canvas at capture time. */
+  viewport?: { x: number; y: number; zoom: number } | null;
+}
+
+/**
+ * Optional canvas connection rows. When supplied, each becomes a typed edge
+ * in the snapshot — preserving the consultant's relationship model
+ * (causes, contradicts, etc.) along with their notes.
+ */
+export interface SnapshotConnectionInput {
+  id: string;
+  source_node_id: string;
+  target_node_id: string;
+  connection_type: ConnectionType;
+  note: string | null;
+}
+
 export function buildLegacyReportGraphSnapshot(params: {
   roundId: string;
   snapshotAt: string;
   themeGroups: SnapshotThemeGroupInput[];
   sourceThemes: SnapshotSourceThemeInput[];
+  /** Saved canvas positions + viewport. Pass to preserve user's spatial layout. */
+  layout?: SnapshotLayoutInput;
+  /** User-authored typed connections from the canvas (causes/influences/etc). */
+  connections?: SnapshotConnectionInput[];
 }): GraphNetworkSnapshot {
-  const { roundId, snapshotAt, themeGroups, sourceThemes } = params;
+  const { roundId, snapshotAt, themeGroups, sourceThemes, layout, connections } = params;
 
   const acceptedGroups = themeGroups.filter((group) => group.status === "accepted");
   const groupById = new Map(acceptedGroups.map((group) => [group.id, group]));
@@ -586,22 +615,69 @@ export function buildLegacyReportGraphSnapshot(params: {
       }
     });
 
-  return {
-    snapshotAt,
-    nodes,
-    edges,
-    layoutState: [
-      {
-        nodeType: "viewport",
-        nodeId: roundId,
-        posX: null,
-        posY: null,
+  // Attach canvas-authored typed connections so the report shows the actual
+  // relationship model, not just the implicit insight→group supports.
+  // Source/target node types are inferred by looking up in the node array.
+  if (connections && connections.length > 0) {
+    const nodeTypeById = new Map<string, GraphNodeType>();
+    nodes.forEach((node) => {
+      nodeTypeById.set(node.nodeId, node.nodeType);
+    });
+    for (const conn of connections) {
+      const fromType = nodeTypeById.get(conn.source_node_id);
+      const toType = nodeTypeById.get(conn.target_node_id);
+      if (!fromType || !toType) continue;
+      edges.push({
+        connectionId: conn.id,
+        fromNodeType: fromType,
+        fromNodeId: conn.source_node_id,
+        toNodeType: toType,
+        toNodeId: conn.target_node_id,
+        connectionType: conn.connection_type,
+        notes: conn.note,
+        origin: "manual",
+      });
+    }
+  }
+
+  // Build layoutState entries. Sprint 16+ snapshots include node positions
+  // so consumers (network-diagram, PDF graph) can reproduce the exact canvas
+  // arrangement instead of falling back to dagre auto-layout.
+  const layoutState: LayoutStateEntry[] = [];
+  const viewport = layout?.viewport ?? null;
+  layoutState.push({
+    nodeType: "viewport",
+    nodeId: roundId,
+    posX: null,
+    posY: null,
+    width: null,
+    height: null,
+    zoom: viewport ? viewport.zoom : null,
+    panX: viewport ? viewport.x : null,
+    panY: viewport ? viewport.y : null,
+  });
+  if (layout?.positions) {
+    for (const node of nodes) {
+      const position = layout.positions[node.nodeId];
+      if (!position) continue;
+      layoutState.push({
+        nodeType: node.nodeType,
+        nodeId: node.nodeId,
+        posX: position.x,
+        posY: position.y,
         width: null,
         height: null,
         zoom: null,
         panX: null,
         panY: null,
-      },
-    ],
+      });
+    }
+  }
+
+  return {
+    snapshotAt,
+    nodes,
+    edges,
+    layoutState,
   };
 }

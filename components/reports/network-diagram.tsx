@@ -74,52 +74,94 @@ export function getNetworkDiagramMode(graphModel: ReportGraphModel): DiagramMode
   return "diagram";
 }
 
+/**
+ * Read saved canvas positions from the snapshot's layoutState. Returns null
+ * when no node-level positions are present (legacy snapshots), in which case
+ * the diagram falls back to dagre auto-layout.
+ *
+ * Sprint 16 task 03.5 — preserves the consultant's spatial arrangement.
+ */
+function readSavedPositions(
+  graphModel: ReportGraphModel
+): Map<string, { x: number; y: number }> | null {
+  const entries = graphModel.snapshot.layoutState.filter(
+    (entry) => entry.nodeType !== "viewport" && entry.posX !== null && entry.posY !== null
+  );
+  if (entries.length === 0) return null;
+  const positions = new Map<string, { x: number; y: number }>();
+  for (const entry of entries) {
+    if (entry.posX === null || entry.posY === null) continue;
+    positions.set(nodeKey(entry.nodeType as GraphNodeType, entry.nodeId), {
+      x: entry.posX,
+      y: entry.posY,
+    });
+  }
+  return positions.size > 0 ? positions : null;
+}
+
 export function buildNetworkDiagramElements(graphModel: ReportGraphModel): {
   nodes: Node[];
   edges: Edge[];
 } {
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({
-    rankdir: "LR",
-    align: "UL",
-    nodesep: 80,
-    ranksep: 100,
-    marginx: 24,
-    marginy: 24,
-  });
-
   const nodeMap = new Map(graphModel.nodes.map((node) => [node.key, node]));
+  const savedPositions = readSavedPositions(graphModel);
 
-  graphModel.nodes.forEach((node) => {
-    const { width, height } = NODE_DIMENSIONS[node.nodeType];
-    dagreGraph.setNode(node.key, { width, height });
-  });
-
-  graphModel.snapshot.edges.forEach((edge) => {
-    const source = nodeKey(edge.fromNodeType, edge.fromNodeId);
-    const target = nodeKey(edge.toNodeType, edge.toNodeId);
-
-    if (!nodeMap.has(source) || !nodeMap.has(target)) {
-      return;
+  // Layout source: prefer the consultant's saved canvas positions; fall
+  // back to dagre when no positions were captured (legacy snapshots).
+  const positionByKey = new Map<string, { x: number; y: number }>();
+  if (savedPositions) {
+    for (const node of graphModel.nodes) {
+      const saved = savedPositions.get(node.key);
+      if (saved) positionByKey.set(node.key, saved);
     }
-
-    dagreGraph.setEdge(source, target);
-  });
-
-  dagre.layout(dagreGraph);
+    // Any nodes without saved positions get a sensible offset so they don't
+    // pile on top of each other at the origin.
+    let fallbackY = 0;
+    for (const node of graphModel.nodes) {
+      if (positionByKey.has(node.key)) continue;
+      positionByKey.set(node.key, { x: -360, y: fallbackY });
+      fallbackY += 120;
+    }
+  } else {
+    const dagreGraph = new dagre.graphlib.Graph();
+    dagreGraph.setDefaultEdgeLabel(() => ({}));
+    dagreGraph.setGraph({
+      rankdir: "LR",
+      align: "UL",
+      nodesep: 80,
+      ranksep: 100,
+      marginx: 24,
+      marginy: 24,
+    });
+    graphModel.nodes.forEach((node) => {
+      const { width, height } = NODE_DIMENSIONS[node.nodeType];
+      dagreGraph.setNode(node.key, { width, height });
+    });
+    graphModel.snapshot.edges.forEach((edge) => {
+      const source = nodeKey(edge.fromNodeType, edge.fromNodeId);
+      const target = nodeKey(edge.toNodeType, edge.toNodeId);
+      if (!nodeMap.has(source) || !nodeMap.has(target)) return;
+      dagreGraph.setEdge(source, target);
+    });
+    dagre.layout(dagreGraph);
+    for (const node of graphModel.nodes) {
+      const { width, height } = NODE_DIMENSIONS[node.nodeType];
+      const positioned = dagreGraph.node(node.key) ?? { x: width / 2, y: height / 2 };
+      positionByKey.set(node.key, {
+        x: positioned.x - width / 2,
+        y: positioned.y - height / 2,
+      });
+    }
+  }
 
   const nodes: Node[] = graphModel.nodes.map((node) => {
     const palette = NODE_PALETTE[node.nodeType];
     const { width, height } = NODE_DIMENSIONS[node.nodeType];
-    const positioned = dagreGraph.node(node.key) ?? { x: width / 2, y: height / 2 };
+    const position = positionByKey.get(node.key) ?? { x: 0, y: 0 };
 
     return {
       id: node.key,
-      position: {
-        x: positioned.x - width / 2,
-        y: positioned.y - height / 2,
-      },
+      position,
       draggable: false,
       selectable: false,
       data: {
@@ -170,12 +212,27 @@ export function buildNetworkDiagramElements(graphModel: ReportGraphModel): {
         return null;
       }
 
+      // Show the consultant's note alongside the connection type so the
+      // intent behind the relationship is preserved in the report. Sprint
+      // 16 task 03.5. Truncate long notes — the diagram label has limited
+      // visual budget; full text is in the connection list view below.
+      const typeLabel = formatConnectionTypeLabel(edge.connectionType);
+      const note = edge.notes?.trim();
+      const labelText =
+        note && note.length > 0
+          ? `${typeLabel} · ${note.length > 40 ? note.slice(0, 38).trimEnd() + "…" : note}`
+          : typeLabel;
+
       const flowEdge: Edge = {
         id: edge.connectionId,
         source,
         target,
         type: "smoothstep",
-        label: formatConnectionTypeLabel(edge.connectionType),
+        label: labelText,
+        // Hover the edge label in the live ReactFlow renderer to see the
+        // full note (used by both screen-reader users and consultants
+        // checking truncated detail).
+        ariaLabel: note ? `${typeLabel} — ${note}` : typeLabel,
         labelShowBg: true,
         labelBgPadding: [8, 4],
         labelBgBorderRadius: 999,

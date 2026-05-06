@@ -17,7 +17,11 @@ export type ConnectionType =
   | 'contradicts'
   | 'escalates'
   | 'resolves'
-  | 'involves';
+  | 'involves'
+  // Sprint 16 task 03.5 — canvas-side connection vocabulary added so the
+  // report can reproduce typed edges authored by the consultant.
+  | 'causes'
+  | 'influences';
 
 export type ConnectionOrigin = 'manual' | 'ai_suggested';
 

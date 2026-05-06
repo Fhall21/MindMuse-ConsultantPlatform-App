@@ -139,7 +139,10 @@ describe("NetworkDiagram", () => {
 
     expect(elements.nodes).toHaveLength(4);
     expect(elements.edges).toHaveLength(3);
-    expect(elements.edges[0]?.label).toBe("Supports");
+    // Sprint 16 task 03.5: edges with a note render "<type> · <note>" so
+    // the consultant's intent appears alongside the connection vocabulary.
+    expect(elements.edges[0]?.label).toBe("Supports · This relationship matters");
+    expect(elements.edges[1]?.label).toBe("Supports");
   });
 
   it("renders a static react flow canvas for small graphs", () => {
@@ -147,5 +150,59 @@ describe("NetworkDiagram", () => {
 
     expect(screen.getByTestId("react-flow")).toHaveAttribute("data-node-count", "4");
     expect(screen.getByTestId("react-flow")).toHaveAttribute("data-edge-count", "3");
+  });
+
+  it("uses saved canvas positions from layoutState when present", () => {
+    // Sprint 16 task 03.5 — when the snapshot carries node positions,
+    // buildNetworkDiagramElements MUST use them instead of dagre auto-layout
+    // so the report mirrors the consultant's spatial arrangement.
+    const baseModel = createGraphModel({ nodeCount: 3, connectionCount: 2 });
+    const modelWithPositions: ReportGraphModel = {
+      ...baseModel,
+      snapshot: {
+        ...baseModel.snapshot,
+        layoutState: [
+          {
+            nodeType: "viewport",
+            nodeId: "round",
+            posX: null,
+            posY: null,
+            width: null,
+            height: null,
+            zoom: 1,
+            panX: 0,
+            panY: 0,
+          },
+          {
+            nodeType: "group",
+            nodeId: "group-1",
+            posX: 100,
+            posY: 200,
+            width: null,
+            height: null,
+            zoom: null,
+            panX: null,
+            panY: null,
+          },
+          {
+            nodeType: "insight",
+            nodeId: "insight-1",
+            posX: 350,
+            posY: 80,
+            width: null,
+            height: null,
+            zoom: null,
+            panX: null,
+            panY: null,
+          },
+        ],
+      },
+    };
+    const elements = buildNetworkDiagramElements(modelWithPositions);
+
+    const groupNode = elements.nodes.find((n) => n.id === "group:group-1");
+    const insightNode = elements.nodes.find((n) => n.id === "insight:insight-1");
+    expect(groupNode?.position).toEqual({ x: 100, y: 200 });
+    expect(insightNode?.position).toEqual({ x: 350, y: 80 });
   });
 });

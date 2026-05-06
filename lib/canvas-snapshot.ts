@@ -18,7 +18,10 @@
  * to the captured container. ReactFlow's current viewport transform
  * (`getViewport()`) provides the offset and zoom factor.
  */
-import html2canvas from "html2canvas";
+// html2canvas-pro is a fork of html2canvas with modern CSS color function
+// support (oklch, lab, color-mix). Required because Tailwind v4 emits oklch
+// colors which the original html2canvas can't parse.
+import html2canvas from "html2canvas-pro";
 import type { CanvasFrame } from "@/types/canvas";
 
 export interface CapturedCanvasImages {

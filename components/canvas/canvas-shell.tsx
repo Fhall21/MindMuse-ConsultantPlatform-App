@@ -11,16 +11,31 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { CanvasGraph } from "@/components/canvas/canvas-graph";
 import { CanvasOrganiseMenu } from "@/components/canvas/canvas-organise-menu";
+import { CanvasFrameBar } from "@/components/canvas/canvas-frame-bar";
+import { CanvasClutterBanner } from "@/components/canvas/canvas-clutter-banner";
 import { ConnectionTypePrompt } from "@/components/canvas/connection-type-prompt";
 import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
 import { MultiSelectionPanel } from "@/components/canvas/multi-selection-panel";
-import { useCanvas, useCreateEdge, useUpdateEdge } from "@/hooks/use-canvas";
+import {
+  useCanvas,
+  useCanvasFrames,
+  useCreateEdge,
+  useCreateFrame,
+  useDeleteFrame,
+  useUpdateEdge,
+  useUpdateFrame,
+} from "@/hooks/use-canvas";
 import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
 import type { CanvasLayoutDirection } from "@/lib/canvas-layout";
 import { createTheme, moveThemeToGroup, updateTheme } from "@/lib/actions/consultation-workflow";
 import { suggestGroupLabel } from "@/lib/actions/canvas-ai";
-import { defaultFilterState, type CanvasFilterState, type ConnectionType } from "@/types/canvas";
+import {
+  CANVAS_CLUTTER_THRESHOLD,
+  defaultFilterState,
+  type CanvasFilterState,
+  type ConnectionType,
+} from "@/types/canvas";
 
 interface CanvasShellProps {
   roundId: string;
@@ -48,6 +63,11 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
   const createEdge = useCreateEdge(roundId);
   const updateEdge = useUpdateEdge(roundId);
 
+  const framesQuery = useCanvasFrames(roundId);
+  const createFrame = useCreateFrame(roundId);
+  const updateFrame = useUpdateFrame(roundId);
+  const deleteFrame = useDeleteFrame(roundId);
+
   const [filters, setFilters] = useState<CanvasFilterState>(defaultFilterState);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
@@ -67,8 +87,35 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
   // Track which theme group IDs were titled by AI so cards can show the indicator
   const [aiGeneratedGroupIds, setAiGeneratedGroupIds] = useState<Set<string>>(new Set());
 
+  // Frame state
+  const [activeFrameId, setActiveFrameId] = useState<string | null>(null);
+  const [viewportRequest, setViewportRequest] = useState<{
+    id: number;
+    viewport: { x: number; y: number; zoom: number };
+  } | null>(null);
+  const nextViewportRequestIdRef = useRef(1);
+  const [clutterDismissed, setClutterDismissed] = useState(false);
+
   const nodes = useMemo(() => canvasQuery.data?.nodes ?? [], [canvasQuery.data?.nodes]);
   const edges = useMemo(() => canvasQuery.data?.edges ?? [], [canvasQuery.data?.edges]);
+
+  const frames = useMemo(() => framesQuery.data ?? [], [framesQuery.data]);
+  const activeFrame = useMemo(
+    () => (activeFrameId ? frames.find((f) => f.id === activeFrameId) ?? null : null),
+    [activeFrameId, frames]
+  );
+  const visibleNodeIds = useMemo(
+    () =>
+      activeFrame && activeFrame.node_ids.length > 0
+        ? new Set(activeFrame.node_ids)
+        : null,
+    [activeFrame]
+  );
+
+  const showClutterBanner =
+    !clutterDismissed &&
+    activeFrameId === null &&
+    nodes.length >= CANVAS_CLUTTER_THRESHOLD;
 
   const selectedNode = focusedNodeId
     ? nodes.find((node) => node.id === focusedNodeId) ?? null
@@ -386,6 +433,44 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     }
   }
 
+  // ─── Frame handlers ──────────────────────────────────────────────────────────
+
+  function handleSelectFrame(frameId: string | null) {
+    setActiveFrameId(frameId);
+    setSelectedNodeIds([]);
+    setFocusedNodeId(null);
+    // Restore saved viewport when switching to a specific frame
+    if (frameId) {
+      const frame = frames.find((f) => f.id === frameId);
+      if (frame) {
+        setViewportRequest({
+          id: nextViewportRequestIdRef.current++,
+          viewport: frame.viewport,
+        });
+      }
+    }
+  }
+
+  async function handleCreateFrame(name: string) {
+    const currentViewport = canvasQuery.data?.viewport ?? { x: 0, y: 0, zoom: 1 };
+    const nodeIds = selectedNodeIds.length > 0 ? selectedNodeIds : nodes.map((n) => n.id);
+    const frame = await createFrame.mutateAsync({
+      name,
+      node_ids: nodeIds,
+      viewport: currentViewport,
+    });
+    setActiveFrameId(frame.id);
+  }
+
+  async function handleRenameFrame(frameId: string, name: string) {
+    await updateFrame.mutateAsync({ id: frameId, name });
+  }
+
+  async function handleDeleteFrame(frameId: string) {
+    await deleteFrame.mutateAsync(frameId);
+    if (activeFrameId === frameId) setActiveFrameId(null);
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
@@ -454,6 +539,28 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
         </div>
       </div>
 
+      {/* Frame bar */}
+      <CanvasFrameBar
+        frames={frames}
+        activeFrameId={activeFrameId}
+        onSelectFrame={handleSelectFrame}
+        onCreateFrame={handleCreateFrame}
+        onRenameFrame={handleRenameFrame}
+        onDeleteFrame={handleDeleteFrame}
+      />
+
+      {/* Clutter banner */}
+      {showClutterBanner && (
+        <CanvasClutterBanner
+          nodeCount={nodes.length}
+          onCreateFrame={() => {
+            setClutterDismissed(true);
+            void handleCreateFrame("New frame");
+          }}
+          onDismiss={() => setClutterDismissed(true)}
+        />
+      )}
+
       {/* Canvas + side panel */}
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1 bg-muted/30">
@@ -466,6 +573,8 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
             selectedEdgeId={selectedEdgeId}
             aiGeneratedGroupIds={aiGeneratedGroupIds}
             layoutRequest={layoutRequest}
+            visibleNodeIds={visibleNodeIds}
+            viewportRequest={viewportRequest}
             onSelectionChange={handleCanvasSelectionChange}
             onNodeFocus={setFocusedNodeId}
             onEdgeSelect={setSelectedEdgeId}

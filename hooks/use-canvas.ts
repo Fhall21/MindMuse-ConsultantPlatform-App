@@ -6,6 +6,7 @@ import { fetchJson } from "@/hooks/api";
 import type {
   AiConnectionSuggestion,
   CanvasEdge,
+  CanvasFrame,
   CanvasLayoutPosition,
   CanvasNode,
   CanvasViewport,
@@ -207,6 +208,85 @@ export function useSaveLayout(roundId: string) {
           body: JSON.stringify(payload),
         }
       ),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Canvas frames
+// ---------------------------------------------------------------------------
+
+function framesKey(roundId: string) {
+  return ["canvas", roundId, "frames"] as const;
+}
+
+export function useCanvasFrames(roundId: string) {
+  return useQuery<CanvasFrame[]>({
+    queryKey: framesKey(roundId),
+    queryFn: () =>
+      fetchJson<CanvasFrame[]>(`/api/client/consultations/${roundId}/canvas/frames`),
+    enabled: Boolean(roundId),
+  });
+}
+
+export interface CreateFramePayload {
+  name: string;
+  node_ids: string[];
+  viewport: CanvasViewport;
+  position?: number;
+}
+
+export function useCreateFrame(roundId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<CanvasFrame, Error, CreateFramePayload>({
+    mutationFn: (payload) =>
+      fetchJson<CanvasFrame>(`/api/client/consultations/${roundId}/canvas/frames`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: framesKey(roundId) });
+    },
+  });
+}
+
+export interface UpdateFramePayload {
+  id: string;
+  name?: string;
+  node_ids?: string[];
+  viewport?: CanvasViewport;
+  position?: number;
+}
+
+export function useUpdateFrame(roundId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<CanvasFrame, Error, UpdateFramePayload>({
+    mutationFn: ({ id, ...payload }) =>
+      fetchJson<CanvasFrame>(
+        `/api/client/consultations/${roundId}/canvas/frames/${id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: framesKey(roundId) });
+    },
+  });
+}
+
+export function useDeleteFrame(roundId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (frameId) =>
+      fetchJson<void>(
+        `/api/client/consultations/${roundId}/canvas/frames/${frameId}`,
+        { method: "DELETE" }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: framesKey(roundId) });
+    },
   });
 }
 

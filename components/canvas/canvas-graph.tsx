@@ -50,6 +50,10 @@ interface CanvasGraphProps {
   selectedEdgeId: string | null;
   aiGeneratedGroupIds?: Set<string>;
   layoutRequest?: { id: number; nodeIds: string[]; direction: CanvasLayoutDirection } | null;
+  /** When set, only these node IDs are rendered (frame visibility filter). */
+  visibleNodeIds?: Set<string> | null;
+  /** When set, the viewport is restored to this position. Increment id to trigger. */
+  viewportRequest?: { id: number; viewport: { x: number; y: number; zoom: number } } | null;
   onSelectionChange: (nodeIds: string[]) => void;
   onNodeFocus: (id: string | null) => void;
   onEdgeSelect: (id: string | null) => void;
@@ -545,6 +549,8 @@ function CanvasGraphInner({
   selectedEdgeId,
   aiGeneratedGroupIds = new Set(),
   layoutRequest,
+  visibleNodeIds,
+  viewportRequest,
   onSelectionChange,
   onNodeFocus,
   onEdgeSelect,
@@ -554,7 +560,7 @@ function CanvasGraphInner({
 }: CanvasGraphProps) {
   const { data, isLoading } = useCanvas(roundId);
   const saveLayout = useSaveLayout(roundId);
-  const { getViewport, getIntersectingNodes } = useReactFlow();
+  const { getViewport, getIntersectingNodes, setViewport } = useReactFlow();
   const dragRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const layoutResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -585,10 +591,37 @@ function CanvasGraphInner({
   const onLayoutCompleteRef = useRef(onLayoutComplete);
   onLayoutCompleteRef.current = onLayoutComplete;
 
-  const { filteredNodes, filteredEdges } = useMemo(
+  const { filteredNodes: filterPassNodes, filteredEdges: filterPassEdges } = useMemo(
     () => applyFilters(data?.nodes ?? [], data?.edges ?? [], filters),
     [data?.nodes, data?.edges, filters]
   );
+
+  const filteredNodes = useMemo(
+    () =>
+      visibleNodeIds
+        ? filterPassNodes.filter((n) => visibleNodeIds.has(n.id))
+        : filterPassNodes,
+    [filterPassNodes, visibleNodeIds]
+  );
+  const filteredEdges = useMemo(
+    () =>
+      visibleNodeIds
+        ? filterPassEdges.filter(
+            (e) => visibleNodeIds.has(e.source_node_id) && visibleNodeIds.has(e.target_node_id)
+          )
+        : filterPassEdges,
+    [filterPassEdges, visibleNodeIds]
+  );
+
+  const viewportRequestRef = useRef(viewportRequest);
+  viewportRequestRef.current = viewportRequest;
+  const setViewportRef = useRef(setViewport);
+  setViewportRef.current = setViewport;
+
+  useEffect(() => {
+    if (!viewportRequest) return;
+    setViewportRef.current(viewportRequest.viewport, { duration: 300 });
+  }, [viewportRequest?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allFlowNodes = useMemo(
     () => buildFlowNodes(data?.nodes ?? [], aiGeneratedGroupIds),

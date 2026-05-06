@@ -29,6 +29,11 @@ export async function fetchJson<T>(
     throw new Error(await readErrorMessage(response));
   }
 
-  return response.json() as Promise<T>;
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
 }
 

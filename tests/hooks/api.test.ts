@@ -31,6 +31,15 @@ describe("hooks/api", () => {
     });
   });
 
+  it("returns undefined for empty successful responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 204 }))
+    );
+
+    await expect(fetchJson<void>("/api/example")).resolves.toBeUndefined();
+  });
+
   it("throws the parsed API error on failure", async () => {
     vi.stubGlobal(
       "fetch",

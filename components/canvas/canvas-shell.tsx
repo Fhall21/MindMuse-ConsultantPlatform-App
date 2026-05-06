@@ -174,6 +174,46 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     []
   );
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (event.key !== "Delete" && event.key !== "Backspace") {
+        return;
+      }
+
+      let selectedFrameId = activeFrameId;
+      if (
+        !selectedFrameId &&
+        selectedNodeIds.length === 1 &&
+        selectedNodeIds[0].startsWith("frame:")
+      ) {
+        selectedFrameId = selectedNodeIds[0].slice("frame:".length);
+      }
+
+      if (!selectedFrameId) {
+        return;
+      }
+
+      event.preventDefault();
+      void handleDeleteFrame(selectedFrameId);
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [activeFrameId, selectedNodeIds]);
+
   // Stable — prevents ReactFlow from rebuilding its selection handler on every render
   const handleCanvasSelectionChange = useCallback((nextIds: string[]) => {
     setSelectedNodeIds((current) =>
@@ -571,10 +611,20 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     await updateFrame.mutateAsync({ id: frameId, color });
   }
 
-  async function handleDeleteFrame(frameId: string) {
-    await deleteFrame.mutateAsync(frameId);
-    if (activeFrameId === frameId) setActiveFrameId(null);
-  }
+  const handleDeleteFrame = useCallback(
+    async (frameId: string) => {
+      try {
+        await deleteFrame.mutateAsync(frameId);
+        if (activeFrameId === frameId) setActiveFrameId(null);
+        const frameFlowId = `frame:${frameId}`;
+        setSelectedNodeIds((current) => current.filter((id) => id !== frameFlowId));
+        if (focusedNodeId === frameFlowId) setFocusedNodeId(null);
+      } catch (error) {
+        throw error;
+      }
+    },
+    [activeFrameId, deleteFrame, focusedNodeId, selectedNodeIds]
+  );
 
   /**
    * Export the current canvas + per-frame images. Captures the live ReactFlow

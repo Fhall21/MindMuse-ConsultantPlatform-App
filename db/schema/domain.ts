@@ -2,6 +2,7 @@ import {
   bigserial,
   boolean,
   check,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -1380,6 +1381,13 @@ export const canvasFrames = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    // Bounding box in canvas flow coordinates (sprint 16 task 03.5).
+    x: doublePrecision("x").default(0).notNull(),
+    y: doublePrecision("y").default(0).notNull(),
+    width: doublePrecision("width").default(600).notNull(),
+    height: doublePrecision("height").default(400).notNull(),
+    // Palette tint. Stored as text; valid values enforced at app layer.
+    color: text("color").default("blue").notNull(),
     nodeIds: jsonb("node_ids")
       .$type<string[]>()
       .default(sql`'[]'::jsonb`)

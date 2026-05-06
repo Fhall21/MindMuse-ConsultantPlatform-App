@@ -14,7 +14,9 @@ import type {
   CanvasPosition,
   CanvasViewport,
   ConnectionType,
+  FrameColor,
 } from "@/types/canvas";
+import { DEFAULT_FRAME_COLOR, FRAME_COLORS } from "@/types/canvas";
 import { requireOwnedConsultation } from "./ownership";
 import { insertAuditLogEntry } from "./audit-log";
 
@@ -275,11 +277,22 @@ export async function deleteCanvasConnection(
 
 type CanvasFrameInsert = typeof canvasFrames.$inferInsert;
 
+function coerceFrameColor(value: string): FrameColor {
+  return (FRAME_COLORS as readonly string[]).includes(value)
+    ? (value as FrameColor)
+    : DEFAULT_FRAME_COLOR;
+}
+
 function rowToFrame(row: typeof canvasFrames.$inferSelect): CanvasFrame {
   return {
     id: row.id,
     consultation_id: row.consultationId,
     name: row.name,
+    x: row.x,
+    y: row.y,
+    width: row.width,
+    height: row.height,
+    color: coerceFrameColor(row.color),
     node_ids: row.nodeIds as string[],
     viewport: row.viewport as CanvasViewport,
     position: row.position,
@@ -311,7 +324,17 @@ export async function listCanvasFrames(
 export async function createCanvasFrame(
   consultationId: string,
   userId: string,
-  data: { name: string; nodeIds: string[]; viewport: CanvasViewport; position?: number }
+  data: {
+    name: string;
+    nodeIds: string[];
+    viewport: CanvasViewport;
+    position?: number;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    color?: FrameColor;
+  }
 ): Promise<CanvasFrame> {
   await requireOwnedConsultation(consultationId, userId);
 
@@ -323,6 +346,11 @@ export async function createCanvasFrame(
     consultationId,
     userId,
     name: data.name,
+    x: data.x ?? 0,
+    y: data.y ?? 0,
+    width: data.width ?? 600,
+    height: data.height ?? 400,
+    color: data.color ?? DEFAULT_FRAME_COLOR,
     nodeIds: data.nodeIds,
     viewport: data.viewport,
     position: data.position ?? 0,
@@ -343,7 +371,17 @@ export async function updateCanvasFrame(
   consultationId: string,
   userId: string,
   frameId: string,
-  updates: Partial<{ name: string; nodeIds: string[]; viewport: CanvasViewport; position: number }>
+  updates: Partial<{
+    name: string;
+    nodeIds: string[];
+    viewport: CanvasViewport;
+    position: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color: FrameColor;
+  }>
 ): Promise<CanvasFrame> {
   await requireOwnedConsultation(consultationId, userId);
 
@@ -369,6 +407,11 @@ export async function updateCanvasFrame(
   if (updates.nodeIds !== undefined) set.nodeIds = updates.nodeIds;
   if (updates.viewport !== undefined) set.viewport = updates.viewport;
   if (updates.position !== undefined) set.position = updates.position;
+  if (updates.x !== undefined) set.x = updates.x;
+  if (updates.y !== undefined) set.y = updates.y;
+  if (updates.width !== undefined) set.width = updates.width;
+  if (updates.height !== undefined) set.height = updates.height;
+  if (updates.color !== undefined) set.color = updates.color;
 
   await db.update(canvasFrames).set(set).where(eq(canvasFrames.id, frameId));
 

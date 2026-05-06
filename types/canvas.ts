@@ -135,21 +135,46 @@ export interface AiConnectionSuggestion {
  *
  * This is the contract Agent 3 reads to render the network section of a report.
  */
-export interface NetworkSnapshot {
-  /** Snapshot version — bump when shape changes. */
+/**
+ * Versioned snapshot. Consumers MUST gate on `version`.
+ * v1: legacy — semantic only, no positions, no frames.
+ * v2: spatial — includes node positions, frames with images, full canvas image.
+ */
+export type NetworkSnapshot = NetworkSnapshotV1 | NetworkSnapshotV2;
+
+export interface NetworkSnapshotV1 {
   version: 1;
   captured_at: string;
   consultation_id: string;
-  nodes: NetworkSnapshotNode[];
+  nodes: NetworkSnapshotNodeV1[];
   edges: NetworkSnapshotEdge[];
 }
 
-export interface NetworkSnapshotNode {
+export interface NetworkSnapshotV2 {
+  version: 2;
+  captured_at: string;
+  consultation_id: string;
+  /** Frames present at capture time. Empty array if consultant created none. */
+  frames: NetworkSnapshotFrame[];
+  nodes: NetworkSnapshotNode[];
+  edges: NetworkSnapshotEdge[];
+  /** Captured image URL for the full canvas. Null if capture failed. */
+  graph_image_url: string | null;
+}
+
+/** v1 node shape — no spatial data. Kept for backward compat. */
+export interface NetworkSnapshotNodeV1 {
   id: string;
   type: CanvasNodeType;
   label: string;
   accepted: boolean;
   subgroup: string | null;
+}
+
+/** v2 node shape — adds position + frame membership. */
+export interface NetworkSnapshotNode extends NetworkSnapshotNodeV1 {
+  position: CanvasPosition;
+  frame_id: string | null;
 }
 
 export interface NetworkSnapshotEdge {
@@ -160,29 +185,82 @@ export interface NetworkSnapshotEdge {
   note: string | null;
 }
 
+/** v2: per-frame snapshot record with cropped image URL. */
+export interface NetworkSnapshotFrame {
+  id: string;
+  name: string;
+  color: FrameColor;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  node_ids: string[];
+  image_url: string | null;
+}
+
 // ---------------------------------------------------------------------------
-// Canvas frames (curated views over the global node set)
+// Canvas frames — spatial bounding-box containers on the canvas
 // ---------------------------------------------------------------------------
 
+/** 6-value palette for frame tinting. Stored as text in DB. */
+export type FrameColor =
+  | "amber"
+  | "blue"
+  | "green"
+  | "purple"
+  | "rose"
+  | "slate";
+
+export const FRAME_COLORS: readonly FrameColor[] = [
+  "amber",
+  "blue",
+  "green",
+  "purple",
+  "rose",
+  "slate",
+] as const;
+
+export const DEFAULT_FRAME_COLOR: FrameColor = "blue";
+
 /**
- * A named, saved viewport + node-visibility filter over the full canvas graph.
- * Nodes are not duplicated — frames reference node IDs from the global graph.
- * Switching frames applies the node filter and restores the saved viewport.
+ * A named spatial container on the canvas. Frames are visible rectangles the
+ * consultant draws to group nodes by region — like a Figma frame or Miro
+ * section. Nodes are assigned to a frame explicitly (via drag-into or
+ * spatial-overlap on creation), not derived from position at render time.
+ *
+ * Membership is stored in `node_ids` so consumers can filter without doing
+ * geometry. Position/size live in `x/y/width/height` (canvas flow coords).
+ *
+ * `viewport` is retained for back-compat with sprint 16 task 02 (it captured
+ * a saved camera). New frames default to the canvas viewport at creation
+ * time but the field is no longer the primary mental model.
  */
 export interface CanvasFrame {
   id: string;
   consultation_id: string;
   name: string;
-  /** Subset of node IDs visible in this frame. Empty = show all. */
+  /** Bounding box in canvas flow coordinates. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Palette tint for visual distinction on dense canvases. */
+  color: FrameColor;
+  /** Explicit member node IDs. Updated on drag-in/drag-out and resize. */
   node_ids: string[];
+  /** Saved camera at frame creation time — kept for "zoom to frame" UX. */
   viewport: CanvasViewport;
-  /** Display order (ascending). */
+  /** Display order in the frame bar (ascending). */
   position: number;
   created_at: string;
   updated_at: string;
 }
 
 export const CANVAS_CLUTTER_THRESHOLD = 15;
+
+/** Default size for a programmatically-created frame (toolbar button fallback). */
+export const DEFAULT_FRAME_WIDTH = 600;
+export const DEFAULT_FRAME_HEIGHT = 400;
 
 // ---------------------------------------------------------------------------
 // Quick filter state (UI-only — not persisted)

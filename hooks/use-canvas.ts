@@ -11,6 +11,7 @@ import type {
   CanvasNode,
   CanvasViewport,
   ConnectionType,
+  FrameColor,
 } from "@/types/canvas";
 
 // ---------------------------------------------------------------------------
@@ -233,6 +234,11 @@ export interface CreateFramePayload {
   node_ids: string[];
   viewport: CanvasViewport;
   position?: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  color?: FrameColor;
 }
 
 export function useCreateFrame(roundId: string) {
@@ -256,6 +262,11 @@ export interface UpdateFramePayload {
   node_ids?: string[];
   viewport?: CanvasViewport;
   position?: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  color?: FrameColor;
 }
 
 export function useUpdateFrame(roundId: string) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { deleteCanvasFrame, updateCanvasFrame } from "@/lib/data/canvas";
+import { parseFrameUpdateBody } from "@/lib/canvas-frame-validation";
 import { jsonError, requireRouteClient } from "../../../../../_helpers";
 import { requireOwnedMeeting } from "@/lib/data/ownership";
 
@@ -17,25 +18,10 @@ export async function PATCH(
     if (!consultationId) return jsonError("Meeting has no active consultation", 400);
 
     const body = await request.json();
-    const updates: Parameters<typeof updateCanvasFrame>[3] = {};
+    const parsed = parseFrameUpdateBody(body);
+    if (!parsed.ok) return jsonError(parsed.error, 400);
 
-    if (typeof body.name === "string") updates.name = body.name;
-    if (Array.isArray(body.node_ids)) updates.nodeIds = body.node_ids as string[];
-    if (
-      body.viewport &&
-      typeof body.viewport.x === "number" &&
-      typeof body.viewport.y === "number" &&
-      typeof body.viewport.zoom === "number"
-    ) {
-      updates.viewport = body.viewport;
-    }
-    if (typeof body.position === "number") updates.position = body.position;
-
-    if (Object.keys(updates).length === 0) {
-      return jsonError("No valid fields to update", 400);
-    }
-
-    const frame = await updateCanvasFrame(consultationId, client.userId, frameId, updates);
+    const frame = await updateCanvasFrame(consultationId, client.userId, frameId, parsed.updates);
     return NextResponse.json(frame);
   } catch (error) {
     console.error("[meetings/canvas/frames/[frameId]/PATCH]", error);

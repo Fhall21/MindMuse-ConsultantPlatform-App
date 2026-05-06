@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createCanvasFrame, listCanvasFrames } from "@/lib/data/canvas";
+import { parseFrameCreateBody } from "@/lib/canvas-frame-validation";
 import { jsonError, requireRouteClient } from "../../../../_helpers";
 import { requireOwnedMeeting } from "@/lib/data/ownership";
 
@@ -38,27 +39,10 @@ export async function POST(
     if (!consultationId) return jsonError("Meeting has no active consultation", 400);
 
     const body = await request.json();
-    const { name, node_ids, viewport, position } = body;
+    const parsed = parseFrameCreateBody(body);
+    if (!parsed.ok) return jsonError(parsed.error, 400);
 
-    if (
-      !name ||
-      typeof name !== "string" ||
-      !Array.isArray(node_ids) ||
-      !viewport ||
-      typeof viewport.x !== "number" ||
-      typeof viewport.y !== "number" ||
-      typeof viewport.zoom !== "number"
-    ) {
-      return jsonError("Missing or invalid fields: name, node_ids, viewport", 400);
-    }
-
-    const frame = await createCanvasFrame(consultationId, client.userId, {
-      name,
-      nodeIds: node_ids as string[],
-      viewport,
-      position: typeof position === "number" ? position : 0,
-    });
-
+    const frame = await createCanvasFrame(consultationId, client.userId, parsed.payload);
     return NextResponse.json(frame, { status: 201 });
   } catch (error) {
     console.error("[meetings/canvas/frames/POST]", error);

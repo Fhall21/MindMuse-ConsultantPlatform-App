@@ -1,10 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Layers, Plus, X } from "lucide-react";
+import { useState } from "react";
+import { Frame as FrameIcon, ImageDown, Layers, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { CanvasFrame } from "@/types/canvas";
@@ -12,43 +11,39 @@ import type { CanvasFrame } from "@/types/canvas";
 interface CanvasFrameBarProps {
   frames: CanvasFrame[];
   activeFrameId: string | null;
+  /** When true, the canvas is in frame-drawing mode (Draw button highlighted). */
+  drawingMode?: boolean;
+  /** Disable the Export button while a capture is in flight. */
+  exporting?: boolean;
   onSelectFrame: (frameId: string | null) => void;
-  onCreateFrame: (name: string) => void;
   onRenameFrame: (frameId: string, name: string) => void;
   onDeleteFrame: (frameId: string) => void;
+  /** Toggle frame-drawing mode (rubber-band rect on the canvas). */
+  onToggleDrawingMode?: () => void;
+  /** Trigger image export — full canvas + one image per frame. */
+  onExportImages?: () => void;
   disabled?: boolean;
 }
 
+/**
+ * Tab bar + actions for canvas frames. Houses both selection (tabs) and the
+ * frame-creation entry point (Draw button) so the canvas top toolbar can
+ * stay focused on filters and AI controls.
+ */
 export function CanvasFrameBar({
   frames,
   activeFrameId,
+  drawingMode = false,
+  exporting = false,
   onSelectFrame,
-  onCreateFrame,
   onRenameFrame,
   onDeleteFrame,
+  onToggleDrawingMode,
+  onExportImages,
   disabled,
 }: CanvasFrameBarProps) {
-  const [newName, setNewName] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
-  const newNameInputRef = useRef<HTMLInputElement>(null);
-
-  function handleOpenCreate(open: boolean) {
-    setCreateOpen(open);
-    if (open) {
-      setNewName("");
-      setTimeout(() => newNameInputRef.current?.focus(), 0);
-    }
-  }
-
-  function handleCreate() {
-    const name = newName.trim();
-    if (!name) return;
-    onCreateFrame(name);
-    setNewName("");
-    setCreateOpen(false);
-  }
 
   function startEdit(frame: CanvasFrame, e: React.MouseEvent) {
     e.stopPropagation();
@@ -151,55 +146,48 @@ export function CanvasFrameBar({
         </div>
       ))}
 
-      {/* Create frame */}
-      <Popover open={createOpen} onOpenChange={handleOpenCreate}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
+      {/* Spacer so action buttons sit at the far right of the bar. */}
+      <div className="ml-auto flex items-center gap-1.5">
+        {onToggleDrawingMode ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={drawingMode ? "default" : "ghost"}
+                size="sm"
+                onClick={onToggleDrawingMode}
+                disabled={disabled}
+                aria-pressed={drawingMode}
+                className="h-7 gap-1.5 px-2.5 text-xs"
+              >
+                <FrameIcon className="h-3.5 w-3.5" />
+                {drawingMode ? "Drawing…" : "Draw frame"}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Click and drag on the canvas to draw a frame
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+        {onExportImages ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={disabled}
-                className="ml-0.5 h-6 w-6 shrink-0 p-0 text-muted-foreground hover:text-foreground"
-                aria-label="Create frame"
+                onClick={onExportImages}
+                disabled={disabled || exporting}
+                className="h-7 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
               >
-                <Plus className="h-3.5 w-3.5" />
+                <ImageDown className="h-3.5 w-3.5" />
+                {exporting ? "Exporting…" : "Export"}
               </Button>
-            </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            Create frame
-          </TooltipContent>
-        </Tooltip>
-
-        <PopoverContent className="w-60 p-3" align="start" sideOffset={6}>
-          <p className="mb-1 text-xs font-medium text-foreground">New frame</p>
-          <p className="mb-2.5 text-xs text-muted-foreground">
-            Name this curated view of the canvas
-          </p>
-          <div className="flex gap-1.5">
-            <Input
-              ref={newNameInputRef}
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreate();
-                if (e.key === "Escape") setCreateOpen(false);
-              }}
-              placeholder="e.g. Wellbeing cluster"
-              className="h-7 text-xs"
-            />
-            <Button
-              size="sm"
-              className="h-7 shrink-0 px-2.5 text-xs"
-              onClick={handleCreate}
-              disabled={!newName.trim()}
-            >
-              Add
-            </Button>
-          </div>
-        </PopoverContent>
-      </Popover>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Download canvas + one image per frame
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+      </div>
     </div>
   );
 }

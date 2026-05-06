@@ -28,10 +28,13 @@ function makeFrame(overrides: Partial<CanvasFrame> = {}): CanvasFrame {
 const defaultProps = {
   frames: [] as CanvasFrame[],
   activeFrameId: null as string | null,
+  drawingMode: false as boolean,
+  exporting: false as boolean,
   onSelectFrame: vi.fn(),
-  onCreateFrame: vi.fn(),
   onRenameFrame: vi.fn(),
   onDeleteFrame: vi.fn(),
+  onToggleDrawingMode: undefined as (() => void) | undefined,
+  onExportImages: undefined as (() => void) | undefined,
   disabled: false as boolean,
 };
 
@@ -108,9 +111,28 @@ describe("CanvasFrameBar", () => {
     expect(onDeleteFrame).toHaveBeenCalledWith("f1");
   });
 
-  it("renders create frame button", () => {
+  it("renders the Draw frame button when onToggleDrawingMode is wired", () => {
+    const onToggleDrawingMode = vi.fn();
+    renderBar({ onToggleDrawingMode });
+    expect(screen.getByRole("button", { name: /draw frame/i })).toBeInTheDocument();
+  });
+
+  it("does not render the Draw button when no toggle handler is supplied", () => {
     renderBar();
-    expect(screen.getByRole("button", { name: /create frame/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /draw frame/i })).not.toBeInTheDocument();
+  });
+
+  it("calls onToggleDrawingMode when Draw button clicked", () => {
+    const onToggleDrawingMode = vi.fn();
+    renderBar({ onToggleDrawingMode });
+    fireEvent.click(screen.getByRole("button", { name: /draw frame/i }));
+    expect(onToggleDrawingMode).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders Drawing… label when drawingMode is true", () => {
+    const onToggleDrawingMode = vi.fn();
+    renderBar({ onToggleDrawingMode, drawingMode: true });
+    expect(screen.getByRole("button", { name: /drawing…/i })).toBeInTheDocument();
   });
 
   it("does not call onSelectFrame when disabled", () => {

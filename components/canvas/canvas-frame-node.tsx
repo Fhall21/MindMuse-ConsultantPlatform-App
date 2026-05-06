@@ -1,11 +1,19 @@
 "use client";
 
-import { memo, useCallback, useState } from "react";
+import { createContext, memo, useCallback, useContext, useState } from "react";
 import { NodeResizer, type NodeProps } from "@xyflow/react";
 import { Check, Palette } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { FRAME_COLORS, type FrameColor } from "@/types/canvas";
+
+/**
+ * Drop-target frame context. Set by CanvasGraph during a node drag so the
+ * highlighted frame can re-render its border without forcing the entire
+ * frame node array to be rebuilt (which would fight RF's local drag state
+ * and cause visible lag).
+ */
+export const DropTargetFrameContext = createContext<string | null>(null);
 
 // Tailwind utility classes per palette value. Use literal class names so the
 // JIT compiler picks them up (string concatenation would be purged).
@@ -63,8 +71,6 @@ export interface CanvasFrameNodeData {
   frameId: string;
   name: string;
   color: FrameColor;
-  /** True when a regular node is being dragged inside this frame's bounds. */
-  isDropTarget?: boolean;
   /** Called when consultant picks a color from the palette popover. */
   onColorChange?: (frameId: string, color: FrameColor) => void;
   /** Called when consultant requests rename via header click. */
@@ -75,6 +81,11 @@ function CanvasFrameNodeComponent({ data, selected }: NodeProps) {
   const frameData = data as unknown as CanvasFrameNodeData;
   const palette = COLOR_CLASSES[frameData.color] ?? COLOR_CLASSES.blue;
   const [colorOpen, setColorOpen] = useState(false);
+  // Drop-target highlight comes from context so the parent can update it
+  // without changing this node's `data` (which would otherwise invalidate
+  // memoization and cause drag jank).
+  const dropTargetId = useContext(DropTargetFrameContext);
+  const isDropTarget = dropTargetId === frameData.frameId;
 
   const handlePickColor = useCallback(
     (color: FrameColor) => {
@@ -86,13 +97,18 @@ function CanvasFrameNodeComponent({ data, selected }: NodeProps) {
 
   return (
     <>
-      {/* Resize handles only visible when frame is selected. */}
+      {/* Resize handles — only when selected. Larger hit area (16px) with
+          palette-coloured fill so corners are obviously grabbable. */}
       <NodeResizer
         isVisible={selected}
         minWidth={120}
         minHeight={80}
         lineClassName={cn("!border-2", palette.border)}
-        handleClassName={cn("!h-2.5 !w-2.5 !rounded-sm !border", palette.border, "!bg-background")}
+        handleClassName={cn(
+          "!h-4 !w-4 !rounded-sm !border-2 !shadow-md",
+          palette.border,
+          palette.dot
+        )}
       />
 
       <div
@@ -100,8 +116,8 @@ function CanvasFrameNodeComponent({ data, selected }: NodeProps) {
           "relative h-full w-full rounded-lg border-2 transition-all",
           palette.fill,
           palette.border,
-          frameData.isDropTarget && "ring-4 ring-offset-2",
-          frameData.isDropTarget && palette.ring,
+          isDropTarget && "ring-4 ring-offset-2",
+          isDropTarget && palette.ring,
           selected && "shadow-md"
         )}
       >

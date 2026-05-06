@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { CanvasNodeCard, type CanvasNodeCardData } from "@/components/canvas/canvas-node-card";
 import {
   CanvasFrameNode,
+  DropTargetFrameContext,
   type CanvasFrameNodeData,
 } from "@/components/canvas/canvas-frame-node";
 import { CONNECTION_TYPE_LABELS } from "@/components/canvas/connection-type-prompt";
@@ -123,11 +124,12 @@ const FRAME_NODE_TYPE = "frameNode";
 /**
  * Build ReactFlow nodes for canvas frames. Frames render at zIndex -1 so
  * they sit beneath theme/insight cards. Each frame is draggable and
- * resizable in place; data carries the frameId + color + drop-target flag.
+ * resizable in place; data carries the frameId + color (drop-target flag
+ * lives in DropTargetFrameContext, not in data, so updates don't churn
+ * the node array during drag).
  */
 function buildFrameFlowNodes(
   frames: CanvasFrame[],
-  dropTargetFrameId: string | null,
   callbacks: {
     onColorChange?: (frameId: string, color: FrameColor) => void;
     onRename?: (frameId: string) => void;
@@ -147,11 +149,35 @@ function buildFrameFlowNodes(
       frameId: frame.id,
       name: frame.name,
       color: frame.color,
-      isDropTarget: dropTargetFrameId === frame.id,
       onColorChange: callbacks.onColorChange,
       onRename: callbacks.onRename,
     } satisfies CanvasFrameNodeData,
   } satisfies Node));
+}
+
+/**
+ * Sync server-supplied frame flow nodes into the local useNodesState. When a
+ * frame's id matches a current local node, we keep its runtime position +
+ * dimensions (so an in-flight drag/resize isn't snapped back). Other fields
+ * (name, color, callbacks) update from the server snapshot.
+ */
+function syncFrameFlowNodes(
+  currentNodes: Node[],
+  nextNodes: Node[]
+): Node[] {
+  const currentById = new Map(currentNodes.map((n) => [n.id, n] as const));
+  return nextNodes.map((next) => {
+    const current = currentById.get(next.id);
+    if (!current) return next;
+    return {
+      ...next,
+      position: current.position,
+      width: current.width ?? next.width,
+      height: current.height ?? next.height,
+      style: current.style ?? next.style,
+      selected: current.selected,
+    } satisfies Node;
+  });
 }
 
 /** True when a node id is a frame's flow-node id (prefixed `frame:`). */
@@ -758,19 +784,23 @@ function CanvasGraphInner({
   const [flowNodes, setFlowNodes] = useNodesState(nextFlowNodes);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(nextFlowEdges);
 
-  // Frame flow nodes — built fresh from props each render. Frame node positions
-  // and sizes live in DB and are pushed back via onFramePersist after a drag/
-  // resize. We don't merge into useNodesState because frames are simpler:
-  // ReactFlow tracks their position locally during drag, then we read from
-  // the dragged node in onNodeDragStop and persist.
-  const frameFlowNodes = useMemo(
+  // Frame flow nodes are stateful — RF tracks position/dimensions locally
+  // during drag/resize, which keeps interaction smooth (60fps). We sync
+  // from the server `frames` prop when it changes (new frames added,
+  // server-side updates) but preserve in-flight drag positions.
+  const nextFrameFlowNodes = useMemo(
     () =>
-      buildFrameFlowNodes(frames, dropTargetFrameId, {
+      buildFrameFlowNodes(frames, {
         onColorChange: onFrameColorChange,
         onRename: onFrameRename,
       }),
-    [frames, dropTargetFrameId, onFrameColorChange, onFrameRename]
+    [frames, onFrameColorChange, onFrameRename]
   );
+  const [frameFlowNodes, setFrameFlowNodes] = useNodesState(nextFrameFlowNodes);
+  useEffect(() => {
+    setFrameFlowNodes((current) => syncFrameFlowNodes(current, nextFrameFlowNodes));
+  }, [nextFrameFlowNodes, setFrameFlowNodes]);
+
   // Render frames first (lower z-index) so node-card hit tests work normally
   // for theme/insight nodes, then theme/insight nodes on top.
   const renderedFlowNodes = useMemo(
@@ -780,58 +810,63 @@ function CanvasGraphInner({
   const flowNodesRef = useRef(flowNodes);
   flowNodesRef.current = flowNodes;
 
-  // Latest frame definitions for use inside drag/resize callbacks. Avoids
-  // capturing stale frames in useCallback closures.
-  const framesRef = useRef(frames);
-  framesRef.current = frames;
-  // Track frame node positions during drag so we can compute the final
-  // bounds at drag-end without depending on ReactFlow internal state.
-  const frameRuntimeBoundsRef = useRef<
-    Record<string, { x: number; y: number; width: number; height: number }>
-  >({});
-  // Reset runtime bounds when the underlying frames list changes.
-  useEffect(() => {
-    frameRuntimeBoundsRef.current = Object.fromEntries(
-      frames.map((f) => [f.id, { x: f.x, y: f.y, width: f.width, height: f.height }])
-    );
-  }, [frames]);
-
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      // Split frame-related changes off from theme/insight changes.
+      // Split changes by node kind so frame nodes stay in their own state
+      // (smooth drag) and theme/insight nodes keep going through the
+      // grouping translation pipeline.
       const themeInsightChanges: NodeChange[] = [];
+      const frameChanges: NodeChange[] = [];
 
       for (const change of changes) {
         const changeId = (change as { id?: string }).id;
-        if (!changeId || !isFrameFlowNodeId(changeId)) {
+        if (changeId && isFrameFlowNodeId(changeId)) {
+          frameChanges.push(change);
+        } else {
           themeInsightChanges.push(change);
-          continue;
         }
-        const frameId = frameIdFromFlowId(changeId);
-        const current = frameRuntimeBoundsRef.current[frameId];
-        if (!current) continue;
+      }
 
-        if (change.type === "position" && change.position) {
-          // Update runtime bounds; persist when drag settles.
-          const next = {
-            ...current,
-            x: change.position.x,
-            y: change.position.y,
-          };
-          frameRuntimeBoundsRef.current[frameId] = next;
-          if (change.dragging === false) {
-            onFramePersist?.(frameId, next);
-          }
-        } else if (change.type === "dimensions" && change.dimensions) {
-          const next = {
-            ...current,
-            width: change.dimensions.width,
-            height: change.dimensions.height,
-          };
-          frameRuntimeBoundsRef.current[frameId] = next;
-          if (change.resizing === false) {
-            onFramePersist?.(frameId, next);
-          }
+      // ── Frame state — apply via xyflow's applyNodeChanges so drag/resize
+      // updates RF's local position/dimensions in sync with the cursor.
+      if (frameChanges.length > 0) {
+        setFrameFlowNodes((currentNodes) =>
+          applyNodeChanges(frameChanges, currentNodes)
+        );
+
+        // Persist on settle (drag-end / resize-end). Reads from
+        // currentNodes after applyNodeChanges so the persisted bounds
+        // match what RF just rendered.
+        for (const change of frameChanges) {
+          const settled =
+            (change.type === "position" && change.dragging === false) ||
+            (change.type === "dimensions" && change.resizing === false);
+          if (!settled) continue;
+
+          const frameId = frameIdFromFlowId((change as { id: string }).id);
+          // Look up the latest local node state via ref-style closure: we
+          // call setFrameFlowNodes again with an inspector that reads the
+          // freshly-applied node and fires the persist callback exactly once.
+          setFrameFlowNodes((currentNodes) => {
+            const node = currentNodes.find((n) => n.id === `frame:${frameId}`);
+            if (node) {
+              const width =
+                (typeof node.width === "number" ? node.width : undefined) ??
+                (typeof node.style?.width === "number" ? node.style.width : undefined) ??
+                0;
+              const height =
+                (typeof node.height === "number" ? node.height : undefined) ??
+                (typeof node.style?.height === "number" ? node.style.height : undefined) ??
+                0;
+              onFramePersist?.(frameId, {
+                x: node.position.x,
+                y: node.position.y,
+                width,
+                height,
+              });
+            }
+            return currentNodes;
+          });
         }
       }
 
@@ -841,7 +876,7 @@ function CanvasGraphInner({
         );
       }
     },
-    [setFlowNodes, onFramePersist]
+    [setFlowNodes, setFrameFlowNodes, onFramePersist]
   );
 
   // Preserve runtime positions while dragging/selecting. Recomputing from server
@@ -1320,6 +1355,7 @@ function CanvasGraphInner({
   })() : null;
 
   return (
+    <DropTargetFrameContext.Provider value={dropTargetFrameId ?? null}>
     <div
       ref={wrapperRef}
       className="relative h-full w-full"
@@ -1377,6 +1413,7 @@ function CanvasGraphInner({
       </ReactFlow>
       {drawOverlay}
     </div>
+    </DropTargetFrameContext.Provider>
   );
 }
 

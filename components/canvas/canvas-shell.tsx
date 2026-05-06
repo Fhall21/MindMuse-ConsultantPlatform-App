@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { ChevronLeft, Frame, ImageDown, Sparkles } from "lucide-react";
+import { ChevronLeft, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import posthog from "posthog-js";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { CanvasGraph } from "@/components/canvas/canvas-graph";
 import { CanvasOrganiseMenu } from "@/components/canvas/canvas-organise-menu";
 import { CanvasFrameBar } from "@/components/canvas/canvas-frame-bar";
 import { CanvasClutterBanner } from "@/components/canvas/canvas-clutter-banner";
+import { FrameRenameDialog } from "@/components/canvas/frame-rename-dialog";
 import { ConnectionTypePrompt } from "@/components/canvas/connection-type-prompt";
 import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
@@ -33,8 +34,6 @@ import { suggestGroupLabel } from "@/lib/actions/canvas-ai";
 import {
   CANVAS_CLUTTER_THRESHOLD,
   DEFAULT_FRAME_COLOR,
-  DEFAULT_FRAME_HEIGHT,
-  DEFAULT_FRAME_WIDTH,
   defaultFilterState,
   type CanvasFilterState,
   type ConnectionType,
@@ -452,6 +451,9 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
   // Image export state (toolbar button → captureCanvasImages + download).
   const [isExportingImages, setIsExportingImages] = useState(false);
+  // Rename dialog state — replaces the window.prompt() that broke design
+  // consistency. Tracks the frame currently being renamed.
+  const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
 
   // Cancel drawing mode on Escape.
   useEffect(() => {
@@ -477,33 +479,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
         });
       }
     }
-  }
-
-  /**
-   * Frame-bar create button. Creates a default-sized frame at the centre of
-   * the current viewport. Drawing-mode entry is the preferred path; this
-   * is kept for the CanvasFrameBar "+" button and the clutter-banner CTA.
-   */
-  async function handleCreateFrame(name: string) {
-    const currentViewport = canvasQuery.data?.viewport ?? { x: 0, y: 0, zoom: 1 };
-    // Place the frame centred on the visible viewport.
-    const x = -currentViewport.x / currentViewport.zoom;
-    const y = -currentViewport.y / currentViewport.zoom;
-    const bounds = {
-      x,
-      y,
-      width: DEFAULT_FRAME_WIDTH,
-      height: DEFAULT_FRAME_HEIGHT,
-    };
-    const auto = nodeIdsInsideFrame(nodes, bounds);
-    const frame = await createFrame.mutateAsync({
-      name,
-      node_ids: auto,
-      viewport: currentViewport,
-      ...bounds,
-      color: DEFAULT_FRAME_COLOR,
-    });
-    setActiveFrameId(frame.id);
   }
 
   /**
@@ -576,14 +551,20 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     setDropTargetFrameId(target?.id ?? null);
   }
 
-  async function handleFrameRename(frameId: string) {
-    const next = window.prompt("Frame name");
-    if (!next || !next.trim()) return;
-    await updateFrame.mutateAsync({ id: frameId, name: next.trim() });
+  /** Frame-bar/header rename trigger — opens the rename dialog. */
+  function handleFrameRename(frameId: string) {
+    setRenameTargetId(frameId);
   }
 
+  /** Frame-bar inline rename (double-click on tab) — direct write. */
   async function handleRenameFrame(frameId: string, name: string) {
     await updateFrame.mutateAsync({ id: frameId, name });
+  }
+
+  /** Submit handler for the FrameRenameDialog. */
+  async function handleRenameDialogSubmit(name: string) {
+    if (!renameTargetId) return;
+    await updateFrame.mutateAsync({ id: renameTargetId, name });
   }
 
   async function handleFrameColorChange(frameId: string, color: FrameColor) {
@@ -668,26 +649,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
         <div className="ml-auto flex items-center gap-2">
           {toolbarOrganiseControl}
           <Button
-            variant={frameDrawingMode ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFrameDrawingMode((v) => !v)}
-            aria-pressed={frameDrawingMode}
-            title="Draw a frame to group nodes by region"
-          >
-            <Frame className="mr-1.5 h-3.5 w-3.5" />
-            {frameDrawingMode ? "Drawing…" : "Draw frame"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportImages}
-            disabled={isExportingImages}
-            title="Download canvas + per-frame images"
-          >
-            <ImageDown className="mr-1.5 h-3.5 w-3.5" />
-            Export view
-          </Button>
-          <Button
             variant="outline"
             size="sm"
             onClick={() => {
@@ -705,23 +666,28 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
         </div>
       </div>
 
-      {/* Frame bar */}
+      {/* Frame bar — hosts both tab selection and the Draw / Export actions
+          so the top toolbar can stay focused on filters + AI controls. */}
       <CanvasFrameBar
         frames={frames}
         activeFrameId={activeFrameId}
+        drawingMode={frameDrawingMode}
+        exporting={isExportingImages}
         onSelectFrame={handleSelectFrame}
-        onCreateFrame={handleCreateFrame}
         onRenameFrame={handleRenameFrame}
         onDeleteFrame={handleDeleteFrame}
+        onToggleDrawingMode={() => setFrameDrawingMode((v) => !v)}
+        onExportImages={handleExportImages}
       />
 
-      {/* Clutter banner */}
+      {/* Clutter banner — points consultants at drawing mode rather than the
+          old default-spot create flow. */}
       {showClutterBanner && (
         <CanvasClutterBanner
           nodeCount={nodes.length}
           onCreateFrame={() => {
             setClutterDismissed(true);
-            void handleCreateFrame("New frame");
+            setFrameDrawingMode(true);
           }}
           onDismiss={() => setClutterDismissed(true)}
         />
@@ -821,6 +787,19 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
           </div>
         ) : null}
       </div>
+
+      {/* Native rename dialog (replaces window.prompt). Mounted at the
+          top level so it sits above the canvas in z-order. */}
+      <FrameRenameDialog
+        open={renameTargetId !== null}
+        initialName={
+          frames.find((f) => f.id === renameTargetId)?.name ?? ""
+        }
+        onOpenChange={(open) => {
+          if (!open) setRenameTargetId(null);
+        }}
+        onSubmit={handleRenameDialogSubmit}
+      />
     </div>
   );
 }

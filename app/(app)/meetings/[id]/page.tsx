@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { AuditTrail } from "@/components/audit/audit-trail";
 import { ThemePanel } from "@/components/consultations/theme-panel";
+import { QuoteReviewPanel } from "@/components/consultations/quote-review-panel";
 import { EmailDraftPanel } from "@/components/evidence/email-draft-panel";
 import { TranscriptIntakePanel } from "@/components/consultations/transcript-intake-panel";
 import { OcrReviewPanel } from "@/components/consultations/ocr-review-panel";
@@ -51,6 +52,7 @@ const SECTION_LINKS = [
   { id: "handwritten-notes", label: "Notes Photo" },
   { id: "notes", label: "Notes" },
   { id: "themes", label: "Themes" },
+  { id: "quotes", label: "Quotes" },
   { id: "evidence-email", label: "Evidence Email" },
   { id: "audit-trail", label: "Audit" },
 ] as const;
@@ -459,6 +461,14 @@ export default function MeetingDetailPage({
       <section id="themes" className="scroll-mt-20 space-y-3">
         <SectionHeading>Themes</SectionHeading>
         <ThemePanel meetingId={id} />
+      </section>
+
+      <Separator />
+
+      {/* Quotes — analysis stage (sprint 16 task 06) */}
+      <section id="quotes" className="scroll-mt-20 space-y-3">
+        <SectionHeading>Quotes</SectionHeading>
+        <QuoteReviewPanel meetingId={id} />
       </section>
 
       <Separator />

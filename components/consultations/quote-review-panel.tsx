@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMeeting } from "@/hooks/use-meetings";
 import { useMeetingThemes } from "@/hooks/use-themes";
 import {
@@ -25,13 +23,15 @@ interface QuoteReviewPanelProps {
   meetingId: string;
 }
 
-type TabValue = QuoteStatus;
+type Selection = { spanStart: number; spanEnd: number; text: string };
 
 const STATUS_LABEL: Record<QuoteStatus, string> = {
   suggested: "Suggested",
   approved: "Approved",
   rejected: "Rejected",
 };
+
+const STATUS_ORDER: QuoteStatus[] = ["suggested", "approved", "rejected"];
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
@@ -40,24 +40,27 @@ function getErrorMessage(error: unknown) {
 }
 
 /**
- * Renders the meeting transcript with approved + suggested quote spans
- * highlighted. Manual quote capture is supported via text selection: select
- * any range and the captured selection is offered for approval.
+ * Read-only transcript that highlights approved + suggested quote spans and
+ * captures manual selections with exact offsets into meetings.transcript_raw.
+ *
+ * Visual rule: status earns weight. Suggested = warm warning tint (needs
+ * review). Approved = quiet brand tint (settled). Rejected isn't rendered.
  */
-function TranscriptWithSpans({
+function TranscriptReadout({
   transcript,
   quotes,
   onSelection,
 }: {
   transcript: string;
   quotes: QuoteRecord[];
-  onSelection: (selection: { spanStart: number; spanEnd: number; text: string } | null) => void;
+  onSelection: (selection: Selection | null) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const segments = useMemo(() => {
-    if (!transcript) return [{ text: "", quote: null as QuoteRecord | null, key: "empty" }];
-
+    if (!transcript) {
+      return [{ text: "", quote: null as QuoteRecord | null, key: "empty" }];
+    }
     const ordered = quotes
       .filter((quote) => quote.status !== "rejected")
       .slice()
@@ -67,7 +70,7 @@ function TranscriptWithSpans({
     let cursor = 0;
     let idx = 0;
     for (const quote of ordered) {
-      if (quote.spanStart < cursor) continue; // skip overlapping quote slices
+      if (quote.spanStart < cursor) continue;
       if (quote.spanStart > cursor) {
         slices.push({
           text: transcript.slice(cursor, quote.spanStart),
@@ -83,11 +86,7 @@ function TranscriptWithSpans({
       cursor = quote.spanEnd;
     }
     if (cursor < transcript.length) {
-      slices.push({
-        text: transcript.slice(cursor),
-        quote: null,
-        key: `plain-tail`,
-      });
+      slices.push({ text: transcript.slice(cursor), quote: null, key: "plain-tail" });
     }
     return slices;
   }, [transcript, quotes]);
@@ -96,11 +95,7 @@ function TranscriptWithSpans({
     const node = containerRef.current;
     if (!node) return;
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) {
-      onSelection(null);
-      return;
-    }
-    if (selection.rangeCount === 0) {
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
       onSelection(null);
       return;
     }
@@ -125,20 +120,21 @@ function TranscriptWithSpans({
     <div
       ref={containerRef}
       onMouseUp={handleMouseUp}
-      className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap rounded-md border bg-card p-4 text-sm leading-relaxed"
+      className="max-w-prose whitespace-pre-wrap rounded-md border border-border/60 bg-background/60 p-4 text-[0.9375rem] leading-7 text-foreground/90 selection:bg-primary/20"
+      data-testid="quote-review-transcript"
     >
       {segments.map((segment) =>
         segment.quote ? (
           <mark
             key={segment.key}
             data-quote-id={segment.quote.id}
+            data-quote-status={segment.quote.status}
             className={cn(
-              "rounded px-0.5",
+              "rounded-sm px-0.5",
               segment.quote.status === "approved"
-                ? "bg-emerald-200/70 dark:bg-emerald-900/40"
-                : "bg-amber-200/70 dark:bg-amber-900/40"
+                ? "bg-primary/10 text-foreground"
+                : "bg-amber-200/60 text-foreground dark:bg-amber-300/20"
             )}
-            title={segment.quote.status === "approved" ? "Approved quote" : "Suggested quote"}
           >
             {segment.text}
           </mark>
@@ -150,17 +146,27 @@ function TranscriptWithSpans({
   );
 }
 
-interface QuoteCardProps {
+interface QuoteRowProps {
   quote: QuoteRecord;
   insightOptions: Array<{ id: string; label: string }>;
-  onApprove: (primaryInsightId: string | null) => void | Promise<void>;
-  onReject: (rejectionReason: string) => void | Promise<void>;
-  onLink: (insightId: string, isPrimary: boolean) => void | Promise<void>;
-  onUnlink: (insightId: string) => void | Promise<void>;
+  onApprove: (primaryInsightId: string | null) => Promise<void>;
+  onReject: (rejectionReason: string) => Promise<void>;
+  onLink: (insightId: string, isPrimary: boolean) => Promise<void>;
+  onUnlink: (insightId: string) => Promise<void>;
   busy: boolean;
 }
 
-function QuoteCard({
+function MetadataLine({ quote }: { quote: QuoteRecord }) {
+  const parts: string[] = [];
+  if (quote.speakerLabel) parts.push(quote.speakerLabel);
+  if (quote.workGroupLabel) parts.push(quote.workGroupLabel);
+  parts.push(quote.source === "ai" ? "AI suggested" : "Manual");
+  if (quote.riskFlag) parts.push("Identifying-risk");
+
+  return <p className="text-xs text-muted-foreground">{parts.join(" · ")}</p>;
+}
+
+function QuoteRow({
   quote,
   insightOptions,
   onApprove,
@@ -168,163 +174,235 @@ function QuoteCard({
   onLink,
   onUnlink,
   busy,
-}: QuoteCardProps) {
-  const [primaryInsightId, setPrimaryInsightId] = useState<string>("");
+}: QuoteRowProps) {
+  const [primaryInsightId, setPrimaryInsightId] = useState("");
+  const [linkInsightId, setLinkInsightId] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [showReject, setShowReject] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const primaryLink = quote.links.find((link) => link.isPrimary);
   const otherLinks = quote.links.filter((link) => !link.isPrimary);
 
   return (
-    <Card>
-      <CardContent className="space-y-3 p-4">
-        <blockquote className="border-l-4 border-primary/40 pl-3 text-sm italic">
-          {quote.exactText}
-        </blockquote>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {quote.speakerLabel && <Badge variant="secondary">{quote.speakerLabel}</Badge>}
-          {quote.workGroupLabel && <Badge variant="outline">{quote.workGroupLabel}</Badge>}
-          <Badge variant="outline">{quote.source === "ai" ? "AI" : "Manual"}</Badge>
-          {quote.riskFlag && (
-            <Badge variant="destructive" title={quote.riskReason ?? undefined}>
-              Risk
-            </Badge>
+    <article className="space-y-3 border-t border-border/60 py-5 first:border-t-0 first:pt-0">
+      <blockquote className="text-[0.9375rem] italic leading-relaxed text-foreground">
+        “{quote.exactText}”
+      </blockquote>
+
+      <MetadataLine quote={quote} />
+
+      {primaryLink && (
+        <p className="text-xs text-muted-foreground">
+          Linked to <span className="text-foreground">{primaryLink.insightLabel}</span>
+          {otherLinks.length > 0 && (
+            <>
+              {" "}
+              <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                className="underline-offset-2 hover:underline"
+              >
+                +{otherLinks.length} more
+              </button>
+            </>
           )}
-        </div>
+        </p>
+      )}
 
-        {primaryLink && (
-          <div className="text-xs">
-            <span className="font-medium">Primary insight:</span> {primaryLink.insightLabel}
-          </div>
-        )}
-        {otherLinks.length > 0 && (
-          <details className="text-xs">
-            <summary className="cursor-pointer text-muted-foreground">
-              {otherLinks.length} other linked insight{otherLinks.length === 1 ? "" : "s"}
-            </summary>
-            <ul className="mt-2 space-y-1">
-              {otherLinks.map((link) => (
-                <li key={link.insightId} className="flex items-center justify-between gap-2">
-                  <span>{link.insightLabel}</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onUnlink(link.insightId)}
-                    disabled={busy}
-                  >
-                    Unlink
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-
-        {quote.status === "suggested" && (
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                className="flex h-8 rounded-md border bg-background px-2 text-xs"
-                value={primaryInsightId}
-                onChange={(event) => setPrimaryInsightId(event.target.value)}
-                disabled={busy || insightOptions.length === 0}
-              >
-                <option value="">No insight (link later)</option>
-                {insightOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <Button
-                size="sm"
-                onClick={() => onApprove(primaryInsightId || null)}
+      {expanded && otherLinks.length > 0 && (
+        <ul className="space-y-1 text-xs text-muted-foreground">
+          {otherLinks.map((link) => (
+            <li key={link.insightId} className="flex items-center justify-between gap-3">
+              <span className="text-foreground">{link.insightLabel}</span>
+              <button
+                type="button"
+                onClick={() => onUnlink(link.insightId)}
                 disabled={busy}
+                className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
               >
-                Approve
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setShowReject((prev) => !prev)}
-                disabled={busy}
-              >
-                Reject
-              </Button>
-            </div>
-            {showReject && (
-              <div className="flex flex-col gap-2">
-                <Textarea
-                  placeholder="Why are you rejecting this quote? (required for audit)"
-                  value={rejectionReason}
-                  onChange={(event) => setRejectionReason(event.target.value)}
-                  rows={2}
-                />
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => onReject(rejectionReason)}
-                    disabled={busy || rejectionReason.trim().length === 0}
-                  >
-                    Confirm reject
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setShowReject(false);
-                      setRejectionReason("");
-                    }}
-                    disabled={busy}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+                Unlink
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
-        {quote.status === "approved" && insightOptions.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-muted-foreground">Add insight link:</span>
+      {quote.status === "suggested" && !showReject && (
+        <div className="flex flex-wrap items-center gap-2">
+          {insightOptions.length > 0 && (
             <select
-              className="flex h-8 rounded-md border bg-background px-2 text-xs"
               value={primaryInsightId}
               onChange={(event) => setPrimaryInsightId(event.target.value)}
               disabled={busy}
+              aria-label="Link to insight on approval"
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
             >
-              <option value="">Select…</option>
+              <option value="">Approve without insight link</option>
               {insightOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  Link to {option.label}
+                </option>
+              ))}
+            </select>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onApprove(primaryInsightId || null)}
+            disabled={busy}
+          >
+            Approve
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowReject(true)}
+            disabled={busy}
+            className="text-muted-foreground"
+          >
+            Reject
+          </Button>
+        </div>
+      )}
+
+      {quote.status === "suggested" && showReject && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={rejectionReason}
+            onChange={(event) => setRejectionReason(event.target.value)}
+            placeholder="Why reject this quote? (audit trail)"
+            className="h-8 max-w-md text-sm"
+            autoFocus
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={async () => {
+              await onReject(rejectionReason);
+              setRejectionReason("");
+              setShowReject(false);
+            }}
+            disabled={busy || rejectionReason.trim().length === 0}
+          >
+            Confirm reject
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setShowReject(false);
+              setRejectionReason("");
+            }}
+            disabled={busy}
+            className="text-muted-foreground"
+          >
+            Cancel
+          </Button>
+        </div>
+      )}
+
+      {quote.status === "approved" && insightOptions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={linkInsightId}
+            onChange={(event) => setLinkInsightId(event.target.value)}
+            disabled={busy}
+            aria-label="Link an additional insight"
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+          >
+            <option value="">Link another insight…</option>
+            {insightOptions
+              .filter((option) => !quote.links.some((link) => link.insightId === option.id))
+              .map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.label}
                 </option>
               ))}
-            </select>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                if (primaryInsightId) {
-                  onLink(primaryInsightId, !primaryLink);
-                }
-              }}
-              disabled={busy || !primaryInsightId}
-            >
-              {primaryLink ? "Link" : "Link as primary"}
-            </Button>
-          </div>
-        )}
+          </select>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={async () => {
+              if (!linkInsightId) return;
+              await onLink(linkInsightId, !primaryLink);
+              setLinkInsightId("");
+            }}
+            disabled={busy || !linkInsightId}
+            className="text-muted-foreground"
+          >
+            {primaryLink ? "Add link" : "Link as primary"}
+          </Button>
+        </div>
+      )}
 
-        {quote.status === "rejected" && quote.rejectionReason && (
-          <p className="text-xs text-muted-foreground">
-            <span className="font-medium">Reason:</span> {quote.rejectionReason}
-          </p>
-        )}
-      </CardContent>
-    </Card>
+      {quote.status === "rejected" && quote.rejectionReason && (
+        <p className="text-xs text-muted-foreground">
+          Reason: <span className="text-foreground/80">{quote.rejectionReason}</span>
+        </p>
+      )}
+    </article>
+  );
+}
+
+function CaptureBar({
+  selection,
+  onCapture,
+  onDismiss,
+  busy,
+}: {
+  selection: Selection;
+  onCapture: (riskFlag: boolean, speakerHint: string) => void | Promise<void>;
+  onDismiss: () => void;
+  busy: boolean;
+}) {
+  const [riskFlag, setRiskFlag] = useState(false);
+  const [speakerHint, setSpeakerHint] = useState("");
+
+  return (
+    <div className="space-y-3 rounded-md border border-border/60 bg-muted/30 p-4">
+      <div className="space-y-1">
+        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+          Captured selection · {selection.text.length} chars
+        </p>
+        <p className="text-sm italic leading-relaxed text-foreground">
+          “{selection.text.length > 240 ? `${selection.text.slice(0, 240)}…` : selection.text}”
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <Input
+          value={speakerHint}
+          onChange={(event) => setSpeakerHint(event.target.value)}
+          placeholder="Speaker (optional)"
+          className="h-8 max-w-[14rem] text-sm"
+        />
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={riskFlag}
+            onChange={(event) => setRiskFlag(event.target.checked)}
+            className="h-3.5 w-3.5 accent-primary"
+          />
+          Identifying-content risk
+        </label>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button size="sm" onClick={() => onCapture(riskFlag, speakerHint)} disabled={busy}>
+          Capture quote
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onDismiss}
+          disabled={busy}
+          className="text-muted-foreground"
+        >
+          Dismiss
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -333,12 +411,8 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
   const themesQuery = useMeetingThemes(meetingId);
   const quotesQuery = useMeetingQuotes(meetingId);
 
-  const [tab, setTab] = useState<TabValue>("suggested");
-  const [pendingSelection, setPendingSelection] = useState<
-    { spanStart: number; spanEnd: number; text: string } | null
-  >(null);
-  const [manualPersonHint, setManualPersonHint] = useState("");
-  const [manualRiskFlag, setManualRiskFlag] = useState(false);
+  const [tab, setTab] = useState<QuoteStatus>("suggested");
+  const [selection, setSelection] = useState<Selection | null>(null);
 
   const createQuote = useCreateQuote(meetingId);
   const approveQuote = useApproveQuote(meetingId);
@@ -347,8 +421,8 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
   const unlinkInsight = useUnlinkQuoteInsight(meetingId);
 
   const transcript = meetingQuery.data?.meeting.transcript_raw ?? "";
-  const quotes = quotesQuery.data ?? [];
-  const themes = themesQuery.data ?? [];
+  const quotes = useMemo(() => quotesQuery.data ?? [], [quotesQuery.data]);
+  const themes = useMemo(() => themesQuery.data ?? [], [themesQuery.data]);
 
   const insightOptions = useMemo(
     () =>
@@ -359,14 +433,8 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
   );
 
   const counts = useMemo(() => {
-    const tally: Record<QuoteStatus, number> = {
-      suggested: 0,
-      approved: 0,
-      rejected: 0,
-    };
-    for (const quote of quotes) {
-      tally[quote.status] += 1;
-    }
+    const tally: Record<QuoteStatus, number> = { suggested: 0, approved: 0, rejected: 0 };
+    for (const quote of quotes) tally[quote.status] += 1;
     return tally;
   }, [quotes]);
 
@@ -382,127 +450,105 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
     linkInsight.isPending ||
     unlinkInsight.isPending;
 
-  useEffect(() => {
-    setPendingSelection(null);
-  }, [tab]);
+  const handleCapture = useCallback(
+    async (riskFlag: boolean, speakerHint: string) => {
+      if (!selection) return;
+      try {
+        await createQuote.mutateAsync({
+          meetingId,
+          spanStart: selection.spanStart,
+          spanEnd: selection.spanEnd,
+          exactText: selection.text,
+          speakerLabel: speakerHint.trim() || null,
+          source: "manual",
+          riskFlag,
+        });
+        toast.success("Quote captured");
+        setSelection(null);
+      } catch (error) {
+        toast.error(getErrorMessage(error));
+      }
+    },
+    [createQuote, meetingId, selection]
+  );
 
-  const handleManualCapture = useCallback(async () => {
-    if (!pendingSelection) return;
-    try {
-      await createQuote.mutateAsync({
-        meetingId,
-        spanStart: pendingSelection.spanStart,
-        spanEnd: pendingSelection.spanEnd,
-        exactText: pendingSelection.text,
-        speakerLabel: manualPersonHint.trim() || null,
-        source: "manual",
-        riskFlag: manualRiskFlag,
-      });
-      toast.success("Quote captured");
-      setPendingSelection(null);
-      setManualPersonHint("");
-      setManualRiskFlag(false);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  }, [createQuote, manualPersonHint, manualRiskFlag, meetingId, pendingSelection]);
+  if (meetingQuery.isLoading) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-20 w-full" />
+      </div>
+    );
+  }
+
+  if (!transcript) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Quote review opens once the transcript is captured.
+      </p>
+    );
+  }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-      <section className="space-y-3">
-        <header className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Transcript</h3>
-          <p className="text-xs text-muted-foreground">
-            Select text to capture a manual quote.
-          </p>
-        </header>
-        {meetingQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading transcript…</p>
-        ) : transcript ? (
-          <TranscriptWithSpans
-            transcript={transcript}
-            quotes={quotes}
-            onSelection={setPendingSelection}
-          />
-        ) : (
-          <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-            No transcript available yet. Quote review unlocks once transcript capture is complete.
-          </p>
-        )}
-        {pendingSelection && (
-          <Card>
-            <CardContent className="space-y-3 p-4">
-              <p className="text-sm font-medium">Capture as quote</p>
-              <blockquote className="border-l-4 border-primary/40 pl-3 text-sm italic">
-                {pendingSelection.text}
-              </blockquote>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Input
-                  placeholder="Speaker name (optional)"
-                  value={manualPersonHint}
-                  onChange={(event) => setManualPersonHint(event.target.value)}
-                />
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={manualRiskFlag}
-                    onChange={(event) => setManualRiskFlag(event.target.checked)}
-                  />
-                  Flag identifying-content risk
-                </label>
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={handleManualCapture} disabled={busy} size="sm">
-                  Capture quote
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPendingSelection(null)}
-                  disabled={busy}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </section>
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        Review suggested quotes against the transcript. Approved quotes feed insight evidence and report drafts. Selecting any text below captures a manual quote with exact offsets.
+      </p>
 
-      <section className="space-y-3">
-        <div className="flex w-full gap-2 border-b">
-          {(["suggested", "approved", "rejected"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setTab(value)}
-              className={cn(
-                "flex flex-1 items-center justify-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
-                tab === value
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {STATUS_LABEL[value]}
-              <span className="rounded bg-muted px-1.5 text-xs">{counts[value]}</span>
-            </button>
-          ))}
-        </div>
-        <div className="space-y-3">
-          {quotesQuery.isLoading && (
-            <p className="text-sm text-muted-foreground">Loading quotes…</p>
-          )}
-          {!quotesQuery.isLoading && visibleQuotes.length === 0 && (
-            <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-              {tab === "suggested"
-                ? "No suggestions yet. Run the AI suggestion pass or capture a quote manually."
-                : tab === "approved"
-                  ? "No approved quotes yet."
-                  : "No rejected quotes."}
-            </p>
-          )}
-          {visibleQuotes.map((quote) => (
-              <QuoteCard
+      <TranscriptReadout transcript={transcript} quotes={quotes} onSelection={setSelection} />
+
+      {selection && (
+        <CaptureBar
+          selection={selection}
+          onCapture={handleCapture}
+          onDismiss={() => setSelection(null)}
+          busy={busy}
+        />
+      )}
+
+      <div className="flex items-end justify-between gap-4 border-b border-border/60">
+        <nav className="flex items-end gap-5" aria-label="Quote review status filter">
+          {STATUS_ORDER.map((value) => {
+            const isActive = tab === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTab(value)}
+                className={cn(
+                  "-mb-px border-b-2 pb-2 text-sm font-medium transition-colors",
+                  isActive
+                    ? "border-foreground/70 text-foreground"
+                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
+                )}
+                aria-current={isActive ? "page" : undefined}
+              >
+                {STATUS_LABEL[value]}
+                <span className="ml-1.5 text-xs text-muted-foreground">{counts[value]}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      <div>
+        {quotesQuery.isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : visibleQuotes.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {tab === "suggested"
+              ? "No suggestions yet. Capture a quote by selecting transcript text above."
+              : tab === "approved"
+                ? "No approved quotes yet."
+                : "No rejected quotes."}
+          </p>
+        ) : (
+          <div>
+            {visibleQuotes.map((quote) => (
+              <QuoteRow
                 key={quote.id}
                 quote={quote}
                 insightOptions={insightOptions}
@@ -511,7 +557,7 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
                   try {
                     await approveQuote.mutateAsync({
                       quoteId: quote.id,
-                      primaryInsightId: primaryInsightId,
+                      primaryInsightId,
                     });
                     toast.success("Quote approved");
                   } catch (error) {
@@ -554,8 +600,9 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
                 }}
               />
             ))}
-        </div>
-      </section>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

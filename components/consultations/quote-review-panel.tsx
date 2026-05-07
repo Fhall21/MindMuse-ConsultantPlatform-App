@@ -238,7 +238,7 @@ function QuoteRow({
               aria-label="Link to insight on approval"
               className="h-8 rounded-md border border-input bg-background px-2 text-xs"
             >
-              <option value="">Approve without insight link</option>
+              <option value="">Link to insight (optional)</option>
               {insightOptions.map((option) => (
                 <option key={option.id} value={option.id}>
                   Link to {option.label}
@@ -360,7 +360,7 @@ function CaptureBar({
   const [speakerHint, setSpeakerHint] = useState("");
 
   return (
-    <div className="space-y-3 rounded-md border border-border/60 bg-muted/30 p-4">
+    <div className="space-y-3" aria-live="polite">
       <div className="space-y-1">
         <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
           Captured selection · {selection.text.length} chars
@@ -370,7 +370,7 @@ function CaptureBar({
         </p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Input
           value={speakerHint}
           onChange={(event) => setSpeakerHint(event.target.value)}
@@ -386,21 +386,20 @@ function CaptureBar({
           />
           Identifying-content risk
         </label>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button size="sm" onClick={() => onCapture(riskFlag, speakerHint)} disabled={busy}>
-          Capture quote
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onDismiss}
-          disabled={busy}
-          className="text-muted-foreground"
-        >
-          Dismiss
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Button size="sm" onClick={() => onCapture(riskFlag, speakerHint)} disabled={busy}>
+            Capture quote
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDismiss}
+            disabled={busy}
+            className="text-muted-foreground"
+          >
+            Dismiss
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -492,43 +491,52 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted-foreground">
-        Review suggested quotes against the transcript. Approved quotes feed insight evidence and report drafts. Selecting any text below captures a manual quote with exact offsets.
+        Review suggested quotes against the transcript. Approved quotes feed insight evidence and report drafts.
       </p>
 
       <TranscriptReadout transcript={transcript} quotes={quotes} onSelection={setSelection} />
 
-      {selection && (
-        <CaptureBar
-          selection={selection}
-          onCapture={handleCapture}
-          onDismiss={() => setSelection(null)}
-          busy={busy}
-        />
-      )}
+      <div
+        className="sticky top-20 z-20 -mx-1 space-y-3 border-b border-border/60 bg-background/85 px-1 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/70"
+      >
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+          <nav className="flex items-end gap-5" aria-label="Quote review status filter">
+            {STATUS_ORDER.map((value) => {
+              const isActive = tab === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTab(value)}
+                  className={cn(
+                    "-mb-px border-b-2 pb-2 text-sm font-medium transition-colors",
+                    isActive
+                      ? "border-foreground/70 text-foreground"
+                      : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
+                  )}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  {STATUS_LABEL[value]}
+                  <span className="ml-1.5 text-xs text-muted-foreground">{counts[value]}</span>
+                </button>
+              );
+            })}
+          </nav>
+          {!selection && (
+            <p className="text-xs text-muted-foreground">
+              Select transcript text above to capture a quote.
+            </p>
+          )}
+        </div>
 
-      <div className="flex items-end justify-between gap-4 border-b border-border/60">
-        <nav className="flex items-end gap-5" aria-label="Quote review status filter">
-          {STATUS_ORDER.map((value) => {
-            const isActive = tab === value;
-            return (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setTab(value)}
-                className={cn(
-                  "-mb-px border-b-2 pb-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "border-foreground/70 text-foreground"
-                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
-                )}
-                aria-current={isActive ? "page" : undefined}
-              >
-                {STATUS_LABEL[value]}
-                <span className="ml-1.5 text-xs text-muted-foreground">{counts[value]}</span>
-              </button>
-            );
-          })}
-        </nav>
+        {selection && (
+          <CaptureBar
+            selection={selection}
+            onCapture={handleCapture}
+            onDismiss={() => setSelection(null)}
+            busy={busy}
+          />
+        )}
       </div>
 
       <div>

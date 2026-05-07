@@ -1,8 +1,8 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -47,15 +48,61 @@ import {
 import { buildMeetingTitle } from "@/lib/meeting-title";
 import { cn } from "@/lib/utils";
 
-const SECTION_LINKS = [
-  { id: "transcript", label: "Transcript" },
-  { id: "handwritten-notes", label: "Notes Photo" },
-  { id: "notes", label: "Notes" },
-  { id: "themes", label: "Themes" },
-  { id: "quotes", label: "Quotes" },
-  { id: "evidence-email", label: "Evidence Email" },
-  { id: "audit-trail", label: "Audit" },
-] as const;
+type WorkflowTab = "capture" | "analysis" | "audit";
+
+const TAB_VALUES: ReadonlyArray<WorkflowTab> = ["capture", "analysis", "audit"];
+
+const TAB_LABELS: Record<WorkflowTab, string> = {
+  capture: "Capture",
+  analysis: "Analysis",
+  audit: "Audit",
+};
+
+const TAB_INNER_ANCHORS: Record<WorkflowTab, ReadonlyArray<{ id: string; label: string }>> = {
+  capture: [
+    { id: "transcript", label: "Transcript" },
+    { id: "handwritten-notes", label: "Notes photo" },
+    { id: "notes", label: "Notes" },
+  ],
+  analysis: [
+    { id: "themes", label: "Themes" },
+    { id: "quotes", label: "Quotes" },
+    { id: "evidence-email", label: "Evidence email" },
+  ],
+  audit: [],
+};
+
+function isWorkflowTab(value: string | null): value is WorkflowTab {
+  return value === "capture" || value === "analysis" || value === "audit";
+}
+
+/**
+ * Thin in-tab anchor strip. Renders only when the tab has 2+ sections — a
+ * one-section tab doesn't need it. Visually muted so it never competes with
+ * the tab strip above for primary navigation weight.
+ */
+function TabAnchorRow({ tab }: { tab: WorkflowTab }) {
+  const anchors = TAB_INNER_ANCHORS[tab];
+  if (anchors.length < 2) return null;
+  return (
+    <nav
+      aria-label={`${TAB_LABELS[tab]} sections`}
+      className="-mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+    >
+      {anchors.map((anchor, index) => (
+        <span key={anchor.id} className="contents">
+          {index > 0 && <span aria-hidden="true">·</span>}
+          <a
+            href={`#${anchor.id}`}
+            className="rounded px-0.5 underline-offset-2 hover:text-foreground hover:underline"
+          >
+            {anchor.label}
+          </a>
+        </span>
+      ))}
+    </nav>
+  );
+}
 
 export default function MeetingDetailPage({
   params,
@@ -68,17 +115,36 @@ export default function MeetingDetailPage({
   const { data: rounds } = useConsultations();
   const { data: meetingTypes = [] } = useMeetingTypes();
 
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
   const [savingFields, setSavingFields] = useState(false);
-  const [auditExpanded, setAuditExpanded] = useState(false);
 
   const meeting = data?.meeting;
   const isDraft = meeting?.status === "draft";
   const isArchived = meeting?.is_archived ?? false;
   const isEditable = Boolean(meeting && isDraft && !isArchived);
+
+  const transcriptIsEmpty = !meeting?.transcript_raw?.trim();
+  const tabParam = searchParams.get("tab");
+  const activeTab: WorkflowTab = useMemo(() => {
+    if (isWorkflowTab(tabParam)) return tabParam;
+    return transcriptIsEmpty ? "capture" : "analysis";
+  }, [tabParam, transcriptIsEmpty]);
+
+  const setTab = useCallback(
+    (next: string) => {
+      if (!isWorkflowTab(next) || next === activeTab) return;
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", next);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [activeTab, router, searchParams]
+  );
 
   const currentConsultation = rounds?.find((consultation) => consultation.id === meeting?.consultation_id) ?? null;
   const normalizedSavedTitle = meeting?.title.trim() ?? "";
@@ -409,101 +475,98 @@ export default function MeetingDetailPage({
         </div>
       </div>
 
-      <div className="sticky top-3 z-30 -mx-1 overflow-x-auto rounded-xl border border-border/60 bg-background/90 p-2 backdrop-blur supports-[backdrop-filter]:bg-background/75">
-        <nav className="flex min-w-max items-center gap-2">
-          {SECTION_LINKS.map((section) => (
-            <a
-              key={section.id}
-              href={`#${section.id}`}
-              className="rounded-full border border-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border/60 hover:bg-muted/40 hover:text-foreground"
-            >
-              {section.label}
-            </a>
-          ))}
-        </nav>
-      </div>
-
-      <Separator />
-
-      {/* Transcript intake — paste, file upload, or audio transcription */}
-      <section id="transcript" className="scroll-mt-20 space-y-3">
-        <SectionHeading>Transcript</SectionHeading>
-        <TranscriptIntakePanel
-          meetingId={id}
-          initialTranscript={meeting.transcript_raw}
-          readOnly={!isDraft}
-        />
-      </section>
-
-      <Separator />
-
-      {/* Handwritten notes OCR */}
-      <section id="handwritten-notes" className="scroll-mt-20 space-y-3">
-        <SectionHeading>Handwritten notes photo</SectionHeading>
-        <OcrReviewPanel meetingId={id} />
-      </section>
-
-      <Separator />
-
-      {/* Notes */}
-      <section id="notes" className="scroll-mt-20 space-y-3">
-        <SectionHeading>Notes</SectionHeading>
-        <NotesEditor
-          meetingId={id}
-          initialValue={meeting.notes}
-          readOnly={!isDraft}
-        />
-      </section>
-
-      <Separator />
-
-      {/* Themes — Agent 4 slot */}
-      <section id="themes" className="scroll-mt-20 space-y-3">
-        <SectionHeading>Themes</SectionHeading>
-        <ThemePanel meetingId={id} />
-      </section>
-
-      <Separator />
-
-      {/* Quotes — analysis stage (sprint 16 task 06) */}
-      <section id="quotes" className="scroll-mt-20 space-y-3">
-        <SectionHeading>Quotes</SectionHeading>
-        <QuoteReviewPanel meetingId={id} />
-      </section>
-
-      <Separator />
-
-      {/* Evidence Email — Agent 4 slot */}
-      <section id="evidence-email" className="scroll-mt-20 space-y-3">
-        <SectionHeading>Evidence Email</SectionHeading>
-        <EmailDraftPanel meetingId={id} />
-      </section>
-
-      <Separator />
-
-      {/* Audit Trail — Agent 4 slot */}
-      <section id="audit-trail" className="scroll-mt-20 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <SectionHeading>Audit Trail</SectionHeading>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-8 gap-1.5 text-xs text-muted-foreground"
-            onClick={() => setAuditExpanded((current) => !current)}
+      <Tabs value={activeTab} onValueChange={setTab}>
+        <div className="sticky top-3 z-30 -mx-1 overflow-x-auto rounded-xl border border-border/60 bg-background/90 p-2 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+          <nav
+            role="tablist"
+            aria-label="Meeting workflow stages"
+            className="flex min-w-max items-center gap-2"
           >
-            {auditExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            {auditExpanded ? "Hide audit trail" : "Show audit trail"}
-          </Button>
+            {TAB_VALUES.map((value) => {
+              const isActive = activeTab === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  tabIndex={isActive ? 0 : -1}
+                  onClick={() => setTab(value)}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    isActive
+                      ? "border-border/60 bg-muted/60 text-foreground"
+                      : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-muted/40 hover:text-foreground"
+                  )}
+                >
+                  {TAB_LABELS[value]}
+                </button>
+              );
+            })}
+          </nav>
         </div>
-        {auditExpanded ? (
+
+        <TabsContent value="capture" className="space-y-8">
+          <TabAnchorRow tab="capture" />
+
+          <section id="transcript" className="scroll-mt-28 space-y-3">
+            <SectionHeading>Transcript</SectionHeading>
+            <TranscriptIntakePanel
+              meetingId={id}
+              initialTranscript={meeting.transcript_raw}
+              readOnly={!isDraft}
+            />
+          </section>
+
+          <Separator />
+
+          <section id="handwritten-notes" className="scroll-mt-28 space-y-3">
+            <SectionHeading>Handwritten notes photo</SectionHeading>
+            <OcrReviewPanel meetingId={id} />
+          </section>
+
+          <Separator />
+
+          <section id="notes" className="scroll-mt-28 space-y-3">
+            <SectionHeading>Notes</SectionHeading>
+            <NotesEditor
+              meetingId={id}
+              initialValue={meeting.notes}
+              readOnly={!isDraft}
+            />
+          </section>
+        </TabsContent>
+
+        <TabsContent value="analysis" className="space-y-8">
+          <TabAnchorRow tab="analysis" />
+
+          <section id="themes" className="scroll-mt-28 space-y-3">
+            <SectionHeading>Themes</SectionHeading>
+            <ThemePanel meetingId={id} />
+          </section>
+
+          <Separator />
+
+          <section id="quotes" className="scroll-mt-28 space-y-3">
+            <SectionHeading>Quotes</SectionHeading>
+            <QuoteReviewPanel meetingId={id} />
+          </section>
+
+          <Separator />
+
+          <section id="evidence-email" className="scroll-mt-28 space-y-3">
+            <SectionHeading>Evidence email</SectionHeading>
+            <EmailDraftPanel meetingId={id} />
+          </section>
+        </TabsContent>
+
+        <TabsContent value="audit" className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Every theme decision, transcript edit, and quote action recorded for this meeting.
+          </p>
           <AuditTrail meetingId={id} />
-        ) : (
-          <div className="text-sm text-muted-foreground">
-            Audit events are available when you need to verify chronology, but kept collapsed by default to keep the working flow focused.
-          </div>
-        )}
-      </section>
+        </TabsContent>
+      </Tabs>
 
       {/* Mark Complete confirmation */}
       <Dialog open={confirmCompleteOpen} onOpenChange={setConfirmCompleteOpen}>

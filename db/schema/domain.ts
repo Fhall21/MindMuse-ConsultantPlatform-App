@@ -1410,3 +1410,88 @@ export const canvasFrames = pgTable(
     ),
   })
 );
+
+// Quote evidence — captured from transcript spans during the post-transcript
+// analysis stage. Stored text is exact and immutable for audit; anonymous-mode
+// masking is applied at render time via lib/report-render-policy.ts.
+export const quotes = pgTable(
+  "quotes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // exact char offsets into meetings.transcript_raw at approval time
+    spanStart: integer("span_start").notNull(),
+    spanEnd: integer("span_end").notNull(),
+    // verbatim text snapshot — never mutated post-approval
+    exactText: text("exact_text").notNull(),
+    // denormalised speaker / work-group context captured at approval time
+    speakerLabel: text("speaker_label"),
+    workGroupLabel: text("work_group_label"),
+    personId: uuid("person_id").references(() => people.id, { onDelete: "set null" }),
+    // approval lifecycle
+    status: text("status").default("suggested").notNull(),
+    source: text("source").default("ai").notNull(),
+    // anonymous-mode rendering directive; storage stays exact
+    anonymousMaskRule: text("anonymous_mask_rule").default("role_workgroup").notNull(),
+    // identifying-content risk gate (Task 09)
+    riskFlag: boolean("risk_flag").default(false).notNull(),
+    riskReason: text("risk_reason"),
+    rejectionReason: text("rejection_reason"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (table) => ({
+    statusCheck: check(
+      "quotes_status_check",
+      sql`${table.status} in ('suggested', 'approved', 'rejected')`
+    ),
+    sourceCheck: check(
+      "quotes_source_check",
+      sql`${table.source} in ('ai', 'manual')`
+    ),
+    maskRuleCheck: check(
+      "quotes_mask_rule_check",
+      sql`${table.anonymousMaskRule} in ('role_workgroup', 'redact', 'none')`
+    ),
+    spanCheck: check("quotes_span_check", sql`${table.spanEnd} > ${table.spanStart}`),
+    meetingIdx: index("idx_quotes_meeting_id").on(table.meetingId),
+    userIdx: index("idx_quotes_user_id").on(table.userId),
+    statusIdx: index("idx_quotes_status").on(table.status),
+    meetingStatusIdx: index("idx_quotes_meeting_status").on(table.meetingId, table.status),
+  })
+);
+
+// Quote ↔ Insight many-to-many linking. One quote may support multiple
+// insights/themes. `isPrimary` selects the default linked insight shown on
+// the quote card; expanded view reveals the rest. `linkType` distinguishes a
+// durable confirmed link from a provisional likely-insight suggestion made
+// before insight approval (Task 07).
+export const quoteInsightLinks = pgTable(
+  "quote_insight_links",
+  {
+    quoteId: uuid("quote_id")
+      .notNull()
+      .references(() => quotes.id, { onDelete: "cascade" }),
+    insightId: uuid("insight_id")
+      .notNull()
+      .references(() => insights.id, { onDelete: "cascade" }),
+    isPrimary: boolean("is_primary").default(false).notNull(),
+    linkType: text("link_type").default("durable").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.quoteId, table.insightId] }),
+    insightIdx: index("idx_quote_insight_links_insight_id").on(table.insightId),
+    primaryIdx: index("idx_quote_insight_links_primary").on(table.quoteId, table.isPrimary),
+    linkTypeCheck: check(
+      "quote_insight_links_link_type_check",
+      sql`${table.linkType} in ('durable', 'provisional')`
+    ),
+  })
+);

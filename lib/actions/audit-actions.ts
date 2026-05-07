@@ -69,4 +69,14 @@ export const AUDIT_ACTIONS = {
   OCR_CORRECTIONS_SAVED: "ocr.corrections_saved",
   OCR_BATCH_CREATED: "ocr.batch_created",
   ROUND_CROSS_INSIGHT_ADDED: "round.cross_insight_added",
+  // Quote workflow (sprint 16, tasks 05-09)
+  QUOTE_SUGGESTED: "quote.suggested",
+  QUOTE_APPROVED: "quote.approved",
+  QUOTE_REJECTED: "quote.rejected",
+  QUOTE_MANUAL_CREATED: "quote.manual_created",
+  QUOTE_INSIGHT_LINKED: "quote.insight_linked",
+  QUOTE_INSIGHT_UNLINKED: "quote.insight_unlinked",
+  QUOTE_PRIMARY_INSIGHT_SET: "quote.primary_insight_set",
+  QUOTE_RISK_FLAGGED: "quote.risk_flagged",
+  QUOTE_INSERTED_INTO_REPORT: "quote.inserted_into_report",
 } as const;

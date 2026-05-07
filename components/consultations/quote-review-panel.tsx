@@ -98,7 +98,7 @@ function TranscriptReadout({
   quotes: QuoteRecord[];
   focusedQuoteId: string | null;
   onSelection: (selection: Selection | null) => void;
-  onSpanClick: (quoteId: string) => void;
+  onSpanClick: (quoteId: string, rect: DOMRect) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -196,7 +196,12 @@ function TranscriptReadout({
             key={segment.key}
             data-quote-id={segment.quote.id}
             data-quote-status={segment.quote.status}
-            onClick={() => onSpanClick(segment.quote!.id)}
+            onClick={(event) =>
+              onSpanClick(
+                segment.quote!.id,
+                event.currentTarget.getBoundingClientRect()
+              )
+            }
             className={cn(
               "cursor-pointer rounded-sm px-0.5 transition-shadow",
               segment.quote.status === "approved"
@@ -242,12 +247,12 @@ function SelectionTooltip({
   busy,
 }: SelectionTooltipProps) {
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [speakerHint, setSpeakerHint] = useState("");
   const [riskFlag, setRiskFlag] = useState(false);
   const [insightId, setInsightId] = useState("");
 
-  // Position once the tooltip has rendered and we know its size.
+  // Position once the tooltip has rendered and we know its size. Applied
+  // directly to the DOM rather than via state to avoid setState-in-effect.
   useLayoutEffect(() => {
     const node = tooltipRef.current;
     if (!node) return;
@@ -270,7 +275,10 @@ function SelectionTooltip({
     }
     if (top < margin) top = margin;
 
-    setPosition({ top, left });
+    node.style.top = `${top}px`;
+    node.style.left = `${left}px`;
+    node.style.visibility = "visible";
+    node.style.pointerEvents = "auto";
   }, [selection.rect]);
 
   // Dismiss on Escape, scroll, or outside click.
@@ -299,11 +307,8 @@ function SelectionTooltip({
       ref={tooltipRef}
       role="dialog"
       aria-label="Capture quote"
-      style={position ?? { visibility: "hidden" }}
-      className={cn(
-        "fixed z-40 w-[min(28rem,calc(100vw-1.5rem))] space-y-3 rounded-lg border border-border/60 bg-popover p-3 text-popover-foreground shadow-md",
-        position == null && "pointer-events-none"
-      )}
+      style={{ visibility: "hidden", pointerEvents: "none", top: 0, left: 0 }}
+      className="fixed z-40 w-[min(28rem,calc(100vw-1.5rem))] space-y-3 rounded-lg border border-border/60 bg-popover p-3 text-popover-foreground shadow-md"
     >
       <div className="space-y-1">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">
@@ -378,6 +383,277 @@ function SelectionTooltip({
   );
 }
 
+interface EditQuoteTooltipProps {
+  quote: QuoteRecord;
+  insightOptions: Array<{ id: string; label: string }>;
+  anchorRect: DOMRect;
+  busy: boolean;
+  onClose: () => void;
+  onApprove: (primaryInsightId: string | null) => Promise<void>;
+  onReject: (rejectionReason: string) => Promise<void>;
+  onLink: (insightId: string, isPrimary: boolean) => Promise<void>;
+  onUnlink: (insightId: string) => Promise<void>;
+}
+
+/**
+ * Floating editor for an existing quote. Anchored to the click target so it
+ * always sits next to the row or transcript span the user picked. Linking is
+ * a multi-select picker — checkbox toggles link, star marks primary. Suggested
+ * quotes also get inline approve / reject in the same surface so the user
+ * doesn't bounce between buttons and the picker.
+ */
+function EditQuoteTooltip({
+  quote,
+  insightOptions,
+  anchorRect,
+  busy,
+  onClose,
+  onApprove,
+  onReject,
+  onLink,
+  onUnlink,
+}: EditQuoteTooltipProps) {
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [showReject, setShowReject] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+
+  // Position once the tooltip has rendered and we know its size. Applied
+  // directly to the DOM rather than via state to avoid setState-in-effect.
+  useLayoutEffect(() => {
+    const node = tooltipRef.current;
+    if (!node) return;
+    const tooltipRect = node.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const margin = 12;
+
+    // Prefer left of anchor (rows live on the right side of the workspace);
+    // fall back to right, then clamp to viewport.
+    let left = anchorRect.left - tooltipRect.width - 8;
+    if (left < margin) {
+      const rightOf = anchorRect.right + 8;
+      if (rightOf + tooltipRect.width + margin <= viewportWidth) {
+        left = rightOf;
+      } else {
+        left = Math.max(margin, viewportWidth - tooltipRect.width - margin);
+      }
+    }
+
+    let top = anchorRect.top;
+    if (top + tooltipRect.height + margin > viewportHeight) {
+      top = Math.max(margin, viewportHeight - tooltipRect.height - margin);
+    }
+
+    node.style.top = `${top}px`;
+    node.style.left = `${left}px`;
+    node.style.visibility = "visible";
+    node.style.pointerEvents = "auto";
+  }, [anchorRect]);
+
+  useEffect(() => {
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    function handlePointer(event: MouseEvent) {
+      if (!tooltipRef.current) return;
+      if (tooltipRef.current.contains(event.target as Node)) return;
+      onClose();
+    }
+    window.addEventListener("keydown", handleKey);
+    document.addEventListener("mousedown", handlePointer);
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      document.removeEventListener("mousedown", handlePointer);
+    };
+  }, [onClose]);
+
+  const hasPrimary = quote.links.some((link) => link.isPrimary);
+  const metadataParts: string[] = [];
+  if (quote.speakerLabel) metadataParts.push(quote.speakerLabel);
+  if (quote.workGroupLabel) metadataParts.push(quote.workGroupLabel);
+  metadataParts.push(quote.source === "ai" ? "AI suggested" : "Manual");
+  if (quote.riskFlag) metadataParts.push("Identifying-risk");
+
+  return (
+    <div
+      ref={tooltipRef}
+      role="dialog"
+      aria-label="Edit quote"
+      style={{ visibility: "hidden", pointerEvents: "none", top: 0, left: 0 }}
+      className="fixed z-40 w-[min(26rem,calc(100vw-1.5rem))] space-y-3 rounded-lg border border-border/60 bg-popover p-3 text-popover-foreground shadow-md"
+    >
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs uppercase tracking-widest text-muted-foreground">
+            {STATUS_LABEL[quote.status]}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="text-sm leading-none text-muted-foreground hover:text-foreground"
+          >
+            ×
+          </button>
+        </div>
+        <p className="line-clamp-3 text-sm italic leading-snug text-foreground">
+          “{quote.exactText.length > 220 ? `${quote.exactText.slice(0, 220)}…` : quote.exactText}”
+        </p>
+        <p className="text-xs text-muted-foreground">{metadataParts.join(" · ")}</p>
+      </div>
+
+      {quote.status !== "rejected" && (
+        <fieldset className="space-y-2 border-t border-border/60 pt-3">
+          <legend className="text-xs uppercase tracking-widest text-muted-foreground">
+            Linked insights
+          </legend>
+          {insightOptions.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No insights yet. Add one in the Themes section above.
+            </p>
+          ) : (
+            <ul className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
+              {insightOptions.map((option) => {
+                const link = quote.links.find((l) => l.insightId === option.id);
+                const isLinked = Boolean(link);
+                const isPrimary = link?.isPrimary ?? false;
+                return (
+                  <li
+                    key={option.id}
+                    className="flex items-center gap-2 rounded px-1 py-1 hover:bg-muted/50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isLinked}
+                      onChange={(event) => {
+                        if (event.target.checked) {
+                          // First link auto-becomes primary; subsequent links don't.
+                          onLink(option.id, !hasPrimary);
+                        } else {
+                          onUnlink(option.id);
+                        }
+                      }}
+                      disabled={busy}
+                      aria-label={`${isLinked ? "Unlink" : "Link"} ${option.label}`}
+                      className="h-3.5 w-3.5 accent-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isLinked || isPrimary) return;
+                        onLink(option.id, true);
+                      }}
+                      disabled={busy || !isLinked}
+                      aria-pressed={isPrimary}
+                      title={
+                        !isLinked
+                          ? "Link this insight first to mark it primary"
+                          : isPrimary
+                            ? "Primary insight"
+                            : "Set as primary"
+                      }
+                      className={cn(
+                        "rounded text-sm leading-none transition-colors",
+                        isPrimary
+                          ? "text-primary"
+                          : isLinked
+                            ? "text-muted-foreground hover:text-foreground"
+                            : "text-muted-foreground/30"
+                      )}
+                    >
+                      {isPrimary ? "★" : "☆"}
+                    </button>
+                    <span
+                      className={cn(
+                        "flex-1 text-sm",
+                        !isLinked && "text-muted-foreground"
+                      )}
+                    >
+                      {option.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </fieldset>
+      )}
+
+      {quote.status === "suggested" && (
+        <div className="space-y-2 border-t border-border/60 pt-3">
+          {showReject ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                value={rejectionReason}
+                onChange={(event) => setRejectionReason(event.target.value)}
+                placeholder="Why reject? (audit trail)"
+                className="h-8 min-w-0 flex-1 text-sm"
+                autoFocus
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  await onReject(rejectionReason);
+                  setShowReject(false);
+                  setRejectionReason("");
+                  onClose();
+                }}
+                disabled={busy || rejectionReason.trim().length === 0}
+              >
+                Confirm
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setShowReject(false);
+                  setRejectionReason("");
+                }}
+                disabled={busy}
+                className="text-muted-foreground"
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={async () => {
+                  // Approve preserves existing links; primary stays whatever
+                  // the user already starred, otherwise null.
+                  const primary = quote.links.find((l) => l.isPrimary);
+                  await onApprove(primary?.insightId ?? null);
+                  onClose();
+                }}
+                disabled={busy}
+              >
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowReject(true)}
+                disabled={busy}
+                className="text-muted-foreground"
+              >
+                Reject
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {quote.status === "rejected" && quote.rejectionReason && (
+        <p className="border-t border-border/60 pt-3 text-xs text-muted-foreground">
+          Reason: <span className="text-foreground/80">{quote.rejectionReason}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
 interface QuoteRowProps {
   quote: QuoteRecord;
   insightOptions: Array<{ id: string; label: string }>;
@@ -386,7 +662,7 @@ interface QuoteRowProps {
   onReject: (rejectionReason: string) => Promise<void>;
   onLink: (insightId: string, isPrimary: boolean) => Promise<void>;
   onUnlink: (insightId: string) => Promise<void>;
-  onFocus: () => void;
+  onFocus: (anchorRect: DOMRect | null) => void;
   busy: boolean;
 }
 
@@ -406,7 +682,6 @@ function QuoteRow({
   isFocused,
   onApprove,
   onReject,
-  onLink,
   onUnlink,
   onFocus,
   busy,
@@ -426,7 +701,7 @@ function QuoteRow({
 
   return (
     <article
-      onClick={onFocus}
+      onClick={(event) => onFocus(event.currentTarget.getBoundingClientRect())}
       className={cn(
         "group cursor-pointer space-y-3 border-t border-border/60 px-4 py-4 transition-colors first:border-t-0",
         isFocused ? "bg-muted/40" : "hover:bg-muted/20"
@@ -567,30 +842,10 @@ function QuoteRow({
         </div>
       )}
 
-      {/* Approved row: pick from remaining insights and link in one gesture. */}
-      {quote.status === "approved" && linkableInsights.length > 0 && (
-        <div onClick={(event) => event.stopPropagation()}>
-          <select
-            value=""
-            onChange={async (event) => {
-              const insightId = event.target.value;
-              if (!insightId) return;
-              await onLink(insightId, !primaryLink);
-            }}
-            disabled={busy}
-            aria-label={primaryLink ? "Add another insight" : "Link primary insight"}
-            className="h-8 max-w-full rounded-md border border-input bg-background px-2 text-xs"
-          >
-            <option value="">
-              {primaryLink ? "Add another insight…" : "Link primary insight…"}
-            </option>
-            {linkableInsights.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+      {quote.status === "approved" && quote.links.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          Click to link insights.
+        </p>
       )}
 
       {quote.status === "rejected" && quote.rejectionReason && (
@@ -607,7 +862,7 @@ interface QuoteListProps {
   quotes: QuoteRecord[];
   insightOptions: Array<{ id: string; label: string }>;
   focusedQuoteId: string | null;
-  onFocus: (quoteId: string) => void;
+  onFocus: (quoteId: string, anchorRect: DOMRect | null) => void;
   onApprove: (quoteId: string, primaryInsightId: string | null) => Promise<void>;
   onReject: (quoteId: string, rejectionReason: string) => Promise<void>;
   onLink: (quoteId: string, insightId: string, isPrimary: boolean) => Promise<void>;
@@ -637,7 +892,7 @@ function QuoteList(props: QuoteListProps) {
           insightOptions={props.insightOptions}
           isFocused={props.focusedQuoteId === quote.id}
           busy={props.busy}
-          onFocus={() => props.onFocus(quote.id)}
+          onFocus={(rect) => props.onFocus(quote.id, rect)}
           onApprove={(primaryInsightId) => props.onApprove(quote.id, primaryInsightId)}
           onReject={(rejectionReason) => props.onReject(quote.id, rejectionReason)}
           onLink={(insightId, isPrimary) => props.onLink(quote.id, insightId, isPrimary)}
@@ -657,6 +912,9 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
   const [tab, setTab] = useState<QuoteStatus>("suggested");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [focusedQuoteId, setFocusedQuoteId] = useState<string | null>(null);
+  const [editingTarget, setEditingTarget] = useState<
+    { quoteId: string; rect: DOMRect } | null
+  >(null);
 
   const createQuote = useCreateQuote(meetingId);
   const approveQuote = useApproveQuote(meetingId);
@@ -705,6 +963,27 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
     if (!focusedQuoteId) return null;
     return quotes.some((quote) => quote.id === focusedQuoteId) ? focusedQuoteId : null;
   }, [focusedQuoteId, quotes]);
+
+  // Live quote for the open EditQuoteTooltip; refetches automatically because
+  // it reads from the same `quotes` cache. If the quote disappears the
+  // tooltip auto-closes.
+  const editingQuote = useMemo(() => {
+    if (!editingTarget) return null;
+    return quotes.find((quote) => quote.id === editingTarget.quoteId) ?? null;
+  }, [editingTarget, quotes]);
+
+  const handleSelectQuote = useCallback(
+    (quoteId: string, anchorRect: DOMRect | null) => {
+      setFocusedQuoteId(quoteId);
+      // Only open the editor when the click came with an anchor rect (a real
+      // click on the row or transcript span). null is used for programmatic
+      // focus — e.g., setting focus after approve/capture.
+      if (anchorRect) {
+        setEditingTarget({ quoteId, rect: anchorRect });
+      }
+    },
+    []
+  );
 
   const handleCapture = useCallback(
     async ({
@@ -835,7 +1114,7 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
           focusedQuoteId={effectiveFocusedQuoteId}
           busy={busy}
           onSelection={setSelection}
-          onSpanFocus={setFocusedQuoteId}
+          onSpanFocus={handleSelectQuote}
           onApprove={onApprove}
           onReject={onReject}
           onLink={onLink}
@@ -852,7 +1131,7 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
           onTabChange={setTab}
           busy={busy}
           onSelection={setSelection}
-          onSpanFocus={setFocusedQuoteId}
+          onSpanFocus={handleSelectQuote}
           onApprove={onApprove}
           onReject={onReject}
           onLink={onLink}
@@ -868,6 +1147,20 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
           onCapture={handleCapture}
           onDismiss={() => setSelection(null)}
           busy={busy}
+        />
+      )}
+
+      {editingTarget && editingQuote && (
+        <EditQuoteTooltip
+          quote={editingQuote}
+          insightOptions={insightOptions}
+          anchorRect={editingTarget.rect}
+          busy={busy}
+          onClose={() => setEditingTarget(null)}
+          onApprove={(primaryInsightId) => onApprove(editingQuote.id, primaryInsightId)}
+          onReject={(rejectionReason) => onReject(editingQuote.id, rejectionReason)}
+          onLink={(insightId, isPrimary) => onLink(editingQuote.id, insightId, isPrimary)}
+          onUnlink={(insightId) => onUnlink(editingQuote.id, insightId)}
         />
       )}
     </div>
@@ -929,7 +1222,7 @@ interface LayoutBaseProps {
   focusedQuoteId: string | null;
   busy: boolean;
   onSelection: (selection: Selection | null) => void;
-  onSpanFocus: (quoteId: string) => void;
+  onSpanFocus: (quoteId: string, anchorRect: DOMRect | null) => void;
   onApprove: (quoteId: string, primaryInsightId: string | null) => Promise<void>;
   onReject: (quoteId: string, rejectionReason: string) => Promise<void>;
   onLink: (quoteId: string, insightId: string, isPrimary: boolean) => Promise<void>;
@@ -939,7 +1232,7 @@ interface LayoutBaseProps {
 
 function WorkspaceLayout(props: LayoutBaseProps) {
   return (
-    <div className="grid min-h-[480px] grid-cols-1 gap-4 lg:h-[calc(100vh-14rem)] lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+    <div className="grid min-h-[520px] grid-cols-1 gap-4 overflow-hidden lg:h-[calc(100vh-14rem)] lg:min-h-0 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
       <TranscriptPane
         transcript={props.transcript}
         quotes={props.quotes}
@@ -947,7 +1240,7 @@ function WorkspaceLayout(props: LayoutBaseProps) {
         onSelection={props.onSelection}
         onSpanFocus={props.onSpanFocus}
       />
-      <div className="grid grid-cols-1 gap-4 lg:grid-rows-2">
+      <div className="flex min-h-0 flex-col gap-4">
         <ListPane
           title="Suggested"
           count={props.counts.suggested}
@@ -961,6 +1254,7 @@ function WorkspaceLayout(props: LayoutBaseProps) {
           onReject={props.onReject}
           onLink={props.onLink}
           onUnlink={props.onUnlink}
+          outerClassName="lg:max-h-[40%]"
         />
         <ListPane
           title="Approved"
@@ -976,6 +1270,7 @@ function WorkspaceLayout(props: LayoutBaseProps) {
           onLink={props.onLink}
           onUnlink={props.onUnlink}
           rejectedCount={props.counts.rejected}
+          outerClassName="lg:flex-1"
         />
       </div>
     </div>
@@ -1026,7 +1321,7 @@ function CompactLayout(props: CompactLayoutProps) {
           quotes={props.quotes}
           focusedQuoteId={props.focusedQuoteId}
           onSelection={props.onSelection}
-          onSpanClick={props.onSpanFocus}
+          onSpanClick={(quoteId, rect) => props.onSpanFocus(quoteId, rect)}
         />
       </div>
       <div className="max-h-[40vh] overflow-y-auto border-t border-border/60">
@@ -1058,12 +1353,12 @@ function TranscriptPane({
   quotes: QuoteRecord[];
   focusedQuoteId: string | null;
   onSelection: (selection: Selection | null) => void;
-  onSpanFocus: (quoteId: string) => void;
+  onSpanFocus: (quoteId: string, anchorRect: DOMRect | null) => void;
 }) {
   return (
     <section
       aria-label="Transcript"
-      className="flex max-h-[70vh] flex-col overflow-hidden rounded-lg border border-border/60 bg-card lg:max-h-none"
+      className="flex max-h-[70vh] min-h-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-card lg:max-h-none"
     >
       <header className="shrink-0 border-b border-border/60 px-4 py-2.5">
         <div className="flex items-baseline gap-3">
@@ -1075,13 +1370,13 @@ function TranscriptPane({
           </span>
         </div>
       </header>
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <TranscriptReadout
           transcript={transcript}
           quotes={quotes}
           focusedQuoteId={focusedQuoteId}
           onSelection={onSelection}
-          onSpanClick={onSpanFocus}
+          onSpanClick={(quoteId, rect) => onSpanFocus(quoteId, rect)}
         />
       </div>
     </section>
@@ -1096,12 +1391,13 @@ interface ListPaneProps {
   insightOptions: Array<{ id: string; label: string }>;
   focusedQuoteId: string | null;
   busy: boolean;
-  onFocus: (quoteId: string) => void;
+  onFocus: (quoteId: string, anchorRect: DOMRect | null) => void;
   onApprove: (quoteId: string, primaryInsightId: string | null) => Promise<void>;
   onReject: (quoteId: string, rejectionReason: string) => Promise<void>;
   onLink: (quoteId: string, insightId: string, isPrimary: boolean) => Promise<void>;
   onUnlink: (quoteId: string, insightId: string) => Promise<void>;
   rejectedCount?: number;
+  outerClassName?: string;
 }
 
 function ListPane({
@@ -1118,11 +1414,15 @@ function ListPane({
   onLink,
   onUnlink,
   rejectedCount,
+  outerClassName,
 }: ListPaneProps) {
   return (
     <section
       aria-label={title}
-      className="flex max-h-[70vh] min-h-[180px] flex-col overflow-hidden rounded-lg border border-border/60 bg-card lg:max-h-none"
+      className={cn(
+        "flex max-h-[70vh] min-h-[160px] flex-col overflow-hidden rounded-lg border border-border/60 bg-card lg:max-h-none lg:min-h-0",
+        outerClassName
+      )}
     >
       <header className="flex shrink-0 items-baseline justify-between gap-3 border-b border-border/60 px-4 py-2.5">
         <div className="flex items-baseline gap-2">
@@ -1137,7 +1437,7 @@ function ListPane({
           </span>
         )}
       </header>
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <QuoteList
           status={status}
           quotes={quotes}

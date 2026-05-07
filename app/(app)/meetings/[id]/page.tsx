@@ -261,9 +261,9 @@ export default function MeetingDetailPage({
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
+    <div className="mx-auto w-full max-w-6xl space-y-8 px-4 sm:px-6">
       {/* Header */}
-      <div className="space-y-4">
+      <div className="mx-auto w-full max-w-2xl space-y-4">
         <nav className="text-sm text-muted-foreground">
           <Link href="/meetings" className="hover:text-foreground">
             Meetings
@@ -476,7 +476,7 @@ export default function MeetingDetailPage({
       </div>
 
       <Tabs value={activeTab} onValueChange={setTab}>
-        <div className="sticky top-3 z-30 -mx-1 overflow-x-auto rounded-xl border border-border/60 bg-background/90 p-2 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+        <div className="sticky top-3 z-30 mx-auto w-full max-w-2xl overflow-x-auto rounded-xl border border-border/60 bg-background/90 p-2 backdrop-blur supports-[backdrop-filter]:bg-background/75">
           <nav
             role="tablist"
             aria-label="Meeting workflow stages"
@@ -506,7 +506,7 @@ export default function MeetingDetailPage({
           </nav>
         </div>
 
-        <TabsContent value="capture" className="space-y-8">
+        <TabsContent value="capture" className="mx-auto w-full max-w-2xl space-y-8">
           <TabAnchorRow tab="capture" />
 
           <section id="transcript" className="scroll-mt-28 space-y-3">
@@ -537,30 +537,41 @@ export default function MeetingDetailPage({
           </section>
         </TabsContent>
 
-        <TabsContent value="analysis" className="space-y-8">
-          <TabAnchorRow tab="analysis" />
+        <TabsContent value="analysis" className="space-y-10">
+          <div className="mx-auto w-full max-w-2xl">
+            <TabAnchorRow tab="analysis" />
+          </div>
 
-          <section id="themes" className="scroll-mt-28 space-y-3">
+          <section
+            id="themes"
+            className="mx-auto w-full max-w-2xl scroll-mt-28 space-y-3"
+          >
             <SectionHeading>Themes</SectionHeading>
             <ThemePanel meetingId={id} />
           </section>
 
-          <Separator />
+          <Separator className="mx-auto w-full max-w-2xl" />
 
+          {/* Quotes uses the full Analysis canvas for proper QDA workspace */}
           <section id="quotes" className="scroll-mt-28 space-y-3">
-            <SectionHeading>Quotes</SectionHeading>
+            <div className="mx-auto w-full max-w-2xl">
+              <SectionHeading>Quotes</SectionHeading>
+            </div>
             <QuoteReviewPanel meetingId={id} />
           </section>
 
-          <Separator />
+          <Separator className="mx-auto w-full max-w-2xl" />
 
-          <section id="evidence-email" className="scroll-mt-28 space-y-3">
+          <section
+            id="evidence-email"
+            className="mx-auto w-full max-w-2xl scroll-mt-28 space-y-3"
+          >
             <SectionHeading>Evidence email</SectionHeading>
             <EmailDraftPanel meetingId={id} />
           </section>
         </TabsContent>
 
-        <TabsContent value="audit" className="space-y-3">
+        <TabsContent value="audit" className="mx-auto w-full max-w-2xl space-y-3">
           <p className="text-sm text-muted-foreground">
             Every theme decision, transcript edit, and quote action recorded for this meeting.
           </p>

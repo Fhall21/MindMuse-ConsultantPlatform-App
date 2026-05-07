@@ -309,8 +309,16 @@ function SelectionTooltip({
       ref={tooltipRef}
       role="dialog"
       aria-label="Capture quote"
-      style={{ visibility: "hidden", pointerEvents: "none", top: 0, left: 0 }}
-      className="fixed z-40 w-[min(28rem,calc(100vw-1.5rem))] space-y-3 rounded-lg border border-border/60 bg-popover p-3 text-popover-foreground shadow-md"
+      style={{
+        position: "fixed",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        zIndex: 40,
+        visibility: "visible",
+        pointerEvents: "auto"
+      }}
+      className="w-[min(28rem,calc(100vw-1.5rem))] space-y-3 rounded-lg border border-border/60 bg-popover p-3 text-popover-foreground shadow-md"
     >
       <div className="space-y-1">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">
@@ -538,8 +546,16 @@ function EditQuoteTooltip({
       ref={tooltipRef}
       role="dialog"
       aria-label="Edit quote"
-      style={{ visibility: "hidden", pointerEvents: "none", top: 0, left: 0 }}
-      className="fixed z-40 w-[min(26rem,calc(100vw-1.5rem))] space-y-3 rounded-lg border border-border/60 bg-popover p-3 text-popover-foreground shadow-md"
+      style={{
+        position: "fixed",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        zIndex: 40,
+        visibility: "visible",
+        pointerEvents: "auto"
+      }}
+      className="w-[min(26rem,calc(100vw-1.5rem))] space-y-3 rounded-lg border border-border/60 bg-popover p-3 text-popover-foreground shadow-md"
     >
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">

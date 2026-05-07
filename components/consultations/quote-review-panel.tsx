@@ -227,7 +227,8 @@ interface SelectionTooltipProps {
   onCapture: (params: {
     speakerHint: string;
     riskFlag: boolean;
-    insightId: string | null;
+    insightIds: string[];
+    primaryInsightId: string | null;
   }) => Promise<void>;
   onDismiss: () => void;
   busy: boolean;
@@ -249,7 +250,8 @@ function SelectionTooltip({
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [speakerHint, setSpeakerHint] = useState("");
   const [riskFlag, setRiskFlag] = useState(false);
-  const [insightId, setInsightId] = useState("");
+  const [checkedInsightIds, setCheckedInsightIds] = useState<Set<string>>(new Set());
+  const [primaryInsightId, setPrimaryInsightId] = useState<string | null>(null);
 
   // Position once the tooltip has rendered and we know its size. Applied
   // directly to the DOM rather than via state to avoid setState-in-effect.
@@ -326,23 +328,79 @@ function SelectionTooltip({
           placeholder="Speaker (optional)"
           className="h-8 text-sm"
         />
-        {insightOptions.length > 0 && (
-          <select
-            value={insightId}
-            onChange={(event) => setInsightId(event.target.value)}
-            disabled={busy}
-            aria-label="Link to insight"
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-          >
-            <option value="">Link to insight (optional)</option>
-            {insightOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
+
+      {insightOptions.length > 0 && (
+        <fieldset className="space-y-2 border-t border-border/60 pt-3">
+          <legend className="text-xs uppercase tracking-widest text-muted-foreground">
+            Link to insights (optional)
+          </legend>
+          <ul className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
+            {insightOptions.map((option) => {
+              const isChecked = checkedInsightIds.has(option.id);
+              const isPrimary = primaryInsightId === option.id;
+              return (
+                <li
+                  key={option.id}
+                  className="flex items-center gap-2 rounded px-1 py-1 hover:bg-muted/50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={(event) => {
+                      const next = new Set(checkedInsightIds);
+                      if (event.target.checked) {
+                        next.add(option.id);
+                      } else {
+                        next.delete(option.id);
+                        if (isPrimary) setPrimaryInsightId(null);
+                      }
+                      setCheckedInsightIds(next);
+                    }}
+                    disabled={busy}
+                    aria-label={`Link to ${option.label}`}
+                    className="h-3.5 w-3.5 accent-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isChecked) return;
+                      setPrimaryInsightId(isPrimary ? null : option.id);
+                    }}
+                    disabled={busy || !isChecked}
+                    aria-pressed={isPrimary}
+                    title={
+                      !isChecked
+                        ? "Check this insight first to mark it primary"
+                        : isPrimary
+                          ? "Primary insight"
+                          : "Set as primary"
+                    }
+                    className={cn(
+                      "rounded text-sm leading-none transition-colors",
+                      isPrimary
+                        ? "text-primary"
+                        : isChecked
+                          ? "text-muted-foreground hover:text-foreground"
+                          : "text-muted-foreground/30"
+                    )}
+                  >
+                    {isPrimary ? "★" : "☆"}
+                  </button>
+                  <span
+                    className={cn(
+                      "flex-1 text-sm",
+                      !isChecked && "text-muted-foreground"
+                    )}
+                  >
+                    {option.label}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </fieldset>
+      )}
 
       <div className="flex items-center justify-between gap-2">
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -370,7 +428,8 @@ function SelectionTooltip({
               onCapture({
                 speakerHint,
                 riskFlag,
-                insightId: insightId || null,
+                insightIds: Array.from(checkedInsightIds),
+                primaryInsightId,
               })
             }
             disabled={busy}
@@ -389,7 +448,7 @@ interface EditQuoteTooltipProps {
   anchorRect: DOMRect;
   busy: boolean;
   onClose: () => void;
-  onApprove: (primaryInsightId: string | null) => Promise<void>;
+  onApprove: (primaryInsightId: string | null, additionalInsightIds: string[]) => Promise<void>;
   onReject: (rejectionReason: string) => Promise<void>;
   onLink: (insightId: string, isPrimary: boolean) => Promise<void>;
   onUnlink: (insightId: string) => Promise<void>;
@@ -624,7 +683,7 @@ function EditQuoteTooltip({
                   // Approve preserves existing links; primary stays whatever
                   // the user already starred, otherwise null.
                   const primary = quote.links.find((l) => l.isPrimary);
-                  await onApprove(primary?.insightId ?? null);
+                  await onApprove(primary?.insightId ?? null, []);
                   onClose();
                 }}
                 disabled={busy}
@@ -658,7 +717,7 @@ interface QuoteRowProps {
   quote: QuoteRecord;
   insightOptions: Array<{ id: string; label: string }>;
   isFocused: boolean;
-  onApprove: (primaryInsightId: string | null) => Promise<void>;
+  onApprove: (primaryInsightId: string | null, additionalInsightIds: string[]) => Promise<void>;
   onReject: (rejectionReason: string) => Promise<void>;
   onLink: (insightId: string, isPrimary: boolean) => Promise<void>;
   onUnlink: (insightId: string) => Promise<void>;
@@ -686,9 +745,11 @@ function QuoteRow({
   onFocus,
   busy,
 }: QuoteRowProps) {
-  const [primaryInsightId, setPrimaryInsightId] = useState("");
+  const [checkedInsightIds, setCheckedInsightIds] = useState<Set<string>>(new Set());
+  const [primaryInsightId, setPrimaryInsightId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [showReject, setShowReject] = useState(false);
+  const [showLinkInsights, setShowLinkInsights] = useState(false);
 
   const primaryLink = quote.links.find((link) => link.isPrimary);
   const otherLinks = quote.links.filter((link) => !link.isPrimary);
@@ -763,43 +824,119 @@ function QuoteRow({
 
       {/* Suggested actions: Approve / Reject (audit-required rationale). */}
       {quote.status === "suggested" && !showReject && (
-        <div
-          className="flex flex-wrap items-center gap-2"
-          onClick={(event) => event.stopPropagation()}
-        >
+        <div className="space-y-2 border-t border-border/60 pt-2">
           {linkableInsights.length > 0 && (
-            <select
-              value={primaryInsightId}
-              onChange={(event) => setPrimaryInsightId(event.target.value)}
-              disabled={busy}
-              aria-label="Link to insight on approval"
-              className="h-8 max-w-full rounded-md border border-input bg-background px-2 text-xs"
+            <div
+              className="flex items-center gap-2"
+              onClick={(event) => event.stopPropagation()}
             >
-              <option value="">Link to insight (optional)</option>
-              {linkableInsights.map((option) => (
-                <option key={option.id} value={option.id}>
-                  Link to {option.label}
-                </option>
-              ))}
-            </select>
+              <button
+                type="button"
+                onClick={() => setShowLinkInsights(!showLinkInsights)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                {showLinkInsights ? "Hide" : "Link to insights (optional)"}
+              </button>
+            </div>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onApprove(primaryInsightId || null)}
-            disabled={busy}
+
+          {showLinkInsights && linkableInsights.length > 0 && (
+            <fieldset className="space-y-0.5 border-l-2 border-border/40 pl-2 ml-1" onClick={(event) => event.stopPropagation()}>
+              <ul className="max-h-32 space-y-0.5 overflow-y-auto pr-1">
+                {linkableInsights.map((option) => {
+                  const isChecked = checkedInsightIds.has(option.id);
+                  const isPrimary = primaryInsightId === option.id;
+                  return (
+                    <li
+                      key={option.id}
+                      className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-muted/50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(event) => {
+                          const next = new Set(checkedInsightIds);
+                          if (event.target.checked) {
+                            next.add(option.id);
+                          } else {
+                            next.delete(option.id);
+                            if (isPrimary) setPrimaryInsightId(null);
+                          }
+                          setCheckedInsightIds(next);
+                        }}
+                        disabled={busy}
+                        aria-label={`Link to ${option.label}`}
+                        className="h-3 w-3 accent-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isChecked) return;
+                          setPrimaryInsightId(isPrimary ? null : option.id);
+                        }}
+                        disabled={busy || !isChecked}
+                        aria-pressed={isPrimary}
+                        title={
+                          !isChecked
+                            ? "Check this insight first to mark it primary"
+                            : isPrimary
+                              ? "Primary insight"
+                              : "Set as primary"
+                        }
+                        className={cn(
+                          "text-xs leading-none transition-colors",
+                          isPrimary
+                            ? "text-primary"
+                            : isChecked
+                              ? "text-muted-foreground hover:text-foreground"
+                              : "text-muted-foreground/30"
+                        )}
+                      >
+                        {isPrimary ? "★" : "☆"}
+                      </button>
+                      <span
+                        className={cn(
+                          "flex-1 text-xs",
+                          !isChecked && "text-muted-foreground"
+                        )}
+                      >
+                        {option.label}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </fieldset>
+          )}
+
+          <div
+            className="flex flex-wrap items-center gap-2"
+            onClick={(event) => event.stopPropagation()}
           >
-            Approve
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setShowReject(true)}
-            disabled={busy}
-            className="text-muted-foreground"
-          >
-            Reject
-          </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const additional = Array.from(checkedInsightIds).filter(id => id !== primaryInsightId);
+                onApprove(primaryInsightId || null, additional);
+                setCheckedInsightIds(new Set());
+                setPrimaryInsightId(null);
+                setShowLinkInsights(false);
+              }}
+              disabled={busy}
+            >
+              Approve
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowReject(true)}
+              disabled={busy}
+              className="text-muted-foreground"
+            >
+              Reject
+            </Button>
+          </div>
         </div>
       )}
 
@@ -863,7 +1000,7 @@ interface QuoteListProps {
   insightOptions: Array<{ id: string; label: string }>;
   focusedQuoteId: string | null;
   onFocus: (quoteId: string, anchorRect: DOMRect | null) => void;
-  onApprove: (quoteId: string, primaryInsightId: string | null) => Promise<void>;
+  onApprove: (quoteId: string, primaryInsightId: string | null, additionalInsightIds: string[]) => Promise<void>;
   onReject: (quoteId: string, rejectionReason: string) => Promise<void>;
   onLink: (quoteId: string, insightId: string, isPrimary: boolean) => Promise<void>;
   onUnlink: (quoteId: string, insightId: string) => Promise<void>;
@@ -893,7 +1030,7 @@ function QuoteList(props: QuoteListProps) {
           isFocused={props.focusedQuoteId === quote.id}
           busy={props.busy}
           onFocus={(rect) => props.onFocus(quote.id, rect)}
-          onApprove={(primaryInsightId) => props.onApprove(quote.id, primaryInsightId)}
+          onApprove={(primaryInsightId, additionalInsightIds) => props.onApprove(quote.id, primaryInsightId, additionalInsightIds)}
           onReject={(rejectionReason) => props.onReject(quote.id, rejectionReason)}
           onLink={(insightId, isPrimary) => props.onLink(quote.id, insightId, isPrimary)}
           onUnlink={(insightId) => props.onUnlink(quote.id, insightId)}
@@ -989,11 +1126,13 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
     async ({
       speakerHint,
       riskFlag,
-      insightId,
+      insightIds,
+      primaryInsightId,
     }: {
       speakerHint: string;
       riskFlag: boolean;
-      insightId: string | null;
+      insightIds: string[];
+      primaryInsightId: string | null;
     }) => {
       if (!selection) return;
       try {
@@ -1006,15 +1145,28 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
           source: "manual",
           riskFlag,
         });
-        if (insightId) {
-          // Manual capture auto-approves; link as primary if no primary yet.
+
+        // Link insights: primary first, then additional
+        if (primaryInsightId) {
           await linkInsight.mutateAsync({
             quoteId: created.id,
-            insightId,
-            isPrimary: created.links.length === 0,
+            insightId: primaryInsightId,
+            isPrimary: true,
           });
         }
-        toast.success(insightId ? "Quote captured and linked" : "Quote captured");
+
+        for (const insightId of insightIds) {
+          if (insightId !== primaryInsightId) {
+            await linkInsight.mutateAsync({
+              quoteId: created.id,
+              insightId,
+              isPrimary: false,
+            });
+          }
+        }
+
+        const linkedCount = insightIds.length;
+        toast.success(linkedCount > 0 ? `Quote captured and linked to ${linkedCount} insight${linkedCount === 1 ? "" : "s"}` : "Quote captured");
         setSelection(null);
         setFocusedQuoteId(created.id);
       } catch (error) {
@@ -1025,9 +1177,9 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
   );
 
   const onApprove = useCallback(
-    async (quoteId: string, primaryInsightId: string | null) => {
+    async (quoteId: string, primaryInsightId: string | null, additionalInsightIds: string[] = []) => {
       try {
-        await approveQuote.mutateAsync({ quoteId, primaryInsightId });
+        await approveQuote.mutateAsync({ quoteId, primaryInsightId, additionalInsightIds });
         toast.success("Quote approved");
         setFocusedQuoteId(quoteId);
       } catch (error) {
@@ -1157,7 +1309,7 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
           anchorRect={editingTarget.rect}
           busy={busy}
           onClose={() => setEditingTarget(null)}
-          onApprove={(primaryInsightId) => onApprove(editingQuote.id, primaryInsightId)}
+          onApprove={(primaryInsightId, additionalIds) => onApprove(editingQuote.id, primaryInsightId, additionalIds)}
           onReject={(rejectionReason) => onReject(editingQuote.id, rejectionReason)}
           onLink={(insightId, isPrimary) => onLink(editingQuote.id, insightId, isPrimary)}
           onUnlink={(insightId) => onUnlink(editingQuote.id, insightId)}
@@ -1223,7 +1375,7 @@ interface LayoutBaseProps {
   busy: boolean;
   onSelection: (selection: Selection | null) => void;
   onSpanFocus: (quoteId: string, anchorRect: DOMRect | null) => void;
-  onApprove: (quoteId: string, primaryInsightId: string | null) => Promise<void>;
+  onApprove: (quoteId: string, primaryInsightId: string | null, additionalInsightIds: string[]) => Promise<void>;
   onReject: (quoteId: string, rejectionReason: string) => Promise<void>;
   onLink: (quoteId: string, insightId: string, isPrimary: boolean) => Promise<void>;
   onUnlink: (quoteId: string, insightId: string) => Promise<void>;
@@ -1392,7 +1544,7 @@ interface ListPaneProps {
   focusedQuoteId: string | null;
   busy: boolean;
   onFocus: (quoteId: string, anchorRect: DOMRect | null) => void;
-  onApprove: (quoteId: string, primaryInsightId: string | null) => Promise<void>;
+  onApprove: (quoteId: string, primaryInsightId: string | null, additionalInsightIds: string[]) => Promise<void>;
   onReject: (quoteId: string, rejectionReason: string) => Promise<void>;
   onLink: (quoteId: string, insightId: string, isPrimary: boolean) => Promise<void>;
   onUnlink: (quoteId: string, insightId: string) => Promise<void>;

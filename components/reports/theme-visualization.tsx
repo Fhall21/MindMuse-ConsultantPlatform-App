@@ -20,7 +20,6 @@
 //     (membership is implied visually by the nested position)
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import dagre from "dagre";
 import {
   ReactFlow,
@@ -712,12 +711,6 @@ export function CanvasPreviewSection({
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             <span className="text-[10px] text-muted-foreground">Supporting insight</span>
           </div>
-          <Link
-            href={`/consultations/rounds/${roundId}/canvas`}
-            className="text-[10px] font-medium text-primary underline-offset-2 hover:underline"
-          >
-            Open live canvas →
-          </Link>
         </div>
       </div>
 

@@ -639,6 +639,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
       await downloadCanvasImages({
         roundId,
         frames,
+        edges,
       });
     } catch (error) {
       console.error("[canvas-shell] export images failed", error);

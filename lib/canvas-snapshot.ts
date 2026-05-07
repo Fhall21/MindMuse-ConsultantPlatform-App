@@ -12,6 +12,13 @@
  * which leaves html2canvas with a blank capture. Forcing the non-WebGL
  * rasteriser path avoids that.
  *
+ * Why composite edges manually?
+ * html2canvas with foreignObjectRendering:false skips ReactFlow's SVG edge
+ * layer (.react-flow__edges). Rather than switching capture libraries, we
+ * read the live handle DOM positions after capture-settle and draw edges
+ * onto the bitmap using Canvas 2D API. This keeps connection lines, colors,
+ * dash patterns, arrowheads, and type labels in the exported image.
+ *
  * Coordinate conversion:
  * Frame bounds are stored in canvas flow coordinates. To crop the captured
  * bitmap per frame, we need to translate flow coords → DOM pixels relative
@@ -22,7 +29,182 @@
 // support (oklch, lab, color-mix). Required because Tailwind v4 emits oklch
 // colors which the original html2canvas can't parse.
 import html2canvas from "html2canvas-pro";
-import type { CanvasFrame } from "@/types/canvas";
+import type { CanvasEdge, CanvasFrame } from "@/types/canvas";
+
+// ─── Edge overlay constants (mirror canvas-graph.tsx) ────────────────────────
+
+const CONNECTION_COLORS: Record<string, string> = {
+  causes: "#ef4444",
+  influences: "#f97316",
+  supports: "#22c55e",
+  contradicts: "#dc2626",
+  related_to: "#6b7280",
+};
+
+const CONNECTION_TYPE_LABELS: Record<string, string> = {
+  causes: "Causes",
+  influences: "Influences",
+  supports: "Supports",
+  contradicts: "Contradicts",
+  related_to: "Related to",
+};
+
+// ─── Handle point reading ─────────────────────────────────────────────────────
+
+interface HandlePoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * Read the center screen-coords (relative to the container's top-left) for
+ * every source and target handle in the live ReactFlow DOM.
+ *
+ * ReactFlow marks handle elements with `data-handletype="source"` /
+ * `data-handletype="target"` and scopes them inside `.react-flow__node[data-id]`
+ * elements. We read `getBoundingClientRect()` on each handle so custom
+ * positioning (e.g. `!top-12` on theme-card handles) is accounted for exactly.
+ *
+ * Frame nodes (id prefix `frame:`) are skipped — they carry no edges.
+ */
+function readHandlePoints(container: HTMLElement): {
+  sources: Map<string, HandlePoint>;
+  targets: Map<string, HandlePoint>;
+} {
+  const containerRect = container.getBoundingClientRect();
+  const sources = new Map<string, HandlePoint>();
+  const targets = new Map<string, HandlePoint>();
+
+  const nodeEls = container.querySelectorAll<HTMLElement>(".react-flow__node[data-id]");
+  for (const nodeEl of nodeEls) {
+    const nodeId = nodeEl.getAttribute("data-id");
+    if (!nodeId || nodeId.startsWith("frame:")) continue;
+
+    const sourceHandle = nodeEl.querySelector<HTMLElement>('[data-handletype="source"]');
+    const targetHandle = nodeEl.querySelector<HTMLElement>('[data-handletype="target"]');
+
+    if (sourceHandle) {
+      const r = sourceHandle.getBoundingClientRect();
+      sources.set(nodeId, {
+        x: r.left - containerRect.left + r.width / 2,
+        y: r.top - containerRect.top + r.height / 2,
+      });
+    }
+    if (targetHandle) {
+      const r = targetHandle.getBoundingClientRect();
+      targets.set(nodeId, {
+        x: r.left - containerRect.left + r.width / 2,
+        y: r.top - containerRect.top + r.height / 2,
+      });
+    }
+  }
+  return { sources, targets };
+}
+
+// ─── Edge compositing ─────────────────────────────────────────────────────────
+
+/**
+ * Draw edge bezier curves, arrowheads, and type labels onto `bitmap`.
+ *
+ * Called after html2canvas capture so edges appear in both the full-canvas
+ * and all per-frame crops (which are sliced from the same bitmap).
+ *
+ * Bezier approximation:
+ *   ReactFlow uses a smooth-step bezier. We approximate it with a cubic
+ *   bezier whose control points offset horizontally by half the x-distance,
+ *   which matches the visual for typical LR / non-overlapping node layouts.
+ *
+ * `scale` is `window.devicePixelRatio` — html2canvas captures at that factor,
+ * so all bitmap coordinates must be multiplied accordingly.
+ */
+function overlayEdges(
+  bitmap: HTMLCanvasElement,
+  edges: CanvasEdge[],
+  sources: Map<string, HandlePoint>,
+  targets: Map<string, HandlePoint>,
+  scale: number
+): void {
+  const ctx = bitmap.getContext("2d");
+  if (!ctx) return;
+
+  for (const edge of edges) {
+    const src = sources.get(edge.source_node_id);
+    const tgt = targets.get(edge.target_node_id);
+    if (!src || !tgt) continue;
+
+    const sx = src.x * scale;
+    const sy = src.y * scale;
+    const tx = tgt.x * scale;
+    const ty = tgt.y * scale;
+
+    const color = CONNECTION_COLORS[edge.connection_type] ?? "#6b7280";
+    const strokeWidth = 2.5 * scale;
+
+    // Cubic bezier — control points offset by half the horizontal span.
+    const hx = Math.abs(tx - sx) * 0.5;
+    const cp1x = sx + hx;
+    const cp1y = sy;
+    const cp2x = tx - hx;
+    const cp2y = ty;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = strokeWidth;
+    ctx.setLineDash(edge.connection_type === "contradicts" ? [6 * scale, 4 * scale] : []);
+
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, tx, ty);
+    ctx.stroke();
+
+    // ── Arrowhead at target ───────────────────────────────────────────────
+    const arrowSize = 8 * scale;
+    // Angle from last control point to target gives the arriving direction.
+    const angle = Math.atan2(ty - cp2y, tx - cp2x);
+    ctx.setLineDash([]);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(
+      tx - arrowSize * Math.cos(angle - Math.PI / 6),
+      ty - arrowSize * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      tx - arrowSize * Math.cos(angle + Math.PI / 6),
+      ty - arrowSize * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    // ── Edge type label at bezier midpoint (De Casteljau t=0.5) ──────────
+    const mx = 0.125 * sx + 0.375 * cp1x + 0.375 * cp2x + 0.125 * tx;
+    const my = 0.125 * sy + 0.375 * cp1y + 0.375 * cp2y + 0.125 * ty;
+    const label = CONNECTION_TYPE_LABELS[edge.connection_type] ?? edge.connection_type;
+    const fontSize = Math.round(11 * scale);
+
+    ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    const metrics = ctx.measureText(label);
+    const padX = 4 * scale;
+    const padY = 3 * scale;
+    const bgW = metrics.width + padX * 2;
+    const bgH = fontSize + padY * 2;
+
+    ctx.fillStyle = "rgba(255,255,255,0.88)";
+    ctx.beginPath();
+    const r = 3 * scale;
+    ctx.roundRect(mx - bgW / 2, my - bgH / 2, bgW, bgH, r);
+    ctx.fill();
+
+    ctx.fillStyle = color;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, mx, my);
+
+    ctx.restore();
+  }
+}
+
+// ─── Public types ─────────────────────────────────────────────────────────────
 
 export interface CapturedCanvasImages {
   /** Full-canvas image as a PNG Blob. */
@@ -120,17 +302,29 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
 /**
  * Capture the canvas + each frame as PNG blobs.
  *
+ * Edges are composited onto the bitmap after html2canvas capture using Canvas
+ * 2D API (html2canvas skips the SVG edge layer when foreignObjectRendering is
+ * false). Handle positions are read directly from the live DOM so custom
+ * vertical offsets (e.g. `!top-12` on theme-card handles) are captured
+ * exactly. Per-frame crops are taken from the composited bitmap, so edges
+ * that cross frame boundaries appear in full in every output.
+ *
  * Failure handling: returns `null` if the canvas DOM isn't available or
  * html2canvas throws. Callers should treat this as best-effort and fall
  * back to live-render or list views.
  */
 export async function captureCanvasImages(
-  frames: CanvasFrame[]
+  frames: CanvasFrame[],
+  edges: CanvasEdge[]
 ): Promise<CapturedCanvasImages | null> {
   const container = findCanvasContainer();
   if (!container) return null;
 
   await settleFrame();
+
+  // Read handle positions AFTER settle so they match the frame we're about to
+  // capture. Must happen before html2canvas to avoid layout shifts during capture.
+  const { sources, targets } = readHandlePoints(container);
 
   let snapshot: HTMLCanvasElement;
   try {
@@ -147,11 +341,18 @@ export async function captureCanvasImages(
     return null;
   }
 
+  const scale = window.devicePixelRatio || 1;
+
+  // Composite edges onto the bitmap. This mutates `snapshot` in-place before
+  // any blob extraction so both full-canvas and per-frame crops include edges.
+  if (edges.length > 0) {
+    overlayEdges(snapshot, edges, sources, targets, scale);
+  }
+
   const fullCanvas = await canvasToBlob(snapshot);
 
   const containerRect = container.getBoundingClientRect();
   const viewport = readViewportFromDom();
-  const scale = window.devicePixelRatio || 1;
 
   const perFrame: Record<string, Blob> = {};
   for (const frame of frames) {
@@ -212,8 +413,9 @@ function safeFileSlug(value: string) {
 export async function downloadCanvasImages(params: {
   roundId: string;
   frames: CanvasFrame[];
+  edges: CanvasEdge[];
 }): Promise<void> {
-  const captured = await captureCanvasImages(params.frames);
+  const captured = await captureCanvasImages(params.frames, params.edges);
   if (!captured) {
     throw new Error("Canvas capture unavailable");
   }

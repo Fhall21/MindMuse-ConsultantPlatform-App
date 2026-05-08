@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMeeting } from "@/hooks/use-meetings";
-import { useMeetingThemes } from "@/hooks/use-themes";
+import { useCreateMeetingTheme, useMeetingThemes } from "@/hooks/use-themes";
 import {
   useApproveQuote,
   useCreateQuote,
@@ -40,6 +40,8 @@ type Selection = {
 
 type ViewMode = "workspace" | "compact";
 
+type InsightOption = { id: string; label: string };
+
 const STATUS_LABEL: Record<QuoteStatus, string> = {
   suggested: "Suggested",
   approved: "Approved",
@@ -54,6 +56,38 @@ function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "string" && error) return error;
   return "Something went wrong. Please try again.";
+}
+
+function InlineNewInsight({
+  value,
+  onChange,
+  onCreate,
+  busy,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onCreate: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="New insight"
+        className="h-8 min-w-0 flex-1 text-sm"
+      />
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={onCreate}
+        disabled={busy || value.trim().length === 0}
+      >
+        Add
+      </Button>
+    </div>
+  );
 }
 
 /**
@@ -223,13 +257,14 @@ function TranscriptReadout({
 
 interface SelectionTooltipProps {
   selection: Selection;
-  insightOptions: Array<{ id: string; label: string }>;
+  insightOptions: InsightOption[];
   onCapture: (params: {
     speakerHint: string;
     riskFlag: boolean;
     insightIds: string[];
     primaryInsightId: string | null;
   }) => Promise<void>;
+  onCreateInsight: (label: string) => Promise<InsightOption | null>;
   onDismiss: () => void;
   busy: boolean;
 }
@@ -244,6 +279,7 @@ function SelectionTooltip({
   selection,
   insightOptions,
   onCapture,
+  onCreateInsight,
   onDismiss,
   busy,
 }: SelectionTooltipProps) {
@@ -252,6 +288,7 @@ function SelectionTooltip({
   const [riskFlag, setRiskFlag] = useState(false);
   const [checkedInsightIds, setCheckedInsightIds] = useState<Set<string>>(new Set());
   const [primaryInsightId, setPrimaryInsightId] = useState<string | null>(null);
+  const [newInsightLabel, setNewInsightLabel] = useState("");
 
   // Position once the tooltip has rendered and we know its size. Applied
   // directly to the DOM rather than via state to avoid setState-in-effect.
@@ -338,77 +375,91 @@ function SelectionTooltip({
         />
       </div>
 
-      {insightOptions.length > 0 && (
-        <fieldset className="space-y-2 border-t border-border/60 pt-3">
-          <legend className="text-xs uppercase tracking-widest text-muted-foreground">
-            Link to insights (optional)
-          </legend>
-          <ul className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
-            {insightOptions.map((option) => {
-              const isChecked = checkedInsightIds.has(option.id);
-              const isPrimary = primaryInsightId === option.id;
-              return (
-                <li
-                  key={option.id}
-                  className="flex items-center gap-2 rounded px-1 py-1 hover:bg-muted/50"
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={(event) => {
-                      const next = new Set(checkedInsightIds);
-                      if (event.target.checked) {
-                        next.add(option.id);
-                      } else {
-                        next.delete(option.id);
-                        if (isPrimary) setPrimaryInsightId(null);
-                      }
-                      setCheckedInsightIds(next);
-                    }}
-                    disabled={busy}
-                    aria-label={`Link to ${option.label}`}
-                    className="h-3.5 w-3.5 accent-primary"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isChecked) return;
-                      setPrimaryInsightId(isPrimary ? null : option.id);
-                    }}
-                    disabled={busy || !isChecked}
-                    aria-pressed={isPrimary}
-                    title={
-                      !isChecked
-                        ? "Check this insight first to mark it primary"
-                        : isPrimary
-                          ? "Primary insight"
-                          : "Set as primary"
+      <fieldset className="space-y-2 border-t border-border/60 pt-3">
+        <legend className="text-xs uppercase tracking-widest text-muted-foreground">
+          Link to insights (optional)
+        </legend>
+        {insightOptions.length > 0 && (
+          <ul className="max-h-40 space-y-0.5 overflow-y-auto pr-1">
+          {insightOptions.map((option) => {
+            const isChecked = checkedInsightIds.has(option.id);
+            const isPrimary = primaryInsightId === option.id;
+            return (
+              <li
+                key={option.id}
+                className="flex items-center gap-2 rounded px-1 py-1 hover:bg-muted/50"
+              >
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={(event) => {
+                    const next = new Set(checkedInsightIds);
+                    if (event.target.checked) {
+                      next.add(option.id);
+                    } else {
+                      next.delete(option.id);
+                      if (isPrimary) setPrimaryInsightId(null);
                     }
-                    className={cn(
-                      "rounded text-sm leading-none transition-colors",
-                      isPrimary
-                        ? "text-primary"
-                        : isChecked
-                          ? "text-muted-foreground hover:text-foreground"
-                          : "text-muted-foreground/30"
-                    )}
-                  >
-                    {isPrimary ? "★" : "☆"}
-                  </button>
-                  <span
-                    className={cn(
-                      "flex-1 text-sm",
-                      !isChecked && "text-muted-foreground"
-                    )}
-                  >
-                    {option.label}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </fieldset>
-      )}
+                    setCheckedInsightIds(next);
+                  }}
+                  disabled={busy}
+                  aria-label={`Link to ${option.label}`}
+                  className="h-3.5 w-3.5 accent-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isChecked) return;
+                    setPrimaryInsightId(isPrimary ? null : option.id);
+                  }}
+                  disabled={busy || !isChecked}
+                  aria-pressed={isPrimary}
+                  title={
+                    !isChecked
+                      ? "Check this insight first to mark it primary"
+                      : isPrimary
+                        ? "Primary insight"
+                        : "Set as primary"
+                  }
+                  className={cn(
+                    "rounded text-sm leading-none transition-colors",
+                    isPrimary
+                      ? "text-primary"
+                      : isChecked
+                        ? "text-muted-foreground hover:text-foreground"
+                        : "text-muted-foreground/30"
+                  )}
+                >
+                  {isPrimary ? "★" : "☆"}
+                </button>
+                <span
+                  className={cn(
+                    "flex-1 text-sm",
+                    !isChecked && "text-muted-foreground"
+                  )}
+                >
+                  {option.label}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+        )}
+        <InlineNewInsight
+          value={newInsightLabel}
+          onChange={setNewInsightLabel}
+          busy={busy}
+          onCreate={() => {
+            void (async () => {
+              const created = await onCreateInsight(newInsightLabel);
+              if (!created) return;
+              setNewInsightLabel("");
+              setCheckedInsightIds((current) => new Set(current).add(created.id));
+              setPrimaryInsightId((current) => current ?? created.id);
+            })();
+          }}
+        />
+      </fieldset>
 
       <div className="flex items-center justify-between gap-2">
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -452,7 +503,7 @@ function SelectionTooltip({
 
 interface EditQuoteTooltipProps {
   quote: QuoteRecord;
-  insightOptions: Array<{ id: string; label: string }>;
+  insightOptions: InsightOption[];
   anchorRect: DOMRect;
   busy: boolean;
   onClose: () => void;
@@ -460,6 +511,7 @@ interface EditQuoteTooltipProps {
   onReject: (rejectionReason: string) => Promise<void>;
   onLink: (insightId: string, isPrimary: boolean) => Promise<void>;
   onUnlink: (insightId: string) => Promise<void>;
+  onCreateInsight: (label: string) => Promise<InsightOption | null>;
 }
 
 /**
@@ -479,10 +531,12 @@ function EditQuoteTooltip({
   onReject,
   onLink,
   onUnlink,
+  onCreateInsight,
 }: EditQuoteTooltipProps) {
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [showReject, setShowReject] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [newInsightLabel, setNewInsightLabel] = useState("");
 
   // Position once the tooltip has rendered and we know its size. Applied
   // directly to the DOM rather than via state to avoid setState-in-effect.
@@ -584,7 +638,7 @@ function EditQuoteTooltip({
           </legend>
           {insightOptions.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              No insights yet. Add one in the Themes section above.
+              No insights yet. Create one here to link this quote.
             </p>
           ) : (
             <ul className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
@@ -651,6 +705,19 @@ function EditQuoteTooltip({
               })}
             </ul>
           )}
+          <InlineNewInsight
+            value={newInsightLabel}
+            onChange={setNewInsightLabel}
+            busy={busy}
+            onCreate={() => {
+              void (async () => {
+                const created = await onCreateInsight(newInsightLabel);
+                if (!created) return;
+                setNewInsightLabel("");
+                await onLink(created.id, !quote.links.some((link) => link.isPrimary));
+              })();
+            }}
+          />
         </fieldset>
       )}
 
@@ -731,12 +798,13 @@ function EditQuoteTooltip({
 
 interface QuoteRowProps {
   quote: QuoteRecord;
-  insightOptions: Array<{ id: string; label: string }>;
+  insightOptions: InsightOption[];
   isFocused: boolean;
   onApprove: (primaryInsightId: string | null, additionalInsightIds: string[]) => Promise<void>;
   onReject: (rejectionReason: string) => Promise<void>;
   onLink: (insightId: string, isPrimary: boolean) => Promise<void>;
   onUnlink: (insightId: string) => Promise<void>;
+  onCreateInsight: (label: string) => Promise<InsightOption | null>;
   onFocus: (anchorRect: DOMRect | null) => void;
   busy: boolean;
 }
@@ -757,12 +825,14 @@ function QuoteRow({
   isFocused,
   onApprove,
   onReject,
+  onCreateInsight,
   onUnlink,
   onFocus,
   busy,
 }: QuoteRowProps) {
   const [checkedInsightIds, setCheckedInsightIds] = useState<Set<string>>(new Set());
   const [primaryInsightId, setPrimaryInsightId] = useState<string | null>(null);
+  const [newInsightLabel, setNewInsightLabel] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [showReject, setShowReject] = useState(false);
   const [showLinkInsights, setShowLinkInsights] = useState(false);
@@ -841,23 +911,22 @@ function QuoteRow({
       {/* Suggested actions: Approve / Reject (audit-required rationale). */}
       {quote.status === "suggested" && !showReject && (
         <div className="space-y-2 border-t border-border/60 pt-2">
-          {linkableInsights.length > 0 && (
-            <div
-              className="flex items-center gap-2"
-              onClick={(event) => event.stopPropagation()}
+          <div
+            className="flex items-center gap-2"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowLinkInsights(!showLinkInsights)}
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
-              <button
-                type="button"
-                onClick={() => setShowLinkInsights(!showLinkInsights)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                {showLinkInsights ? "Hide" : "Link to insights (optional)"}
-              </button>
-            </div>
-          )}
+              {showLinkInsights ? "Hide" : "Link or create insight (optional)"}
+            </button>
+          </div>
 
-          {showLinkInsights && linkableInsights.length > 0 && (
-            <fieldset className="space-y-0.5 border-l-2 border-border/40 pl-2 ml-1" onClick={(event) => event.stopPropagation()}>
+          {showLinkInsights && (
+            <fieldset className="space-y-2 border-t border-border/60 pt-2" onClick={(event) => event.stopPropagation()}>
+              {linkableInsights.length > 0 && (
               <ul className="max-h-32 space-y-0.5 overflow-y-auto pr-1">
                 {linkableInsights.map((option) => {
                   const isChecked = checkedInsightIds.has(option.id);
@@ -922,6 +991,22 @@ function QuoteRow({
                   );
                 })}
               </ul>
+              )}
+              <InlineNewInsight
+                value={newInsightLabel}
+                onChange={setNewInsightLabel}
+                busy={busy}
+                onCreate={() => {
+                  void (async () => {
+                    const created = await onCreateInsight(newInsightLabel);
+                    if (!created) return;
+                    setNewInsightLabel("");
+                    setCheckedInsightIds((current) => new Set(current).add(created.id));
+                    setPrimaryInsightId((current) => current ?? created.id);
+                    setShowLinkInsights(true);
+                  })();
+                }}
+              />
             </fieldset>
           )}
 
@@ -1013,13 +1098,14 @@ function QuoteRow({
 interface QuoteListProps {
   status: QuoteStatus;
   quotes: QuoteRecord[];
-  insightOptions: Array<{ id: string; label: string }>;
+  insightOptions: InsightOption[];
   focusedQuoteId: string | null;
   onFocus: (quoteId: string, anchorRect: DOMRect | null) => void;
   onApprove: (quoteId: string, primaryInsightId: string | null, additionalInsightIds: string[]) => Promise<void>;
   onReject: (quoteId: string, rejectionReason: string) => Promise<void>;
   onLink: (quoteId: string, insightId: string, isPrimary: boolean) => Promise<void>;
   onUnlink: (quoteId: string, insightId: string) => Promise<void>;
+  onCreateInsight: (label: string) => Promise<InsightOption | null>;
   busy: boolean;
 }
 
@@ -1050,6 +1136,7 @@ function QuoteList(props: QuoteListProps) {
           onReject={(rejectionReason) => props.onReject(quote.id, rejectionReason)}
           onLink={(insightId, isPrimary) => props.onLink(quote.id, insightId, isPrimary)}
           onUnlink={(insightId) => props.onUnlink(quote.id, insightId)}
+          onCreateInsight={props.onCreateInsight}
         />
       ))}
     </div>
@@ -1070,6 +1157,7 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
   >(null);
 
   const createQuote = useCreateQuote(meetingId);
+  const createInsight = useCreateMeetingTheme(meetingId);
   const approveQuote = useApproveQuote(meetingId);
   const rejectQuote = useRejectQuote(meetingId);
   const linkInsight = useLinkQuoteInsight(meetingId);
@@ -1105,6 +1193,7 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
 
   const busy =
     createQuote.isPending ||
+    createInsight.isPending ||
     approveQuote.isPending ||
     rejectQuote.isPending ||
     linkInsight.isPending ||
@@ -1190,6 +1279,23 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
       }
     },
     [createQuote, linkInsight, meetingId, selection]
+  );
+
+  const handleCreateInsight = useCallback(
+    async (label: string): Promise<InsightOption | null> => {
+      const trimmed = label.trim();
+      if (!trimmed) return null;
+      try {
+        const created = await createInsight.mutateAsync({ label: trimmed });
+        await themesQuery.refetch();
+        toast.success("Insight created");
+        return { id: created.id, label: trimmed };
+      } catch (error) {
+        toast.error(getErrorMessage(error));
+        return null;
+      }
+    },
+    [createInsight, themesQuery]
   );
 
   const onApprove = useCallback(
@@ -1287,6 +1393,7 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
           onReject={onReject}
           onLink={onLink}
           onUnlink={onUnlink}
+          onCreateInsight={handleCreateInsight}
         />
       ) : (
         <CompactLayout
@@ -1304,6 +1411,7 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
           onReject={onReject}
           onLink={onLink}
           onUnlink={onUnlink}
+          onCreateInsight={handleCreateInsight}
           quotesByStatus={quotesByStatus}
         />
       )}
@@ -1313,6 +1421,7 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
           selection={selection}
           insightOptions={insightOptions}
           onCapture={handleCapture}
+          onCreateInsight={handleCreateInsight}
           onDismiss={() => setSelection(null)}
           busy={busy}
         />
@@ -1329,6 +1438,7 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
           onReject={(rejectionReason) => onReject(editingQuote.id, rejectionReason)}
           onLink={(insightId, isPrimary) => onLink(editingQuote.id, insightId, isPrimary)}
           onUnlink={(insightId) => onUnlink(editingQuote.id, insightId)}
+          onCreateInsight={handleCreateInsight}
         />
       )}
     </div>
@@ -1386,7 +1496,7 @@ interface LayoutBaseProps {
   transcript: string;
   quotes: QuoteRecord[];
   counts: Record<QuoteStatus, number>;
-  insightOptions: Array<{ id: string; label: string }>;
+  insightOptions: InsightOption[];
   focusedQuoteId: string | null;
   busy: boolean;
   onSelection: (selection: Selection | null) => void;
@@ -1395,6 +1505,7 @@ interface LayoutBaseProps {
   onReject: (quoteId: string, rejectionReason: string) => Promise<void>;
   onLink: (quoteId: string, insightId: string, isPrimary: boolean) => Promise<void>;
   onUnlink: (quoteId: string, insightId: string) => Promise<void>;
+  onCreateInsight: (label: string) => Promise<InsightOption | null>;
   quotesByStatus: Record<QuoteStatus, QuoteRecord[]>;
 }
 
@@ -1422,6 +1533,7 @@ function WorkspaceLayout(props: LayoutBaseProps) {
           onReject={props.onReject}
           onLink={props.onLink}
           onUnlink={props.onUnlink}
+          onCreateInsight={props.onCreateInsight}
           outerClassName="lg:max-h-[40%]"
         />
         <ListPane
@@ -1437,6 +1549,7 @@ function WorkspaceLayout(props: LayoutBaseProps) {
           onReject={props.onReject}
           onLink={props.onLink}
           onUnlink={props.onUnlink}
+          onCreateInsight={props.onCreateInsight}
           rejectedCount={props.counts.rejected}
           outerClassName="lg:flex-1"
         />
@@ -1503,6 +1616,7 @@ function CompactLayout(props: CompactLayoutProps) {
           onReject={props.onReject}
           onLink={props.onLink}
           onUnlink={props.onUnlink}
+          onCreateInsight={props.onCreateInsight}
           busy={props.busy}
         />
       </div>
@@ -1556,7 +1670,7 @@ interface ListPaneProps {
   count: number;
   status: QuoteStatus;
   quotes: QuoteRecord[];
-  insightOptions: Array<{ id: string; label: string }>;
+  insightOptions: InsightOption[];
   focusedQuoteId: string | null;
   busy: boolean;
   onFocus: (quoteId: string, anchorRect: DOMRect | null) => void;
@@ -1564,6 +1678,7 @@ interface ListPaneProps {
   onReject: (quoteId: string, rejectionReason: string) => Promise<void>;
   onLink: (quoteId: string, insightId: string, isPrimary: boolean) => Promise<void>;
   onUnlink: (quoteId: string, insightId: string) => Promise<void>;
+  onCreateInsight: (label: string) => Promise<InsightOption | null>;
   rejectedCount?: number;
   outerClassName?: string;
 }
@@ -1581,6 +1696,7 @@ function ListPane({
   onReject,
   onLink,
   onUnlink,
+  onCreateInsight,
   rejectedCount,
   outerClassName,
 }: ListPaneProps) {
@@ -1616,6 +1732,7 @@ function ListPane({
           onReject={onReject}
           onLink={onLink}
           onUnlink={onUnlink}
+          onCreateInsight={onCreateInsight}
           busy={busy}
         />
       </div>

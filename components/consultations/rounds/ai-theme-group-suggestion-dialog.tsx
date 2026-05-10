@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, RotateCcw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -26,6 +26,7 @@ interface AiThemeGroupSuggestionDialogProps {
   onOpenChange: (open: boolean) => void;
   roundLabel: string | null;
   sourceThemes: SourceTheme[];
+  initialSelectedIds?: Set<string>;
   onAcceptSuggestion: (suggestion: SuggestedThemeGroup) => Promise<void>;
 }
 
@@ -34,6 +35,7 @@ export function AiThemeGroupSuggestionDialog({
   onOpenChange,
   roundLabel,
   sourceThemes,
+  initialSelectedIds,
   onAcceptSuggestion,
 }: AiThemeGroupSuggestionDialogProps) {
   const [phase, setPhase] = useState<"setup" | "review">("setup");
@@ -48,10 +50,22 @@ export function AiThemeGroupSuggestionDialog({
     new Set(sourceThemes.map((t) => t.label))
   ).sort();
 
+  useEffect(() => {
+    if (!open || !initialSelectedIds) return;
+    const labels = sourceThemes
+      .filter((theme) => initialSelectedIds.has(theme.id))
+      .map((theme) => theme.label);
+    setSelectedFocusLabels(new Set(labels));
+  }, [initialSelectedIds, open, sourceThemes]);
+
   const toggleFocus = (label: string) => {
     setSelectedFocusLabels((prev) => {
       const next = new Set(prev);
-      next.has(label) ? next.delete(label) : next.add(label);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
       return next;
     });
   };
@@ -64,13 +78,15 @@ export function AiThemeGroupSuggestionDialog({
     themeByIdSnapshot.current = new Map(sourceThemes.map((t) => [t.id, t]));
 
     try {
-      const themeInputs = sourceThemes.map((t) => ({
-        theme_id: t.id,
-        label: t.label,
-        description: t.description ?? null,
-        consultation_title: t.sourceMeetingTitle,
-        is_user_added: t.isUserAdded,
-      }));
+      const themeInputs = sourceThemes
+        .filter((t) => selectedFocusLabels.has(t.label))
+        .map((t) => ({
+          theme_id: t.id,
+          label: t.label,
+          description: t.description ?? null,
+          consultation_title: t.sourceMeetingTitle,
+          is_user_added: t.isUserAdded,
+        }));
 
       const result = await suggestThemeGroups(
         roundLabel,

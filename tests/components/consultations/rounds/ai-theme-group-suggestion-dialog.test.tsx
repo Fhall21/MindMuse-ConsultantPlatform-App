@@ -3,7 +3,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SuggestedThemeGroup } from "@/lib/actions/consultation-workflow";
 
 // ─── Mock the server action ────────────────────────────────────────────────
 
@@ -24,7 +23,6 @@ vi.mock("sonner", () => ({
 
 import { AiThemeGroupSuggestionDialog } from "@/components/consultations/rounds/ai-theme-group-suggestion-dialog";
 import type { SourceTheme } from "@/types/round-detail";
-import { toast } from "sonner";
 
 // ─── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -81,7 +79,7 @@ describe("AiThemeGroupSuggestionDialog — selected-subset scoping", () => {
     await user.click(screen.getByLabelText("Burnout"));
     await user.click(screen.getByLabelText("Team Support"));
 
-    await user.click(screen.getByRole("button", { name: /suggest groups/i }));
+    await user.click(screen.getByRole("button", { name: /generate clusters/i }));
 
     await waitFor(() => {
       expect(mockSuggestThemeGroups).toHaveBeenCalledTimes(1);
@@ -110,11 +108,11 @@ describe("AiThemeGroupSuggestionDialog — selected-subset scoping", () => {
       />
     );
 
-    // Select only one theme — "Suggest Groups" button stays disabled, no API call
+    // Select only one theme; the generate button stays disabled, no API call
     await user.click(screen.getByLabelText("Burnout"));
 
     // Button should be disabled with 1 selection
-    const button = screen.getByRole("button", { name: /suggest groups/i });
+    const button = screen.getByRole("button", { name: /generate clusters/i });
     expect(button).toBeDisabled();
     expect(mockSuggestThemeGroups).not.toHaveBeenCalled();
   });
@@ -144,7 +142,7 @@ describe("AiThemeGroupSuggestionDialog — selected-subset scoping", () => {
     ).toBeChecked();
 
     // And the button should be enabled (2 in scope)
-    const button = screen.getByRole("button", { name: /suggest groups/i });
+    const button = screen.getByRole("button", { name: /generate clusters/i });
     expect(button).not.toBeDisabled();
 
     // Clicking suggest should only send the 2 pre-selected themes
@@ -163,7 +161,7 @@ describe("AiThemeGroupSuggestionDialog — selected-subset scoping", () => {
     expect(themeInputs.map((t) => t.theme_id).sort()).toEqual(["t3", "t4"]);
   });
 
-  it("shows N themes in scope text when 2+ themes selected", async () => {
+  it("shows selected count when 2+ themes are selected", async () => {
     const user = userEvent.setup();
 
     render(
@@ -180,6 +178,6 @@ describe("AiThemeGroupSuggestionDialog — selected-subset scoping", () => {
     await user.click(screen.getByLabelText("Team Support"));
     await user.click(screen.getByLabelText("Management Style"));
 
-    expect(screen.getByText("3 themes in scope")).toBeInTheDocument();
+    expect(screen.getByText("(3 selected)")).toBeInTheDocument();
   });
 });

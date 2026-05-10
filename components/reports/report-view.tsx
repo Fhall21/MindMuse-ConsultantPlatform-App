@@ -36,15 +36,16 @@ import {
 import {
   buildReportGraphFrameModels,
   buildReportGraphModel,
-  getAcceptedConsultationThemes,
-  getSupportingMeetingThemes,
   getAllThemeGroups,
   type ReportGraphModel,
   type AllThemeGroupSnapshot,
 } from "@/lib/report-graph";
 import { normalizeReportMarkdownForEditor } from "@/lib/report-editor-markdown";
 import { parseContentBlocks } from "@/lib/report-content-blocks";
-import { applyRenderPolicyToReport } from "@/lib/report-render-policy";
+import {
+  applyRenderPolicyToReport,
+  createReportRenderPolicy,
+} from "@/lib/report-render-policy";
 import { cn } from "@/lib/utils";
 import { AuditTrailSection } from "@/components/reports/report-audit-trail-section";
 import { ReportCoverPage, deriveMatterRef } from "@/components/reports/report-cover-page";
@@ -52,6 +53,7 @@ import { NetworkDiagram } from "@/components/reports/network-diagram";
 import { GroupNetworkSection, CanvasPreviewSection } from "@/components/reports/theme-visualization";
 import { toast } from "sonner";
 import { ReportShareDialog } from "@/components/reports/report-share-dialog";
+import { ReportQuoteLibrary } from "@/components/reports/report-quote-library";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -305,170 +307,6 @@ export function GraphNodesSection({
           </div>
         ))}
       </div>
-    </section>
-  );
-}
-
-function LegacyFindingsSection({
-  report,
-  template,
-}: {
-  report: ReportArtifactDetail;
-  template: ReportTemplate;
-}) {
-  const inputThemes = getAcceptedConsultationThemes(report.inputSnapshot);
-  const supportingThemes = getSupportingMeetingThemes(report.inputSnapshot);
-
-  const acceptedToShow =
-    template === "executive" ? inputThemes?.slice(0, 3) : inputThemes;
-  const showSupporting = template === "standard";
-
-  if (!acceptedToShow?.length && !supportingThemes?.length) return null;
-
-  // Build map: accepted theme label (normalised) → linked supporting themes
-  const supportingByAccepted = new Map<
-    string,
-    Array<{ label: string; description?: string | null; consultation_title?: string | null }>
-  >();
-  const unlinkedSupporting: Array<{
-    label: string;
-    description?: string | null;
-    consultation_title?: string | null;
-  }> = [];
-
-  if (showSupporting && supportingThemes && inputThemes) {
-    const acceptedLabelSet = new Set(inputThemes.map((t) => t.label.toLowerCase()));
-    for (const st of supportingThemes) {
-      const key = st.label.toLowerCase();
-      if (acceptedLabelSet.has(key)) {
-        const arr = supportingByAccepted.get(key) ?? [];
-        arr.push(st);
-        supportingByAccepted.set(key, arr);
-      } else {
-        unlinkedSupporting.push(st);
-      }
-    }
-  }
-
-  return (
-    <section className="space-y-6">
-      {/* Accepted (round-level) themes with linked consultation evidence */}
-      {acceptedToShow && acceptedToShow.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Key Findings ({inputThemes?.length ?? 0})
-            {template === "executive" && inputThemes && inputThemes.length > 3 && (
-              <span className="ml-2 normal-case tracking-normal font-normal">
-                — showing top 3
-              </span>
-            )}
-          </h3>
-          <div className="grid gap-3">
-            {acceptedToShow.map((theme, i) => {
-              const linked = supportingByAccepted.get(theme.label.toLowerCase());
-              return (
-                <div key={i}>
-                  {/* Primary accepted theme */}
-                  <div className="group rounded-lg border border-emerald-200/60 border-l-4 border-l-emerald-500 bg-emerald-50/20 px-4 py-3 dark:border-emerald-800/40 dark:border-l-emerald-600 dark:bg-emerald-950/10">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-foreground">{theme.label}</p>
-                          <Badge
-                            variant="outline"
-                            className="shrink-0 border-emerald-300 text-[10px] text-emerald-700 dark:border-emerald-700 dark:text-emerald-400"
-                          >
-                            Accepted
-                          </Badge>
-                        </div>
-                        {theme.description && (
-                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                            {theme.description}
-                          </p>
-                        )}
-                      </div>
-                      <CopyButton
-                        text={theme.description ? `${theme.label}: ${theme.description}` : theme.label}
-                        label={theme.label}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Linked consultation-level evidence for this theme */}
-                  {showSupporting && linked && linked.length > 0 && (
-                    <div className="ml-4 mt-1 space-y-1 border-l-2 border-emerald-200/40 pl-3 dark:border-emerald-800/30">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 pb-0.5">
-                        Evidence from consultations
-                      </p>
-                      {linked.map((st, j) => (
-                        <div
-                          key={j}
-                          className="flex items-start gap-2 rounded-md border border-border/30 bg-muted/5 px-3 py-2"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <p className="text-xs font-medium text-foreground/80">{st.label}</p>
-                              {st.consultation_title && (
-                                <Badge variant="outline" className="text-[10px]">
-                                  {st.consultation_title}
-                                </Badge>
-                              )}
-                            </div>
-                            {st.description && (
-                              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                                {st.description}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Unlinked supporting themes (don't match any accepted label) */}
-      {showSupporting && unlinkedSupporting.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Additional Supporting Themes ({unlinkedSupporting.length})
-          </h3>
-          <div className="grid gap-2">
-            {unlinkedSupporting.map((theme, i) => (
-              <div
-                key={i}
-                className="group rounded-lg border border-border/40 border-l-4 border-l-slate-300 bg-slate-50/20 px-4 py-3 dark:border-slate-700/40 dark:border-l-slate-600 dark:bg-slate-900/10"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-foreground">{theme.label}</p>
-                      {theme.consultation_title && (
-                        <Badge variant="outline" className="text-[10px]">
-                          {theme.consultation_title}
-                        </Badge>
-                      )}
-                    </div>
-                    {theme.description && (
-                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                        {theme.description}
-                      </p>
-                    )}
-                  </div>
-                  <CopyButton
-                    text={theme.description ? `${theme.label}: ${theme.description}` : theme.label}
-                    label={theme.label}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </section>
   );
 }
@@ -992,17 +830,27 @@ function TemplateSelector({
 
 interface ReportEditorProps {
   report: ReportArtifactDetail;
+  anonymousMode: boolean;
   onExit: () => void;
   onSaved: (newArtifactId: string) => void;
 }
 
-function ReportEditor({ report, onExit, onSaved }: ReportEditorProps) {
+export function ReportEditor({
+  report,
+  anonymousMode,
+  onExit,
+  onSaved,
+}: ReportEditorProps) {
   const editorRef = useRef<MDXEditorMethods>(null);
   const isDirtyRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const initialMarkdown = useMemo(
     () => normalizeReportMarkdownForEditor(report.content),
     [report.content]
+  );
+  const renderPolicy = useMemo(
+    () => createReportRenderPolicy(report, anonymousMode),
+    [anonymousMode, report]
   );
 
   // Warn before navigating away with unsaved changes
@@ -1045,8 +893,14 @@ function ReportEditor({ report, onExit, onSaved }: ReportEditorProps) {
     }
   }, [report.id, onSaved]);
 
+  const handleInsertMarkdown = useCallback((markdown: string) => {
+    editorRef.current?.insertMarkdown(`\n\n${markdown}\n\n`);
+    isDirtyRef.current = true;
+    toast.success("Quote inserted");
+  }, []);
+
   return (
-    <div className="mx-auto max-w-4xl space-y-0">
+    <div className="mx-auto max-w-7xl space-y-0">
       {/* Slim sticky toolbar */}
       <div className="sticky top-0 z-20 flex h-12 items-center justify-between border-b border-border/60 bg-background/95 px-4 py-2 backdrop-blur print:hidden">
         <Button
@@ -1067,32 +921,38 @@ function ReportEditor({ report, onExit, onSaved }: ReportEditorProps) {
         </Button>
       </div>
 
-      {/* MDXEditor — full width, no sidebar */}
-      <MDXEditor
-        ref={editorRef}
-        className="report-mdxeditor"
-        markdown={initialMarkdown}
-        onChange={() => { isDirtyRef.current = true; }}
-        contentEditableClassName="report-mdxeditor-content min-h-[60vh] px-8 py-6 focus:outline-none"
-        plugins={[
-          headingsPlugin({ allowedHeadingLevels: [2, 3] }),
-          listsPlugin(),
-          markdownShortcutPlugin(),
-          toolbarPlugin({
-            toolbarContents: () => (
-              <>
-                <UndoRedo />
-                <EditorSeparator />
-                <BlockTypeSelect />
-                <EditorSeparator />
-                <BoldItalicUnderlineToggles options={["Bold", "Italic"]} />
-                <EditorSeparator />
-                <ListsToggle options={["bullet"]} />
-              </>
-            ),
-          }),
-        ]}
-      />
+      <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <MDXEditor
+          ref={editorRef}
+          className="report-mdxeditor min-w-0"
+          markdown={initialMarkdown}
+          onChange={() => { isDirtyRef.current = true; }}
+          contentEditableClassName="report-mdxeditor-content min-h-[60vh] px-8 py-6 focus:outline-none"
+          plugins={[
+            headingsPlugin({ allowedHeadingLevels: [2, 3] }),
+            listsPlugin(),
+            markdownShortcutPlugin(),
+            toolbarPlugin({
+              toolbarContents: () => (
+                <>
+                  <UndoRedo />
+                  <EditorSeparator />
+                  <BlockTypeSelect />
+                  <EditorSeparator />
+                  <BoldItalicUnderlineToggles options={["Bold", "Italic"]} />
+                  <EditorSeparator />
+                  <ListsToggle options={["bullet"]} />
+                </>
+              ),
+            }),
+          ]}
+        />
+        <ReportQuoteLibrary
+          consultations={report.consultations}
+          renderPolicy={renderPolicy}
+          onInsertMarkdown={handleInsertMarkdown}
+        />
+      </div>
     </div>
   );
 }
@@ -1210,6 +1070,7 @@ export function ReportView({ artifactId }: ReportViewProps) {
     return (
       <ReportEditor
         report={report}
+        anonymousMode={aiPreferences?.anonymousMode ?? false}
         onExit={() => setIsEditing(false)}
         onSaved={handleSaved}
       />

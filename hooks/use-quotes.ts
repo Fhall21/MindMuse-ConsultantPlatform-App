@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QuoteRecord, QuoteStatus } from "@/lib/actions/quotes";
+import type { ReportQuoteLibraryQuote } from "@/lib/report-quote-library";
 import {
   approveQuote,
   createQuote,
@@ -29,6 +30,38 @@ export function useMeetingQuotes(
       ),
     enabled: options.enabled ?? Boolean(meetingId),
   });
+}
+
+export function useApprovedQuotesForMeetings(
+  meetings: Array<{ id: string; title: string }>,
+  options: { enabled?: boolean } = {}
+) {
+  const enabled = options.enabled ?? true;
+  const results = useQueries({
+    queries: meetings.map((meeting) => ({
+      queryKey: quoteKeysForMeeting(meeting.id, "approved"),
+      queryFn: () =>
+        fetchJson<QuoteRecord[]>(
+          `/api/client/quotes/meeting/${meeting.id}?status=approved`
+        ),
+      enabled: enabled && Boolean(meeting.id),
+    })),
+  });
+
+  const quotes = results.flatMap((result, index): ReportQuoteLibraryQuote[] => {
+    const meeting = meetings[index];
+    return (result.data ?? []).map((quote) => ({
+      ...quote,
+      meetingTitle: meeting?.title ?? "Untitled meeting",
+    }));
+  });
+
+  return {
+    quotes,
+    isLoading: results.some((result) => result.isLoading),
+    isError: results.some((result) => result.isError),
+    error: results.find((result) => result.error)?.error ?? null,
+  };
 }
 
 function invalidateMeetingQuotes(qc: ReturnType<typeof useQueryClient>, meetingId: string) {

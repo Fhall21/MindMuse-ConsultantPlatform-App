@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReportQuoteLibrary } from "@/components/reports/report-quote-library";
 import type { ReportQuoteLibraryQuote } from "@/lib/report-quote-library";
 import type { ReportRenderPolicy } from "@/lib/report-render-policy";
 
-const approvedQuotes: ReportQuoteLibraryQuote[] = [
-  {
+const approvedQuotes: ReportQuoteLibraryQuote[] = [];
+
+function quote(overrides: Partial<ReportQuoteLibraryQuote> = {}): ReportQuoteLibraryQuote {
+  return {
     id: "quote-1",
     meetingId: "meeting-1",
     meetingTitle: "Operations workshop",
@@ -34,8 +36,9 @@ const approvedQuotes: ReportQuoteLibraryQuote[] = [
         linkType: "durable",
       },
     ],
-  },
-];
+    ...overrides,
+  };
+}
 
 vi.mock("@/hooks/use-quotes", () => ({
   useApprovedQuotesForMeetings: () => ({
@@ -54,6 +57,11 @@ const renderPolicy: ReportRenderPolicy = {
 };
 
 describe("ReportQuoteLibrary", () => {
+  beforeEach(() => {
+    approvedQuotes.splice(0, approvedQuotes.length, quote());
+    vi.restoreAllMocks();
+  });
+
   it("shows approved quotes and inserts rendered markdown on click", () => {
     const onInsertMarkdown = vi.fn();
 
@@ -128,6 +136,58 @@ describe("ReportQuoteLibrary", () => {
     expect(onInsertMarkdown).toHaveBeenCalledWith(expect.stringContaining("Insight: Theme 1"));
     expect(onInsertMarkdown).not.toHaveBeenCalledWith(
       expect.stringContaining("Operations workshop")
+    );
+  });
+
+  it("requires confirmation before inserting anonymous-mode risk quotes", () => {
+    approvedQuotes.splice(
+      0,
+      approvedQuotes.length,
+      quote({
+        anonymousMaskRule: "role_workgroup",
+        riskFlag: true,
+        riskReason: "Names a one-off incident in a small team.",
+      })
+    );
+    const onInsertMarkdown = vi.fn();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(
+      <ReportQuoteLibrary
+        consultations={[
+          {
+            id: "meeting-1",
+            title: "Operations workshop",
+            date: "2026-05-08",
+            people: ["Riley"],
+            participantLabels: ["Riley"],
+            meetingTypeLabel: "Workshop",
+          },
+        ]}
+        renderPolicy={{
+          anonymousMode: true,
+          maskText: (value) => value,
+          maskPeople: (people) => people,
+          maskConsultationTitle: (title) => title,
+        }}
+        onInsertMarkdown={onInsertMarkdown}
+      />
+    );
+
+    expect(screen.getByText(/anonymous risk/i)).toHaveTextContent(
+      "Names a one-off incident in a small team."
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /insert quote/i }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("potentially identifying"));
+    expect(onInsertMarkdown).not.toHaveBeenCalled();
+
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: /insert quote/i }));
+
+    expect(onInsertMarkdown).toHaveBeenCalledWith(
+      expect.stringContaining("Review before external sharing")
     );
   });
 });

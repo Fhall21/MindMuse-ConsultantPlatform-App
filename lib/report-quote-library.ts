@@ -128,3 +128,10 @@ export function formatQuoteInsertionMarkdown(
 
   return `${blockquote(rendered.text)}\n\n_${metadata.join(" | ")}_`;
 }
+
+export function quoteRequiresAnonymousRiskConfirmation(
+  rendered: Pick<RenderedQuote, "riskFlagged">,
+  anonymousMode: boolean
+) {
+  return anonymousMode && rendered.riskFlagged;
+}

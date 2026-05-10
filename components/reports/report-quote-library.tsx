@@ -17,6 +17,7 @@ import { useApprovedQuotesForMeetings } from "@/hooks/use-quotes";
 import {
   formatQuoteInsertionMarkdown,
   groupReportQuotes,
+  quoteRequiresAnonymousRiskConfirmation,
   type QuoteGroupMode,
   type QuoteSourceFilter,
 } from "@/lib/report-quote-library";
@@ -155,18 +156,30 @@ export function ReportQuoteLibrary({
                       meetingTitle,
                       insightLabels[0],
                     ].filter((value): value is string => Boolean(value));
+                    const requiresRiskConfirmation = quoteRequiresAnonymousRiskConfirmation(
+                      rendered,
+                      renderPolicy.anonymousMode
+                    );
+                    const riskWarning =
+                      quote.riskReason?.trim() ||
+                      "This quote may still identify someone after anonymous-mode masking.";
 
                     return (
                       <article
                         key={`${group.key}-${quote.id}`}
                         className={cn(
                           "rounded-md border border-border bg-background p-3 shadow-sm",
-                          rendered.riskFlagged && "border-amber-300 bg-amber-50/40"
+                          requiresRiskConfirmation && "border-amber-300 bg-amber-50/40"
                         )}
                       >
                         <p className="line-clamp-4 text-sm leading-6 text-foreground">
                           &ldquo;{rendered.text}&rdquo;
                         </p>
+                        {requiresRiskConfirmation && (
+                          <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-900">
+                            Anonymous risk: {riskWarning}
+                          </p>
+                        )}
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           {metadata.map((value) => (
                             <Badge key={value} variant="secondary" className="max-w-full truncate text-[11px]">
@@ -189,14 +202,21 @@ export function ReportQuoteLibrary({
                           size="sm"
                           variant="outline"
                           className="mt-3 h-8 w-full gap-2 text-xs"
-                          onClick={() =>
+                          onClick={() => {
+                            if (requiresRiskConfirmation) {
+                              const confirmed = window.confirm(
+                                `This quote is flagged as potentially identifying in anonymous mode.\n\n${riskWarning}\n\nInsert it anyway?`
+                              );
+                              if (!confirmed) return;
+                            }
+
                             onInsertMarkdown(
                               formatQuoteInsertionMarkdown(quote, rendered, {
                                 meetingTitle,
                                 insightLabels,
                               })
-                            )
-                          }
+                            );
+                          }}
                         >
                           <Plus className="h-3.5 w-3.5" />
                           Insert quote

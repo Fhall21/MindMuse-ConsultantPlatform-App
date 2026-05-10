@@ -3,6 +3,7 @@ import {
   formatQuoteInsertionMarkdown,
   groupReportQuotes,
   quoteMatchesReportFilters,
+  quoteRequiresAnonymousRiskConfirmation,
   type ReportQuoteLibraryQuote,
 } from "@/lib/report-quote-library";
 
@@ -89,6 +90,12 @@ describe("report quote library helpers", () => {
     expect(markdown).toContain("Insight: Handoff ownership is unclear");
     expect(markdown).toContain("Masked for anonymous mode");
     expect(markdown).toContain("Review before external sharing");
+  });
+
+  it("requires risk confirmation only when anonymous mode and rendered risk are both present", () => {
+    expect(quoteRequiresAnonymousRiskConfirmation({ riskFlagged: true }, true)).toBe(true);
+    expect(quoteRequiresAnonymousRiskConfirmation({ riskFlagged: true }, false)).toBe(false);
+    expect(quoteRequiresAnonymousRiskConfirmation({ riskFlagged: false }, true)).toBe(false);
   });
 
   it("uses caller-provided masked provenance labels when inserting markdown", () => {

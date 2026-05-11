@@ -110,6 +110,29 @@ function blockquote(text: string) {
     .join("\n>\n");
 }
 
+/**
+ * Key-quote format: a standalone blockquote block with optional attribution.
+ *
+ * > "Quote text here"
+ * >
+ * > — Speaker, Work group
+ */
+export function formatKeyQuoteMarkdown(text: string, attribution: string | null): string {
+  const attrLine = attribution ? `\n>\n> \u2014 ${attribution}` : "";
+  return `> \u201c${text.trim()}\u201d${attrLine}`;
+}
+
+/**
+ * Inline-quote format: a short run of quoted text woven into prose.
+ *
+ * "Quote text here" — Speaker, Work group
+ */
+export function formatInlineQuoteMarkdown(text: string, attribution: string | null): string {
+  const attrPart = attribution ? ` \u2014 ${attribution}` : "";
+  return `\u201c${text.trim()}\u201d${attrPart}`;
+}
+
+/** @deprecated Use formatKeyQuoteMarkdown / formatInlineQuoteMarkdown instead. */
 export function formatQuoteInsertionMarkdown(
   quote: ReportQuoteLibraryQuote,
   rendered: RenderedQuote,

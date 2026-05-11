@@ -28,6 +28,7 @@ export type ContentBlock =
   | { type: "heading3"; text: string }
   | { type: "bullet"; items: string[] }
   | { type: "numbered"; items: string[] }
+  | { type: "blockquote"; lines: string[] }
   | { type: "prose"; text: string };
 
 type MutableBlock =
@@ -36,6 +37,7 @@ type MutableBlock =
   | { type: "heading3"; text: string }
   | { type: "bullet"; items: string[] }
   | { type: "numbered"; items: string[] }
+  | { type: "blockquote"; lines: string[] }
   | { type: "prose"; lines: string[] };
 
 function isBulletLine(line: string): boolean {
@@ -112,6 +114,23 @@ export function parseContentBlocks(content: string): ContentBlock[] {
       flush();
       results.push({ type: "heading1", text: normalizeReportHeadingText(trimmed.slice(2)) });
       current = null;
+      continue;
+    }
+
+    // ── Blockquote (lines starting with ">") ──────────────────────────────
+    if (trimmed.startsWith(">")) {
+      // Strip the "> " or bare ">" prefix to get the inner text
+      const inner = trimmed.startsWith("> ")
+        ? trimmed.slice(2)
+        : trimmed === ">"
+        ? ""
+        : trimmed.slice(1);
+      if (current && blockType(current) === "blockquote") {
+        (current as { type: "blockquote"; lines: string[] }).lines.push(inner);
+      } else {
+        flush();
+        current = { type: "blockquote", lines: [inner] };
+      }
       continue;
     }
 

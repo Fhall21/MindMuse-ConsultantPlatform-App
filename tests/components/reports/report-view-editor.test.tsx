@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
 
+// Make requestAnimationFrame synchronous so quote insertion tests can assert
+// immediately without needing fake timers or act() wrappers.
+global.requestAnimationFrame = (cb: FrameRequestCallback) => { cb(0); return 0; };
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ReportArtifactDetail } from "@/types/report-artifact";
@@ -24,6 +28,7 @@ vi.mock("@mdxeditor/editor", async () => {
     headingsPlugin: vi.fn(),
     listsPlugin: vi.fn(),
     markdownShortcutPlugin: vi.fn(),
+    quotePlugin: vi.fn(),
     toolbarPlugin: vi.fn(),
     BoldItalicUnderlineToggles: () => null,
     BlockTypeSelect: () => null,

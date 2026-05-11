@@ -321,6 +321,31 @@ html[data-accessibility-motion="reduced"] *::after {
   color: var(--foreground);
 }
 
+/* Key-quote block inserted from the quote library */
+.report-mdxeditor-content blockquote {
+  margin: 1.25rem 0;
+  padding: 1rem 1.25rem;
+  border-left: 4px solid color-mix(in oklab, var(--primary) 55%, transparent);
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  background: color-mix(in oklab, var(--primary) 4%, var(--background));
+}
+
+.report-mdxeditor-content blockquote p {
+  margin: 0;
+  font-size: 1rem;
+  font-style: italic;
+  line-height: 1.7;
+  color: var(--foreground);
+}
+
+/* Attribution line (the "— Name" line inside the blockquote) */
+.report-mdxeditor-content blockquote p:last-child:not(:first-child) {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  font-style: normal;
+  color: var(--muted-foreground);
+}
+
 /* ─── Print styles (Cmd+P / Ctrl+P) ─── */
 @media print {
   /* Hide navigation, sidebar, and interactive elements */

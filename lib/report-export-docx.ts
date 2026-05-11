@@ -118,6 +118,33 @@ function blockToParagraphs(block: ContentBlock): Paragraph[] {
             children: [new TextRun({ text: `${i + 1}. ${item}` })],
           })
       );
+
+    case "blockquote": {
+      const bodyLines = block.lines.filter(
+        (l) => l !== "" && !l.startsWith("\u2014") && !l.startsWith("--")
+      );
+      const attrLine = block.lines.find(
+        (l) => l.startsWith("\u2014 ") || l.startsWith("-- ")
+      );
+      const attrText = attrLine
+        ? attrLine.replace(/^[-\u2014]{1,2}\s*/, "")
+        : null;
+      const paras: Paragraph[] = [
+        new Paragraph({
+          indent: { left: 360 },
+          children: [new TextRun({ text: bodyLines.join(" "), italics: true })],
+        }),
+      ];
+      if (attrText) {
+        paras.push(
+          new Paragraph({
+            indent: { left: 360 },
+            children: [new TextRun({ text: `\u2014 ${attrText}`, color: "888888" })],
+          })
+        );
+      }
+      return paras;
+    }
   }
 }
 

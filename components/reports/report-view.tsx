@@ -894,9 +894,15 @@ export function ReportEditor({
   }, [report.id, onSaved]);
 
   const handleInsertMarkdown = useCallback((markdown: string) => {
-    editorRef.current?.insertMarkdown(`\n\n${markdown}\n\n`);
+    // rAF lets the popover close first so editor retains its cursor position.
+    // focus() is called explicitly: clicking the sidebar popover button moves
+    // DOM focus away from the editor, and insertMarkdown needs an active Lexical
+    // selection to know where to insert.
+    requestAnimationFrame(() => {
+      editorRef.current?.focus(undefined, { preventScroll: true });
+      editorRef.current?.insertMarkdown(`\n\n${markdown}\n\n`);
+    });
     isDirtyRef.current = true;
-    toast.success("Quote inserted");
   }, []);
 
   return (

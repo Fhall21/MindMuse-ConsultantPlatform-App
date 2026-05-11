@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChevronDown, Plus, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlignLeft, ChevronDown, Plus, Search, Type } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,6 +13,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -22,7 +27,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApprovedQuotesForMeetings } from "@/hooks/use-quotes";
 import {
-  formatQuoteInsertionMarkdown,
+  formatKeyQuoteMarkdown,
+  formatInlineQuoteMarkdown,
   groupReportQuotes,
   quoteRequiresAnonymousRiskConfirmation,
   type QuoteGroupMode,
@@ -55,6 +61,22 @@ export function ReportQuoteLibrary({
   const [groupBy, setGroupBy] = useState<QuoteGroupMode>("insight");
   const [accordionMode, setAccordionMode] = useState(true);
   const [openGroupKey, setOpenGroupKey] = useState<string | null>(null);
+  const [popoverOpenId, setPopoverOpenId] = useState<string | null>(null);
+  const [flashedId, setFlashedId] = useState<string | null>(null);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up flash timer on unmount
+  useEffect(() => {
+    return () => {
+      if (flashTimerRef.current !== null) clearTimeout(flashTimerRef.current);
+    };
+  }, []);
+
+  function triggerFlash(id: string) {
+    if (flashTimerRef.current !== null) clearTimeout(flashTimerRef.current);
+    setFlashedId(id);
+    flashTimerRef.current = setTimeout(() => setFlashedId(null), 1200);
+  }
 
   const meetings = useMemo(
     () => consultations.map((meeting) => ({ id: meeting.id, title: meeting.title })),
@@ -178,15 +200,29 @@ export function ReportQuoteLibrary({
                 <div className="space-y-2 pb-1 pt-1">
                   {group.quotes.map((quote) => {
                     const rendered = renderQuote(quote, renderPolicy);
+
+                    // Attribution for insertion: Speaker + Workgroup, deduped
+                    const maskedWorkgroup = quote.workGroupLabel
+                      ? renderPolicy.maskText(quote.workGroupLabel)
+                      : null;
+                    const attrParts = [rendered.attribution];
+                    if (maskedWorkgroup && maskedWorkgroup !== rendered.attribution) {
+                      attrParts.push(maskedWorkgroup);
+                    }
+                    const insertionAttribution =
+                      attrParts.filter(Boolean).join(", ") || null;
+
+                    // Metadata badges for display on the card (not inserted into doc)
                     const meetingTitle = renderPolicy.maskConsultationTitle(quote.meetingTitle);
                     const insightLabels = quote.links.map((link) =>
                       renderPolicy.maskText(link.insightLabel)
                     );
-                    const metadata = [
+                    const displayBadges = [
                       rendered.attribution,
                       meetingTitle,
                       insightLabels[0],
                     ].filter((value): value is string => Boolean(value));
+
                     const requiresRiskConfirmation = quoteRequiresAnonymousRiskConfirmation(
                       rendered,
                       renderPolicy.anonymousMode
@@ -195,12 +231,36 @@ export function ReportQuoteLibrary({
                       quote.riskReason?.trim() ||
                       "This quote may still identify someone after anonymous-mode masking.";
 
+                    const isFlashing = flashedId === quote.id;
+                    const isPopoverOpen = popoverOpenId === quote.id;
+
+                    function handleInsertClick(format: "key" | "inline") {
+                      setPopoverOpenId(null);
+                      const markdown =
+                        format === "key"
+                          ? formatKeyQuoteMarkdown(rendered.text, insertionAttribution)
+                          : formatInlineQuoteMarkdown(rendered.text, insertionAttribution);
+                      onInsertMarkdown(markdown);
+                      triggerFlash(quote.id);
+                    }
+
+                    function handleTriggerClick() {
+                      if (requiresRiskConfirmation) {
+                        const confirmed = window.confirm(
+                          `This quote is flagged as potentially identifying in anonymous mode.\n\n${riskWarning}\n\nInsert it anyway?`
+                        );
+                        if (!confirmed) return;
+                      }
+                      setPopoverOpenId((prev) => (prev === quote.id ? null : quote.id));
+                    }
+
                     return (
                       <article
                         key={`${group.key}-${quote.id}`}
                         className={cn(
-                          "rounded-md border border-border bg-background p-3 shadow-sm",
-                          requiresRiskConfirmation && "border-amber-300 bg-amber-50/40"
+                          "rounded-md border border-border bg-background p-3 shadow-sm transition-shadow duration-500",
+                          requiresRiskConfirmation && "border-amber-300 bg-amber-50/40",
+                          isFlashing && "ring-2 ring-primary/40"
                         )}
                       >
                         <p className="line-clamp-4 text-sm leading-6 text-foreground">
@@ -212,7 +272,7 @@ export function ReportQuoteLibrary({
                           </p>
                         )}
                         <div className="mt-3 flex flex-wrap gap-1.5">
-                          {metadata.map((value) => (
+                          {displayBadges.map((value) => (
                             <Badge
                               key={value}
                               variant="secondary"
@@ -235,29 +295,56 @@ export function ReportQuoteLibrary({
                             </Badge>
                           )}
                         </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="mt-3 h-8 w-full gap-2 text-xs"
-                          onClick={() => {
-                            if (requiresRiskConfirmation) {
-                              const confirmed = window.confirm(
-                                `This quote is flagged as potentially identifying in anonymous mode.\n\n${riskWarning}\n\nInsert it anyway?`
-                              );
-                              if (!confirmed) return;
-                            }
-                            onInsertMarkdown(
-                              formatQuoteInsertionMarkdown(quote, rendered, {
-                                meetingTitle,
-                                insightLabels,
-                              })
-                            );
-                          }}
+
+                        {/* Insert picker */}
+                        <Popover
+                          open={isPopoverOpen}
+                          onOpenChange={(open) => { if (!open) setPopoverOpenId(null); }}
                         >
-                          <Plus className="h-3.5 w-3.5" />
-                          Insert quote
-                        </Button>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="mt-3 h-8 w-full gap-2 text-xs"
+                              onClick={handleTriggerClick}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              Insert quote
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            align="center"
+                            side="top"
+                            sideOffset={6}
+                            className="w-52 p-1.5"
+                          >
+                            <div className="space-y-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleInsertClick("key")}
+                                className="flex w-full items-start gap-3 rounded-sm px-2.5 py-2 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                <AlignLeft className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <div>
+                                  <p className="text-xs font-medium text-foreground">Key quote</p>
+                                  <p className="text-[11px] text-muted-foreground">Standalone block</p>
+                                </div>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleInsertClick("inline")}
+                                className="flex w-full items-start gap-3 rounded-sm px-2.5 py-2 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                <Type className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <div>
+                                  <p className="text-xs font-medium text-foreground">Inline</p>
+                                  <p className="text-[11px] text-muted-foreground">Woven into prose</p>
+                                </div>
+                              </button>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       </article>
                     );
                   })}

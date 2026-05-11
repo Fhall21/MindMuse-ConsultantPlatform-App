@@ -925,6 +925,29 @@ function PdfContentBlocks({ content }: { content: string }) {
                 ))}
               </View>
             );
+          case "blockquote": {
+            const bodyLines = block.lines.filter(
+              (l) => l !== "" && !l.startsWith("\u2014") && !l.startsWith("--")
+            );
+            const attrLine = block.lines.find(
+              (l) => l.startsWith("\u2014 ") || l.startsWith("-- ")
+            );
+            const attrText = attrLine
+              ? attrLine.replace(/^[-\u2014]{1,2}\s*/, "")
+              : null;
+            return (
+              <View key={i} style={{ marginVertical: 8, paddingLeft: 12, borderLeft: 3, borderLeftColor: "#94a3b8" }}>
+                <Text style={{ ...s.paragraph, fontStyle: "italic" }}>
+                  {bodyLines.join(" ")}
+                </Text>
+                {attrText ? (
+                  <Text style={{ ...s.paragraph, fontSize: 9, color: "#64748b" }}>
+                    \u2014 {attrText}
+                  </Text>
+                ) : null}
+              </View>
+            );
+          }
           default:
             return (
               <Text key={i} style={s.paragraph}>

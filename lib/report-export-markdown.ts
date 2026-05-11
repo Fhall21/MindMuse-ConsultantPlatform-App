@@ -43,6 +43,17 @@ function serializeBlock(block: ContentBlock): string {
       return block.items.map((item) => `- ${item}`).join("\n");
     case "numbered":
       return block.items.map((item, i) => `${i + 1}. ${item}`).join("\n");
+    case "blockquote": {
+      const bodyLines = block.lines.filter(
+        (l) => l !== "" && !l.startsWith("\u2014") && !l.startsWith("--")
+      );
+      const attrLine = block.lines.find(
+        (l) => l.startsWith("\u2014 ") || l.startsWith("-- ")
+      );
+      const lines = [`> ${bodyLines.join(" ")}`];
+      if (attrLine) lines.push(`> ${attrLine}`);
+      return lines.join("\n");
+    }
   }
 }
 

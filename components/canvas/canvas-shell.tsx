@@ -692,7 +692,9 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
         throw error;
       }
     },
-    [activeFrameId, deleteFrame, focusedNodeId, selectedNodeIds]
+    // selectedNodeIds intentionally omitted: state setter form (functional
+    // update) is used, so we don't need the current value in the dep array.
+    [activeFrameId, deleteFrame, focusedNodeId]
   );
 
   /**

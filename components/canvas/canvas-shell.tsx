@@ -251,12 +251,25 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     setShowSuggestions(false);
     setSelectedEdgeId(null);
     setConnectionPrompt(null);
-    setIsReorganising(true);
 
     // When a frame is active and the user hasn't manually selected nodes,
     // scope the layout to that frame's node_ids and pass the frame bounds so
     // the layout algorithm centers the result within the frame.
     const useFrameScope = !!activeFrame && selectedNodeIds.length < 2;
+
+    // Guard: frame has fewer than 2 nodes — layout can't run and passing an
+    // empty nodeIds array would silently fall back to scope="all" and rearrange
+    // the *entire* canvas. Surface a clear error instead.
+    if (useFrameScope && activeFrame.node_ids.length < 2) {
+      toast.error(
+        activeFrame.node_ids.length === 0
+          ? `"${activeFrame.name}" has no nodes. Drag nodes inside the frame first.`
+          : `"${activeFrame.name}" needs at least 2 nodes to arrange.`
+      );
+      return;
+    }
+
+    setIsReorganising(true);
     setLayoutRequest({
       id: nextLayoutRequestIdRef.current++,
       nodeIds: useFrameScope

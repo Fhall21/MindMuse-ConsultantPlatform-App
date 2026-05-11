@@ -281,6 +281,25 @@ export function useUpdateFrame(roundId: string) {
           body: JSON.stringify(payload),
         }
       ),
+    onMutate: async (payload) => {
+      // Cancel in-flight refetches so they don't overwrite our optimistic update.
+      await queryClient.cancelQueries({ queryKey: framesKey(roundId) });
+      const previousFrames = queryClient.getQueryData<CanvasFrame[]>(framesKey(roundId));
+      // Optimistically apply the partial update so subsequent mutations in the
+      // same tick (e.g. two nodes dragged to the same frame) read fresh node_ids.
+      queryClient.setQueryData<CanvasFrame[]>(framesKey(roundId), (old = []) =>
+        old.map((frame) =>
+          frame.id === payload.id ? { ...frame, ...payload } : frame
+        )
+      );
+      return { previousFrames };
+    },
+    onError: (_err, _payload, context) => {
+      const ctx = context as { previousFrames?: CanvasFrame[] } | undefined;
+      if (ctx?.previousFrames) {
+        queryClient.setQueryData(framesKey(roundId), ctx.previousFrames);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: framesKey(roundId) });
     },

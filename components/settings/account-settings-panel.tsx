@@ -187,7 +187,6 @@ export function AccountSettingsPanel() {
             {isLoading ? "Loading account details…" : currentEmail || "No email found"}
           </p>
         </div>
-        <Badge variant="outline">{isLoading ? "Loading" : "Signed in"}</Badge>
       </div>
 
       <Card size="sm">

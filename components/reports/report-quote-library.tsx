@@ -1,10 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { ChevronDown, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -46,6 +53,9 @@ export function ReportQuoteLibrary({
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<QuoteSourceFilter>("all");
   const [groupBy, setGroupBy] = useState<QuoteGroupMode>("insight");
+  const [accordionMode, setAccordionMode] = useState(true);
+  const [openGroupKey, setOpenGroupKey] = useState<string | null>(null);
+
   const meetings = useMemo(
     () => consultations.map((meeting) => ({ id: meeting.id, title: meeting.title })),
     [consultations]
@@ -59,12 +69,21 @@ export function ReportQuoteLibrary({
   );
   const visibleCount = groups.reduce((sum, group) => sum + group.quotes.length, 0);
 
+  // When search is active, expand all groups regardless of accordion mode.
+  const isSearchActive = search.trim().length > 0;
+  const useAccordion = accordionMode && !isSearchActive;
+
+  function handleGroupToggle(key: string) {
+    setOpenGroupKey((prev) => (prev === key ? null : key));
+  }
+
   return (
     <aside
-      className="flex min-h-[60vh] flex-col rounded-lg border border-border bg-muted/20"
+      className="flex h-[70vh] flex-col overflow-hidden rounded-lg border border-border bg-muted/20"
       aria-label="Approved quote library"
     >
-      <div className="space-y-3 border-b border-border/70 p-4">
+      {/* Sticky controls */}
+      <div className="shrink-0 space-y-3 border-b border-border/70 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-foreground">Quote library</h2>
@@ -111,8 +130,26 @@ export function ReportQuoteLibrary({
             </SelectContent>
           </Select>
         </div>
+
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="accordion-toggle"
+            checked={accordionMode}
+            onCheckedChange={(checked) => {
+              setAccordionMode(checked === true);
+              setOpenGroupKey(null);
+            }}
+          />
+          <Label
+            htmlFor="accordion-toggle"
+            className="cursor-pointer select-none text-xs text-muted-foreground"
+          >
+            Collapse groups
+          </Label>
+        </div>
       </div>
 
+      {/* Scrollable quote list */}
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {isLoading ? (
           <div className="space-y-3">
@@ -129,22 +166,16 @@ export function ReportQuoteLibrary({
             No approved quotes match these filters.
           </p>
         ) : (
-          <div className="space-y-4">
-            {groups.map((group) => (
-              <section key={group.key} className="space-y-2">
-                <div className="flex items-center justify-between gap-2 px-1">
-                  <h3 className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {GROUP_LABELS[groupBy]} |{" "}
-                    {groupBy === "meeting"
-                      ? renderPolicy.maskConsultationTitle(group.label)
-                      : renderPolicy.maskText(group.label)}
-                  </h3>
-                  <span className="text-[11px] tabular-nums text-muted-foreground">
-                    {group.quotes.length}
-                  </span>
-                </div>
+          <div className="space-y-1">
+            {groups.map((group) => {
+              const groupLabel =
+                groupBy === "meeting"
+                  ? renderPolicy.maskConsultationTitle(group.label)
+                  : renderPolicy.maskText(group.label);
+              const isOpen = !useAccordion || openGroupKey === group.key;
 
-                <div className="space-y-2">
+              const quoteCards = (
+                <div className="space-y-2 pb-1 pt-1">
                   {group.quotes.map((quote) => {
                     const rendered = renderQuote(quote, renderPolicy);
                     const meetingTitle = renderPolicy.maskConsultationTitle(quote.meetingTitle);
@@ -182,7 +213,11 @@ export function ReportQuoteLibrary({
                         )}
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           {metadata.map((value) => (
-                            <Badge key={value} variant="secondary" className="max-w-full truncate text-[11px]">
+                            <Badge
+                              key={value}
+                              variant="secondary"
+                              className="max-w-full truncate text-[11px]"
+                            >
                               {value}
                             </Badge>
                           ))}
@@ -192,7 +227,10 @@ export function ReportQuoteLibrary({
                             </Badge>
                           )}
                           {rendered.riskFlagged && (
-                            <Badge variant="outline" className="border-amber-300 text-[11px] text-amber-700">
+                            <Badge
+                              variant="outline"
+                              className="border-amber-300 text-[11px] text-amber-700"
+                            >
                               Risk
                             </Badge>
                           )}
@@ -209,7 +247,6 @@ export function ReportQuoteLibrary({
                               );
                               if (!confirmed) return;
                             }
-
                             onInsertMarkdown(
                               formatQuoteInsertionMarkdown(quote, rendered, {
                                 meetingTitle,
@@ -225,8 +262,50 @@ export function ReportQuoteLibrary({
                     );
                   })}
                 </div>
-              </section>
-            ))}
+              );
+
+              if (useAccordion) {
+                return (
+                  <Collapsible
+                    key={group.key}
+                    open={openGroupKey === group.key}
+                    onOpenChange={() => handleGroupToggle(group.key)}
+                  >
+                    <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 rounded-sm px-1 py-1.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {GROUP_LABELS[groupBy]} | {groupLabel}
+                      </span>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span className="text-[11px] tabular-nums text-muted-foreground">
+                          {group.quotes.length}
+                        </span>
+                        <ChevronDown
+                          className={cn(
+                            "h-3.5 w-3.5 text-muted-foreground/60 transition-transform duration-200",
+                            openGroupKey === group.key && "rotate-180"
+                          )}
+                        />
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>{quoteCards}</CollapsibleContent>
+                  </Collapsible>
+                );
+              }
+
+              return (
+                <section key={group.key} className="space-y-1">
+                  <div className="flex items-center justify-between gap-2 px-1 py-1.5">
+                    <h3 className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {GROUP_LABELS[groupBy]} | {groupLabel}
+                    </h3>
+                    <span className="text-[11px] tabular-nums text-muted-foreground">
+                      {group.quotes.length}
+                    </span>
+                  </div>
+                  {quoteCards}
+                </section>
+              );
+            })}
           </div>
         )}
       </div>

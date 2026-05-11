@@ -733,18 +733,35 @@ function CanvasGraphInner({
   const filteredNodes = useMemo(
     () =>
       visibleNodeIds
-        ? filterPassNodes.filter((n) => visibleNodeIds.has(n.id))
+        ? filterPassNodes.filter(
+            // Show a node if it is directly in the frame, OR if it is a grouped
+            // insight whose parent theme is in the frame. Without this, switching
+            // to a frame that contains a theme hides all of that theme's children
+            // because child insight IDs are not stored in frame.node_ids.
+            (n) => visibleNodeIds.has(n.id) || !!(n.groupId && visibleNodeIds.has(n.groupId))
+          )
         : filterPassNodes,
     [filterPassNodes, visibleNodeIds]
   );
   const filteredEdges = useMemo(
     () =>
       visibleNodeIds
-        ? filterPassEdges.filter(
-            (e) => visibleNodeIds.has(e.source_node_id) && visibleNodeIds.has(e.target_node_id)
-          )
+        ? filterPassEdges.filter((e) => {
+            // An edge is visible when both its endpoints are reachable in the
+            // current frame. An endpoint is reachable if its own ID is in the
+            // frame, OR if it belongs to a theme that is in the frame.
+            const sourceNode = filterPassNodes.find((n) => n.id === e.source_node_id);
+            const targetNode = filterPassNodes.find((n) => n.id === e.target_node_id);
+            const sourceVisible =
+              visibleNodeIds.has(e.source_node_id) ||
+              !!(sourceNode?.groupId && visibleNodeIds.has(sourceNode.groupId));
+            const targetVisible =
+              visibleNodeIds.has(e.target_node_id) ||
+              !!(targetNode?.groupId && visibleNodeIds.has(targetNode.groupId));
+            return sourceVisible && targetVisible;
+          })
         : filterPassEdges,
-    [filterPassEdges, visibleNodeIds]
+    [filterPassEdges, filterPassNodes, visibleNodeIds]
   );
 
   const viewportRequestRef = useRef(viewportRequest);

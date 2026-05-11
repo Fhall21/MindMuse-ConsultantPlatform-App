@@ -75,9 +75,18 @@ interface CanvasGraphProps {
   /** ID of the frame currently highlighted as a drop target during a drag. */
   dropTargetFrameId?: string | null;
   /** Fired when consultant releases the rubber-band rectangle. */
-  onFrameDraw?: (bounds: { x: number; y: number; width: number; height: number }) => void;
+  onFrameDraw?: (
+    bounds: { x: number; y: number; width: number; height: number },
+    /** Live node positions at draw time — use instead of stale server snapshot. */
+    liveNodes: Array<{ id: string; position: { x: number; y: number }; measured?: { width?: number; height?: number } }>
+  ) => void;
   /** Fired when a frame is moved/resized. */
-  onFramePersist?: (frameId: string, bounds: { x: number; y: number; width: number; height: number }) => void;
+  onFramePersist?: (
+    frameId: string,
+    bounds: { x: number; y: number; width: number; height: number },
+    /** Live node positions at persist time — use instead of stale server snapshot. */
+    liveNodes: Array<{ id: string; position: { x: number; y: number }; measured?: { width?: number; height?: number } }>
+  ) => void;
   /** Fired after a node drag settles — checks frame membership. */
   onNodeFrameAssign?: (nodeId: string, position: { x: number; y: number }) => void;
   /** Fired during node drag to update drop-target highlight. */
@@ -840,6 +849,14 @@ function CanvasGraphInner({
         // Persist on settle (drag-end / resize-end). Reads from
         // currentNodes after applyNodeChanges so the persisted bounds
         // match what RF just rendered.
+        // Snapshot live non-frame node positions once per batch, before
+        // entering the setFrameFlowNodes setter which reads stale closure state.
+        // Child nodes (parentId set = grouped insights) are excluded — their
+        // positions are parent-relative and they are not tracked in frame.node_ids.
+        const liveNodesSnapshot = flowNodesRef.current
+          .filter((n) => !n.parentId)
+          .map((n) => ({ id: n.id, position: n.position, measured: n.measured }));
+
         for (const change of frameChanges) {
           const settled =
             (change.type === "position" && change.dragging === false) ||
@@ -866,7 +883,7 @@ function CanvasGraphInner({
                 y: node.position.y,
                 width,
                 height,
-              });
+              }, liveNodesSnapshot);
             }
             return currentNodes;
           });
@@ -1331,7 +1348,12 @@ function CanvasGraphInner({
       setDrawState(null);
       // Ignore tiny drags (treat as accidental click).
       if (width < 40 || height < 40) return;
-      onFrameDraw?.({ x, y, width, height });
+      onFrameDraw?.(
+        { x, y, width, height },
+        flowNodesRef.current
+          .filter((n) => !n.parentId)
+          .map((n) => ({ id: n.id, position: n.position, measured: n.measured }))
+      );
     },
     [drawState, onFrameDraw, screenToFlowPosition]
   );

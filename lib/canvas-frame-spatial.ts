@@ -42,16 +42,29 @@ export function frameContainingPoint(
 }
 
 /**
- * Compute the set of node IDs whose center position falls inside the given
- * frame's bounds. Used at frame creation (auto-assign overlapping nodes) and
- * after frame resize (recompute membership for nodes now inside/outside).
+ * Compute the set of node IDs whose center falls inside the given frame's
+ * bounds. Used at frame creation (auto-assign overlapping nodes) and after
+ * frame resize (recompute membership for nodes now inside/outside).
+ *
+ * Uses the node centre (position + half measured dimensions) so that a node
+ * must be majority-inside the frame to be included, not just touching at its
+ * top-left corner.
  */
 export function nodeIdsInsideFrame(
-  nodes: ReadonlyArray<Pick<CanvasNode, "id" | "position">>,
+  nodes: ReadonlyArray<
+    Pick<CanvasNode, "id" | "position"> & {
+      measured?: { width?: number; height?: number };
+    }
+  >,
   frame: FrameBounds
 ): string[] {
   return nodes
-    .filter((node) => pointInFrameBounds(node.position, frame))
+    .filter((node) => {
+      // Use centre of the node, not top-left corner.
+      const cx = node.position.x + (node.measured?.width ?? 0) / 2;
+      const cy = node.position.y + (node.measured?.height ?? 0) / 2;
+      return pointInFrameBounds({ x: cx, y: cy }, frame);
+    })
     .map((node) => node.id);
 }
 

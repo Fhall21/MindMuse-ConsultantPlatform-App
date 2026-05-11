@@ -589,9 +589,13 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
    * rectangle on the canvas. Auto-assigns nodes whose centres fall inside
    * the drawn bounds and exits drawing mode.
    */
-  async function handleFrameDraw(bounds: { x: number; y: number; width: number; height: number }) {
+  async function handleFrameDraw(
+    bounds: { x: number; y: number; width: number; height: number },
+    liveNodes: Array<{ id: string; position: { x: number; y: number }; measured?: { width?: number; height?: number } }>
+  ) {
     const currentViewport = canvasQuery.data?.viewport ?? { x: 0, y: 0, zoom: 1 };
-    const auto = nodeIdsInsideFrame(nodes, bounds);
+    // Use live positions passed from canvas-graph (not stale server snapshot).
+    const auto = nodeIdsInsideFrame(liveNodes, bounds);
     const name = `Frame ${frames.length + 1}`;
     const frame = await createFrame.mutateAsync({
       name,
@@ -611,9 +615,11 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
    */
   async function handleFramePersist(
     frameId: string,
-    bounds: { x: number; y: number; width: number; height: number }
+    bounds: { x: number; y: number; width: number; height: number },
+    liveNodes: Array<{ id: string; position: { x: number; y: number }; measured?: { width?: number; height?: number } }>
   ) {
-    const nextNodeIds = nodeIdsInsideFrame(nodes, bounds);
+    // Use live positions passed from canvas-graph (not stale server snapshot).
+    const nextNodeIds = nodeIdsInsideFrame(liveNodes, bounds);
     await updateFrame.mutateAsync({
       id: frameId,
       ...bounds,

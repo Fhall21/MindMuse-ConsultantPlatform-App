@@ -22,7 +22,6 @@ import { useDigitalInterviewUnreadCount } from "@/hooks/use-digital-interviews";
 
 const consultationsSubItems = [
   { title: "All Meetings", href: "/meetings" },
-  { title: "Digital Interviews", href: "/digital-interviews" },
   { title: "Consultations", href: "/consultations" },
 ];
 

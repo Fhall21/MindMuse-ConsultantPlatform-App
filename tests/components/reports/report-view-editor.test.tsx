@@ -10,6 +10,7 @@ import type { ReportArtifactDetail } from "@/types/report-artifact";
 
 const insertMarkdown = vi.fn();
 const getMarkdown = vi.fn(() => "Existing report");
+const focus = vi.fn((callback?: () => void) => callback?.());
 
 vi.mock("@mdxeditor/editor", async () => {
   const React = await vi.importActual<typeof import("react")>("react");
@@ -18,6 +19,7 @@ vi.mock("@mdxeditor/editor", async () => {
       getMarkdown,
       setMarkdown: vi.fn(),
       insertMarkdown,
+      focus,
     }));
     return <div data-testid="mock-report-editor" />;
   });
@@ -68,7 +70,7 @@ vi.mock("@/hooks/use-ai-preferences", () => ({
   useAIPreferences: vi.fn(),
 }));
 
-import { ReportEditor } from "@/components/reports/report-view";
+import { ReportContent, ReportEditor } from "@/components/reports/report-view";
 
 function reportFixture(): ReportArtifactDetail {
   return {
@@ -118,6 +120,26 @@ describe("ReportEditor quote insertion", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /insert quote from library/i }));
 
+    expect(focus).toHaveBeenCalledWith(expect.any(Function), { preventScroll: true });
     expect(insertMarkdown).toHaveBeenCalledWith("\n\n> Inserted quote\n\n");
+  });
+
+  it("renders saved key quotes as journal-style callouts instead of crashing", () => {
+    render(
+      <ReportContent
+        content={[
+          "## Executive Summary",
+          "",
+          "> \u201CThe handoff gets messy when three teams touch the same request.\u201D",
+          ">",
+          "> \u2014 Riley, Operations",
+        ].join("\n")}
+      />
+    );
+
+    expect(
+      screen.getByText("\u201CThe handoff gets messy when three teams touch the same request.\u201D")
+    ).toBeInTheDocument();
+    expect(screen.getByText(/\u2014 Riley, Operations/)).toBeInTheDocument();
   });
 });

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatInlineQuoteMarkdown,
+  formatKeyQuoteMarkdown,
   formatQuoteInsertionMarkdown,
   groupReportQuotes,
   quoteMatchesReportFilters,
@@ -90,6 +92,18 @@ describe("report quote library helpers", () => {
     expect(markdown).toContain("Insight: Handoff ownership is unclear");
     expect(markdown).toContain("Masked for anonymous mode");
     expect(markdown).toContain("Review before external sharing");
+  });
+
+  it("formats key quote markdown as a standalone pull quote", () => {
+    expect(formatKeyQuoteMarkdown("A concise evidence quote.", "Riley, Operations")).toBe(
+      "> \u201CA concise evidence quote.\u201D\n>\n> \u2014 Riley, Operations"
+    );
+  });
+
+  it("formats inline quote markdown without blockquote syntax", () => {
+    expect(formatInlineQuoteMarkdown("A concise evidence quote.", "Riley, Operations")).toBe(
+      "\u201CA concise evidence quote.\u201D \u2014 Riley, Operations"
+    );
   });
 
   it("requires risk confirmation only when anonymous mode and rendered risk are both present", () => {

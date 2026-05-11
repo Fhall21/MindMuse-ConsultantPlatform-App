@@ -323,19 +323,44 @@ html[data-accessibility-motion="reduced"] *::after {
 
 /* Key-quote block inserted from the quote library */
 .report-mdxeditor-content blockquote {
+  position: relative;
   margin: 1.25rem 0;
-  padding: 1rem 1.25rem;
-  border-left: 4px solid color-mix(in oklab, var(--primary) 55%, transparent);
-  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
-  background: color-mix(in oklab, var(--primary) 4%, var(--background));
+  padding: 1.25rem 1.5rem 1.25rem 3rem;
+  border: 1px solid color-mix(in oklab, var(--border) 72%, var(--primary));
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--primary) 8%, var(--card)) 0%,
+      color-mix(in oklab, var(--background) 92%, var(--primary)) 100%
+    );
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+.report-mdxeditor-content blockquote::before {
+  content: "\201C";
+  position: absolute;
+  left: 1rem;
+  top: 0.6rem;
+  color: color-mix(in oklab, var(--primary) 58%, var(--muted-foreground));
+  font-family: Georgia, serif;
+  font-size: 2.75rem;
+  line-height: 1;
 }
 
 .report-mdxeditor-content blockquote p {
   margin: 0;
-  font-size: 1rem;
-  font-style: italic;
-  line-height: 1.7;
+  font-size: 1.0625rem;
+  font-weight: 500;
+  line-height: 1.75;
   color: var(--foreground);
+}
+
+.report-mdxeditor-content blockquote p + p {
+  margin-top: 0.65rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
 }
 
 /* Attribution line (the "— Name" line inside the blockquote) */

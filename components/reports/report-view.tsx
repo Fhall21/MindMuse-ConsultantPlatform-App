@@ -15,6 +15,7 @@ import {
   headingsPlugin,
   listsPlugin,
   markdownShortcutPlugin,
+  quotePlugin,
   toolbarPlugin,
   BoldItalicUnderlineToggles,
   BlockTypeSelect,
@@ -728,6 +729,33 @@ export function ReportContent({ content }: { content: string }) {
                 ))}
               </ol>
             );
+          case "blockquote": {
+            const bodyLines = block.lines.filter(
+              (line) => line !== "" && !line.startsWith("\u2014") && !line.startsWith("--")
+            );
+            const attrLine = block.lines.find(
+              (line) => line.startsWith("\u2014 ") || line.startsWith("-- ")
+            );
+            const attrText = attrLine
+              ? attrLine.replace(/^[-\u2014]{1,2}\s*/, "")
+              : null;
+
+            return (
+              <figure
+                key={i}
+                className="my-6 rounded-lg border border-border/70 bg-muted/20 px-5 py-4"
+              >
+                <blockquote className="text-base font-medium leading-8 text-foreground">
+                  {renderInline(bodyLines.join(" "))}
+                </blockquote>
+                {attrText ? (
+                  <figcaption className="mt-3 text-xs font-medium text-muted-foreground">
+                    &mdash; {renderInline(attrText)}
+                  </figcaption>
+                ) : null}
+              </figure>
+            );
+          }
           case "prose":
           default:
             return (
@@ -939,6 +967,7 @@ export function ReportEditor({
           plugins={[
             headingsPlugin({ allowedHeadingLevels: [2, 3] }),
             listsPlugin(),
+            quotePlugin(),
             markdownShortcutPlugin(),
             toolbarPlugin({
               toolbarContents: () => (

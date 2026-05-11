@@ -83,22 +83,29 @@ describe("ReportQuoteLibrary", () => {
     );
 
     expect(screen.getByText("Quote library")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /handoff ownership is unclear/i }));
     expect(screen.getByText(/handoff gets messy/i)).toBeInTheDocument();
     expect(screen.getByText("Handoff ownership is unclear")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /insert quote/i }));
+    fireEvent.click(screen.getByRole("button", { name: /key quote/i }));
 
     expect(onInsertMarkdown).toHaveBeenCalledWith(
       expect.stringContaining(
-        "> The handoff gets messy when three teams touch the same request."
+        "> \u201CThe handoff gets messy when three teams touch the same request.\u201D"
       )
     );
     expect(onInsertMarkdown).toHaveBeenCalledWith(
-      expect.stringContaining("Meeting: Operations workshop")
+      expect.stringContaining("> \u2014 Riley, Operations")
     );
   });
 
   it("masks provenance labels before display and insertion in anonymous mode", () => {
+    approvedQuotes.splice(
+      0,
+      approvedQuotes.length,
+      quote({ anonymousMaskRule: "role_workgroup" })
+    );
     const onInsertMarkdown = vi.fn();
 
     render(
@@ -126,14 +133,16 @@ describe("ReportQuoteLibrary", () => {
       />
     );
 
-    expect(screen.getByText("Theme 1")).toBeInTheDocument();
+    expect(screen.getByText(/Theme 1/)).toBeInTheDocument();
     expect(screen.queryByText("Operations workshop")).not.toBeInTheDocument();
     expect(screen.queryByText("Handoff ownership is unclear")).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: /theme 1/i }));
     fireEvent.click(screen.getByRole("button", { name: /insert quote/i }));
+    fireEvent.click(screen.getByRole("button", { name: /key quote/i }));
 
-    expect(onInsertMarkdown).toHaveBeenCalledWith(expect.stringContaining("Meeting: Meeting 1"));
-    expect(onInsertMarkdown).toHaveBeenCalledWith(expect.stringContaining("Insight: Theme 1"));
+    expect(onInsertMarkdown).toHaveBeenCalledWith(expect.stringContaining("> \u2014 Operations"));
+    expect(onInsertMarkdown).not.toHaveBeenCalledWith(expect.stringContaining("Riley"));
     expect(onInsertMarkdown).not.toHaveBeenCalledWith(
       expect.stringContaining("Operations workshop")
     );
@@ -174,6 +183,7 @@ describe("ReportQuoteLibrary", () => {
       />
     );
 
+    fireEvent.click(screen.getByRole("button", { name: /handoff ownership is unclear/i }));
     expect(screen.getByText(/anonymous risk/i)).toHaveTextContent(
       "Names a one-off incident in a small team."
     );
@@ -185,9 +195,10 @@ describe("ReportQuoteLibrary", () => {
 
     confirmSpy.mockReturnValue(true);
     fireEvent.click(screen.getByRole("button", { name: /insert quote/i }));
+    fireEvent.click(screen.getByRole("button", { name: /key quote/i }));
 
     expect(onInsertMarkdown).toHaveBeenCalledWith(
-      expect.stringContaining("Review before external sharing")
+      expect.stringContaining("> \u201CThe handoff gets messy when three teams touch the same request.\u201D")
     );
   });
 });

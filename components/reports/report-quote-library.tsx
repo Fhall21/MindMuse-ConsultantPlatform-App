@@ -194,7 +194,6 @@ export function ReportQuoteLibrary({
                 groupBy === "meeting"
                   ? renderPolicy.maskConsultationTitle(group.label)
                   : renderPolicy.maskText(group.label);
-              const isOpen = !useAccordion || openGroupKey === group.key;
 
               const quoteCards = (
                 <div className="space-y-2 pb-1 pt-1">

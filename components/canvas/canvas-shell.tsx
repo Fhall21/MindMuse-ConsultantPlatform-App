@@ -151,10 +151,16 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     () => new Map(nodes.map((node) => [node.id, node.position] as const)),
     [nodes]
   );
-  const canReorganiseCanvas = nodes.length >= 2;
   // When a frame is active and no manual selection, scope to the frame.
   // Manual selection (≥2 nodes) always wins over frame-scope.
   const isFrameScoped = !!activeFrame && selectedNodeIds.length < 2;
+  // Arrange button enabled when there are enough nodes *in scope* to layout.
+  // When frame-scoped, check frame.node_ids count — not the total canvas count.
+  // This prevents the button from appearing active when the frame is empty,
+  // which previously led to the confusing "global arrange" fallback.
+  const canReorganiseCanvas = isFrameScoped
+    ? (activeFrame?.node_ids.length ?? 0) >= 2
+    : nodes.length >= 2;
   const organiseLabel = isFrameScoped
     ? `Arrange "${activeFrame.name}"`
     : selectedNodeIds.length >= 2
@@ -564,18 +570,18 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
   function handleSelectFrame(frameId: string | null) {
     setActiveFrameId(frameId);
-    setSelectedNodeIds([]);
-    setFocusedNodeId(null);
-    // Restore saved viewport when switching to a specific frame
+    // Only clear selection/focus for nodes that are no longer visible in the
+    // new frame. Wiping everything on every tab switch surprises users who
+    // are working with a node and switch frames to check context.
     if (frameId) {
       const frame = frames.find((f) => f.id === frameId);
       if (frame) {
-        setViewportRequest({
-          id: nextViewportRequestIdRef.current++,
-          viewport: frame.viewport,
-        });
+        const frameNodeSet = new Set(frame.node_ids);
+        setSelectedNodeIds((current) => current.filter((id) => frameNodeSet.has(id)));
+        setFocusedNodeId((current) => (current && frameNodeSet.has(current) ? current : null));
       }
     }
+    // Switching back to "All" — keep whatever selection the user has.
   }
 
   /**

@@ -895,12 +895,14 @@ export function ReportEditor({
 
   const handleInsertMarkdown = useCallback((markdown: string) => {
     // rAF lets the popover close first so editor retains its cursor position.
-    // focus() is called explicitly: clicking the sidebar popover button moves
-    // DOM focus away from the editor, and insertMarkdown needs an active Lexical
-    // selection to know where to insert.
+    // focus() accepts a callback that fires once Lexical has actually restored
+    // its internal selection — insertMarkdown must live inside that callback,
+    // not after the focus() call, otherwise it runs before the selection exists.
     requestAnimationFrame(() => {
-      editorRef.current?.focus(undefined, { preventScroll: true });
-      editorRef.current?.insertMarkdown(`\n\n${markdown}\n\n`);
+      editorRef.current?.focus(
+        () => { editorRef.current?.insertMarkdown(`\n\n${markdown}\n\n`); },
+        { preventScroll: true }
+      );
     });
     isDirtyRef.current = true;
   }, []);

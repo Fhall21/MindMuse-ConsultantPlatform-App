@@ -65,6 +65,12 @@ interface CanvasOrganiseMenuProps {
   scopeLabel: string;
   onSelect: (direction: CanvasLayoutDirection) => void;
   fullWidth?: boolean;
+  /**
+   * When set, direction options are reordered to surface these directions
+   * first. The top item gets a "Best fit" badge. Pass when a frame is active
+   * so the menu reflects the frame's aspect ratio.
+   */
+  preferredDirections?: CanvasLayoutDirection[];
 }
 
 function OrganiseTriggerIcon(props: SVGProps<SVGSVGElement>) {
@@ -220,7 +226,20 @@ export function CanvasOrganiseMenu({
   scopeLabel,
   onSelect,
   fullWidth = false,
+  preferredDirections,
 }: CanvasOrganiseMenuProps) {
+  // Reorder options by preferredDirections when set (frame-scope mode).
+  const sortedOptions = preferredDirections
+    ? [...DIRECTION_OPTIONS].sort((a, b) => {
+        const ai = preferredDirections.indexOf(a.value);
+        const bi = preferredDirections.indexOf(b.value);
+        if (ai === -1 && bi === -1) return 0;
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      })
+    : DIRECTION_OPTIONS;
+  const bestFitDirection = preferredDirections?.[0];
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -257,7 +276,9 @@ export function CanvasOrganiseMenu({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <TooltipProvider delayDuration={0}>
-          {DIRECTION_OPTIONS.map((option) => (
+          {sortedOptions.map((option) => {
+            const isBestFit = option.value === bestFitDirection;
+            return (
             <Tooltip key={option.value}>
               <TooltipTrigger asChild>
                 <DropdownMenuItem
@@ -268,7 +289,14 @@ export function CanvasOrganiseMenu({
                     <OrganiseDirectionIcon direction={option.value} className="h-6 w-6" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium leading-none">{option.label}</span>
+                    <span className="flex items-center gap-1.5 text-sm font-medium leading-none">
+                      {option.label}
+                      {isBestFit && (
+                        <span className="inline-flex items-center rounded-sm bg-primary/10 px-1 py-px text-[10px] font-medium text-primary">
+                          Best fit
+                        </span>
+                      )}
+                    </span>
                     <span className="sr-only">
                       {option.description}. {option.helper}
                     </span>
@@ -285,7 +313,7 @@ export function CanvasOrganiseMenu({
                 <span className="block text-background/85">{option.helper}</span>
               </TooltipContent>
             </Tooltip>
-          ))}
+          )})}
         </TooltipProvider>
       </DropdownMenuContent>
     </DropdownMenu>

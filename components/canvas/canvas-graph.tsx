@@ -36,6 +36,7 @@ import { useCanvas, useSaveLayout, type CreateEdgePayload } from "@/hooks/use-ca
 import {
   buildCanvasReorganiseLayout,
   type CanvasLayoutDirection,
+  type FrameBoundsRect,
   getDefaultGroupedPosition,
   getGroupHeight,
   GROUP_HEADER_HEIGHT,
@@ -61,7 +62,7 @@ interface CanvasGraphProps {
   selectedNodeIds: string[];
   selectedEdgeId: string | null;
   aiGeneratedGroupIds?: Set<string>;
-  layoutRequest?: { id: number; nodeIds: string[]; direction: CanvasLayoutDirection } | null;
+  layoutRequest?: { id: number; nodeIds: string[]; direction: CanvasLayoutDirection; frameBounds?: FrameBoundsRect } | null;
   /** When set, only these node IDs are rendered (frame visibility filter). */
   visibleNodeIds?: Set<string> | null;
   /** When set, the viewport is restored to this position. Increment id to trigger. */
@@ -92,6 +93,8 @@ interface CanvasGraphProps {
     movedNodeIds: string[];
     scope: "selected" | "all";
     direction: CanvasLayoutDirection;
+    /** Set when the frame needs to be expanded to contain the laid-out nodes. */
+    suggestedFrameBounds?: FrameBoundsRect;
   }) => void;
   onCreateEdge: (payload: CreateEdgePayload) => Promise<CanvasEdge>;
   onGroupDrop: (params: {
@@ -1079,6 +1082,7 @@ function CanvasGraphInner({
       selectedNodeIds: nextLayoutRequest.nodeIds,
       direction: nextLayoutRequest.direction,
       runtimePositions,
+      frameBounds: nextLayoutRequest.frameBounds,
     });
 
     if (!layoutResult) {
@@ -1147,6 +1151,7 @@ function CanvasGraphInner({
         movedNodeIds: layoutResult.movedNodeIds,
         scope: layoutResult.scope,
         direction: nextLayoutRequest.direction,
+        suggestedFrameBounds: layoutResult.suggestedFrameBounds,
       })
     );
   }, [data, layoutRequest?.id, setFlowNodes]);

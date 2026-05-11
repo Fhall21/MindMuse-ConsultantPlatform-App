@@ -19,6 +19,8 @@ const LAYOUT_RANK_SEP = 108;
 const LAYOUT_EDGE_SEP = 40;
 const LAYOUT_MARGIN = 24;
 const COMPONENT_GAP = 136;
+/** Padding added around laid-out nodes when auto-expanding a frame to fit. */
+const FRAME_LAYOUT_PADDING = 40;
 
 interface ReorganisableNode {
   id: string;
@@ -29,10 +31,23 @@ interface ReorganisableNode {
   height: number;
 }
 
+export interface FrameBoundsRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface CanvasReorganiseLayoutResult {
   positions: Record<string, CanvasPosition>;
   movedNodeIds: string[];
   scope: "selected" | "all";
+  /**
+   * Set only when `frameBounds` was provided and the laid-out nodes overflow
+   * the original bounds. The frame should be expanded to these dimensions.
+   * The frame never shrinks — only grows.
+   */
+  suggestedFrameBounds?: FrameBoundsRect;
 }
 
 interface BuildCanvasReorganiseLayoutParams {
@@ -41,6 +56,12 @@ interface BuildCanvasReorganiseLayoutParams {
   selectedNodeIds: string[];
   direction?: CanvasLayoutDirection;
   runtimePositions?: Record<string, CanvasPosition>;
+  /**
+   * When provided, the laid-out cluster is centered within this frame rect
+   * instead of being centered at the original cluster's centroid. The frame
+   * may also be auto-expanded if the laid-out nodes overflow its bounds.
+   */
+  frameBounds?: FrameBoundsRect;
 }
 
 interface EntityEdge {
@@ -321,6 +342,7 @@ export function buildCanvasReorganiseLayout({
   selectedNodeIds,
   direction = "LR",
   runtimePositions = {},
+  frameBounds,
 }: BuildCanvasReorganiseLayoutParams): CanvasReorganiseLayoutResult | null {
   const { nodes: eligibleNodes, scope } = resolveEligibleNodes(
     nodes,
@@ -389,9 +411,15 @@ export function buildCanvasReorganiseLayout({
     x: (laidOutBounds.minX + laidOutBounds.maxX) / 2,
     y: (laidOutBounds.minY + laidOutBounds.maxY) / 2,
   };
+  // When a frame is active, center the laid-out cluster within the frame rect
+  // rather than at the original cluster centroid. This keeps nodes inside the
+  // frame bounds after layout.
+  const targetCenter = frameBounds
+    ? { x: frameBounds.x + frameBounds.width / 2, y: frameBounds.y + frameBounds.height / 2 }
+    : currentCenter;
   const translation = {
-    x: currentCenter.x - laidOutCenter.x,
-    y: currentCenter.y - laidOutCenter.y,
+    x: targetCenter.x - laidOutCenter.x,
+    y: targetCenter.y - laidOutCenter.y,
   };
 
   const positions: Record<string, CanvasPosition> = {};
@@ -434,9 +462,48 @@ export function buildCanvasReorganiseLayout({
     });
   });
 
+  // When a frame was provided, check if the laid-out + translated nodes overflow
+  // its bounds. If so, compute the minimum expansion needed and return it.
+  let suggestedFrameBounds: FrameBoundsRect | undefined;
+  if (frameBounds) {
+    // Compute the bounding box of all final positions
+    const finalPositions = Object.values(positions);
+    if (finalPositions.length > 0) {
+      const minX = Math.min(...finalPositions.map((p) => p.x)) - FRAME_LAYOUT_PADDING;
+      const minY = Math.min(...finalPositions.map((p) => p.y)) - FRAME_LAYOUT_PADDING;
+      const maxX = Math.max(...finalPositions.map((p) => p.x)) + FRAME_LAYOUT_PADDING;
+      const maxY = Math.max(...finalPositions.map((p) => p.y)) + FRAME_LAYOUT_PADDING;
+
+      const expandedX = Math.min(frameBounds.x, minX);
+      const expandedY = Math.min(frameBounds.y, minY);
+      const expandedMaxX = Math.max(frameBounds.x + frameBounds.width, maxX);
+      const expandedMaxY = Math.max(frameBounds.y + frameBounds.height, maxY);
+
+      const expandedWidth = expandedMaxX - expandedX;
+      const expandedHeight = expandedMaxY - expandedY;
+
+      // Only suggest expansion if the frame actually needs to grow
+      const needsExpansion =
+        expandedX < frameBounds.x ||
+        expandedY < frameBounds.y ||
+        expandedWidth > frameBounds.width ||
+        expandedHeight > frameBounds.height;
+
+      if (needsExpansion) {
+        suggestedFrameBounds = {
+          x: expandedX,
+          y: expandedY,
+          width: expandedWidth,
+          height: expandedHeight,
+        };
+      }
+    }
+  }
+
   return {
     positions,
     movedNodeIds: Array.from(movedNodeIds),
     scope,
+    suggestedFrameBounds,
   };
 }

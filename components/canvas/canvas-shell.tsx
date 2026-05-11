@@ -28,7 +28,7 @@ import {
   useUpdateFrame,
 } from "@/hooks/use-canvas";
 import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
-import type { CanvasLayoutDirection } from "@/lib/canvas-layout";
+import type { CanvasLayoutDirection, FrameBoundsRect } from "@/lib/canvas-layout";
 import { createTheme, moveThemeToGroup, updateTheme } from "@/lib/actions/consultation-workflow";
 import { suggestGroupLabel } from "@/lib/actions/canvas-ai";
 import {
@@ -89,6 +89,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     id: number;
     nodeIds: string[];
     direction: CanvasLayoutDirection;
+    frameBounds?: FrameBoundsRect;
   } | null>(null);
   const nextLayoutRequestIdRef = useRef(1);
   const organiseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -151,11 +152,28 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     [nodes]
   );
   const canReorganiseCanvas = nodes.length >= 2;
-  const organiseLabel = selectedNodeIds.length >= 2 ? "Arrange selection" : "Arrange canvas";
-  const organiseScopeLabel =
-    selectedNodeIds.length >= 2
+  // When a frame is active and no manual selection, scope to the frame.
+  // Manual selection (≥2 nodes) always wins over frame-scope.
+  const isFrameScoped = !!activeFrame && selectedNodeIds.length < 2;
+  const organiseLabel = isFrameScoped
+    ? `Arrange "${activeFrame.name}"`
+    : selectedNodeIds.length >= 2
+      ? "Arrange selection"
+      : "Arrange canvas";
+  const organiseScopeLabel = isFrameScoped
+    ? `Reflow nodes within "${activeFrame.name}"`
+    : selectedNodeIds.length >= 2
       ? "Reflow the selected cluster"
       : "Reflow the main canvas map";
+  // Direction recommendation based on frame aspect ratio.
+  // Wide frames → prefer horizontal; tall frames → prefer vertical.
+  const preferredDirections = useMemo<CanvasLayoutDirection[] | undefined>(() => {
+    if (!isFrameScoped || !activeFrame) return undefined;
+    const ar = activeFrame.width / activeFrame.height;
+    if (ar >= 1.2) return ["LR", "RL", "TB", "BT"];
+    if (ar <= 0.83) return ["TB", "BT", "LR", "RL"];
+    return undefined;
+  }, [isFrameScoped, activeFrame]);
 
   const invalidateCanvas = () =>
     queryClient.invalidateQueries({ queryKey: ["canvas", roundId] });
@@ -234,23 +252,36 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     setSelectedEdgeId(null);
     setConnectionPrompt(null);
     setIsReorganising(true);
+
+    // When a frame is active and the user hasn't manually selected nodes,
+    // scope the layout to that frame's node_ids and pass the frame bounds so
+    // the layout algorithm centers the result within the frame.
+    const useFrameScope = !!activeFrame && selectedNodeIds.length < 2;
     setLayoutRequest({
       id: nextLayoutRequestIdRef.current++,
-      nodeIds: selectedNodeIds.length >= 2 ? selectedNodeIds : [],
+      nodeIds: useFrameScope
+        ? activeFrame.node_ids
+        : selectedNodeIds.length >= 2
+          ? selectedNodeIds
+          : [],
       direction,
+      frameBounds: useFrameScope
+        ? { x: activeFrame.x, y: activeFrame.y, width: activeFrame.width, height: activeFrame.height }
+        : undefined,
     });
     organiseTimeoutRef.current = setTimeout(() => {
       setIsReorganising(false);
       setLayoutRequest(null);
       toast.error("Canvas organise took too long. Try again.");
     }, 4000);
-  }, [canReorganiseCanvas, isReorganising, selectedNodeIds]);
+  }, [canReorganiseCanvas, isReorganising, selectedNodeIds, activeFrame]);
 
   const handleLayoutComplete = useCallback((result: {
     applied: boolean;
     movedNodeIds: string[];
     scope: "selected" | "all";
     direction: CanvasLayoutDirection;
+    suggestedFrameBounds?: FrameBoundsRect;
   }) => {
     if (organiseTimeoutRef.current) {
       clearTimeout(organiseTimeoutRef.current);
@@ -269,13 +300,25 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
       return;
     }
 
+    // If the laid-out nodes overflowed the frame bounds, auto-expand the frame.
+    if (result.suggestedFrameBounds && activeFrame) {
+      void updateFrame.mutateAsync({
+        id: activeFrame.id,
+        x: result.suggestedFrameBounds.x,
+        y: result.suggestedFrameBounds.y,
+        width: result.suggestedFrameBounds.width,
+        height: result.suggestedFrameBounds.height,
+      });
+    }
+
     posthog.capture("canvas_reorganised", {
       round_id: roundId,
       scope: result.scope,
       direction: result.direction,
       moved_node_count: result.movedNodeIds.length,
+      frame_scoped: !!activeFrame,
     });
-  }, [roundId]);
+  }, [roundId, activeFrame, updateFrame]);
 
   const toolbarOrganiseControl = (
     <CanvasOrganiseMenu
@@ -283,6 +326,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
       isOrganising={isReorganising}
       label={organiseLabel}
       scopeLabel={organiseScopeLabel}
+      preferredDirections={preferredDirections}
       onSelect={requestReorganise}
     />
   );

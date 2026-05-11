@@ -1204,7 +1204,10 @@ function CanvasGraphInner({
       }
       // After the drag settles, ask the parent to recalculate frame
       // membership for this node based on its final canvas position.
-      onNodeFrameAssign?.(node.id, node.position);
+      // NOTE: deferred to after grouping determination below.
+      // If the node is being grouped into a theme, it becomes a child node
+      // with a parent-relative position — frame membership follows the parent
+      // theme, so we must NOT add the insight to frame.node_ids individually.
 
       const draggedNodeId = dragRef.current ?? node.id;
       const draggedNodeBeforeDrag = nodesDataRef.current.find((candidate) => candidate.id === draggedNodeId);
@@ -1268,6 +1271,19 @@ function CanvasGraphInner({
       persistLayout(settledFlowNodes);
       dragRef.current = null;
       dragSelectionRef.current = false;
+
+      // Now that we know whether the node is being grouped, recalculate frame
+      // membership. Skip if the node is being absorbed into a theme group —
+      // grouped insights are child nodes (parentId set, parent-relative pos)
+      // and should not appear in frame.node_ids; frame membership follows the
+      // parent theme node.
+      const nodeIsBeingGrouped =
+        !!targetGroupId &&
+        draggedInsightIds.length > 0 &&
+        typeof insertionIndex === "number";
+      if (!nodeIsBeingGrouped) {
+        onNodeFrameAssign?.(node.id, node.position);
+      }
 
       if (targetGroupId && typeof insertionIndex === "number") {
         void onGroupDrop({

@@ -859,6 +859,7 @@ export const userAIPreferences = pgTable(
       .$type<string[]>()
       .default(sql`'[]'::jsonb`)
       .notNull(),
+    industry: text("industry").default("").notNull(),
     excludedTopics: jsonb("excluded_topics")
       .$type<string[]>()
       .default(sql`'[]'::jsonb`)
@@ -873,6 +874,50 @@ export const userAIPreferences = pgTable(
   },
   (table) => ({
     userIdx: index("idx_user_ai_preferences_user_id").on(table.userId),
+  })
+);
+
+export const researchSessions = pgTable(
+  "research_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sessionType: text("session_type")
+      .notNull()
+      .$type<"literature" | "analysis">(),
+    query: text("query").notNull(),
+    industryCtx: text("industry_ctx"),
+    status: text("status")
+      .default("pending")
+      .notNull()
+      .$type<"pending" | "running" | "complete" | "failed">(),
+    taskId: text("task_id"),
+    resultData: jsonb("result_data").$type<Record<string, unknown>>(),
+    fileEntryId: text("file_entry_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => ({
+    sessionTypeCheck: check(
+      "research_sessions_session_type_check",
+      sql`${table.sessionType} in ('literature', 'analysis')`
+    ),
+    statusCheck: check(
+      "research_sessions_status_check",
+      sql`${table.status} in ('pending', 'running', 'complete', 'failed')`
+    ),
+    userIdx: index("idx_research_sessions_user_id").on(table.userId),
+    userCreatedIdx: index("idx_research_sessions_user_created").on(
+      table.userId,
+      table.createdAt.desc()
+    ),
+    userTypeIdx: index("idx_research_sessions_user_type").on(
+      table.userId,
+      table.sessionType
+    ),
+    taskIdx: index("idx_research_sessions_task_id").on(table.taskId),
   })
 );
 

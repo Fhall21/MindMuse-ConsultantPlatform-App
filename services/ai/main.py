@@ -29,7 +29,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
-from routers import clarification, draft, infer, interview, ocr, rounds, shorthand, tasks, templates, themes, transcribe
+from routers import clarification, draft, infer, interview, ocr, research, rounds, shorthand, tasks, templates, themes, transcribe
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +126,7 @@ app.include_router(infer.router)
 app.include_router(templates.router)
 app.include_router(tasks.router)
 app.include_router(interview.router)
+app.include_router(research.router)
 
 
 @app.get("/health")
@@ -152,5 +153,7 @@ async def health():
             "/templates/analyse-examples",
             "/tasks/learning/compute",
             "/interview/chat",
+            "/research/literature",
+            "/research/analysis",
         ],
     }

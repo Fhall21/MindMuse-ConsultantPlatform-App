@@ -13,6 +13,12 @@ export const aiPreferencesSchema = z.object({
     .max(10, "Maximum 10 focus areas allowed")
     .default([]),
 
+  industry: z
+    .string()
+    .max(150, "Keep industry / practice area under 150 characters")
+    .transform((value) => value.trim())
+    .default(""),
+
   excludedTopics: z
     .array(trimmedString.pipe(z.string().min(1).max(200)))
     .max(10, "Maximum 10 excluded topics allowed")

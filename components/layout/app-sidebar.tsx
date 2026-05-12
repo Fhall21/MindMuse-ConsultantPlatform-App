@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as Collapsible from "@radix-ui/react-collapsible";
+import { FlaskConical } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -125,6 +126,15 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname.startsWith("/reports")}>
                   <Link href="/reports">Reports</Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.startsWith("/research")}>
+                  <Link href="/research" className="flex items-center gap-2">
+                    <FlaskConical className="size-4" aria-hidden="true" />
+                    <span>Research</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 

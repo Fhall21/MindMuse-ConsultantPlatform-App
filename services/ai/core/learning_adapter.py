@@ -123,6 +123,10 @@ def build_personalization_prompt(
             preference_lines.append(
                 f"Consider the consultant's common consultation contexts: {consultation_types}."
             )
+        if preferences.industry:
+            preference_lines.append(
+                f"Assume this industry or practice-area context when relevant: \"{preferences.industry}\"."
+            )
         if preferences.excluded_topics:
             excluded_topics = ", ".join(f'"{item}"' for item in preferences.excluded_topics)
             preference_lines.append(

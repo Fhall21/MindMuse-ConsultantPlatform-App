@@ -25,6 +25,7 @@ class LearningSignal(BaseModel):
 class UserPreferences(BaseModel):
     consultation_types: List[str] = []
     focus_areas: List[str] = []
+    industry: str = ""
     excluded_topics: List[str] = []
     email_guidance: str = ""
 

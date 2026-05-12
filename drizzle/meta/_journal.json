@@ -232,6 +232,13 @@
       "when": 1778111658093,
       "tag": "0032_mute_doomsday",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1778629314438,
+      "tag": "0033_bumpy_barracuda",
+      "breakpoints": true
     }
   ]
 }

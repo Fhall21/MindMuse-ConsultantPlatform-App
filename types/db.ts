@@ -55,6 +55,7 @@ export type {
   IngestionStatus,
   IngestionArtifactType,
   UserAIPreferences,
+  ResearchSession,
   MeetingType,
 } from "./database";
 export type {

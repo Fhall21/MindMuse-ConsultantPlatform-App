@@ -103,6 +103,7 @@ export function PreferencesForm() {
 
   const [consultationTypes, setConsultationTypes] = useState<string[]>([]);
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
+  const [industry, setIndustry] = useState("");
   const [excludedTopics, setExcludedTopics] = useState<string[]>([]);
   const [emailGuidance, setEmailGuidance] = useState("");
   const [anonymousMode, setAnonymousMode] = useState(false);
@@ -111,6 +112,7 @@ export function PreferencesForm() {
     if (prefs) {
       setConsultationTypes(prefs.consultationTypes ?? []);
       setFocusAreas(prefs.focusAreas ?? []);
+      setIndustry(prefs.industry ?? "");
       setExcludedTopics(prefs.excludedTopics ?? []);
       setEmailGuidance(prefs.emailGuidance ?? "");
       setAnonymousMode(prefs.anonymousMode ?? false);
@@ -122,6 +124,7 @@ export function PreferencesForm() {
       {
         consultationTypes,
         focusAreas,
+        industry,
         excludedTopics,
         emailGuidance,
         anonymousMode,
@@ -176,6 +179,25 @@ export function PreferencesForm() {
           maxLength={200}
           placeholder="e.g., Emotional patterns, Team dynamics"
         />
+
+        <div className="rounded-xl border p-4">
+          <div className="space-y-2">
+            <p className="font-medium">Industry / practice area</p>
+            <p className="text-sm text-muted-foreground">
+              Give research tools the professional context they should assume.
+            </p>
+          </div>
+          <Input
+            className="mt-4"
+            maxLength={150}
+            placeholder="e.g. Organisational psychology, Public sector, Healthcare consulting"
+            value={industry}
+            onChange={(event) => setIndustry(event.target.value)}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            {industry.length}/150 used
+          </p>
+        </div>
 
         <TagInput
           label="Topics to exclude"

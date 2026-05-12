@@ -315,11 +315,26 @@ export interface UserAIPreferences {
   userId: string;
   consultationTypes: string[];
   focusAreas: string[];
+  industry: string;
   excludedTopics: string[];
   emailGuidance: string;
   anonymousMode: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ResearchSession {
+  id: string;
+  userId: string;
+  sessionType: "literature" | "analysis";
+  query: string;
+  industryCtx: string | null;
+  status: "pending" | "running" | "complete" | "failed";
+  taskId: string | null;
+  resultData: Record<string, unknown> | null;
+  fileEntryId: string | null;
+  createdAt: string;
+  completedAt: string | null;
 }
 
 export type AILearningTopicType = "theme_generation";

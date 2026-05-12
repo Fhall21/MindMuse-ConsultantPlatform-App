@@ -62,6 +62,15 @@ describe("AppSidebar", () => {
     expect(screen.getByText("9+")).toBeInTheDocument();
   });
 
+  it("shows Research after Reports", () => {
+    const { container } = render(<AppSidebar />);
+
+    const sidebarText = container.textContent?.replace(/\s+/g, " ") ?? "";
+
+    expect(sidebarText.indexOf("Reports")).toBeLessThan(sidebarText.indexOf("Research"));
+    expect(sidebarText.indexOf("Research")).toBeLessThan(sidebarText.indexOf("Settings"));
+  });
+
   it("hides the badge when unread count is zero", () => {
     sidebarState.unreadCount = 0;
 

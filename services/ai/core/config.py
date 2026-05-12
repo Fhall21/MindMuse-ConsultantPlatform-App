@@ -2,7 +2,13 @@ from typing import Any
 
 from pydantic import Field
 from pydantic.fields import FieldInfo
-from pydantic_settings import BaseSettings, EnvSettingsSource, PydanticBaseSettingsSource, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    DotEnvSettingsSource,
+    EnvSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 
 class _SettingsEnvSource(EnvSettingsSource):
@@ -12,8 +18,16 @@ class _SettingsEnvSource(EnvSettingsSource):
         return super().prepare_field_value(field_name, field, value, value_is_complex)
 
 
+class _SettingsDotEnvSource(DotEnvSettingsSource):
+    def prepare_field_value(self, field_name: str, field: FieldInfo, value: Any, value_is_complex: bool) -> Any:
+        if field_name == "allowed_origins" and isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return super().prepare_field_value(field_name, field, value, value_is_complex)
+
+
 class Settings(BaseSettings):
     openai_api_key: str
+    edison_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"            # text generation (themes, draft, clarification, shorthand)
     openai_vision_model: str = "gpt-4o"           # vision/OCR — gpt-4o required for image input
     openai_audio_model: str = "whisper-1"         # audio transcription
@@ -48,10 +62,11 @@ class Settings(BaseSettings):
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         _ = env_settings
+        _ = dotenv_settings
         return (
             init_settings,
             _SettingsEnvSource(settings_cls),
-            dotenv_settings,
+            _SettingsDotEnvSource(settings_cls),
             file_secret_settings,
         )
 

@@ -25,6 +25,7 @@ export async function GET() {
           userId: client.userId,
           consultationTypes: [],
           focusAreas: [],
+          industry: "",
           excludedTopics: [],
           emailGuidance: "",
           anonymousMode: false,
@@ -72,6 +73,7 @@ export async function PATCH(request: Request) {
     const {
       consultationTypes,
       focusAreas,
+      industry,
       excludedTopics,
       emailGuidance,
       anonymousMode,
@@ -92,6 +94,7 @@ export async function PATCH(request: Request) {
         userId: client.userId,
         consultationTypes,
         focusAreas,
+        industry,
         excludedTopics,
         emailGuidance,
         anonymousMode,
@@ -101,6 +104,7 @@ export async function PATCH(request: Request) {
         set: {
           consultationTypes,
           focusAreas,
+          industry,
           excludedTopics,
           emailGuidance,
           anonymousMode,
@@ -118,6 +122,7 @@ export async function PATCH(request: Request) {
           ? {
               consultationTypes: oldValues.consultationTypes,
               focusAreas: oldValues.focusAreas,
+              industry: oldValues.industry,
               excludedTopics: oldValues.excludedTopics,
               emailGuidance: oldValues.emailGuidance,
               anonymousMode: oldValues.anonymousMode,
@@ -126,6 +131,7 @@ export async function PATCH(request: Request) {
         new: {
           consultationTypes,
           focusAreas,
+          industry,
           excludedTopics,
           emailGuidance,
           anonymousMode,

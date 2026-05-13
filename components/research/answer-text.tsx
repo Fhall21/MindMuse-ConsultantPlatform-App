@@ -126,7 +126,21 @@ export function AnswerText({
         return;
       }
 
-      nodes.push(<span key={index}>{part}</span>);
+      const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
+      if (boldParts.length === 1) {
+        nodes.push(<span key={index}>{part}</span>);
+      } else {
+        boldParts.forEach((bp, bi) => {
+          const bold = /^\*\*([^*]+)\*\*$/.exec(bp);
+          nodes.push(
+            bold ? (
+              <strong key={`${index}-${bi}`}>{bold[1]}</strong>
+            ) : (
+              <span key={`${index}-${bi}`}>{bp}</span>
+            )
+          );
+        });
+      }
     });
 
     return nodes;

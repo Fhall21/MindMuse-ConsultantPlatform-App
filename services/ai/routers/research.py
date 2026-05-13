@@ -340,25 +340,84 @@ def _compute_context_usage(
     return result
 
 
-def _extract_analysis_stats(inner: dict[str, Any]) -> dict[str, int]:
-    """Derive the Evidence-tab stats strip.
+_STATUS_TRAILER_RE = re.compile(
+    r"Status:\s*Paper Count=(?P<paper>\d+)\s*\|\s*"
+    r"Relevant Papers=(?P<relevant>\d+)\s*\|\s*"
+    r"Clinical Trial Count=(?P<trials>\d+)\s*\|\s*"
+    r"Relevant Clinical Trials=(?P<rel_trials>\d+)\s*\|\s*"
+    r"Current Evidence=(?P<evidence>\d+)"
+    r"(?:\s*\|\s*Current Cost=\$?[\d.,]+)?"
+    r"\s*\|\s*Disease-Target Evidence=(?P<dt>\d+)"
+)
 
-    Edison's `analysis_status` / top-level `stats` are absent in this account,
-    so we derive everything from list lengths. Clinical-trial buckets are 0
-    until/unless Edison surfaces structured paper-type metadata that flags
-    trials — `bibtex_type=article` alone is not sufficient to claim a trial.
+
+def _parse_status_trailer(text: str) -> dict[str, int] | None:
+    """Parse Edison's per-result 'Status: …' trailer line.
+
+    Edison appends a line like:
+      Status: Paper Count=69 | Relevant Papers=11 | Clinical Trial Count=0 |
+      Relevant Clinical Trials=0 | Current Evidence=34 | Current Cost=$0.21 |
+      Disease-Target Evidence=0
+    to many tool results. We want the LATEST occurrence in the whole message
+    history — that's the agent's final tally and exactly matches the numbers
+    Edison's own UI shows in the Analysis Status footer.
     """
+    last = None
+    for m in _STATUS_TRAILER_RE.finditer(text):
+        last = m
+    if not last:
+        return None
+    g = last.groupdict()
+    return {
+        "paper_count": int(g["paper"]),
+        "relevant_papers": int(g["relevant"]),
+        "clinical_trial_count": int(g["trials"]),
+        "relevant_clinical_trials": int(g["rel_trials"]),
+        "current_evidence": int(g["evidence"]),
+        "disease_target_evidence": int(g["dt"]),
+    }
+
+
+def _extract_analysis_stats(
+    inner: dict[str, Any],
+    tool_results_concat: str = "",
+) -> dict[str, int]:
+    """Edison-tab stats strip.
+
+    Source order:
+      1. `inner['analysis_status']` (Edison's own dict — only present on some
+         job versions; absent in this account).
+      2. The LAST `Status: Paper Count=… | …` trailer Edison appends to many
+         tool results (authoritative — these are the EXACT numbers shown in
+         Edison's own Analysis Status footer).
+      3. Fallback: derive from list lengths.
+    """
+    edison = inner.get("analysis_status")
+    if isinstance(edison, dict) and edison:
+        return {
+            "paper_count": int(edison.get("paper_count", 0)),
+            "relevant_papers": int(edison.get("relevant_papers", 0)),
+            "clinical_trial_count": int(edison.get("clinical_trial_count", 0)),
+            "relevant_clinical_trials": int(edison.get("relevant_clinical_trials", 0)),
+            "current_evidence": int(edison.get("current_evidence", 0)),
+            "disease_target_evidence": int(edison.get("disease_target_evidence", 0)),
+        }
+
+    if tool_results_concat:
+        trailer = _parse_status_trailer(tool_results_concat)
+        if trailer:
+            return trailer
+
+    # Derived fallback.
     contexts = inner.get("contexts") or []
     citeable = inner.get("citeable_context_ids") or []
     used_contexts = inner.get("used_contexts") or []
-
     seen_keys: set[str] = set()
     for ctx in contexts:
         if isinstance(ctx, dict):
             ck = _context_citation_key(ctx)
             if ck:
                 seen_keys.add(ck)
-
     return {
         "paper_count": len(seen_keys) or len(contexts),
         "relevant_papers": len(citeable),
@@ -463,51 +522,106 @@ def _parse_messages_content(
         except Exception:
             pass
 
-    # ── paper_search: per-query list of papers found with counts.
+    # ── paper_search: per-query, per-paper records.
+    # Edison's RESULT is a sequence of blocks separated by `---`. Each block:
+    #   ## N. <title>
+    #   Valid Text Names:
+    #   'key pages 1-2', 'key pages 2-4', ...
+    #   BibTex:
+    #   @article{key, author="...", year="2018", journal="Journal name", ... }
+    #   Abstract: ...
+    #   Relevant Snippet: ...
     search_queries: list[dict[str, Any]] = []
     search_lines: list[str] = []
-    paper_md = re.compile(r"^## \d+\. (.+)$", re.MULTILINE)
     for call in by_tool.get("paper_search", []):
         query = call["args"].get("query", "")
-        titles = paper_md.findall(call["result"])
+        result_text = call["result"] or ""
+        papers = _parse_paper_search_result(result_text)
         if not query:
             continue
-        papers = [{"title": t} for t in titles[:8]]
+        # Trim per-paper detail; UI only shows top ~8.
         search_queries.append({
             "query": query,
-            "papers": papers,
-            "count": len(titles),
+            "papers": [
+                {k: v for k, v in p.items() if v not in (None, "")}
+                for p in papers[:8]
+            ],
+            "count": len(papers),
         })
-        preview = ", ".join(titles[:3]) if titles else "searching…"
+        preview = ", ".join((p.get("title") or "") for p in papers[:3]) or "searching…"
         search_lines.append(f'"{query}" → {preview}')
     if search_queries:
         structured["paper_search"] = {"kind": "search", "queries": search_queries}
     if search_lines:
         formatted["paper_search"] = "\n".join(search_lines)
 
-    # ── gather_evidence: question + count + top excerpts (extracted from the
-    # tool result text, which Edison formats as numbered blocks).
-    gather_calls = by_tool.get("gather_evidence", [])
-    if gather_calls:
-        first = gather_calls[0]
-        question = first["args"].get("question", "")
-        # Heuristic: count occurrences of "context" lines in the result.
-        excerpt_blocks = re.findall(
-            r"(?:^|\n)(?:\d+\.\s+|##\s+)([^\n]{40,500})",
-            first["result"],
-        )
-        top = [{"excerpt": e.strip()} for e in excerpt_blocks[:3]]
-        excerpts_count = len(excerpt_blocks)
-        if question:
-            formatted["gather_evidence"] = question[:600]
-            structured["gather_evidence"] = {
-                "kind": "gather",
-                "question": question,
-                "excerpts_count": excerpts_count,
-                "top_excerpts": top,
-            }
+    # ── gather_evidence: every round's question + structured per-context
+    # excerpts. Each result starts with "Most relevant evidence (with ids):"
+    # then blocks per context, separated by `---`. Block format:
+    #   ## pqac-XXXXXXXX
+    #   From text 'citation_key pages X-Y'.
+    #   <full formatted citation incl. "N citations" + "<tier> peer-reviewed journal">
+    #   <excerpt summary>
+    gather_rounds: list[dict[str, Any]] = []
+    first_question_text: str | None = None
+    for call in by_tool.get("gather_evidence", []):
+        question = call["args"].get("question", "")
+        focus = call["args"].get("text_name_focus_list", []) or []
+        excerpts = _parse_gather_evidence_result(call["result"] or "")
+        if not question and not excerpts:
+            continue
+        gather_rounds.append({
+            "question": question,
+            "focus_papers": [_text_name_to_key(t) for t in focus if isinstance(t, str)],
+            "excerpts_count": len(excerpts),
+            "top_excerpts": excerpts[:5],
+        })
+        if first_question_text is None and question:
+            first_question_text = question
+    if gather_rounds:
+        structured["gather_evidence"] = {
+            "kind": "gather",
+            # Back-compat: keep the original fields the UI expects in
+            # ReasoningEvidenceQuotes — populated from the first round.
+            "question": gather_rounds[0]["question"],
+            "excerpts_count": gather_rounds[0]["excerpts_count"],
+            "top_excerpts": gather_rounds[0]["top_excerpts"],
+            # New: every round, so the UI can scroll through all sub-questions.
+            "rounds": gather_rounds,
+        }
+    if first_question_text:
+        formatted["gather_evidence"] = first_question_text[:600]
 
-    # ── read_text: per-paper takeaway (first ~200 chars of the tool result).
+    # ── view_images: per-call paper + figure-count + description.
+    image_rounds: list[dict[str, Any]] = []
+    for call in by_tool.get("view_images", []):
+        result_text = call["result"] or ""
+        # "Retrieved N image(s) from <paper_key>"
+        m = re.search(r"Retrieved\s+(\d+)\s+image\(s\)\s+from\s+([A-Za-z0-9_]+)", result_text)
+        count = int(m.group(1)) if m else 0
+        ck = m.group(2) if m else ""
+        # First narrative sentence after the header — Edison's prose
+        # describing what was extracted.
+        post_header = result_text[m.end() :] if m else result_text
+        # Strip context-id headers; take the first 400 chars of prose.
+        prose = re.sub(r"##\s+Context ID:\s*pqac-\w+\s*", "", post_header).strip()
+        description = " ".join(prose.split())[:400]
+        image_rounds.append({
+            "citation_key": ck,
+            "image_count": count,
+            "query": call["args"].get("query", ""),
+            "description": description,
+            "text_name": call["args"].get("text_name", ""),
+        })
+    if image_rounds:
+        structured["view_images"] = {"kind": "figures", "rounds": image_rounds}
+        formatted["view_images"] = "\n".join(
+            f"{r['image_count']} from {r['citation_key']}: {r['query'][:80]}"
+            for r in image_rounds
+        )
+
+    # ── read_text: per-paper takeaway. (Most accounts skip read_text; gather_
+    # evidence carries the heavy lifting.)
     read_papers: list[dict[str, str]] = []
     for call in by_tool.get("read_text", []):
         ck = (
@@ -517,7 +631,6 @@ def _parse_messages_content(
             or ""
         )
         result_text = (call["result"] or "").strip()
-        # Title line typically appears first; fall back to citation key.
         first_line = result_text.splitlines()[0][:140] if result_text else ck
         takeaway = result_text[:240].strip()
         if takeaway:
@@ -535,11 +648,110 @@ def _parse_messages_content(
         result = artifact_calls[-1]["result"]
         table_start = result.find("|")
         if table_start >= 0:
-            table_md = result[table_start: table_start + 4000]
+            table_md = result[table_start: table_start + 8000]
             formatted["create_artifact"] = table_md[:1200]
             structured["create_artifact"] = {"kind": "artifact", "table_markdown": table_md}
 
     return formatted, structured
+
+
+# ── paper_search / gather_evidence parsers ───────────────────────────────────
+
+_BIBTEX_FIELD_RE = re.compile(r'(\w+)\s*=\s*"((?:[^"\\]|\\.)*)"', re.DOTALL)
+_PAPER_BLOCK_RE = re.compile(
+    r"^##\s+\d+\.\s+(?P<title>[^\n]+)\n"
+    r"(?P<body>.*?)(?=\n##\s+\d+\.\s+|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+
+
+def _text_name_to_key(text_name: str) -> str:
+    return text_name.split(" pages ", 1)[0].strip()
+
+
+def _parse_paper_search_result(text: str) -> list[dict[str, Any]]:
+    """Extract per-paper metadata from a paper_search tool result."""
+    papers: list[dict[str, Any]] = []
+    for m in _PAPER_BLOCK_RE.finditer(text):
+        title = m.group("title").strip()
+        body = m.group("body")
+        # Valid Text Names → page chunk count.
+        chunk_match = re.search(r"Valid Text Names:\s*(.+?)\n\n", body, re.DOTALL)
+        chunks: list[str] = []
+        if chunk_match:
+            chunks = re.findall(r"'([^']+)'", chunk_match.group(1))
+        # BibTex block.
+        bibtex_match = re.search(r"BibTex:\s*\n@\w+\{[^,]+,(.+?)\n\}", body, re.DOTALL)
+        bib_fields: dict[str, str] = {}
+        if bibtex_match:
+            for fm in _BIBTEX_FIELD_RE.finditer(bibtex_match.group(1)):
+                bib_fields[fm.group(1).lower()] = fm.group(2)
+        # Citation key from the first chunk name.
+        ck = _text_name_to_key(chunks[0]) if chunks else ""
+        papers.append({
+            "title": title,
+            "citation_key": ck,
+            "authors": bib_fields.get("author", ""),
+            "year": bib_fields.get("year", ""),
+            "journal": bib_fields.get("journal", ""),
+            "doi": bib_fields.get("doi", ""),
+            "url": bib_fields.get("url", ""),
+            "chunk_count": len(chunks),
+        })
+    return papers
+
+
+_EVIDENCE_BLOCK_RE = re.compile(
+    r"^##\s+(?P<id>pqac-\w+)\n"
+    r"(?P<body>.*?)(?=\n##\s+pqac-\w+|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+_FROM_TEXT_RE = re.compile(r"From text\s+'([^']+)'", re.IGNORECASE)
+_CITATIONS_RE = re.compile(r"This article has\s+(\d+)\s+citations", re.IGNORECASE)
+
+
+def _parse_gather_evidence_result(text: str) -> list[dict[str, Any]]:
+    """Extract per-context excerpts from a gather_evidence result.
+
+    Each block looks like:
+      ## pqac-00000000
+      From text 'citation_key pages X-Y'.
+      <formatted citation incl. "This article has N citations …">
+      <excerpt summary>
+    """
+    out: list[dict[str, Any]] = []
+    for m in _EVIDENCE_BLOCK_RE.finditer(text):
+        cid = m.group("id")
+        body = m.group("body").strip()
+        if not body:
+            continue
+        # First line: "From text '<key> pages X-Y'"
+        from_match = _FROM_TEXT_RE.search(body)
+        source_key = ""
+        if from_match:
+            source_key = _text_name_to_key(from_match.group(1))
+        cite_match = _CITATIONS_RE.search(body)
+        citation_count = int(cite_match.group(1)) if cite_match else None
+        # The summary excerpt is the last paragraph after the citation sentence.
+        # Heuristic: drop the "From text" line and citation sentence; keep the rest.
+        lines = [ln for ln in body.splitlines() if ln.strip()]
+        # Skip the first line (From text…) and any lines that look like the
+        # formatted citation (contain "doi:" or "This article has").
+        excerpt_lines: list[str] = []
+        for ln in lines:
+            if ln.startswith("From text"):
+                continue
+            if "doi:" in ln or "This article has" in ln:
+                continue
+            excerpt_lines.append(ln)
+        excerpt = " ".join(excerpt_lines).strip()
+        out.append({
+            "id": cid,
+            "source_citation_key": source_key,
+            "citation_count": citation_count,
+            "excerpt": excerpt[:1200],
+        })
+    return out
 
 
 def _tool_history_to_steps(
@@ -687,7 +899,16 @@ def _extract_literature_payload(verbose_result: Any) -> dict[str, Any]:
         artifacts: dict[str, Any] = inner.get("artifacts", {}) or {}
         artifact = artifacts.get("artifact-00", "") or ""
 
-        stats = _extract_analysis_stats(inner)
+        # Edison appends its own Status: trailer to several tool results.
+        # Concatenate every tool result so _extract_analysis_stats can pick
+        # up the LATEST trailer — the authoritative final tally.
+        tool_results_concat = "\n".join(
+            (m.get("content") if isinstance(m.get("content"), str)
+             else " ".join(c.get("text", "") for c in (m.get("content") or []) if isinstance(c, dict)))
+            for m in messages
+            if isinstance(m, dict) and m.get("role") == "tool"
+        )
+        stats = _extract_analysis_stats(inner, tool_results_concat)
 
         # Attach stats footer to the create_artifact step's structured data so
         # the Reasoning tab can render the analysis-status alongside the table.

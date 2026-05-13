@@ -12,6 +12,7 @@ import { ReasoningPlanTable } from "@/components/research/_reasoning-plan-table"
 import { ReasoningEvidenceQuotes } from "@/components/research/_reasoning-evidence-quotes";
 import type {
   ArtifactStepData,
+  FiguresStepData,
   LiteratureStats,
   ReadStepData,
   ReasoningStep,
@@ -51,26 +52,75 @@ function SearchRows({ data }: { data: SearchStepData }) {
   return (
     <ul className="divide-y divide-border/30">
       {data.queries.map((q, i) => (
-        <li key={i} className="py-2.5 first:pt-0 last:pb-0">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-sm text-foreground/85">{q.query}</p>
+        <li key={i} className="py-3 first:pt-0 last:pb-0">
+          <div className="mb-1.5 flex items-baseline justify-between gap-3">
+            <p className="text-sm font-medium text-foreground/90">{q.query}</p>
             <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/60">
               {q.count} {q.count === 1 ? "paper" : "papers"}
             </span>
           </div>
           {q.papers.length > 0 && (
-            <ul className="mt-1 space-y-0.5">
-              {q.papers.slice(0, 5).map((p, j) => (
-                <li key={j} className="text-xs leading-snug text-muted-foreground">
-                  · {p.title}
-                </li>
-              ))}
+            <ul className="space-y-1.5">
+              {q.papers.slice(0, 5).map((p, j) => {
+                const meta = [p.year, p.journal].filter(Boolean).join(" · ");
+                return (
+                  <li key={j} className="text-xs leading-snug">
+                    <p className="text-foreground/85">{p.title}</p>
+                    {(meta || p.authors || p.chunk_count) && (
+                      <p className="mt-0.5 text-muted-foreground">
+                        {p.authors && (
+                          <span className="line-clamp-1">{p.authors}</span>
+                        )}
+                        {(meta || p.chunk_count) && (
+                          <span>
+                            {meta}
+                            {p.chunk_count != null && (
+                              <span className="text-muted-foreground/60">
+                                {meta ? " · " : ""}
+                                {p.chunk_count} chunks
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
               {q.papers.length > 5 && (
                 <li className="text-xs text-muted-foreground/50">
                   +{q.papers.length - 5} more
                 </li>
               )}
             </ul>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function FigureRounds({ data }: { data: FiguresStepData }) {
+  return (
+    <ul className="space-y-3">
+      {data.rounds.map((r, i) => (
+        <li key={i} className="space-y-1">
+          <div className="flex items-baseline gap-2 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+            <span className="tabular-nums">
+              {r.image_count} {r.image_count === 1 ? "figure" : "figures"}
+            </span>
+            <span className="text-muted-foreground/30">·</span>
+            <span className="normal-case font-mono tracking-normal text-muted-foreground/80">
+              {r.citation_key}
+            </span>
+          </div>
+          {r.query && (
+            <p className="text-xs italic text-muted-foreground">“{r.query}”</p>
+          )}
+          {r.description && (
+            <p className="border-l border-border/60 pl-3 text-xs leading-relaxed text-foreground/85">
+              {r.description}
+            </p>
           )}
         </li>
       ))}
@@ -152,6 +202,8 @@ function StructuredStepContent({ data }: { data: ReasoningStepData }) {
       return <SearchRows data={data} />;
     case "gather":
       return <ReasoningEvidenceQuotes data={data} />;
+    case "figures":
+      return <FigureRounds data={data} />;
     case "read":
       return <ReadPapers data={data} />;
     case "artifact":

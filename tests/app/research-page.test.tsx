@@ -8,22 +8,35 @@ vi.mock("@/hooks/use-ai-preferences", () => ({
   useAIPreferences: () => ({ data: null }),
 }));
 
+const researchHooksMock = vi.hoisted(() => ({
+  useResearchSessions: vi.fn(() => ({ data: [], isLoading: false, error: null })),
+  useCreateResearchSession: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useLiteratureResearch: vi.fn(() => ({
+    status: "idle" as const,
+    result: null,
+    error: null,
+    elapsedSeconds: 0,
+    reasoningSteps: [],
+    sessionId: null,
+    submit: vi.fn(),
+    reset: vi.fn(),
+  })),
+}));
+
 vi.mock("@/hooks/use-research", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/hooks/use-research")>();
   return {
     ...actual,
-    useLiteratureResearch: () => ({
-      status: "idle" as const,
-      result: null,
-      error: null,
-      elapsedSeconds: 0,
-      reasoningSteps: [],
-      sessionId: null,
-      submit: vi.fn(),
-      reset: vi.fn(),
-    }),
+    useLiteratureResearch: researchHooksMock.useLiteratureResearch,
+    useResearchSessions: researchHooksMock.useResearchSessions,
+    useCreateResearchSession: researchHooksMock.useCreateResearchSession,
   };
 });
+
+// Stub next/navigation so router.push doesn't throw in jsdom
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 describe("ResearchPage", () => {
   it("renders Literature and Data Analysis tabs", () => {
@@ -41,9 +54,37 @@ describe("ResearchPage", () => {
     expect(screen.getByText("Edison-backed data analysis will appear here.")).toBeInTheDocument();
   });
 
-  it("renders search button in Literature tab", () => {
+  it("renders Search literature submit button", () => {
     render(<ResearchPage />);
 
     expect(screen.getByRole("button", { name: /Search literature/i })).toBeInTheDocument();
   });
+
+  it("renders empty state when no previous sessions", () => {
+    render(<ResearchPage />);
+
+    expect(screen.getByText(/No searches yet/)).toBeInTheDocument();
+  });
+
+  it("renders previous session rows when sessions exist", () => {
+    researchHooksMock.useResearchSessions.mockReturnValueOnce({
+      data: [
+        {
+          id: "sess-1",
+          query: "burnout prevalence",
+          status: "complete",
+          sessionType: "literature",
+          createdAt: "2026-05-01T10:00:00.000Z",
+          completedAt: "2026-05-01T10:01:00.000Z",
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(<ResearchPage />);
+
+    expect(screen.getByText("burnout prevalence")).toBeInTheDocument();
+  });
 });
+

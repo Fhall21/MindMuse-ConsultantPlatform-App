@@ -1,7 +1,8 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LiteraturePanel } from "@/components/research/literature-panel";
+import { ResearchComposer } from "@/components/research/research-composer";
+import { ResearchSessionList } from "@/components/research/session-list";
 
 export default function ResearchPage() {
   return (
@@ -19,8 +20,9 @@ export default function ResearchPage() {
           <TabsTrigger value="analysis">Data Analysis</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="literature" className="rounded-xl border p-6">
-          <LiteraturePanel />
+        <TabsContent value="literature" className="space-y-6 rounded-xl border p-6">
+          <ResearchComposer />
+          <ResearchSessionList />
         </TabsContent>
 
         <TabsContent value="analysis" className="rounded-xl border p-6">

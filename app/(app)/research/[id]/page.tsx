@@ -1,16 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { use } from "react";
-import { ArrowLeft, Check, Circle, Loader2 } from "lucide-react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeft, ChevronDown, Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { EvidenceList } from "@/components/research/evidence-list";
-import { ReasoningSteps } from "@/components/research/reasoning-steps";
+import { ReasoningSteps, StepContent } from "@/components/research/reasoning-steps";
 import { ReferencesList } from "@/components/research/references-list";
+import { AnswerText } from "@/components/research/answer-text";
+import { cn } from "@/lib/utils";
 import { fetchJson } from "@/hooks/api";
 import { useResearchSession } from "@/hooks/use-research";
 import type { LiteratureResult, ReasoningStep } from "@/hooks/use-research";
@@ -37,139 +44,115 @@ function inferActiveStep(createdAt: string): number {
   return active;
 }
 
-// ── Step cards ─────────────────────────────────────────────────────────────────
+// ── In-flight step accordion with live partial content ───────────────────────
 
-interface StepCardProps {
-  index: number;
-  label: string;
-  detail?: string;
-  state: "done" | "active" | "upcoming";
-}
-
-function StepCard({ index, label, detail, state }: StepCardProps) {
-  return (
-    <div
-      className={[
-        "flex items-center gap-3 rounded-md border px-3 py-2.5 transition-colors",
-        state === "active" ? "border-border bg-background" : "border-border/50",
-      ].join(" ")}
-    >
-      <span
-        className={[
-          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-          state === "done"     ? "bg-muted text-muted-foreground/60" :
-          state === "active"   ? "bg-primary/10 text-primary" :
-                                 "bg-muted/50 text-muted-foreground/30",
-        ].join(" ")}
-      >
-        {index + 1}
-      </span>
-      <span
-        className={[
-          "flex-1 text-sm",
-          state === "done"   ? "text-muted-foreground/60" :
-          state === "active" ? "font-medium text-foreground" :
-                               "text-muted-foreground/40",
-        ].join(" ")}
-      >
-        {label}
-        {detail && state === "active" && (
-          <span className="ml-1.5 font-normal text-muted-foreground">{detail}</span>
-        )}
-      </span>
-      {state === "done" && (
-        <Check className="h-3.5 w-3.5 shrink-0 text-green-500" />
-      )}
-      {state === "active" && (
-        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
-      )}
-      {state === "upcoming" && (
-        <Circle className="h-3 w-3 shrink-0 text-muted-foreground/20" />
-      )}
-    </div>
-  );
-}
-
-// In-flight: infer step from elapsed time, show full roadmap
-function InFlightSteps({ createdAt, isPending }: { createdAt: string; isPending: boolean }) {
+function InFlightSteps({
+  createdAt,
+  isPending,
+  partialSteps,
+}: {
+  createdAt: string;
+  isPending: boolean;
+  partialSteps: ReasoningStep[];
+}) {
   const activeIndex = isPending ? 0 : inferActiveStep(createdAt);
-  return (
-    <div className="space-y-1.5">
-      {KNOWN_STEPS.map((step, i) => (
-        <StepCard
-          key={i}
-          index={i}
-          label={step.label}
-          detail={step.detail}
-          state={isPending && i > 0 ? "upcoming" : i < activeIndex ? "done" : i === activeIndex ? "active" : "upcoming"}
-        />
-      ))}
-    </div>
-  );
-}
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const hasSetInitial = useRef(false);
 
-// Complete: actual steps from result_data, all done, with detail if available
-function CompletedSteps({ steps }: { steps: ReasoningStep[] }) {
-  if (steps.length === 0) {
-    // Fallback: show canonical steps all done
-    return (
-      <div className="space-y-1.5">
-        {KNOWN_STEPS.map((step, i) => (
-          <StepCard key={i} index={i} label={step.label} state="done" />
-        ))}
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-1.5">
-      {steps.map((step, i) => (
-        <StepCard key={i} index={i} label={step.label} state="done" />
-      ))}
-    </div>
-  );
-}
+  // Auto-open the last step that has content, once on first arrival
+  useEffect(() => {
+    if (!hasSetInitial.current && partialSteps.length > 0) {
+      hasSetInitial.current = true;
+      let last = -1;
+      for (let i = 0; i < KNOWN_STEPS.length; i++) {
+        const match = partialSteps.find((s) => s.label === KNOWN_STEPS[i].label);
+        if (match?.content) last = i;
+      }
+      if (last >= 0) setOpenIndex(last);
+    }
+  }, [partialSteps.length]);
 
-// ── Local display helpers ─────────────────────────────────────────────────────
-
-function AnswerText({ text }: { text: string }) {
-  const blocks = text.split(/\n\n+/);
   return (
-    <div className="space-y-3 text-sm leading-relaxed">
-      {blocks.map((block, bi) => {
-        const trimmed = block.trim();
-        if (!trimmed) return null;
-        const h2 = /^## (.+)/.exec(trimmed);
-        if (h2) return <h3 key={bi} className="text-base font-semibold pt-1">{h2[1]}</h3>;
-        const h3 = /^### (.+)/.exec(trimmed);
-        if (h3) return <h4 key={bi} className="text-sm font-semibold">{h3[1]}</h4>;
-        const parts = trimmed.split(/(\[\d+(?:,\s*\d+)*\])/g);
+    <div className="divide-y divide-border/50 overflow-hidden rounded-lg border">
+      {KNOWN_STEPS.map((step, i) => {
+        const stepState: "done" | "active" | "upcoming" =
+          isPending && i > 0
+            ? "upcoming"
+            : i < activeIndex
+            ? "done"
+            : i === activeIndex
+            ? "active"
+            : "upcoming";
+        const partialStep = partialSteps.find((s) => s.label === step.label);
+        const hasContent = Boolean(partialStep?.content);
+        const isOpen = openIndex === i && hasContent;
+
         return (
-          <p key={bi}>
-            {parts.map((part, pi) => {
-              const citMatch = /^\[(\d+(?:,\s*\d+)*)\]$/.exec(part);
-              if (citMatch) {
-                return (
-                  <span key={pi}>
-                    {citMatch[1].split(",").map((n) => (
-                      <Badge
-                        key={n.trim()}
-                        variant="outline"
-                        className="mx-0.5 px-1 py-0 text-xs font-semibold align-super"
-                      >
-                        {n.trim()}
-                      </Badge>
-                    ))}
+          <Collapsible
+            key={i}
+            open={isOpen}
+            onOpenChange={(open) => setOpenIndex(open ? i : null)}
+          >
+            <CollapsibleTrigger
+              disabled={!hasContent}
+              className={cn(
+                "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors",
+                hasContent ? "cursor-pointer hover:bg-muted/30" : "cursor-default"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold transition-all duration-200",
+                  stepState === "active"   && "bg-primary/10 text-primary ring-2 ring-primary/20",
+                  stepState === "done"     && "bg-muted text-muted-foreground/60",
+                  stepState === "upcoming" && "bg-muted/50 text-muted-foreground/30"
+                )}
+              >
+                {i + 1}
+              </span>
+              <span
+                className={cn(
+                  "flex-1 text-sm transition-colors",
+                  stepState === "active"   && "font-semibold text-foreground",
+                  stepState === "done"     && "font-medium text-muted-foreground/70",
+                  stepState === "upcoming" && "font-medium text-muted-foreground/30"
+                )}
+              >
+                {step.label}
+                {stepState === "active" && !hasContent && (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground/70">
+                    {step.detail}
                   </span>
-                );
-              }
-              return <span key={pi}>{part}</span>;
-            })}
-          </p>
+                )}
+              </span>
+              {stepState === "active" && (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+              )}
+              {stepState !== "active" && hasContent && (
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 shrink-0 text-muted-foreground/40 transition-transform duration-200",
+                    isOpen && "rotate-180"
+                  )}
+                />
+              )}
+            </CollapsibleTrigger>
+
+            {hasContent && (
+              <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+                <div className="border-t border-border/40 bg-muted/20 px-4 pb-4 pl-12 pt-3">
+                  <StepContent label={step.label} content={partialStep!.content!} />
+                </div>
+              </CollapsibleContent>
+            )}
+          </Collapsible>
         );
       })}
     </div>
   );
 }
+
+// ── Local display helpers ─────────────────────────────────────────────────────
 
 function ArtifactTable({ markdown }: { markdown: string }) {
   const rows = markdown
@@ -205,29 +188,20 @@ function ArtifactTable({ markdown }: { markdown: string }) {
   );
 }
 
-// ── Status badge ──────────────────────────────────────────────────────────────
-
-function StatusBadge({ status }: { status: string }) {
-  if (status === "pending")
-    return <Badge variant="secondary" className="text-xs font-normal text-muted-foreground">Queued</Badge>;
-  if (status === "running")
-    return (
-      <Badge variant="secondary" className="gap-1 text-xs font-normal text-blue-700 dark:text-blue-300">
-        <Loader2 className="h-3 w-3 animate-spin" /> Searching
-      </Badge>
-    );
-  if (status === "failed")
-    return <Badge variant="outline" className="text-xs border-destructive/40 text-destructive">Failed</Badge>;
-  if (status === "cancelled")
-    return <Badge variant="outline" className="text-xs border-border text-muted-foreground">Cancelled</Badge>;
-  return null;
-}
-
 // ── Results view ──────────────────────────────────────────────────────────────
 
 function ResultView({ result }: { result: LiteratureResult }) {
+  const [activeTab, setActiveTab] = useState("results");
+
+  const handleCitationClick = useCallback((num: string) => {
+    setActiveTab("references");
+    setTimeout(() => {
+      document.getElementById(`ref-${num}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 60);
+  }, []);
+
   return (
-    <Tabs defaultValue="results">
+    <Tabs value={activeTab} onValueChange={setActiveTab}>
       <TabsList>
         <TabsTrigger value="results">Results</TabsTrigger>
         <TabsTrigger value="reasoning">
@@ -264,7 +238,11 @@ function ResultView({ result }: { result: LiteratureResult }) {
           </div>
         )}
         <div className="border-t pt-4">
-          <AnswerText text={result.answer} />
+          <AnswerText
+            text={result.answer}
+            references={result.references}
+            onCitationClick={handleCitationClick}
+          />
         </div>
       </TabsContent>
 
@@ -319,9 +297,10 @@ export default function ResearchSessionPage({
         </Link>
 
         {isLoading && (
-          <div className="space-y-3">
-            <Skeleton className="h-7 w-2/3" />
-            <Skeleton className="h-4 w-24" />
+          <div className="space-y-2">
+            <Skeleton className="h-3.5 w-28" />
+            <Skeleton className="h-6 w-2/3" />
+            <Skeleton className="h-5 w-1/2" />
           </div>
         )}
 
@@ -332,25 +311,47 @@ export default function ResearchSessionPage({
         {session && (
           <>
             <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-semibold tracking-tight">{session.query}</h1>
-                <StatusBadge status={session.status} />
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] tabular-nums text-muted-foreground/55 leading-none">
+                  {new Date(session.createdAt).toLocaleDateString("en-GB", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </span>
+                {session.status === "pending" && (
+                  <span className="text-[11px] text-muted-foreground/50 leading-none">Queued</span>
+                )}
+                {session.status === "failed" && (
+                  <span className="text-[11px] text-destructive/60 leading-none">Failed</span>
+                )}
+                {session.status === "cancelled" && (
+                  <span className="text-[11px] text-muted-foreground/50 leading-none">Cancelled</span>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                {new Date(session.createdAt).toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-              </p>
+              <div className="flex items-start gap-3">
+                {(session.status === "running" || session.status === "pending") && (
+                  <div className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/70" />
+                  </div>
+                )}
+                <h1 className="text-xl font-semibold tracking-tight leading-snug">{session.query}</h1>
+              </div>
             </div>
 
-            {/* In-flight: step roadmap with live active inference */}
+            {/* In-flight: collapsible steps with live partial chain-of-thought */}
             {isInFlight && (
               <div className="space-y-3">
                 <InFlightSteps
                   createdAt={session.createdAt}
                   isPending={session.status === "pending"}
+                  partialSteps={
+                    (
+                      session.resultData as
+                        | { partial_reasoning_steps?: ReasoningStep[] }
+                        | null
+                    )?.partial_reasoning_steps ?? []
+                  }
                 />
                 <Button
                   variant="ghost"

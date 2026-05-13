@@ -30,6 +30,7 @@ export function useStartResearchStream(sessionType: ResearchSessionType) {
 
 export interface LiteratureReference {
   number: number;
+  citation_key: string;
   title: string;
   authors: string;
   year: string;
@@ -83,9 +84,11 @@ const INITIAL_STATE: LiteratureState = {
 export function useLiteratureResearch() {
   const [state, setState] = useState<LiteratureState>(INITIAL_STATE);
   const abortRef = useRef<AbortController | null>(null);
+  const lastPatchedStepCountRef = useRef(0);
 
   const submit = useCallback(async (query: string, industryCtx?: string) => {
     abortRef.current?.abort();
+    lastPatchedStepCountRef.current = 0;
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -180,6 +183,12 @@ export function useLiteratureResearch() {
                 ? incomingSteps
                 : s.reasoningSteps,
             }));
+            // Persist partial steps so /research/[id] detail page sees live
+            // chain-of-thought via its 4s DB poll
+            if (incomingSteps && incomingSteps.length > lastPatchedStepCountRef.current) {
+              lastPatchedStepCountRef.current = incomingSteps.length;
+              patchSession({ result_data: { partial_reasoning_steps: incomingSteps } });
+            }
           } else if (event.type === "complete") {
             const data = event.data as unknown as LiteratureResult;
             setState((s) => ({

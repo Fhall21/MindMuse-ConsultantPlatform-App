@@ -1,0 +1,1 @@
+ALTER TABLE "research_sessions" ADD COLUMN "updated_at" timestamp with time zone DEFAULT now() NOT NULL;

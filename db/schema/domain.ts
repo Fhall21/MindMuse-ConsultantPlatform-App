@@ -898,6 +898,7 @@ export const researchSessions = pgTable(
     fileEntryId: text("file_entry_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...timestamps,
   },
   (table) => ({
     sessionTypeCheck: check(

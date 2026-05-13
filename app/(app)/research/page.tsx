@@ -1,6 +1,7 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LiteraturePanel } from "@/components/research/literature-panel";
 
 export default function ResearchPage() {
   return (
@@ -19,12 +20,7 @@ export default function ResearchPage() {
         </TabsList>
 
         <TabsContent value="literature" className="rounded-xl border p-6">
-          <div className="space-y-2">
-            <h2 className="text-lg font-medium">Literature</h2>
-            <p className="text-sm text-muted-foreground">
-              Edison-backed literature search will appear here.
-            </p>
-          </div>
+          <LiteraturePanel />
         </TabsContent>
 
         <TabsContent value="analysis" className="rounded-xl border p-6">

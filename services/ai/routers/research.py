@@ -154,22 +154,56 @@ def _tool_history_to_steps(tool_history: list[Any]) -> list[dict[str, str]]:
     return steps
 
 
-def _extract_literature_payload(task_result: Any, verbose_result: Any) -> dict[str, Any]:
-    """Build the payload dict from a completed Edison PQATaskResponse."""
-    raw_answer: str = getattr(task_result, "answer", "") or ""
+def _extract_evidence(contexts: list[Any], used_ids: set[str]) -> list[dict[str, Any]]:
+    """Return used evidence excerpts sorted by relevance score."""
+    evidence = []
+    for ctx in contexts:
+        cid = ctx.get("id", "")
+        if not cid or cid not in used_ids:
+            continue
+        evidence.append({
+            "id": cid,
+            "excerpt": ctx.get("context", ""),
+            "question": ctx.get("question", ""),
+            "score": ctx.get("score", 0),
+        })
+    evidence.sort(key=lambda x: x["score"], reverse=True)
+    return evidence
+
+
+def _extract_inner(verbose_result: Any) -> dict[str, Any] | None:
+    """Safely extract the inner answer dict from a verbose Edison response."""
+    try:
+        return verbose_result.environment_frame["state"]["state"]["response"]["answer"]
+    except (KeyError, TypeError, AttributeError):
+        return None
+
+
+def _extract_literature_payload(verbose_result: Any) -> dict[str, Any]:
+    """Build the complete payload from a finished Edison TaskResponseVerbose."""
     references: list[dict[str, Any]] = []
     reasoning_steps: list[dict[str, str]] = []
+    evidence: list[dict[str, Any]] = []
+    artifact: str = ""
+    raw_answer: str = ""
 
-    try:
-        inner = verbose_result.environment_frame["state"]["state"]["response"]["answer"]
+    inner = _extract_inner(verbose_result)
+    if inner:
+        raw_answer = inner.get("answer", "") or ""
 
         refs_str: str = inner.get("references", "") or ""
         references = _parse_references_string(refs_str)
 
         tool_history: list[Any] = inner.get("tool_history", [])
         reasoning_steps = _tool_history_to_steps(tool_history)
-    except (KeyError, TypeError, AttributeError):
-        pass
+
+        used_ids = set(inner.get("used_contexts", []))
+        evidence = _extract_evidence(inner.get("contexts", []), used_ids)
+
+        artifacts: dict[str, Any] = inner.get("artifacts", {}) or {}
+        artifact = artifacts.get("artifact-00", "") or ""
+    else:
+        raw_answer = getattr(verbose_result, "answer", "") or ""
 
     key_to_num = {r["citation_key"]: r["number"] for r in references}
     answer = _replace_inline_citations(raw_answer, key_to_num) if key_to_num else raw_answer
@@ -178,7 +212,17 @@ def _extract_literature_payload(task_result: Any, verbose_result: Any) -> dict[s
         "answer": answer,
         "reasoning_steps": reasoning_steps,
         "references": references,
+        "evidence": evidence,
+        "artifact": artifact,
     }
+
+
+def _partial_steps(verbose_result: Any) -> list[dict[str, str]]:
+    """Extract whatever reasoning steps are available from an in-progress verbose result."""
+    inner = _extract_inner(verbose_result)
+    if not inner:
+        return []
+    return _tool_history_to_steps(inner.get("tool_history", []))
 
 
 # ── SSE generators ────────────────────────────────────────────────────────────
@@ -222,33 +266,32 @@ async def _run_literature_sse(query: str, industry_ctx: str | None) -> AsyncIter
         await asyncio.sleep(5)
 
         try:
-            result = await client.aget_task(task_id)
+            # Single verbose call: gives status + partial tool_history + contexts
+            verbose_poll = await client.aget_task(task_id, verbose=True)
         except Exception as exc:
             yield {"type": "error", "data": {"message": f"Polling error: {exc}"}}
             return
 
         elapsed = int(asyncio.get_event_loop().time() - start)
 
-        if result.status == "success":
-            try:
-                verbose_result = await client.aget_task(task_id, verbose=True)
-            except Exception:
-                verbose_result = result
-            payload = _extract_literature_payload(result, verbose_result)
+        if verbose_poll.status == "success":
+            payload = _extract_literature_payload(verbose_poll)
             yield {"type": "complete", "data": payload}
             return
-        elif result.status in {"fail", "cancelled", "truncated"}:
+        elif verbose_poll.status in {"fail", "cancelled", "truncated"}:
             yield {
                 "type": "error",
-                "data": {"message": f"Edison task ended with status: {result.status}"},
+                "data": {"message": f"Edison task ended with status: {verbose_poll.status}"},
             }
             return
         else:
+            steps = _partial_steps(verbose_poll)
             yield {
                 "type": "polling",
                 "data": {
                     "elapsed_seconds": elapsed,
                     "message": _polling_message(elapsed),
+                    "reasoning_steps": steps,
                 },
             }
 
@@ -283,6 +326,7 @@ async def _stub_research_events(
                 {"label": "Planning research", "detail": "Creating a structured plan for the research query."},
                 {"label": "Searching literature", "detail": "Querying scientific databases for relevant papers."},
                 {"label": "Gathering evidence", "detail": "Collecting key excerpts from retrieved papers."},
+                {"label": "Synthesising findings", "detail": "Structuring retrieved evidence into a coherent summary."},
                 {"label": "Writing answer", "detail": "Composing the final cited, evidence-grounded response."},
             ],
             "references": [
@@ -305,6 +349,26 @@ async def _stub_research_events(
                     "url": "",
                 },
             ],
+            "evidence": [
+                {
+                    "id": "pqac-00000001",
+                    "excerpt": "Braun & Clarke describe thematic analysis as a method for identifying patterns of meaning across qualitative datasets, applicable to a wide range of research questions.",
+                    "question": "What is thematic analysis?",
+                    "score": 9,
+                },
+                {
+                    "id": "pqac-00000002",
+                    "excerpt": "Smith & Jones argue that evidence-based consulting requires systematic review of relevant literature before advising clients on psychosocial interventions.",
+                    "question": "How is evidence used in consulting?",
+                    "score": 8,
+                },
+            ],
+            "artifact": (
+                "| Method | Description | Application |\n"
+                "|---|---|---|\n"
+                "| Thematic analysis | Identifies patterns across qualitative data | Interview coding |\n"
+                "| Structured interviews | Standardised question format | Data collection |"
+            ),
         },
     }
 

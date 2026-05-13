@@ -42,10 +42,19 @@ export interface ReasoningStep {
   detail: string;
 }
 
+export interface EvidenceExcerpt {
+  id: string;
+  excerpt: string;
+  question: string;
+  score: number;
+}
+
 export interface LiteratureResult {
   answer: string;
   reasoning_steps: ReasoningStep[];
   references: LiteratureReference[];
+  evidence: EvidenceExcerpt[];
+  artifact: string;
 }
 
 export type LiteratureStatus = "idle" | "submitted" | "polling" | "complete" | "error";
@@ -160,12 +169,15 @@ export function useLiteratureResearch() {
           if (event.type === "submitted") {
             setState((s) => ({ ...s, status: "submitted" }));
           } else if (event.type === "polling") {
+            const incomingSteps = event.data.reasoning_steps as ReasoningStep[] | undefined;
             setState((s) => ({
               ...s,
               status: "polling",
               elapsedSeconds: (event.data.elapsed_seconds as number) ?? s.elapsedSeconds,
               pollingMessage: (event.data.message as string) || s.pollingMessage,
-              reasoningSteps: (event.data.reasoning_steps as ReasoningStep[]) ?? s.reasoningSteps,
+              reasoningSteps: incomingSteps && incomingSteps.length > s.reasoningSteps.length
+                ? incomingSteps
+                : s.reasoningSteps,
             }));
           } else if (event.type === "complete") {
             const data = event.data as unknown as LiteratureResult;

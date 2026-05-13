@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchJson, readErrorMessage } from "@/hooks/api";
 
 export type ResearchSessionType = "literature" | "analysis";
@@ -40,6 +40,7 @@ export interface LiteratureReference {
 export interface ReasoningStep {
   label: string;
   detail: string;
+  content?: string;
 }
 
 export interface EvidenceExcerpt {
@@ -213,4 +214,58 @@ export function useLiteratureResearch() {
   }, []);
 
   return { ...state, submit, reset };
+}
+
+// ── Session list / detail hooks ───────────────────────────────────────────────
+
+export interface ResearchSessionSummary {
+  id: string;
+  sessionType: "literature" | "analysis";
+  query: string;
+  status: "pending" | "running" | "complete" | "failed";
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface ResearchSessionDetail extends ResearchSessionSummary {
+  resultData: LiteratureResult | null;
+}
+
+const IN_FLIGHT_STATUSES = new Set(["pending", "running"]);
+
+export function useResearchSessions() {
+  return useQuery({
+    queryKey: ["research-sessions"],
+    queryFn: () => fetchJson<{ sessions: ResearchSessionSummary[] }>("/api/research/sessions"),
+    select: (data) => data.sessions,
+    staleTime: 10_000,
+  });
+}
+
+export function useResearchSession(id: string) {
+  return useQuery({
+    queryKey: ["research-session", id],
+    queryFn: () => fetchJson<{ session: ResearchSessionDetail }>(`/api/research/sessions/${id}`),
+    select: (data) => data.session,
+    // Poll while in-flight; stop once complete or failed
+    refetchInterval: (query) => {
+      const status = query.state.data?.session?.status;
+      return status && IN_FLIGHT_STATUSES.has(status) ? 4_000 : false;
+    },
+  });
+}
+
+export function useCreateResearchSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { query: string; session_type?: string; industry_ctx?: string | null }) =>
+      fetchJson<{ id: string }>("/api/research/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["research-sessions"] });
+    },
+  });
 }

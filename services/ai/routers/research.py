@@ -141,7 +141,94 @@ _TOOL_LABELS: dict[str, tuple[str, str]] = {
 }
 
 
-def _tool_history_to_steps(tool_history: list[Any]) -> list[dict[str, str]]:
+def _parse_messages_content(messages: list[Any]) -> dict[str, str]:
+    """Extract meaningful chain-of-thought content per tool from the message history."""
+    # Pair tool calls with their results by tool_call_id
+    pending: dict[str, dict[str, Any]] = {}
+    results: dict[str, str] = {}
+
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        role = msg.get("role", "")
+        if role == "assistant":
+            for tc in msg.get("tool_calls", []):
+                tc_id = tc.get("id", "")
+                fn = tc.get("function", {})
+                name = fn.get("name", "")
+                args_raw = fn.get("arguments", "{}")
+                try:
+                    args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
+                except Exception:
+                    args = {}
+                pending[tc_id] = {"name": name, "args": args}
+        elif role == "tool":
+            tc_id = msg.get("tool_call_id", "")
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                content = " ".join(
+                    c.get("text", "") for c in content if isinstance(c, dict)
+                )
+            results[tc_id] = str(content)
+
+    # Group calls+results by tool name
+    by_tool: dict[str, list[dict[str, Any]]] = {}
+    for tc_id, call in pending.items():
+        name = call["name"]
+        by_tool.setdefault(name, []).append({"args": call["args"], "result": results.get(tc_id, "")})
+
+    formatted: dict[str, str] = {}
+
+    # create_plan: show objectives from the first update_plan result
+    first_plan = next(
+        (c for c in by_tool.get("update_plan", []) if c["result"]), None
+    )
+    if first_plan:
+        try:
+            raw = first_plan["result"]
+            plan_data = json.loads(raw[raw.index("{") : raw.rindex("}") + 1])
+            lines = []
+            for obj in plan_data.get("objectives", []):
+                icon = "✓" if obj.get("status") == "completed" else "→" if obj.get("status") == "in-progress" else "○"
+                lines.append(f"{icon} {obj.get('objective', '')}")
+            if lines:
+                formatted["create_plan"] = "\n".join(lines)
+        except Exception:
+            pass
+
+    # paper_search: queries → paper titles found
+    search_lines = []
+    for call in by_tool.get("paper_search", []):
+        query = call["args"].get("query", "")
+        titles = re.findall(r"^## \d+\. (.+)$", call["result"], re.MULTILINE)
+        if query:
+            papers = ", ".join(titles[:3]) if titles else "searching…"
+            search_lines.append(f'"{query}" → {papers}')
+    if search_lines:
+        formatted["paper_search"] = "\n".join(search_lines)
+
+    # gather_evidence: the question asked
+    for call in by_tool.get("gather_evidence", []):
+        q = call["args"].get("question", "")
+        if q:
+            formatted["gather_evidence"] = q[:600]
+            break
+
+    # create_artifact: the markdown table from the result
+    for call in by_tool.get("create_artifact", []):
+        result = call["result"]
+        table_start = result.find("|")
+        if table_start >= 0:
+            formatted["create_artifact"] = result[table_start : table_start + 1200]
+            break
+
+    return formatted
+
+
+def _tool_history_to_steps(
+    tool_history: list[Any], messages: list[Any] | None = None
+) -> list[dict[str, str]]:
+    content_by_tool = _parse_messages_content(messages) if messages else {}
     seen: set[str] = set()
     steps: list[dict[str, str]] = []
     for entry in tool_history:
@@ -150,7 +237,10 @@ def _tool_history_to_steps(tool_history: list[Any]) -> list[dict[str, str]]:
                 if tool not in seen and tool in _TOOL_LABELS:
                     seen.add(tool)
                     label, detail = _TOOL_LABELS[tool]
-                    steps.append({"label": label, "detail": detail})
+                    step: dict[str, str] = {"label": label, "detail": detail}
+                    if tool in content_by_tool:
+                        step["content"] = content_by_tool[tool]
+                    steps.append(step)
     return steps
 
 
@@ -179,6 +269,18 @@ def _extract_inner(verbose_result: Any) -> dict[str, Any] | None:
         return None
 
 
+def _extract_messages(verbose_result: Any) -> list[Any]:
+    """Extract the full message history from agent_state."""
+    try:
+        agent_state = verbose_result.agent_state or []
+        if not agent_state:
+            return []
+        last = agent_state[-1]
+        return last["state"]["transition"]["agent_state"]["messages"]
+    except (KeyError, TypeError, IndexError, AttributeError):
+        return []
+
+
 def _extract_literature_payload(verbose_result: Any) -> dict[str, Any]:
     """Build the complete payload from a finished Edison TaskResponseVerbose."""
     references: list[dict[str, Any]] = []
@@ -195,7 +297,8 @@ def _extract_literature_payload(verbose_result: Any) -> dict[str, Any]:
         references = _parse_references_string(refs_str)
 
         tool_history: list[Any] = inner.get("tool_history", [])
-        reasoning_steps = _tool_history_to_steps(tool_history)
+        messages = _extract_messages(verbose_result)
+        reasoning_steps = _tool_history_to_steps(tool_history, messages)
 
         used_ids = set(inner.get("used_contexts", []))
         evidence = _extract_evidence(inner.get("contexts", []), used_ids)
@@ -222,7 +325,8 @@ def _partial_steps(verbose_result: Any) -> list[dict[str, str]]:
     inner = _extract_inner(verbose_result)
     if not inner:
         return []
-    return _tool_history_to_steps(inner.get("tool_history", []))
+    messages = _extract_messages(verbose_result)
+    return _tool_history_to_steps(inner.get("tool_history", []), messages)
 
 
 # ── SSE generators ────────────────────────────────────────────────────────────

@@ -14,6 +14,94 @@ interface ReasoningStepsProps {
   isLoading?: boolean;
 }
 
+// Render step content: plan objectives as a list, search queries as lines,
+// artifact tables as a table, everything else as plain text.
+function StepContent({ label, content }: { label: string; content: string }) {
+  // Plan objectives: lines starting with ✓ → / ○
+  if (label === "Planning research") {
+    const lines = content.split("\n").filter(Boolean);
+    return (
+      <ul className="space-y-1">
+        {lines.map((line, i) => {
+          const icon = line[0];
+          const text = line.slice(2).trim();
+          const done = icon === "✓";
+          const active = icon === "→";
+          return (
+            <li key={i} className="flex items-start gap-2 text-sm">
+              <span className={done ? "text-green-500" : active ? "text-primary" : "text-muted-foreground"}>
+                {icon}
+              </span>
+              <span className={done ? "text-muted-foreground line-through" : active ? "text-foreground font-medium" : "text-muted-foreground"}>
+                {text}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  // Search queries: "query" → papers
+  if (label === "Searching literature") {
+    const lines = content.split("\n").filter(Boolean);
+    return (
+      <ul className="space-y-1.5">
+        {lines.map((line, i) => {
+          const [query, papers] = line.split(" → ");
+          return (
+            <li key={i} className="text-sm">
+              <span className="font-medium text-foreground">{query}</span>
+              {papers && (
+                <span className="text-muted-foreground"> → {papers}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  // Artifact: markdown table → render as HTML table
+  if (label === "Synthesising findings" && content.startsWith("|")) {
+    const rows = content
+      .split("\n")
+      .map((r) => r.trim())
+      .filter((r) => r.startsWith("|") && !r.match(/^\|[-| ]+\|$/));
+    if (rows.length >= 2) {
+      const parseRow = (row: string) =>
+        row.split("|").slice(1, -1).map((c) => c.trim());
+      const [headerRow, ...bodyRows] = rows;
+      const headers = parseRow(headerRow);
+      return (
+        <div className="overflow-x-auto rounded border text-xs">
+          <table className="w-full">
+            <thead className="bg-muted/50">
+              <tr>
+                {headers.map((h, hi) => (
+                  <th key={hi} className="px-2 py-1.5 text-left font-semibold">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {bodyRows.map((row, ri) => (
+                <tr key={ri} className="border-t">
+                  {parseRow(row).map((cell, ci) => (
+                    <td key={ci} className="px-2 py-1.5 text-muted-foreground">{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+  }
+
+  // Default: plain text
+  return <p className="text-sm text-muted-foreground whitespace-pre-wrap">{content}</p>;
+}
+
 export function ReasoningSteps({ steps, isLoading = false }: ReasoningStepsProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
@@ -28,6 +116,7 @@ export function ReasoningSteps({ steps, isLoading = false }: ReasoningStepsProps
     <div className="w-full space-y-1">
       {steps.map((step, i) => {
         const isActive = isLoading && i === steps.length - 1;
+        const hasContent = Boolean(step.content);
         return (
           <Collapsible
             key={i}
@@ -45,7 +134,7 @@ export function ReasoningSteps({ steps, isLoading = false }: ReasoningStepsProps
               <span className={`flex-1 ${isActive ? "text-primary" : ""}`}>
                 {step.label}
               </span>
-              {!isActive && (
+              {!isActive && (hasContent || step.detail) && (
                 <ChevronDown
                   className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200"
                   style={{ transform: openIndex === i ? "rotate(180deg)" : "rotate(0deg)" }}
@@ -53,9 +142,13 @@ export function ReasoningSteps({ steps, isLoading = false }: ReasoningStepsProps
               )}
             </CollapsibleTrigger>
             <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-none">
-              <p className="pb-2 pl-9 pr-2 text-sm text-muted-foreground">
-                {step.detail}
-              </p>
+              <div className="pb-3 pl-9 pr-2">
+                {hasContent ? (
+                  <StepContent label={step.label} content={step.content!} />
+                ) : (
+                  <p className="text-sm text-muted-foreground">{step.detail}</p>
+                )}
+              </div>
             </CollapsibleContent>
           </Collapsible>
         );

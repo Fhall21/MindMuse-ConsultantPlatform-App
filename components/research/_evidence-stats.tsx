@@ -63,13 +63,12 @@ export function EvidenceStats({
 
   return (
     <div className="space-y-2.5">
-      <div className="grid grid-cols-1 divide-y rounded-lg border bg-card sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+      <div className="grid grid-cols-1 divide-y rounded-lg border bg-card sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <Tier1Tile label="Papers screened" value={stats.paper_count} />
         <Tier1Tile label="Relevant papers" value={stats.relevant_papers} />
         <Tier1Tile label="Current evidence" value={stats.current_evidence} />
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs">
-        <Tier2Metric label="Papers screened" value={stats.paper_count} />
-        <span className="text-muted-foreground/30">·</span>
         <Tier2Metric label="Clinical trials" value={trialsLabel} />
         <span className="text-muted-foreground/30">·</span>
         <Tier2Metric label="Disease-target" value={stats.disease_target_evidence} />

@@ -128,7 +128,7 @@ export interface LiteratureResult {
   stats?: LiteratureStats;
 }
 
-export type LiteratureStatus = "idle" | "submitted" | "polling" | "complete" | "error" | "cancelled";
+export type LiteratureStatus = "idle" | "submitted" | "polling" | "complete" | "error" | "cancelled" | "reconnecting";
 
 interface LiteratureState {
   status: LiteratureStatus;
@@ -163,8 +163,8 @@ export function useLiteratureResearch() {
 
     setState({ ...INITIAL_STATE, status: "submitted" });
 
-    // 1. Create session row
-    let sessionId: string | null = null;
+    // 1. Create session row — worker picks this up and submits to Edison.
+    let sessionId: string;
     try {
       const sessionRes = await fetchJson<{ id: string }>("/api/research/sessions", {
         method: "POST",
@@ -180,110 +180,145 @@ export function useLiteratureResearch() {
       return;
     }
 
-    // 2. Open SSE stream
-    let response: Response;
-    try {
-      response = await fetch("/api/research/literature", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, industry_ctx: industryCtx ?? null }),
-        signal: controller.signal,
-      });
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      setState((s) => ({ ...s, status: "error", error: "Connection to research service failed" }));
-      return;
-    }
-
-    if (!response.ok || !response.body) {
-      setState((s) => ({
-        ...s,
-        status: "error",
-        error: `Research service returned ${response.status}`,
-      }));
-      return;
-    }
-
-    // 3. Read SSE stream
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    const patchSession = (updates: Record<string, unknown>) => {
-      if (!sessionId) return;
+    const patchSession = (updates: Record<string, unknown>, terminal = false) => {
       fetchJson(`/api/research/sessions/${sessionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
-      }).catch(() => {});
+      }).catch((err) => {
+        if (terminal) console.error("[research] failed to persist session update:", err);
+      });
     };
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+    // Reconnect and openStream are mutually recursive — defining both before
+    // calling either, then assigning so they can reference each other.
+    let openStream: (attempt: number) => Promise<void>;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
+    const reconnect = async (attempt: number, reason: string): Promise<void> => {
+      const MAX_ATTEMPTS = 3;
+      const backoffMs = [2000, 4000, 8000] as const;
 
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const raw = line.slice(6).trim();
-          if (!raw) continue;
+      if (controller.signal.aborted) return;
 
-          let event: { type: string; data: Record<string, unknown> };
-          try {
-            event = JSON.parse(raw) as typeof event;
-          } catch {
-            continue;
-          }
+      if (attempt >= MAX_ATTEMPTS) {
+        setState((s) => ({
+          ...s,
+          status: "error",
+          error: "Connection lost — check Research History for your result",
+        }));
+        return;
+      }
 
-          if (event.type === "submitted") {
-            setState((s) => ({ ...s, status: "submitted" }));
-          } else if (event.type === "polling") {
-            const incomingSteps = event.data.reasoning_steps as ReasoningStep[] | undefined;
-            setState((s) => ({
-              ...s,
-              status: "polling",
-              elapsedSeconds: (event.data.elapsed_seconds as number) ?? s.elapsedSeconds,
-              pollingMessage: (event.data.message as string) || s.pollingMessage,
-              reasoningSteps: incomingSteps && incomingSteps.length > s.reasoningSteps.length
-                ? incomingSteps
-                : s.reasoningSteps,
-            }));
-            // Persist partial steps so /research/[id] detail page sees live
-            // chain-of-thought via its 4s DB poll
-            if (incomingSteps && incomingSteps.length > lastPatchedStepCountRef.current) {
-              lastPatchedStepCountRef.current = incomingSteps.length;
-              patchSession({ result_data: { partial_reasoning_steps: incomingSteps } });
+      setState((s) => ({ ...s, status: "reconnecting" }));
+      console.warn(`[research] ${reason}, reconnecting (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+
+      await new Promise<void>((res) => setTimeout(res, backoffMs[attempt] ?? 8000));
+      if (controller.signal.aborted) return;
+
+      return openStream(attempt + 1);
+    };
+
+    // 2. Open SSE stream — passes session_id so the backend polls the worker's
+    //    Edison task_id rather than submitting a second task.
+    openStream = async (attempt: number): Promise<void> => {
+      let response: Response;
+      try {
+        response = await fetch("/api/research/literature", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, query, industry_ctx: industryCtx ?? null }),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        return reconnect(attempt, "Connection failed");
+      }
+
+      if (!response.ok || !response.body) {
+        setState((s) => ({
+          ...s,
+          status: "error",
+          error: `Research service returned ${response.status}`,
+        }));
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const raw = line.slice(6).trim();
+            if (!raw) continue;
+
+            let event: { type: string; data: Record<string, unknown> };
+            try {
+              event = JSON.parse(raw) as typeof event;
+            } catch {
+              continue;
             }
-          } else if (event.type === "complete") {
-            const data = event.data as unknown as LiteratureResult;
-            setState((s) => ({
-              ...s,
-              status: "complete",
-              result: data,
-              reasoningSteps: data.reasoning_steps ?? s.reasoningSteps,
-            }));
-            patchSession({ status: "complete", result_data: event.data });
-            return;
-          } else if (event.type === "error") {
-            const msg = (event.data.message as string) || "Research failed";
-            setState((s) => ({ ...s, status: "error", error: msg }));
-            patchSession({ status: "failed" });
-            return;
+
+            if (event.type === "submitted") {
+              setState((s) => ({ ...s, status: "submitted" }));
+            } else if (event.type === "polling") {
+              const incomingSteps = event.data.reasoning_steps as ReasoningStep[] | undefined;
+              setState((s) => ({
+                ...s,
+                status: "polling",
+                elapsedSeconds: (event.data.elapsed_seconds as number) ?? s.elapsedSeconds,
+                pollingMessage: (event.data.message as string) || s.pollingMessage,
+                reasoningSteps:
+                  incomingSteps && incomingSteps.length > s.reasoningSteps.length
+                    ? incomingSteps
+                    : s.reasoningSteps,
+              }));
+              // Persist partial steps so /research/[id] detail page sees live
+              // chain-of-thought via its 4s DB poll.
+              if (incomingSteps && incomingSteps.length > lastPatchedStepCountRef.current) {
+                lastPatchedStepCountRef.current = incomingSteps.length;
+                patchSession({ result_data: { partial_reasoning_steps: incomingSteps } });
+              }
+            } else if (event.type === "complete") {
+              const data = event.data as unknown as LiteratureResult;
+              setState((s) => ({
+                ...s,
+                status: "complete",
+                result: data,
+                reasoningSteps: data.reasoning_steps ?? s.reasoningSteps,
+              }));
+              // Worker is authoritative for result_data; this is a fast-path
+              // cache warm so the detail page reflects completion sooner.
+              patchSession({ status: "complete", result_data: event.data }, true);
+              return;
+            } else if (event.type === "error") {
+              const msg = (event.data.message as string) || "Research failed";
+              setState((s) => ({ ...s, status: "error", error: msg }));
+              patchSession({ status: "failed" }, true);
+              return;
+            }
           }
         }
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        // Stream dropped — reconnect rather than marking the session failed.
+        // Worker continues; result is retrievable from Research History.
+        return reconnect(attempt, "Stream interrupted");
+      } finally {
+        reader.releaseLock();
       }
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        setState((s) => ({ ...s, status: "error", error: "Stream interrupted" }));
-        patchSession({ status: "failed" });
-      }
-    } finally {
-      reader.releaseLock();
-    }
+    };
+
+    await openStream(0);
   }, []);
 
   const cancel = useCallback(() => {
@@ -306,7 +341,7 @@ export function useLiteratureResearch() {
     setState(INITIAL_STATE);
   }, []);
 
-  const isCancellable = state.status === "submitted" || state.status === "polling";
+  const isCancellable = state.status === "submitted" || state.status === "polling" || state.status === "reconnecting";
 
   return { ...state, submit, reset, cancel, isCancellable };
 }

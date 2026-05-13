@@ -9,6 +9,52 @@ from typing import Any, Literal, TypedDict
 from fastapi import APIRouter, Body
 from starlette.responses import StreamingResponse
 
+# How long the SSE stream polls before giving up (slightly longer than worker's
+# STUCK_TIMEOUT_MINUTES=45 so the worker gets a chance to write a failure first).
+SSE_MAX_POLL_SECONDS = 50 * 60
+
+# How long to wait for the worker to claim the session and write task_id.
+# Worker polls every 10s; 6 × 5s = 30s covers the worst-case gap.
+_TASK_ID_FETCH_RETRIES = 6
+_TASK_ID_FETCH_INTERVAL = 5
+
+_db_engine: Any = None
+
+
+def _get_db_engine() -> Any:
+    global _db_engine
+    if _db_engine is None:
+        from core.config import settings
+        from sqlalchemy import create_engine
+
+        url = settings.build_database_url()
+        if not url:
+            raise RuntimeError("DATABASE_URL not configured")
+        _db_engine = create_engine(url, future=True, pool_pre_ping=True)
+    return _db_engine
+
+
+def _read_task_id(engine: Any, session_id: str) -> str | None:
+    try:
+        from sqlalchemy import text
+        sql = text("SELECT task_id FROM research_sessions WHERE id = :sid")
+    except ModuleNotFoundError:
+        sql = "SELECT task_id FROM research_sessions WHERE id = :sid"  # type: ignore[assignment]
+    with engine.connect() as conn:
+        row = conn.execute(sql, {"sid": session_id}).fetchone()
+    return str(row[0]) if row and row[0] else None
+
+
+async def _fetch_task_id(engine: Any, session_id: str) -> str | None:
+    """Poll DB until the worker writes task_id, or give up after ~30s."""
+    loop = asyncio.get_event_loop()
+    for _ in range(_TASK_ID_FETCH_RETRIES):
+        task_id = await loop.run_in_executor(None, _read_task_id, engine, session_id)
+        if task_id:
+            return task_id
+        await asyncio.sleep(_TASK_ID_FETCH_INTERVAL)
+    return None
+
 
 ResearchEventType = Literal["submitted", "polling", "complete", "error"]
 
@@ -692,7 +738,19 @@ def _polling_message(elapsed: int) -> str:
     return "Writing cited answer…"
 
 
-async def _run_literature_sse(query: str, industry_ctx: str | None) -> AsyncIterator[ResearchEvent]:
+async def _run_literature_sse(
+    session_id: str | None,
+    query: str,
+    industry_ctx: str | None,
+) -> AsyncIterator[ResearchEvent]:
+    """Stream research progress to the client.
+
+    Coordinator model: the background worker owns Edison submission and writes
+    task_id to the DB. This generator waits for that task_id, then polls
+    Edison directly — one Edison call per query, no dual submission.
+
+    Stub path (no Edison key): session_id is ignored; fake events are emitted.
+    """
     from core.config import settings
 
     if not settings.edison_api_key:
@@ -700,27 +758,39 @@ async def _run_literature_sse(query: str, industry_ctx: str | None) -> AsyncIter
             yield event
         return
 
-    from edison_client import EdisonClient, JobNames  # type: ignore[import]
+    if not session_id:
+        yield {"type": "error", "data": {"message": "session_id required for live research"}}
+        return
 
-    client = EdisonClient(api_key=settings.edison_api_key)
-    full_query = f"[Industry context: {industry_ctx}]\n\n{query}" if industry_ctx else query
+    from edison_client import EdisonClient  # type: ignore[import]
 
-    try:
-        task_id: str = await client.acreate_task({"name": JobNames.LITERATURE, "query": full_query})
-    except Exception as exc:
-        yield {"type": "error", "data": {"message": f"Failed to submit Edison task: {exc}"}}
+    engine = _get_db_engine()
+    task_id = await _fetch_task_id(engine, session_id)
+    if not task_id:
+        yield {"type": "error", "data": {"message": "Research task did not start — worker may be down"}}
         return
 
     yield {"type": "submitted", "data": {"task_id": task_id}}
 
+    client = EdisonClient(api_key=settings.edison_api_key)
     start = asyncio.get_event_loop().time()
 
     while True:
+        elapsed = int(asyncio.get_event_loop().time() - start)
+        if elapsed >= SSE_MAX_POLL_SECONDS:
+            yield {"type": "error", "data": {"message": "Research timed out"}}
+            return
+
         await asyncio.sleep(5)
 
         try:
             # Single verbose call: gives status + partial tool_history + contexts
-            verbose_poll = await client.aget_task(task_id, verbose=True)
+            verbose_poll = await asyncio.wait_for(
+                client.aget_task(task_id, verbose=True),
+                timeout=60.0,
+            )
+        except asyncio.TimeoutError:
+            continue
         except Exception as exc:
             yield {"type": "error", "data": {"message": f"Polling error: {exc}"}}
             return
@@ -894,7 +964,8 @@ async def literature_search(
 ) -> StreamingResponse:
     query: str = payload.get("query", "")
     industry_ctx: str | None = payload.get("industry_ctx") or None
-    return await research_event_stream(_run_literature_sse(query, industry_ctx))
+    session_id: str | None = payload.get("session_id") or None
+    return await research_event_stream(_run_literature_sse(session_id, query, industry_ctx))
 
 
 @router.post("/analysis")

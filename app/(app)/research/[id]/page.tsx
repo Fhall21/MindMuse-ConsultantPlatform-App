@@ -224,7 +224,10 @@ function ResultView({ result }: { result: LiteratureResult }) {
       </TabsContent>
 
       <TabsContent value="references" className="mt-3">
-        <ReferencesList references={result.references} />
+        <ReferencesList
+          references={result.references}
+          onJumpToEvidence={() => setActiveTab("evidence")}
+        />
       </TabsContent>
     </Tabs>
   );

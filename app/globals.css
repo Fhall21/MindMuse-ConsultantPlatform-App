@@ -48,6 +48,12 @@
   --radius-4xl: calc(var(--radius) * 2.6);
   --animate-collapsible-down: collapsible-down 200ms ease-out;
   --animate-collapsible-up: collapsible-up 150ms ease-in;
+  --color-strength-domain: var(--strength-domain);
+  --color-strength-domain-foreground: var(--strength-domain-foreground);
+  --color-strength-peer: var(--strength-peer);
+  --color-strength-peer-foreground: var(--strength-peer-foreground);
+  --color-strength-quality: var(--strength-quality);
+  --color-strength-quality-foreground: var(--strength-quality-foreground);
 }
 
 :root {
@@ -83,6 +89,12 @@
   --sidebar-accent-foreground: oklch(0.214 0.009 43.1);
   --sidebar-border: oklch(0.904 0.004 49.3);
   --sidebar-ring: oklch(0.63 0.025 252.1);
+  --strength-domain: oklch(0.94 0.04 305);
+  --strength-domain-foreground: oklch(0.32 0.12 305);
+  --strength-peer: oklch(0.94 0.06 85);
+  --strength-peer-foreground: oklch(0.36 0.12 70);
+  --strength-quality: oklch(0.93 0.07 155);
+  --strength-quality-foreground: oklch(0.34 0.11 155);
 }
 
 .dark {
@@ -117,6 +129,12 @@
   --sidebar-accent-foreground: oklch(0.986 0.002 67.8);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.547 0.021 43.1);
+  --strength-domain: oklch(0.28 0.07 305);
+  --strength-domain-foreground: oklch(0.88 0.07 305);
+  --strength-peer: oklch(0.3 0.06 70);
+  --strength-peer-foreground: oklch(0.88 0.08 80);
+  --strength-quality: oklch(0.28 0.07 155);
+  --strength-quality-foreground: oklch(0.88 0.07 155);
 }
 
 @layer base {

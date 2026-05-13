@@ -215,7 +215,12 @@ function ResultView({ result }: { result: LiteratureResult }) {
       </TabsContent>
 
       <TabsContent value="evidence" className="mt-3">
-        <EvidenceList evidence={result.evidence} />
+        <EvidenceList
+          evidence={result.evidence}
+          references={result.references}
+          stats={result.stats}
+          onJumpToReference={(num) => handleCitationClick(String(num))}
+        />
       </TabsContent>
 
       <TabsContent value="references" className="mt-3">

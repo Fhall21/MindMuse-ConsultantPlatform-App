@@ -28,6 +28,9 @@ export function useStartResearchStream(sessionType: ResearchSessionType) {
 
 // ── Literature research hook ──────────────────────────────────────────────────
 
+export type ReferenceStrength = "DOMAIN_LEADING" | "PEER_REVIEWED" | "HIGHEST_QUALITY";
+export type PaperType = "journal" | "preprint" | "clinical_trial" | "other";
+
 export interface LiteratureReference {
   number: number;
   citation_key: string;
@@ -36,12 +39,74 @@ export interface LiteratureReference {
   year: string;
   journal: string;
   url: string;
+  citation_count?: number;
+  strength?: ReferenceStrength;
+  paper_type?: PaperType;
+  contexts_used?: string[];
+  contexts_unused?: string[];
 }
+
+// Stats shown at the top of the Evidence tab. Mirrors Edison's
+// `response.answer.analysis_status` when present; otherwise derived in the
+// backend from contexts + references. See plan D1 for zero-handling.
+export interface LiteratureStats {
+  paper_count: number;
+  relevant_papers: number;
+  clinical_trial_count: number;
+  relevant_clinical_trials: number;
+  current_evidence: number;
+  disease_target_evidence: number;
+}
+
+// Discriminated-union payloads attached to each reasoning step. `kind`
+// is the source of truth — see plan "Internal DX guardrails."
+export interface PlanStepData {
+  kind: "plan";
+  rows: Array<{
+    id: number;
+    objective: string;
+    rationale: string;
+    status: "COMPLETED" | "IN-PROGRESS" | "PENDING";
+    result: string;
+    evaluation: string;
+  }>;
+}
+
+export interface SearchStepData {
+  kind: "search";
+  queries: Array<{ query: string; papers: Array<{ title: string; authors?: string; year?: string }>; count: number }>;
+}
+
+export interface GatherStepData {
+  kind: "gather";
+  question: string;
+  excerpts_count: number;
+  top_excerpts: Array<{ excerpt: string; source_ref_number?: number; source_title?: string }>;
+}
+
+export interface ReadStepData {
+  kind: "read";
+  papers: Array<{ citation_key: string; title: string; takeaway: string }>;
+}
+
+export interface ArtifactStepData {
+  kind: "artifact";
+  table_markdown: string;
+  stats?: LiteratureStats;
+}
+
+export type ReasoningStepData =
+  | PlanStepData
+  | SearchStepData
+  | GatherStepData
+  | ReadStepData
+  | ArtifactStepData;
 
 export interface ReasoningStep {
   label: string;
   detail: string;
   content?: string;
+  data?: ReasoningStepData;
 }
 
 export interface EvidenceExcerpt {
@@ -49,6 +114,9 @@ export interface EvidenceExcerpt {
   excerpt: string;
   question: string;
   score: number;
+  source_ref_number?: number;
+  source_title?: string;
+  source_url?: string;
 }
 
 export interface LiteratureResult {
@@ -57,6 +125,7 @@ export interface LiteratureResult {
   references: LiteratureReference[];
   evidence: EvidenceExcerpt[];
   artifact: string;
+  stats?: LiteratureStats;
 }
 
 export type LiteratureStatus = "idle" | "submitted" | "polling" | "complete" | "error" | "cancelled";

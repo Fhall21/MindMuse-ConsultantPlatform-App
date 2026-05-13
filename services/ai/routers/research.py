@@ -41,11 +41,22 @@ async def research_event_stream(
 
 # ── Edison response parsing ───────────────────────────────────────────────────
 
+_STRENGTH_PHRASE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"highest[- ]quality peer[- ]reviewed journal", re.IGNORECASE), "HIGHEST_QUALITY"),
+    (re.compile(r"domain[- ]leading peer[- ]reviewed journal", re.IGNORECASE), "DOMAIN_LEADING"),
+    (re.compile(r"peer[- ]reviewed journal", re.IGNORECASE), "PEER_REVIEWED"),
+]
+
+
 def _parse_references_string(refs_str: str) -> list[dict[str, Any]]:
     """Parse Edison's numbered reference string into a deduplicated list.
 
     Edison emits the same paper multiple times (different page ranges).
-    We deduplicate by title and re-number from 1.
+    We deduplicate by title and re-number from 1. Citation count and Edison's
+    own strength phrase are extracted from the trailing sentence Edison appends
+    to each entry: 'This article has N citations and is from a <quality> peer-
+    reviewed journal.' Edison's strength is the source of truth (D3) — the
+    threshold-based fallback runs later only when Edison didn't tag the paper.
     """
     if not refs_str:
         return []
@@ -64,6 +75,17 @@ def _parse_references_string(refs_str: str) -> list[dict[str, Any]]:
 
         key_match = re.match(r"(\S+)\s+pages", key_pages)
         citation_key = key_match.group(1) if key_match else key_pages
+
+        # Citation count + Edison-supplied strength tag.
+        citation_count: int | None = None
+        cite_match = re.search(r"This article has\s+(\d+)\s+citations", rest, re.IGNORECASE)
+        if cite_match:
+            citation_count = int(cite_match.group(1))
+        edison_strength: str | None = None
+        for pat, tag in _STRENGTH_PHRASE_PATTERNS:
+            if pat.search(rest):
+                edison_strength = tag
+                break
 
         url_match = re.search(r"URL:\s*(https?://[^\s,]+)", rest)
         url = url_match.group(1) if url_match else ""
@@ -104,17 +126,20 @@ def _parse_references_string(refs_str: str) -> list[dict[str, Any]]:
             continue
 
         seen_titles[title] = len(result) + 1
-        result.append(
-            {
-                "number": len(result) + 1,
-                "citation_key": citation_key,
-                "title": title,
-                "authors": authors,
-                "year": year,
-                "journal": journal,
-                "url": url,
-            }
-        )
+        entry: dict[str, Any] = {
+            "number": len(result) + 1,
+            "citation_key": citation_key,
+            "title": title,
+            "authors": authors,
+            "year": year,
+            "journal": journal,
+            "url": url,
+        }
+        if citation_count is not None:
+            entry["citation_count"] = citation_count
+        if edison_strength is not None:
+            entry["strength"] = edison_strength
+        result.append(entry)
 
     return result
 
@@ -130,6 +155,174 @@ def _replace_inline_citations(answer_text: str, key_to_num: dict[str, int]) -> s
     return re.sub(r"\s*\(([^)]+\bpages\b[^)]+)\)", replace_group, answer_text)
 
 
+# ── Per-paper metadata + context⇄reference joining ───────────────────────────
+
+def _context_citation_key(ctx: dict[str, Any]) -> str:
+    """Citation key for a single context (no page range).
+
+    Prefers the per-paper key on `text.doc.docname`/`text.doc.key` when
+    present; falls back to the leading token of `text.name`
+    (e.g. 'edmondson2023... pages 1-3' → 'edmondson2023...').
+    """
+    text = ctx.get("text") or {}
+    if isinstance(text, dict):
+        doc = text.get("doc") or {}
+        if isinstance(doc, dict):
+            for k in ("docname", "key", "dockey"):
+                v = doc.get(k)
+                if isinstance(v, str) and v:
+                    return v
+        name = text.get("name", "")
+        if isinstance(name, str) and name:
+            head = name.split(" pages ", 1)[0].strip()
+            if head:
+                return head
+    return ""
+
+
+def _extract_doc_metadata(contexts: list[Any]) -> dict[str, dict[str, Any]]:
+    """Build citation_key → doc-level metadata from contexts.
+
+    Edison repeats the same paper across multiple context chunks; we only
+    need the first occurrence per citation_key.
+    """
+    out: dict[str, dict[str, Any]] = {}
+    if not contexts:
+        return out
+    for ctx in contexts:
+        if not isinstance(ctx, dict):
+            continue
+        ck = _context_citation_key(ctx)
+        if not ck or ck in out:
+            continue
+        doc = (ctx.get("text") or {}).get("doc") or {}
+        if not isinstance(doc, dict):
+            continue
+        bibtex_type = (doc.get("bibtex_type") or "").lower()
+        if bibtex_type in {"article", "inproceedings"}:
+            paper_type = "journal"
+        elif bibtex_type in {"misc", "techreport"}:
+            paper_type = "preprint"
+        else:
+            paper_type = "other"
+        out[ck] = {
+            "citation_count": doc.get("citation_count"),
+            "source_quality": doc.get("source_quality"),
+            "is_retracted": bool(doc.get("is_retracted")) if doc.get("is_retracted") is not None else None,
+            "paper_type": paper_type,
+        }
+    return out
+
+
+def _strength_tag_for(
+    edison_tag: str | None,
+    citation_count: int | None,
+    source_quality: int | None,
+    paper_type: str | None,
+    year: str,
+) -> str | None:
+    """Resolve the strength badge per D3.
+
+    Order of precedence:
+      1. Edison's own phrase (`edison_tag` — already parsed from references).
+      2. Threshold rules:
+         - ≥400 citations → DOMAIN_LEADING
+         - 50–399 citations on a journal → PEER_REVIEWED
+         - ≥200 citations on a journal published in the last 5y → HIGHEST_QUALITY
+    """
+    if edison_tag in {"DOMAIN_LEADING", "PEER_REVIEWED", "HIGHEST_QUALITY"}:
+        return edison_tag
+
+    if citation_count is None:
+        return None
+
+    is_journal = paper_type == "journal" or (source_quality is not None and source_quality >= 1)
+
+    # Recent + heavily cited journal → HIGHEST_QUALITY (rare; matches the
+    # reference image where a 2012 Work & Stress paper with 251 citations
+    # earned the green tag).
+    if is_journal and citation_count >= 200 and year:
+        try:
+            from datetime import datetime
+            if (datetime.utcnow().year - int(year)) <= 5:
+                return "HIGHEST_QUALITY"
+        except (ValueError, TypeError):
+            pass
+
+    if citation_count >= 400:
+        return "DOMAIN_LEADING"
+    if is_journal and citation_count >= 50:
+        return "PEER_REVIEWED"
+    return None
+
+
+def _compute_context_usage(
+    contexts: list[Any],
+    used_ids: set[str],
+    references: list[dict[str, Any]],
+) -> dict[int, dict[str, list[str]]]:
+    """For each reference (by its 1-based number), list used/unused chunks.
+
+    Chunk IDs are formatted as `{ref_number}.{1-based chunk index}`, matching
+    Edison's UI (e.g. 'Contexts: Used 1.1 1.2  Unused 1.5').
+
+    Mapping is by citation_key — context's `text.name` token before " pages "
+    matches the reference's `citation_key`. Positional ordering of chunks is
+    preserved as they appear in `contexts` (Edison emits them ordered).
+    """
+    key_to_ref_number: dict[str, int] = {r["citation_key"]: r["number"] for r in references}
+    per_ref_chunks: dict[int, list[tuple[str, bool]]] = {r["number"]: [] for r in references}
+
+    for ctx in contexts:
+        if not isinstance(ctx, dict):
+            continue
+        ck = _context_citation_key(ctx)
+        ref_num = key_to_ref_number.get(ck)
+        if ref_num is None:
+            continue
+        cid = ctx.get("id", "")
+        per_ref_chunks[ref_num].append((cid, cid in used_ids))
+
+    result: dict[int, dict[str, list[str]]] = {}
+    for ref_num, chunks in per_ref_chunks.items():
+        used: list[str] = []
+        unused: list[str] = []
+        for idx, (_cid, was_used) in enumerate(chunks, start=1):
+            label = f"{ref_num}.{idx}"
+            (used if was_used else unused).append(label)
+        result[ref_num] = {"used": used, "unused": unused}
+    return result
+
+
+def _extract_analysis_stats(inner: dict[str, Any]) -> dict[str, int]:
+    """Derive the Evidence-tab stats strip.
+
+    Edison's `analysis_status` / top-level `stats` are absent in this account,
+    so we derive everything from list lengths. Clinical-trial buckets are 0
+    until/unless Edison surfaces structured paper-type metadata that flags
+    trials — `bibtex_type=article` alone is not sufficient to claim a trial.
+    """
+    contexts = inner.get("contexts") or []
+    citeable = inner.get("citeable_context_ids") or []
+    used_contexts = inner.get("used_contexts") or []
+
+    seen_keys: set[str] = set()
+    for ctx in contexts:
+        if isinstance(ctx, dict):
+            ck = _context_citation_key(ctx)
+            if ck:
+                seen_keys.add(ck)
+
+    return {
+        "paper_count": len(seen_keys) or len(contexts),
+        "relevant_papers": len(citeable),
+        "clinical_trial_count": 0,
+        "relevant_clinical_trials": 0,
+        "current_evidence": len(used_contexts),
+        "disease_target_evidence": 0,
+    }
+
+
 _TOOL_LABELS: dict[str, tuple[str, str]] = {
     "create_plan": ("Planning research", "Creating a structured plan for the research query."),
     "paper_search": ("Searching literature", "Querying scientific databases for relevant papers."),
@@ -141,8 +334,16 @@ _TOOL_LABELS: dict[str, tuple[str, str]] = {
 }
 
 
-def _parse_messages_content(messages: list[Any]) -> dict[str, str]:
-    """Extract meaningful chain-of-thought content per tool from the message history."""
+def _parse_messages_content(
+    messages: list[Any],
+) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
+    """Extract chain-of-thought content per tool — both flat text (legacy) and
+    structured payloads (tagged-union, consumed by the frontend's
+    ReasoningStepData types).
+
+    Returns (content_by_tool, data_by_tool) where `data_by_tool[tool_name]`
+    is a dict with a `kind` discriminator matching the frontend's union.
+    """
     # Pair tool calls with their results by tool_call_id
     pending: dict[str, dict[str, Any]] = {}
     results: dict[str, str] = {}
@@ -171,92 +372,188 @@ def _parse_messages_content(messages: list[Any]) -> dict[str, str]:
                 )
             results[tc_id] = str(content)
 
-    # Group calls+results by tool name
+    # Group calls+results by tool name, preserving call order
     by_tool: dict[str, list[dict[str, Any]]] = {}
     for tc_id, call in pending.items():
         name = call["name"]
         by_tool.setdefault(name, []).append({"args": call["args"], "result": results.get(tc_id, "")})
 
     formatted: dict[str, str] = {}
+    structured: dict[str, dict[str, Any]] = {}
 
-    # create_plan: show objectives from the first update_plan result
-    first_plan = next(
-        (c for c in by_tool.get("update_plan", []) if c["result"]), None
-    )
-    if first_plan:
+    # ── Planning research (use the *last* update_plan with a result — that's
+    # the final plan state, columns: objective × rationale × status × result
+    # × evaluation).
+    plan_calls = [c for c in by_tool.get("update_plan", []) if c["result"]]
+    final_plan = plan_calls[-1] if plan_calls else None
+    if final_plan:
         try:
-            raw = first_plan["result"]
-            plan_data = json.loads(raw[raw.index("{") : raw.rindex("}") + 1])
-            lines = []
-            for obj in plan_data.get("objectives", []):
-                icon = "✓" if obj.get("status") == "completed" else "→" if obj.get("status") == "in-progress" else "○"
+            raw = final_plan["result"]
+            plan_data = json.loads(raw[raw.index("{"): raw.rindex("}") + 1])
+            rows: list[dict[str, Any]] = []
+            lines: list[str] = []
+            for i, obj in enumerate(plan_data.get("objectives", []), start=1):
+                status_raw = (obj.get("status") or "").lower()
+                if status_raw in {"completed", "complete", "done"}:
+                    status = "COMPLETED"
+                elif status_raw in {"in-progress", "in_progress", "active"}:
+                    status = "IN-PROGRESS"
+                else:
+                    status = "PENDING"
+                rows.append({
+                    "id": i,
+                    "objective": obj.get("objective", "") or "",
+                    "rationale": obj.get("rationale", "") or "",
+                    "status": status,
+                    "result": obj.get("result", "") or "",
+                    "evaluation": obj.get("evaluation", "") or "",
+                })
+                icon = "✓" if status == "COMPLETED" else "→" if status == "IN-PROGRESS" else "○"
                 lines.append(f"{icon} {obj.get('objective', '')}")
+            if rows:
+                structured["create_plan"] = {"kind": "plan", "rows": rows}
             if lines:
                 formatted["create_plan"] = "\n".join(lines)
         except Exception:
             pass
 
-    # paper_search: queries → paper titles found
-    search_lines = []
+    # ── paper_search: per-query list of papers found with counts.
+    search_queries: list[dict[str, Any]] = []
+    search_lines: list[str] = []
+    paper_md = re.compile(r"^## \d+\. (.+)$", re.MULTILINE)
     for call in by_tool.get("paper_search", []):
         query = call["args"].get("query", "")
-        titles = re.findall(r"^## \d+\. (.+)$", call["result"], re.MULTILINE)
-        if query:
-            papers = ", ".join(titles[:3]) if titles else "searching…"
-            search_lines.append(f'"{query}" → {papers}')
+        titles = paper_md.findall(call["result"])
+        if not query:
+            continue
+        papers = [{"title": t} for t in titles[:8]]
+        search_queries.append({
+            "query": query,
+            "papers": papers,
+            "count": len(titles),
+        })
+        preview = ", ".join(titles[:3]) if titles else "searching…"
+        search_lines.append(f'"{query}" → {preview}')
+    if search_queries:
+        structured["paper_search"] = {"kind": "search", "queries": search_queries}
     if search_lines:
         formatted["paper_search"] = "\n".join(search_lines)
 
-    # gather_evidence: the question asked
-    for call in by_tool.get("gather_evidence", []):
-        q = call["args"].get("question", "")
-        if q:
-            formatted["gather_evidence"] = q[:600]
-            break
+    # ── gather_evidence: question + count + top excerpts (extracted from the
+    # tool result text, which Edison formats as numbered blocks).
+    gather_calls = by_tool.get("gather_evidence", [])
+    if gather_calls:
+        first = gather_calls[0]
+        question = first["args"].get("question", "")
+        # Heuristic: count occurrences of "context" lines in the result.
+        excerpt_blocks = re.findall(
+            r"(?:^|\n)(?:\d+\.\s+|##\s+)([^\n]{40,500})",
+            first["result"],
+        )
+        top = [{"excerpt": e.strip()} for e in excerpt_blocks[:3]]
+        excerpts_count = len(excerpt_blocks)
+        if question:
+            formatted["gather_evidence"] = question[:600]
+            structured["gather_evidence"] = {
+                "kind": "gather",
+                "question": question,
+                "excerpts_count": excerpts_count,
+                "top_excerpts": top,
+            }
 
-    # create_artifact: the markdown table from the result
-    for call in by_tool.get("create_artifact", []):
-        result = call["result"]
+    # ── read_text: per-paper takeaway (first ~200 chars of the tool result).
+    read_papers: list[dict[str, str]] = []
+    for call in by_tool.get("read_text", []):
+        ck = (
+            call["args"].get("docname")
+            or call["args"].get("paper_key")
+            or call["args"].get("dockey")
+            or ""
+        )
+        result_text = (call["result"] or "").strip()
+        # Title line typically appears first; fall back to citation key.
+        first_line = result_text.splitlines()[0][:140] if result_text else ck
+        takeaway = result_text[:240].strip()
+        if takeaway:
+            read_papers.append({
+                "citation_key": ck,
+                "title": first_line or ck,
+                "takeaway": takeaway,
+            })
+    if read_papers:
+        structured["read_text"] = {"kind": "read", "papers": read_papers[:10]}
+
+    # ── create_artifact: the markdown table from the latest result.
+    artifact_calls = [c for c in by_tool.get("create_artifact", []) if c["result"]]
+    if artifact_calls:
+        result = artifact_calls[-1]["result"]
         table_start = result.find("|")
         if table_start >= 0:
-            formatted["create_artifact"] = result[table_start : table_start + 1200]
-            break
+            table_md = result[table_start: table_start + 4000]
+            formatted["create_artifact"] = table_md[:1200]
+            structured["create_artifact"] = {"kind": "artifact", "table_markdown": table_md}
 
-    return formatted
+    return formatted, structured
 
 
 def _tool_history_to_steps(
     tool_history: list[Any], messages: list[Any] | None = None
-) -> list[dict[str, str]]:
-    content_by_tool = _parse_messages_content(messages) if messages else {}
+) -> list[dict[str, Any]]:
+    if messages:
+        content_by_tool, data_by_tool = _parse_messages_content(messages)
+    else:
+        content_by_tool, data_by_tool = {}, {}
     seen: set[str] = set()
-    steps: list[dict[str, str]] = []
+    steps: list[dict[str, Any]] = []
     for entry in tool_history:
         if isinstance(entry, list):
             for tool in entry:
                 if tool not in seen and tool in _TOOL_LABELS:
                     seen.add(tool)
                     label, detail = _TOOL_LABELS[tool]
-                    step: dict[str, str] = {"label": label, "detail": detail}
+                    step: dict[str, Any] = {"label": label, "detail": detail}
                     if tool in content_by_tool:
                         step["content"] = content_by_tool[tool]
+                    if tool in data_by_tool:
+                        step["data"] = data_by_tool[tool]
                     steps.append(step)
     return steps
 
 
-def _extract_evidence(contexts: list[Any], used_ids: set[str]) -> list[dict[str, Any]]:
-    """Return used evidence excerpts sorted by relevance score."""
-    evidence = []
+def _extract_evidence(
+    contexts: list[Any],
+    used_ids: set[str],
+    references: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Return used evidence excerpts sorted by relevance score, enriched with
+    the source reference number / title / url when resolvable.
+    """
+    key_to_ref: dict[str, dict[str, Any]] = {}
+    if references:
+        for r in references:
+            key_to_ref[r["citation_key"]] = r
+
+    evidence: list[dict[str, Any]] = []
     for ctx in contexts:
+        if not isinstance(ctx, dict):
+            continue
         cid = ctx.get("id", "")
         if not cid or cid not in used_ids:
             continue
-        evidence.append({
+        item: dict[str, Any] = {
             "id": cid,
             "excerpt": ctx.get("context", ""),
             "question": ctx.get("question", ""),
             "score": ctx.get("score", 0),
-        })
+        }
+        ck = _context_citation_key(ctx)
+        ref = key_to_ref.get(ck) if ck else None
+        if ref:
+            item["source_ref_number"] = ref["number"]
+            item["source_title"] = ref.get("title", "")
+            if ref.get("url"):
+                item["source_url"] = ref["url"]
+        evidence.append(item)
     evidence.sort(key=lambda x: x["score"], reverse=True)
     return evidence
 
@@ -282,12 +579,19 @@ def _extract_messages(verbose_result: Any) -> list[Any]:
 
 
 def _extract_literature_payload(verbose_result: Any) -> dict[str, Any]:
-    """Build the complete payload from a finished Edison TaskResponseVerbose."""
+    """Build the complete payload from a finished Edison TaskResponseVerbose.
+
+    The shape of this return is the SSE `complete` event's `data` field — also
+    persisted to `research_sessions.result_data`. Treat the keys here as a
+    contract; the snapshot test in `test_research_router.py` locks them in.
+    See plan "Internal DX guardrails" for context.
+    """
     references: list[dict[str, Any]] = []
-    reasoning_steps: list[dict[str, str]] = []
+    reasoning_steps: list[dict[str, Any]] = []
     evidence: list[dict[str, Any]] = []
     artifact: str = ""
     raw_answer: str = ""
+    stats: dict[str, int] | None = None
 
     inner = _extract_inner(verbose_result)
     if inner:
@@ -296,28 +600,73 @@ def _extract_literature_payload(verbose_result: Any) -> dict[str, Any]:
         refs_str: str = inner.get("references", "") or ""
         references = _parse_references_string(refs_str)
 
+        contexts: list[Any] = inner.get("contexts", []) or []
+        doc_meta = _extract_doc_metadata(contexts)
+
+        # Enrich each reference with structured doc metadata + resolved strength.
+        for ref in references:
+            ck = ref.get("citation_key", "")
+            meta = doc_meta.get(ck, {})
+            if meta.get("paper_type"):
+                ref["paper_type"] = meta["paper_type"]
+            # Citation count: prefer the structured doc.citation_count when the
+            # references-string regex missed it.
+            if ref.get("citation_count") is None and meta.get("citation_count") is not None:
+                ref["citation_count"] = meta["citation_count"]
+            # Strength resolution (D3): Edison's phrase wins; otherwise thresholds.
+            ref["strength"] = _strength_tag_for(
+                edison_tag=ref.get("strength"),
+                citation_count=ref.get("citation_count"),
+                source_quality=meta.get("source_quality"),
+                paper_type=ref.get("paper_type"),
+                year=ref.get("year", ""),
+            )
+            if ref["strength"] is None:
+                ref.pop("strength")
+
+        # Per-reference context usage (Used X.Y X.Y  Unused X.Z).
+        used_ids = set(inner.get("used_contexts", []))
+        usage = _compute_context_usage(contexts, used_ids, references)
+        for ref in references:
+            entry = usage.get(ref["number"], {"used": [], "unused": []})
+            ref["contexts_used"] = entry["used"]
+            ref["contexts_unused"] = entry["unused"]
+
         tool_history: list[Any] = inner.get("tool_history", [])
         messages = _extract_messages(verbose_result)
         reasoning_steps = _tool_history_to_steps(tool_history, messages)
 
-        used_ids = set(inner.get("used_contexts", []))
-        evidence = _extract_evidence(inner.get("contexts", []), used_ids)
+        evidence = _extract_evidence(contexts, used_ids, references)
 
         artifacts: dict[str, Any] = inner.get("artifacts", {}) or {}
         artifact = artifacts.get("artifact-00", "") or ""
+
+        stats = _extract_analysis_stats(inner)
+
+        # Attach stats footer to the create_artifact step's structured data so
+        # the Reasoning tab can render the analysis-status alongside the table.
+        if stats is not None:
+            for step in reasoning_steps:
+                data = step.get("data")
+                if isinstance(data, dict) and data.get("kind") == "artifact":
+                    data["stats"] = stats
+                    break
     else:
         raw_answer = getattr(verbose_result, "answer", "") or ""
 
     key_to_num = {r["citation_key"]: r["number"] for r in references}
     answer = _replace_inline_citations(raw_answer, key_to_num) if key_to_num else raw_answer
 
-    return {
+    payload: dict[str, Any] = {
         "answer": answer,
         "reasoning_steps": reasoning_steps,
         "references": references,
         "evidence": evidence,
         "artifact": artifact,
     }
+    if stats is not None:
+        payload["stats"] = stats
+    return payload
 
 
 def _partial_steps(verbose_result: Any) -> list[dict[str, str]]:

@@ -132,7 +132,6 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname.startsWith("/research")}>
                   <Link href="/research" className="flex items-center gap-2">
-                    <FlaskConical className="size-4" aria-hidden="true" />
                     <span>Research</span>
                   </Link>
                 </SidebarMenuButton>

@@ -13,7 +13,7 @@ import type { ReasoningStep } from "@/hooks/use-research";
 // ── Content renderers (exported for InFlightSteps on detail page) ─────────────
 
 export function StepContent({ label, content }: { label: string; content: string }) {
-  // Planning research: ✓ / → / ○ objective checklist
+  // Planning research: ✓ / → / ○ objective checklist — flat, no icon badges
   if (label === "Planning research") {
     const lines = content.split("\n").filter(Boolean);
     return (
@@ -27,10 +27,10 @@ export function StepContent({ label, content }: { label: string; content: string
             <li key={i} className="flex items-start gap-2.5 text-sm">
               <span
                 className={cn(
-                  "mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
-                  done   && "bg-green-500/15 text-green-600",
-                  active && "bg-primary/10 text-primary",
-                  !done && !active && "text-muted-foreground/30"
+                  "mt-0.5 w-3.5 shrink-0 text-center text-xs leading-none",
+                  done && "text-muted-foreground/40",
+                  active && "text-primary",
+                  !done && !active && "text-muted-foreground/25"
                 )}
               >
                 {done ? "✓" : active ? "→" : "·"}
@@ -38,9 +38,9 @@ export function StepContent({ label, content }: { label: string; content: string
               <span
                 className={cn(
                   "leading-snug",
-                  done   && "text-muted-foreground/60 line-through",
+                  done && "text-muted-foreground/50 line-through",
                   active && "font-medium text-foreground",
-                  !done && !active && "text-muted-foreground/50"
+                  !done && !active && "text-muted-foreground/40"
                 )}
               >
                 {text}
@@ -52,22 +52,22 @@ export function StepContent({ label, content }: { label: string; content: string
     );
   }
 
-  // Searching literature: query → paper count rows
+  // Searching literature: stacked rows — query above, papers below
   if (label === "Searching literature") {
     const lines = content.split("\n").filter(Boolean);
     return (
-      <ul className="divide-y divide-border/40">
+      <ul className="divide-y divide-border/30">
         {lines.map((line, i) => {
           const sepIdx = line.indexOf(" → ");
           const query = sepIdx >= 0 ? line.slice(0, sepIdx) : line;
           const papers = sepIdx >= 0 ? line.slice(sepIdx + 3) : undefined;
           return (
-            <li key={i} className="flex items-baseline gap-3 py-1.5 text-sm">
-              <span className="min-w-0 flex-1 text-foreground/80">{query}</span>
+            <li key={i} className="py-2.5 first:pt-0 last:pb-0">
+              <p className="text-sm text-foreground/80">{query}</p>
               {papers && (
-                <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                   {papers}
-                </span>
+                </p>
               )}
             </li>
           );
@@ -76,7 +76,7 @@ export function StepContent({ label, content }: { label: string; content: string
     );
   }
 
-  // Synthesising findings: markdown table → styled HTML table
+  // Synthesising findings: markdown table — no card wrapper, just dividers
   if (label === "Synthesising findings" && content.includes("|")) {
     const rows = content
       .split("\n")
@@ -88,22 +88,22 @@ export function StepContent({ label, content }: { label: string; content: string
       const [headerRow, ...bodyRows] = rows;
       const headers = parseRow(headerRow);
       return (
-        <div className="overflow-x-auto rounded border text-xs">
-          <table className="w-full">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="border-b bg-muted/50">
+              <tr className="border-b border-border/50">
                 {headers.map((h, hi) => (
-                  <th key={hi} className="px-3 py-2 text-left font-semibold text-foreground">
+                  <th key={hi} className="pb-2 pr-4 text-left font-medium text-foreground/70">
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-border/50">
+            <tbody className="divide-y divide-border/30">
               {bodyRows.map((row, ri) => (
-                <tr key={ri} className="transition-colors hover:bg-muted/20">
+                <tr key={ri}>
                   {parseRow(row).map((cell, ci) => (
-                    <td key={ci} className="px-3 py-2 text-muted-foreground">
+                    <td key={ci} className="py-2 pr-4 text-muted-foreground">
                       {cell}
                     </td>
                   ))}
@@ -206,7 +206,7 @@ export function ReasoningSteps({ steps, isLoading = false }: ReasoningStepsProps
 
             {hasContent && (
               <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-                <div className="border-t border-border/40 bg-muted/20 px-4 pb-4 pl-12 pt-3">
+                <div className="border-t border-border/40 px-4 pb-4 pl-12 pt-3">
                   <StepContent label={step.label} content={step.content!} />
                 </div>
               </CollapsibleContent>

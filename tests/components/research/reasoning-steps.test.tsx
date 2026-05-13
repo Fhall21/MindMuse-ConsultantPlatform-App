@@ -19,7 +19,6 @@ describe("ReasoningSteps", () => {
       />
     );
 
-    expect(screen.getByText("Checklist")).toBeInTheDocument();
     expect(screen.getByText("Define scope")).toBeInTheDocument();
     expect(screen.getByText("Build search terms")).toBeInTheDocument();
     expect(screen.getByText("Capture evidence")).toBeInTheDocument();

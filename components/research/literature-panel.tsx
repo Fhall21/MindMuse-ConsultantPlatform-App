@@ -17,33 +17,69 @@ import { useLiteratureResearch } from "@/hooks/use-research";
 import { ReasoningSteps } from "./reasoning-steps";
 import { ReferencesList } from "./references-list";
 
+// Render Edison answer text: light markdown heading support + [N, M] citation badges.
 function AnswerText({ text }: { text: string }) {
-  const parts = text.split(/(\[\d+\])/g);
+  const blocks = text.split(/\n\n+/);
+
   return (
-    <p className="text-sm leading-relaxed">
-      {parts.map((part, i) => {
-        const match = /^\[(\d+)\]$/.exec(part);
-        if (match) {
+    <div className="space-y-3 text-sm leading-relaxed">
+      {blocks.map((block, bi) => {
+        const trimmed = block.trim();
+        if (!trimmed) return null;
+
+        // Heading lines
+        const h2 = /^## (.+)/.exec(trimmed);
+        if (h2) {
           return (
-            <Badge
-              key={i}
-              variant="outline"
-              className="mx-0.5 px-1 py-0 text-xs font-semibold align-super"
-            >
-              {match[1]}
-            </Badge>
+            <h3 key={bi} className="text-base font-semibold text-foreground pt-1">
+              {h2[1]}
+            </h3>
           );
         }
-        return <span key={i}>{part}</span>;
+        const h3 = /^### (.+)/.exec(trimmed);
+        if (h3) {
+          return (
+            <h4 key={bi} className="text-sm font-semibold text-foreground">
+              {h3[1]}
+            </h4>
+          );
+        }
+
+        // Paragraph: replace [N] and [N, M] with inline badges
+        const parts = trimmed.split(/(\[\d+(?:,\s*\d+)*\])/g);
+        return (
+          <p key={bi}>
+            {parts.map((part, pi) => {
+              const citMatch = /^\[(\d+(?:,\s*\d+)*)\]$/.exec(part);
+              if (citMatch) {
+                const nums = citMatch[1].split(",").map((n) => n.trim());
+                return (
+                  <span key={pi}>
+                    {nums.map((n) => (
+                      <Badge
+                        key={n}
+                        variant="outline"
+                        className="mx-0.5 px-1 py-0 text-xs font-semibold align-super"
+                      >
+                        {n}
+                      </Badge>
+                    ))}
+                  </span>
+                );
+              }
+              return <span key={pi}>{part}</span>;
+            })}
+          </p>
+        );
       })}
-    </p>
+    </div>
   );
 }
 
 export function LiteraturePanel() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { data: preferences } = useAIPreferences();
-  const { status, result, error, elapsedSeconds, reasoningSteps, submit, reset } =
+  const { status, result, error, elapsedSeconds, submit, reset } =
     useLiteratureResearch();
 
   const industry = preferences?.industry || undefined;
@@ -105,11 +141,6 @@ export function LiteraturePanel() {
               {elapsedSeconds > 0 && ` · ${elapsedSeconds}s elapsed`}
             </p>
           </div>
-          {reasoningSteps.length > 0 && (
-            <div className="w-full max-w-sm text-left">
-              <ReasoningSteps steps={reasoningSteps} />
-            </div>
-          )}
         </div>
       )}
 

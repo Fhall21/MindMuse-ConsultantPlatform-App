@@ -296,6 +296,68 @@ async def _run_literature_sse(query: str, industry_ctx: str | None) -> AsyncIter
             }
 
 
+def _stub_literature_payload() -> dict[str, Any]:
+    """Return a stub literature result dict for use when Edison API key is absent."""
+    return {
+        "stub": True,
+        "answer": (
+            "Social science consulting relies on evidence-based methods. [1]\n\n"
+            "## Structured interviews\n\n"
+            "Structured interviews are a core tool for gathering qualitative data in consulting contexts. [2]\n\n"
+            "## Thematic analysis\n\n"
+            "Thematic analysis enables systematic interpretation of interview findings, "
+            "producing actionable insights from complex data. [1, 2]"
+        ),
+        "reasoning_steps": [
+            {"label": "Planning research", "detail": "Creating a structured plan for the research query."},
+            {"label": "Searching literature", "detail": "Querying scientific databases for relevant papers."},
+            {"label": "Gathering evidence", "detail": "Collecting key excerpts from retrieved papers."},
+            {"label": "Synthesising findings", "detail": "Structuring retrieved evidence into a coherent summary."},
+            {"label": "Writing answer", "detail": "Composing the final cited, evidence-grounded response."},
+        ],
+        "references": [
+            {
+                "number": 1,
+                "citation_key": "braun2006",
+                "title": "Using thematic analysis in psychology",
+                "authors": "Virginia Braun and Victoria Clarke",
+                "year": "2006",
+                "journal": "Qualitative Research in Psychology",
+                "url": "https://doi.org/10.1191/1478088706qp063oa",
+            },
+            {
+                "number": 2,
+                "citation_key": "smith2023",
+                "title": "Evidence-based practice in social science consulting",
+                "authors": "Smith, J. & Jones, A.",
+                "year": "2023",
+                "journal": "Journal of Consulting Research",
+                "url": "",
+            },
+        ],
+        "evidence": [
+            {
+                "id": "pqac-00000001",
+                "excerpt": "Braun & Clarke describe thematic analysis as a method for identifying patterns of meaning across qualitative datasets, applicable to a wide range of research questions.",
+                "question": "What is thematic analysis?",
+                "score": 9,
+            },
+            {
+                "id": "pqac-00000002",
+                "excerpt": "Smith & Jones argue that evidence-based consulting requires systematic review of relevant literature before advising clients on psychosocial interventions.",
+                "question": "How is evidence used in consulting?",
+                "score": 8,
+            },
+        ],
+        "artifact": (
+            "| Method | Description | Application |\n"
+            "|---|---|---|\n"
+            "| Thematic analysis | Identifies patterns across qualitative data | Interview coding |\n"
+            "| Structured interviews | Standardised question format | Data collection |"
+        ),
+    }
+
+
 async def _stub_research_events(
     session_type: Literal["literature", "analysis"],
 ) -> AsyncIterator[ResearchEvent]:

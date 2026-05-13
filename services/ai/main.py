@@ -49,6 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = None
     worker_task: asyncio.Task | None = None  # type: ignore[type-arg]
     learning_worker_task: asyncio.Task | None = None  # type: ignore[type-arg]
+    research_worker_task: asyncio.Task | None = None  # type: ignore[type-arg]
 
     try:
         from workers.analytics_job_worker import (
@@ -81,9 +82,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning("[lifespan] learning worker could not start: %s", exc)
 
     try:
+        from workers.research_job_worker import run_worker_loop as run_research_worker_loop
+        if engine is None:
+            from workers.research_job_worker import create_db_engine as create_research_engine
+            engine = create_research_engine()
+        research_worker_task = asyncio.create_task(run_research_worker_loop(engine))
+        research_worker_task.add_done_callback(
+            lambda task: _log_background_task_result(task, "research worker")
+        )
+        logger.info("[lifespan] research worker started")
+    except Exception as exc:
+        logger.warning("[lifespan] research worker could not start: %s", exc)
+
+    try:
         yield
     finally:
-        for task in (worker_task, learning_worker_task):
+        for task in (worker_task, learning_worker_task, research_worker_task):
             if task and not task.done():
                 task.cancel()
                 try:

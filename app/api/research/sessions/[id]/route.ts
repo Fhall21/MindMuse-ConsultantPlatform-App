@@ -6,6 +6,25 @@ import { researchSessions } from "@/db/schema";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+export async function GET(_request: NextRequest, { params }: RouteContext) {
+  const auth = await requireAuthenticatedApiUser();
+  if (auth instanceof NextResponse) return auth;
+
+  const { id } = await params;
+
+  const [session] = await db
+    .select()
+    .from(researchSessions)
+    .where(and(eq(researchSessions.id, id), eq(researchSessions.userId, auth.id)))
+    .limit(1);
+
+  if (!session) {
+    return NextResponse.json({ detail: "Not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ session });
+}
+
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   const auth = await requireAuthenticatedApiUser();
   if (auth instanceof NextResponse) return auth;

@@ -1,7 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
+import { desc, eq } from "drizzle-orm";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
 import { db } from "@/db/client";
 import { researchSessions } from "@/db/schema";
+
+export async function GET() {
+  const auth = await requireAuthenticatedApiUser();
+  if (auth instanceof NextResponse) return auth;
+
+  const sessions = await db
+    .select({
+      id: researchSessions.id,
+      sessionType: researchSessions.sessionType,
+      query: researchSessions.query,
+      status: researchSessions.status,
+      createdAt: researchSessions.createdAt,
+      completedAt: researchSessions.completedAt,
+    })
+    .from(researchSessions)
+    .where(eq(researchSessions.userId, auth.id))
+    .orderBy(desc(researchSessions.createdAt))
+    .limit(50);
+
+  return NextResponse.json({ sessions });
+}
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedApiUser();
@@ -26,7 +48,7 @@ export async function POST(request: NextRequest) {
       sessionType: (session_type as "literature" | "analysis") ?? "literature",
       query: query.trim(),
       industryCtx: industry_ctx ?? null,
-      status: "running",
+      status: "pending",
     })
     .returning({ id: researchSessions.id });
 

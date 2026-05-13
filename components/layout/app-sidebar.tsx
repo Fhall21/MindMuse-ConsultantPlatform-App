@@ -118,6 +118,14 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname.startsWith("/research")}>
+                  <Link href="/research" className="flex items-center gap-2">
+                    <span>Research</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname.startsWith("/people")}>
                   <Link href="/people">People</Link>
                 </SidebarMenuButton>
@@ -129,13 +137,7 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname.startsWith("/research")}>
-                  <Link href="/research" className="flex items-center gap-2">
-                    <span>Research</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              
 
               <Collapsible.Root defaultOpen={isInSettings} asChild>
                 <SidebarMenuItem>

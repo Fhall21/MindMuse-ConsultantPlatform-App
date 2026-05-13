@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { use } from "react";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EvidenceList } from "@/components/research/evidence-list";
 import { ReasoningSteps } from "@/components/research/reasoning-steps";
 import { ReferencesList } from "@/components/research/references-list";
+import { fetchJson } from "@/hooks/api";
 import { useResearchSession } from "@/hooks/use-research";
 import type { LiteratureResult } from "@/hooks/use-research";
 
@@ -175,6 +178,20 @@ export default function ResearchSessionPage({
 }) {
   const { id } = use(params);
   const { data: session, isLoading, error } = useResearchSession(id);
+  const qc = useQueryClient();
+  const cancelMutation = useMutation({
+    mutationFn: () =>
+      fetchJson(`/api/research/sessions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["research-session", id] });
+      void qc.invalidateQueries({ queryKey: ["research-sessions"] });
+    },
+  });
+  const isInFlight = session?.status === "pending" || session?.status === "running";
 
   return (
     <div className="space-y-6">
@@ -215,14 +232,25 @@ export default function ResearchSessionPage({
             </div>
 
             {/* In-flight */}
-            {(session.status === "pending" || session.status === "running") && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                <span>
-                  {session.status === "pending"
-                    ? "Queued — waiting to start"
-                    : "Searching scientific databases — usually 30–90 seconds"}
-                </span>
+            {isInFlight && (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                  <span>
+                    {session.status === "pending"
+                      ? "Queued — waiting to start"
+                      : "Searching scientific databases — usually 30–90 seconds"}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => cancelMutation.mutate()}
+                  disabled={cancelMutation.isPending}
+                  className="text-muted-foreground"
+                >
+                  Cancel
+                </Button>
               </div>
             )}
 

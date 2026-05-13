@@ -84,7 +84,7 @@ function InFlightSteps({
             ? "active"
             : "upcoming";
         const partialStep = partialSteps.find((s) => s.label === step.label);
-        const hasContent = Boolean(partialStep?.content);
+        const hasContent = Boolean(partialStep?.content) || Boolean(partialStep?.data);
         const isOpen = openIndex === i && hasContent;
 
         return (
@@ -141,7 +141,11 @@ function InFlightSteps({
             {hasContent && (
               <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
                 <div className="border-t border-border/40 px-4 pb-4 pl-12 pt-3">
-                  <StepContent label={step.label} content={partialStep!.content!} />
+                  <StepContent
+                    label={step.label}
+                    content={partialStep?.content}
+                    data={partialStep?.data}
+                  />
                 </div>
               </CollapsibleContent>
             )}

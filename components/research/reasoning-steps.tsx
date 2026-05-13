@@ -8,11 +8,170 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import type { ReasoningStep } from "@/hooks/use-research";
+import { ReasoningPlanTable } from "@/components/research/_reasoning-plan-table";
+import { ReasoningEvidenceQuotes } from "@/components/research/_reasoning-evidence-quotes";
+import type {
+  ArtifactStepData,
+  LiteratureStats,
+  ReadStepData,
+  ReasoningStep,
+  ReasoningStepData,
+  SearchStepData,
+} from "@/hooks/use-research";
 
 // ── Content renderers (exported for InFlightSteps on detail page) ─────────────
 
-export function StepContent({ label, content }: { label: string; content: string }) {
+function ArtifactStatsFooter({ stats }: { stats: LiteratureStats }) {
+  const Tile = ({ label, value }: { label: string; value: number }) => (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+        {label}
+      </span>
+      <span
+        className={cn(
+          "text-base font-semibold tabular-nums leading-none",
+          value === 0 ? "text-muted-foreground/40" : "text-foreground"
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  );
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-3 rounded-md border bg-card/40 p-3 sm:grid-cols-4">
+      <Tile label="Papers screened" value={stats.paper_count} />
+      <Tile label="Relevant papers" value={stats.relevant_papers} />
+      <Tile label="Current evidence" value={stats.current_evidence} />
+      <Tile label="Clinical trials" value={stats.clinical_trial_count} />
+    </div>
+  );
+}
+
+function SearchRows({ data }: { data: SearchStepData }) {
+  return (
+    <ul className="divide-y divide-border/30">
+      {data.queries.map((q, i) => (
+        <li key={i} className="py-2.5 first:pt-0 last:pb-0">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm text-foreground/85">{q.query}</p>
+            <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/60">
+              {q.count} {q.count === 1 ? "paper" : "papers"}
+            </span>
+          </div>
+          {q.papers.length > 0 && (
+            <ul className="mt-1 space-y-0.5">
+              {q.papers.slice(0, 5).map((p, j) => (
+                <li key={j} className="text-xs leading-snug text-muted-foreground">
+                  · {p.title}
+                </li>
+              ))}
+              {q.papers.length > 5 && (
+                <li className="text-xs text-muted-foreground/50">
+                  +{q.papers.length - 5} more
+                </li>
+              )}
+            </ul>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ReadPapers({ data }: { data: ReadStepData }) {
+  return (
+    <ul className="space-y-3">
+      {data.papers.map((p, i) => (
+        <li key={i} className="space-y-1">
+          <p className="text-sm font-medium leading-snug text-foreground">{p.title}</p>
+          {p.takeaway && (
+            <p className="text-xs leading-relaxed text-muted-foreground border-l border-border/60 pl-3">
+              {p.takeaway}
+            </p>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ArtifactBlock({ data }: { data: ArtifactStepData }) {
+  return (
+    <div className="space-y-3">
+      <MarkdownTable raw={data.table_markdown} />
+      {data.stats && <ArtifactStatsFooter stats={data.stats} />}
+    </div>
+  );
+}
+
+function MarkdownTable({ raw }: { raw: string }) {
+  const rows = raw
+    .split("\n")
+    .map((r) => r.trim())
+    .filter((r) => r.startsWith("|") && !r.match(/^\|[-| ]+\|$/));
+  if (rows.length < 2) {
+    return <p className="whitespace-pre-wrap text-sm text-muted-foreground">{raw}</p>;
+  }
+  const parseRow = (row: string) =>
+    row.split("|").slice(1, -1).map((c) => c.trim());
+  const [headerRow, ...bodyRows] = rows;
+  const headers = parseRow(headerRow);
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-border/50">
+            {headers.map((h, hi) => (
+              <th key={hi} className="pb-2 pr-4 text-left font-medium text-foreground/70">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border/30">
+          {bodyRows.map((row, ri) => (
+            <tr key={ri}>
+              {parseRow(row).map((cell, ci) => (
+                <td key={ci} className="py-2 pr-4 align-top text-muted-foreground">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StructuredStepContent({ data }: { data: ReasoningStepData }) {
+  switch (data.kind) {
+    case "plan":
+      return <ReasoningPlanTable data={data} />;
+    case "search":
+      return <SearchRows data={data} />;
+    case "gather":
+      return <ReasoningEvidenceQuotes data={data} />;
+    case "read":
+      return <ReadPapers data={data} />;
+    case "artifact":
+      return <ArtifactBlock data={data} />;
+  }
+}
+
+export function StepContent({
+  label,
+  content,
+  data,
+}: {
+  label: string;
+  content?: string;
+  data?: ReasoningStepData;
+}) {
+  if (data) {
+    return <StructuredStepContent data={data} />;
+  }
+  if (!content) return null;
   // Planning research: ✓ / → / ○ objective checklist — flat, no icon badges
   if (label === "Planning research") {
     const lines = content.split("\n").filter(Boolean);
@@ -145,7 +304,7 @@ export function ReasoningSteps({ steps, isLoading = false }: ReasoningStepsProps
     <div className="divide-y divide-border/50 overflow-hidden rounded-lg border">
       {steps.map((step, i) => {
         const isActive = isLoading && i === steps.length - 1;
-        const hasContent = Boolean(step.content);
+        const hasContent = Boolean(step.content) || Boolean(step.data);
         const isOpen = openIndex === i && hasContent;
 
         return (
@@ -205,7 +364,7 @@ export function ReasoningSteps({ steps, isLoading = false }: ReasoningStepsProps
             {hasContent && (
               <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
                 <div className="border-t border-border/40 px-4 pb-4 pl-12 pt-3">
-                  <StepContent label={step.label} content={step.content!} />
+                  <StepContent label={step.label} content={step.content} data={step.data} />
                 </div>
               </CollapsibleContent>
             )}

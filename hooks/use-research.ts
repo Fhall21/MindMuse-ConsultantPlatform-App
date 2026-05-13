@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchJson, readErrorMessage } from "@/hooks/api";
 
@@ -72,16 +72,59 @@ export interface PlanStepData {
   }>;
 }
 
+export interface SearchPaper {
+  title: string;
+  citation_key?: string;
+  authors?: string;
+  year?: string;
+  journal?: string;
+  doi?: string;
+  url?: string;
+  chunk_count?: number;
+}
+
 export interface SearchStepData {
   kind: "search";
-  queries: Array<{ query: string; papers: Array<{ title: string; authors?: string; year?: string }>; count: number }>;
+  queries: Array<{ query: string; papers: SearchPaper[]; count: number }>;
+}
+
+export interface GatherExcerpt {
+  id?: string;
+  excerpt: string;
+  source_citation_key?: string;
+  source_ref_number?: number;
+  source_title?: string;
+  citation_count?: number;
+}
+
+export interface GatherRound {
+  question: string;
+  focus_papers?: string[];
+  excerpts_count: number;
+  top_excerpts: GatherExcerpt[];
 }
 
 export interface GatherStepData {
   kind: "gather";
+  // Back-compat shorthand for the first round; UIs that don't read `rounds`
+  // still get something to show.
   question: string;
   excerpts_count: number;
-  top_excerpts: Array<{ excerpt: string; source_ref_number?: number; source_title?: string }>;
+  top_excerpts: GatherExcerpt[];
+  rounds?: GatherRound[];
+}
+
+export interface FigureRound {
+  citation_key: string;
+  image_count: number;
+  query: string;
+  description: string;
+  text_name?: string;
+}
+
+export interface FiguresStepData {
+  kind: "figures";
+  rounds: FigureRound[];
 }
 
 export interface ReadStepData {
@@ -99,6 +142,7 @@ export type ReasoningStepData =
   | PlanStepData
   | SearchStepData
   | GatherStepData
+  | FiguresStepData
   | ReadStepData
   | ArtifactStepData;
 
@@ -150,6 +194,146 @@ const INITIAL_STATE: LiteratureState = {
   sessionId: null,
 };
 
+// ── SSE stream runner (shared between submit and reconnectSession) ────────────
+
+type SetState = React.Dispatch<React.SetStateAction<LiteratureState>>;
+
+async function _runSseStream(
+  sessionId: string,
+  query: string,
+  industryCtx: string | null | undefined,
+  controller: AbortController,
+  setState: SetState,
+  lastPatchedStepCountRef: React.MutableRefObject<number>,
+): Promise<void> {
+  const patchSession = (updates: Record<string, unknown>, terminal = false) => {
+    fetchJson(`/api/research/sessions/${sessionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    }).catch((err) => {
+      if (terminal) console.error("[research] failed to persist session update:", err);
+    });
+  };
+
+  let openStream: (attempt: number) => Promise<void>;
+
+  const reconnect = async (attempt: number, reason: string): Promise<void> => {
+    const MAX_ATTEMPTS = 3;
+    const backoffMs = [2000, 4000, 8000] as const;
+    if (controller.signal.aborted) return;
+    if (attempt >= MAX_ATTEMPTS) {
+      setState((s) => ({
+        ...s,
+        status: "error",
+        error: "Connection lost — check Research History for your result",
+      }));
+      return;
+    }
+    setState((s) => ({ ...s, status: "reconnecting" }));
+    console.warn(`[research] ${reason}, reconnecting (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+    await new Promise<void>((res) => setTimeout(res, backoffMs[attempt] ?? 8000));
+    if (controller.signal.aborted) return;
+    return openStream(attempt + 1);
+  };
+
+  openStream = async (attempt: number): Promise<void> => {
+    let response: Response;
+    try {
+      response = await fetch("/api/research/literature", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, query, industry_ctx: industryCtx ?? null }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      return reconnect(attempt, "Connection failed");
+    }
+
+    if (!response.ok || !response.body) {
+      setState((s) => ({
+        ...s,
+        status: "error",
+        error: `Research service returned ${response.status}`,
+      }));
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (!raw) continue;
+
+          let event: { type: string; data: Record<string, unknown> };
+          try {
+            event = JSON.parse(raw) as typeof event;
+          } catch {
+            continue;
+          }
+
+          if (event.type === "submitted") {
+            setState((s) => ({ ...s, status: "submitted" }));
+          } else if (event.type === "polling") {
+            const incomingSteps = event.data.reasoning_steps as ReasoningStep[] | undefined;
+            setState((s) => ({
+              ...s,
+              status: "polling",
+              elapsedSeconds: (event.data.elapsed_seconds as number) ?? s.elapsedSeconds,
+              pollingMessage: (event.data.message as string) || s.pollingMessage,
+              reasoningSteps:
+                incomingSteps && incomingSteps.length > s.reasoningSteps.length
+                  ? incomingSteps
+                  : s.reasoningSteps,
+            }));
+            if (incomingSteps && incomingSteps.length > lastPatchedStepCountRef.current) {
+              lastPatchedStepCountRef.current = incomingSteps.length;
+              patchSession({ result_data: { partial_reasoning_steps: incomingSteps } });
+            }
+          } else if (event.type === "complete") {
+            const data = event.data as unknown as LiteratureResult;
+            setState((s) => ({
+              ...s,
+              status: "complete",
+              result: data,
+              reasoningSteps: data.reasoning_steps ?? s.reasoningSteps,
+            }));
+            patchSession({ status: "complete", result_data: event.data }, true);
+            return;
+          } else if (event.type === "error") {
+            const msg = (event.data.message as string) || "Research failed";
+            setState((s) => ({ ...s, status: "error", error: msg }));
+            patchSession({ status: "failed" }, true);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      return reconnect(attempt, "Stream interrupted");
+    } finally {
+      reader.releaseLock();
+    }
+  };
+
+  await openStream(0);
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
+
 export function useLiteratureResearch() {
   const [state, setState] = useState<LiteratureState>(INITIAL_STATE);
   const abortRef = useRef<AbortController | null>(null);
@@ -180,150 +364,25 @@ export function useLiteratureResearch() {
       return;
     }
 
-    const patchSession = (updates: Record<string, unknown>, terminal = false) => {
-      fetchJson(`/api/research/sessions/${sessionId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      }).catch((err) => {
-        if (terminal) console.error("[research] failed to persist session update:", err);
-      });
-    };
+    // 2. Open SSE stream with the new session_id.
+    await _runSseStream(sessionId, query, industryCtx, controller, setState, lastPatchedStepCountRef);
+  }, []);
 
-    // Reconnect and openStream are mutually recursive — defining both before
-    // calling either, then assigning so they can reference each other.
-    let openStream: (attempt: number) => Promise<void>;
+  // Re-connect to an existing session's Edison task without creating a new session.
+  // Used by the detail page to recover failed sessions or reconnect dropped streams.
+  const reconnectSession = useCallback(async (existingSessionId: string, query: string, industryCtx?: string) => {
+    abortRef.current?.abort();
+    lastPatchedStepCountRef.current = 0;
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-    const reconnect = async (attempt: number, reason: string): Promise<void> => {
-      const MAX_ATTEMPTS = 3;
-      const backoffMs = [2000, 4000, 8000] as const;
+    setState({ ...INITIAL_STATE, status: "submitted", sessionId: existingSessionId });
 
-      if (controller.signal.aborted) return;
-
-      if (attempt >= MAX_ATTEMPTS) {
-        setState((s) => ({
-          ...s,
-          status: "error",
-          error: "Connection lost — check Research History for your result",
-        }));
-        return;
-      }
-
-      setState((s) => ({ ...s, status: "reconnecting" }));
-      console.warn(`[research] ${reason}, reconnecting (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
-
-      await new Promise<void>((res) => setTimeout(res, backoffMs[attempt] ?? 8000));
-      if (controller.signal.aborted) return;
-
-      return openStream(attempt + 1);
-    };
-
-    // 2. Open SSE stream — passes session_id so the backend polls the worker's
-    //    Edison task_id rather than submitting a second task.
-    openStream = async (attempt: number): Promise<void> => {
-      let response: Response;
-      try {
-        response = await fetch("/api/research/literature", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session_id: sessionId, query, industry_ctx: industryCtx ?? null }),
-          signal: controller.signal,
-        });
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return;
-        return reconnect(attempt, "Connection failed");
-      }
-
-      if (!response.ok || !response.body) {
-        setState((s) => ({
-          ...s,
-          status: "error",
-          error: `Research service returned ${response.status}`,
-        }));
-        return;
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const raw = line.slice(6).trim();
-            if (!raw) continue;
-
-            let event: { type: string; data: Record<string, unknown> };
-            try {
-              event = JSON.parse(raw) as typeof event;
-            } catch {
-              continue;
-            }
-
-            if (event.type === "submitted") {
-              setState((s) => ({ ...s, status: "submitted" }));
-            } else if (event.type === "polling") {
-              const incomingSteps = event.data.reasoning_steps as ReasoningStep[] | undefined;
-              setState((s) => ({
-                ...s,
-                status: "polling",
-                elapsedSeconds: (event.data.elapsed_seconds as number) ?? s.elapsedSeconds,
-                pollingMessage: (event.data.message as string) || s.pollingMessage,
-                reasoningSteps:
-                  incomingSteps && incomingSteps.length > s.reasoningSteps.length
-                    ? incomingSteps
-                    : s.reasoningSteps,
-              }));
-              // Persist partial steps so /research/[id] detail page sees live
-              // chain-of-thought via its 4s DB poll.
-              if (incomingSteps && incomingSteps.length > lastPatchedStepCountRef.current) {
-                lastPatchedStepCountRef.current = incomingSteps.length;
-                patchSession({ result_data: { partial_reasoning_steps: incomingSteps } });
-              }
-            } else if (event.type === "complete") {
-              const data = event.data as unknown as LiteratureResult;
-              setState((s) => ({
-                ...s,
-                status: "complete",
-                result: data,
-                reasoningSteps: data.reasoning_steps ?? s.reasoningSteps,
-              }));
-              // Worker is authoritative for result_data; this is a fast-path
-              // cache warm so the detail page reflects completion sooner.
-              patchSession({ status: "complete", result_data: event.data }, true);
-              return;
-            } else if (event.type === "error") {
-              const msg = (event.data.message as string) || "Research failed";
-              setState((s) => ({ ...s, status: "error", error: msg }));
-              patchSession({ status: "failed" }, true);
-              return;
-            }
-          }
-        }
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return;
-        // Stream dropped — reconnect rather than marking the session failed.
-        // Worker continues; result is retrievable from Research History.
-        return reconnect(attempt, "Stream interrupted");
-      } finally {
-        reader.releaseLock();
-      }
-    };
-
-    await openStream(0);
+    await _runSseStream(existingSessionId, query, industryCtx, controller, setState, lastPatchedStepCountRef);
   }, []);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
-    // Patch session to cancelled in the background; sessionId captured via closure
     setState((s) => {
       if (s.sessionId) {
         fetchJson(`/api/research/sessions/${s.sessionId}`, {
@@ -343,7 +402,7 @@ export function useLiteratureResearch() {
 
   const isCancellable = state.status === "submitted" || state.status === "polling" || state.status === "reconnecting";
 
-  return { ...state, submit, reset, cancel, isCancellable };
+  return { ...state, submit, reconnectSession, reset, cancel, isCancellable };
 }
 
 // ── Session list / detail hooks ───────────────────────────────────────────────

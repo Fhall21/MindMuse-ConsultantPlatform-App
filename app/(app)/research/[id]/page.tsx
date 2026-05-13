@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { use, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ChevronDown, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Loader2, RotateCcw } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { ReferencesList } from "@/components/research/references-list";
 import { AnswerText } from "@/components/research/answer-text";
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/hooks/api";
-import { useResearchSession } from "@/hooks/use-research";
+import { useLiteratureResearch, useResearchSession } from "@/hooks/use-research";
 import type { LiteratureResult, ReasoningStep } from "@/hooks/use-research";
 
 // ── Canonical step sequence (mirrors backend TOOL_LABELS order) ───────────────
@@ -247,6 +247,8 @@ export default function ResearchSessionPage({
   const { id } = use(params);
   const { data: session, isLoading, error } = useResearchSession(id);
   const qc = useQueryClient();
+  const research = useLiteratureResearch();
+
   const cancelMutation = useMutation({
     mutationFn: () =>
       fetchJson(`/api/research/sessions/${id}`, {
@@ -259,7 +261,24 @@ export default function ResearchSessionPage({
       void qc.invalidateQueries({ queryKey: ["research-sessions"] });
     },
   });
+
+  // When the live SSE stream completes, refresh the DB-backed session query
+  // so the page shows results from the authoritative source.
+  useEffect(() => {
+    if (research.status === "complete" || research.status === "error") {
+      void qc.invalidateQueries({ queryKey: ["research-session", id] });
+      void qc.invalidateQueries({ queryKey: ["research-sessions"] });
+    }
+  }, [research.status, id, qc]);
+
   const isInFlight = session?.status === "pending" || session?.status === "running";
+  const isLiveActive = research.status !== "idle" && research.status !== "complete" && research.status !== "error";
+
+  // The live result takes priority when the stream just completed; otherwise fall back to DB.
+  const displayResult: LiteratureResult | null =
+    research.status === "complete" && research.result
+      ? research.result
+      : (session?.resultData as LiteratureResult | null) ?? null;
 
   return (
     <div className="space-y-6">
@@ -295,28 +314,67 @@ export default function ResearchSessionPage({
                     year: "numeric",
                   })}
                 </span>
-                {session.status === "pending" && (
+                {session.status === "pending" && !isLiveActive && (
                   <span className="text-[11px] text-muted-foreground/50 leading-none">Queued</span>
                 )}
-                {session.status === "failed" && (
+                {session.status === "failed" && !isLiveActive && (
                   <span className="text-[11px] text-destructive/60 leading-none">Failed</span>
                 )}
-                {session.status === "cancelled" && (
+                {session.status === "cancelled" && !isLiveActive && (
                   <span className="text-[11px] text-muted-foreground/50 leading-none">Cancelled</span>
+                )}
+                {research.status === "reconnecting" && (
+                  <span className="text-[11px] text-muted-foreground/60 leading-none">Reconnecting…</span>
                 )}
               </div>
               <div className="flex items-start gap-3">
-                {(session.status === "running" || session.status === "pending") && (
+                {(isInFlight || isLiveActive) && research.status !== "reconnecting" && (
                   <div className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center">
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/70" />
+                  </div>
+                )}
+                {research.status === "reconnecting" && (
+                  <div className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center">
+                    <RotateCcw className="h-4 w-4 animate-spin text-muted-foreground/50" />
                   </div>
                 )}
                 <h1 className="text-xl font-semibold tracking-tight leading-snug">{session.query}</h1>
               </div>
             </div>
 
-            {/* In-flight: collapsible steps with live partial chain-of-thought */}
-            {isInFlight && (
+            {/* Live reconnecting banner */}
+            {research.status === "reconnecting" && (
+              <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-3 py-2.5">
+                <RotateCcw className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground/60" />
+                <p className="text-sm text-muted-foreground">
+                  Connection dropped — attempting to reconnect.
+                </p>
+              </div>
+            )}
+
+            {/* Live SSE in-flight: show live reasoning steps */}
+            {isLiveActive && research.status !== "reconnecting" && (
+              <div className="space-y-3">
+                <InFlightSteps
+                  createdAt={session.createdAt}
+                  isPending={research.status === "submitted"}
+                  partialSteps={research.reasoningSteps}
+                />
+                {research.isCancellable && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => research.cancel()}
+                    className="text-muted-foreground h-7 px-2 text-xs"
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* DB in-flight (no live connection): show static step accordion */}
+            {isInFlight && !isLiveActive && (
               <div className="space-y-3">
                 <InFlightSteps
                   createdAt={session.createdAt}
@@ -341,24 +399,53 @@ export default function ResearchSessionPage({
               </div>
             )}
 
-            {/* Failed */}
-            {session.status === "failed" && (
-              <p className="text-sm text-destructive">
-                {(session.resultData as { error?: string } | null)?.error ??
-                  "Search failed. Please try again."}
-              </p>
+            {/* Failed — offer reconnect */}
+            {session.status === "failed" && !isLiveActive && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  {(session.resultData as { error?: string } | null)?.error ??
+                    "The search did not complete. Edison may have finished in the background — reconnect to retrieve the result."}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => research.reconnectSession(id, session.query)}
+                  className="gap-2"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reconnect
+                </Button>
+              </div>
+            )}
+
+            {/* Live error (reconnect exhausted) */}
+            {research.status === "error" && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  {research.error ?? "Reconnection failed."}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => research.reconnectSession(id, session.query)}
+                  className="gap-2"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Try again
+                </Button>
+              </div>
             )}
 
             {/* Cancelled */}
-            {session.status === "cancelled" && (
+            {session.status === "cancelled" && !isLiveActive && (
               <p className="text-sm text-muted-foreground">Search was cancelled.</p>
             )}
 
-            {/* Complete */}
-            {session.status === "complete" && session.resultData && (
-              <ResultView result={session.resultData as unknown as LiteratureResult} />
+            {/* Complete — live result or DB result */}
+            {(session.status === "complete" || research.status === "complete") && displayResult && (
+              <ResultView result={displayResult} />
             )}
-            {session.status === "complete" && !session.resultData && (
+            {session.status === "complete" && !displayResult && (
               <p className="text-sm text-muted-foreground">No results were returned for this search.</p>
             )}
           </>

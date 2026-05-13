@@ -14,11 +14,11 @@ export function ReferencesList({ references }: ReferencesListProps) {
   }
 
   return (
-    <ol className="space-y-3">
+    <ol className="divide-y">
       {references.map((ref) => (
         <li
           key={ref.number}
-          className="flex gap-3 rounded-lg border bg-card p-3 text-sm"
+          className="flex gap-3 py-3 text-sm"
         >
           <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
             {ref.number}

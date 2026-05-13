@@ -14,7 +14,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAIPreferences } from "@/hooks/use-ai-preferences";
 import { useLiteratureResearch } from "@/hooks/use-research";
-import type { EvidenceExcerpt } from "@/hooks/use-research";
+import { EvidenceList } from "./evidence-list";
 import { ReasoningSteps } from "./reasoning-steps";
 import { ReferencesList } from "./references-list";
 
@@ -118,26 +118,6 @@ function ArtifactTable({ markdown }: { markdown: string }) {
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function EvidenceList({ evidence }: { evidence: EvidenceExcerpt[] }) {
-  if (evidence.length === 0) return <p className="text-sm text-muted-foreground">No evidence excerpts available.</p>;
-
-  return (
-    <div className="space-y-3">
-      {evidence.map((item, i) => (
-        <div key={item.id} className="rounded-lg border bg-card p-3 space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-muted-foreground">{item.question}</p>
-            <Badge variant="secondary" className="shrink-0 text-xs">
-              score {item.score}
-            </Badge>
-          </div>
-          <p className="text-sm leading-relaxed">{item.excerpt}</p>
-        </div>
-      ))}
     </div>
   );
 }

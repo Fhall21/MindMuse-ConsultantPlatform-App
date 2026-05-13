@@ -3,13 +3,14 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ResearchPage from "@/app/(app)/research/page";
+import type { ResearchSessionSummary } from "@/hooks/use-research";
 
 vi.mock("@/hooks/use-ai-preferences", () => ({
   useAIPreferences: () => ({ data: null }),
 }));
 
 const researchHooksMock = vi.hoisted(() => ({
-  useResearchSessions: vi.fn(() => ({ data: [], isLoading: false, error: null })),
+  useResearchSessions: vi.fn(() => ({ data: [] as ResearchSessionSummary[], isLoading: false, error: null })),
   useCreateResearchSession: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
   useLiteratureResearch: vi.fn(() => ({
     status: "idle" as const,

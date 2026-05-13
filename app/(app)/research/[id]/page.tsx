@@ -6,10 +6,11 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EvidenceList } from "@/components/research/evidence-list";
 import { ReasoningSteps } from "@/components/research/reasoning-steps";
 import { ReferencesList } from "@/components/research/references-list";
 import { useResearchSession } from "@/hooks/use-research";
-import type { LiteratureResult, EvidenceExcerpt } from "@/hooks/use-research";
+import type { LiteratureResult } from "@/hooks/use-research";
 
 // ── Local display helpers ─────────────────────────────────────────────────────
 
@@ -83,24 +84,6 @@ function ArtifactTable({ markdown }: { markdown: string }) {
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function EvidenceList({ evidence }: { evidence: EvidenceExcerpt[] }) {
-  if (evidence.length === 0)
-    return <p className="text-sm text-muted-foreground">No evidence excerpts available.</p>;
-  return (
-    <div className="space-y-3">
-      {evidence.map((item) => (
-        <div key={item.id} className="rounded-lg border bg-card p-3 space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-muted-foreground">{item.question}</p>
-            <Badge variant="secondary" className="shrink-0 text-xs">score {item.score}</Badge>
-          </div>
-          <p className="text-sm leading-relaxed">{item.excerpt}</p>
-        </div>
-      ))}
     </div>
   );
 }

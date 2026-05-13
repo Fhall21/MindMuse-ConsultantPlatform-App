@@ -1,0 +1,2 @@
+ALTER TABLE "research_sessions" DROP CONSTRAINT "research_sessions_status_check";--> statement-breakpoint
+ALTER TABLE "research_sessions" ADD CONSTRAINT "research_sessions_status_check" CHECK ("research_sessions"."status" in ('pending', 'running', 'complete', 'failed', 'cancelled'));

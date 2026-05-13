@@ -134,6 +134,8 @@ export function LiteraturePanel() {
     reasoningSteps,
     submit,
     reset,
+    cancel,
+    isCancellable,
   } = useLiteratureResearch();
 
   const industry = preferences?.industry || undefined;
@@ -177,6 +179,11 @@ export function LiteraturePanel() {
             )}
             Search literature
           </Button>
+          {isCancellable && (
+            <Button variant="ghost" size="sm" onClick={cancel}>
+              Cancel
+            </Button>
+          )}
           {(hasResult || status === "error") && (
             <Button variant="ghost" size="sm" onClick={reset}>
               New search

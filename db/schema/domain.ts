@@ -892,7 +892,7 @@ export const researchSessions = pgTable(
     status: text("status")
       .default("pending")
       .notNull()
-      .$type<"pending" | "running" | "complete" | "failed">(),
+      .$type<"pending" | "running" | "complete" | "failed" | "cancelled">(),
     taskId: text("task_id"),
     resultData: jsonb("result_data").$type<Record<string, unknown>>(),
     fileEntryId: text("file_entry_id"),
@@ -906,7 +906,7 @@ export const researchSessions = pgTable(
     ),
     statusCheck: check(
       "research_sessions_status_check",
-      sql`${table.status} in ('pending', 'running', 'complete', 'failed')`
+      sql`${table.status} in ('pending', 'running', 'complete', 'failed', 'cancelled')`
     ),
     userIdx: index("idx_research_sessions_user_id").on(table.userId),
     userCreatedIdx: index("idx_research_sessions_user_created").on(

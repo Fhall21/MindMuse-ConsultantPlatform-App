@@ -101,6 +101,8 @@ function StatusBadge({ status }: { status: string }) {
     );
   if (status === "failed")
     return <Badge variant="outline" className="text-xs border-destructive/40 text-destructive">Failed</Badge>;
+  if (status === "cancelled")
+    return <Badge variant="outline" className="text-xs border-border text-muted-foreground">Cancelled</Badge>;
   return null;
 }
 
@@ -230,6 +232,11 @@ export default function ResearchSessionPage({
                 {(session.resultData as { error?: string } | null)?.error ??
                   "Search failed. Please try again."}
               </p>
+            )}
+
+            {/* Cancelled */}
+            {session.status === "cancelled" && (
+              <p className="text-sm text-muted-foreground">Search was cancelled.</p>
             )}
 
             {/* Complete */}

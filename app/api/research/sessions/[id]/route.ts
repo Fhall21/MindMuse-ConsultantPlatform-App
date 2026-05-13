@@ -39,18 +39,24 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   }
 
   const updates: {
-    status?: "pending" | "running" | "complete" | "failed";
+    status?: "pending" | "running" | "complete" | "failed" | "cancelled";
     resultData?: Record<string, unknown>;
     completedAt?: Date;
   } = {};
 
-  if (body.status === "complete" || body.status === "failed" || body.status === "running" || body.status === "pending") {
+  if (
+    body.status === "complete" ||
+    body.status === "failed" ||
+    body.status === "cancelled" ||
+    body.status === "running" ||
+    body.status === "pending"
+  ) {
     updates.status = body.status;
   }
   if (body.result_data) {
     updates.resultData = body.result_data;
   }
-  if (body.status === "complete" || body.status === "failed") {
+  if (body.status === "complete" || body.status === "failed" || body.status === "cancelled") {
     updates.completedAt = new Date();
   }
 

@@ -58,7 +58,7 @@ export interface LiteratureResult {
   artifact: string;
 }
 
-export type LiteratureStatus = "idle" | "submitted" | "polling" | "complete" | "error";
+export type LiteratureStatus = "idle" | "submitted" | "polling" | "complete" | "error" | "cancelled";
 
 interface LiteratureState {
   status: LiteratureStatus;
@@ -208,12 +208,29 @@ export function useLiteratureResearch() {
     }
   }, []);
 
+  const cancel = useCallback(() => {
+    abortRef.current?.abort();
+    // Patch session to cancelled in the background; sessionId captured via closure
+    setState((s) => {
+      if (s.sessionId) {
+        fetchJson(`/api/research/sessions/${s.sessionId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "cancelled" }),
+        }).catch(() => {});
+      }
+      return INITIAL_STATE;
+    });
+  }, []);
+
   const reset = useCallback(() => {
     abortRef.current?.abort();
     setState(INITIAL_STATE);
   }, []);
 
-  return { ...state, submit, reset };
+  const isCancellable = state.status === "submitted" || state.status === "polling";
+
+  return { ...state, submit, reset, cancel, isCancellable };
 }
 
 // ── Session list / detail hooks ───────────────────────────────────────────────
@@ -222,7 +239,7 @@ export interface ResearchSessionSummary {
   id: string;
   sessionType: "literature" | "analysis";
   query: string;
-  status: "pending" | "running" | "complete" | "failed";
+  status: "pending" | "running" | "complete" | "failed" | "cancelled";
   createdAt: string;
   completedAt: string | null;
 }

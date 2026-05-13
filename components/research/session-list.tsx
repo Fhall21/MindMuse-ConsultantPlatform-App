@@ -30,6 +30,9 @@ function StatusSignal({ status }: { status: ResearchSessionSummary["status"] }) 
   if (status === "failed") {
     return <span className="text-xs text-destructive/70">Failed</span>;
   }
+  if (status === "cancelled") {
+    return <span className="text-xs text-muted-foreground/60">Cancelled</span>;
+  }
   return null;
 }
 

@@ -239,6 +239,13 @@
       "when": 1778629314438,
       "tag": "0033_bumpy_barracuda",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1778646758679,
+      "tag": "0034_vengeful_doctor_faustus",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EvidenceList } from "@/components/research/evidence-list";
+import { ReasoningSteps } from "@/components/research/reasoning-steps";
 import { ReferencesList } from "@/components/research/references-list";
 import { fetchJson } from "@/hooks/api";
 import { useResearchSession } from "@/hooks/use-research";
@@ -268,7 +269,7 @@ function ResultView({ result }: { result: LiteratureResult }) {
       </TabsContent>
 
       <TabsContent value="reasoning" className="mt-3">
-        <CompletedSteps steps={result.reasoning_steps} />
+        <ReasoningSteps steps={result.reasoning_steps} />
       </TabsContent>
 
       <TabsContent value="evidence" className="mt-3">

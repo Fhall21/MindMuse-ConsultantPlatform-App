@@ -161,13 +161,11 @@ export function ReasoningSteps({ steps, isLoading = false }: ReasoningStepsProps
                 hasContent ? "cursor-pointer hover:bg-muted/30" : "cursor-default"
               )}
             >
-              {/* Step number badge */}
+              {/* Step number */}
               <span
                 className={cn(
-                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold transition-all duration-200",
-                  isActive
-                    ? "bg-primary/10 text-primary ring-2 ring-primary/20"
-                    : "bg-muted text-muted-foreground/60"
+                  "flex h-5 w-5 shrink-0 items-center justify-center text-[10px] font-bold transition-all duration-200",
+                  isActive ? "text-primary" : "text-muted-foreground/60"
                 )}
               >
                 {i + 1}

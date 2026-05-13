@@ -102,10 +102,10 @@ function InFlightSteps({
             >
               <span
                 className={cn(
-                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold transition-all duration-200",
-                  stepState === "active"   && "bg-primary/10 text-primary ring-2 ring-primary/20",
-                  stepState === "done"     && "bg-muted text-muted-foreground/60",
-                  stepState === "upcoming" && "bg-muted/50 text-muted-foreground/30"
+                  "flex h-5 w-5 shrink-0 items-center justify-center text-[10px] font-bold transition-all duration-200",
+                  stepState === "active"   && "text-primary",
+                  stepState === "done"     && "text-muted-foreground/60",
+                  stepState === "upcoming" && "text-muted-foreground/25"
                 )}
               >
                 {i + 1}
@@ -140,7 +140,7 @@ function InFlightSteps({
 
             {hasContent && (
               <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-                <div className="border-t border-border/40 bg-muted/20 px-4 pb-4 pl-12 pt-3">
+                <div className="border-t border-border/40 px-4 pb-4 pl-12 pt-3">
                   <StepContent label={step.label} content={partialStep!.content!} />
                 </div>
               </CollapsibleContent>

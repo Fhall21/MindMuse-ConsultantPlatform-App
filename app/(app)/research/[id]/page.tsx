@@ -2,18 +2,131 @@
 
 import Link from "next/link";
 import { use } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Circle, Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EvidenceList } from "@/components/research/evidence-list";
-import { ReasoningSteps } from "@/components/research/reasoning-steps";
 import { ReferencesList } from "@/components/research/references-list";
 import { fetchJson } from "@/hooks/api";
 import { useResearchSession } from "@/hooks/use-research";
-import type { LiteratureResult } from "@/hooks/use-research";
+import type { LiteratureResult, ReasoningStep } from "@/hooks/use-research";
+
+// ── Canonical step sequence (mirrors backend TOOL_LABELS order) ───────────────
+
+const KNOWN_STEPS: { label: string; detail: string }[] = [
+  { label: "Planning research",    detail: "Breaking down the question into targeted sub-queries." },
+  { label: "Searching literature", detail: "Searching academic databases for relevant papers." },
+  { label: "Reading sources",      detail: "Reviewing and evaluating paper content in detail." },
+  { label: "Gathering evidence",   detail: "Extracting and scoring relevant evidence excerpts." },
+  { label: "Synthesising findings",detail: "Building a structured summary of the evidence." },
+];
+
+// Mirrors _polling_message thresholds in research.py
+const STEP_THRESHOLDS = [0, 20, 45, 75, 105]; // seconds at which each step becomes active
+
+function inferActiveStep(createdAt: string): number {
+  const elapsed = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000);
+  let active = 0;
+  for (let i = 0; i < STEP_THRESHOLDS.length; i++) {
+    if (elapsed >= STEP_THRESHOLDS[i]) active = i;
+  }
+  return active;
+}
+
+// ── Step cards ─────────────────────────────────────────────────────────────────
+
+interface StepCardProps {
+  index: number;
+  label: string;
+  detail?: string;
+  state: "done" | "active" | "upcoming";
+}
+
+function StepCard({ index, label, detail, state }: StepCardProps) {
+  return (
+    <div
+      className={[
+        "flex items-center gap-3 rounded-md border px-3 py-2.5 transition-colors",
+        state === "active" ? "border-border bg-background" : "border-border/50",
+      ].join(" ")}
+    >
+      <span
+        className={[
+          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+          state === "done"     ? "bg-muted text-muted-foreground/60" :
+          state === "active"   ? "bg-primary/10 text-primary" :
+                                 "bg-muted/50 text-muted-foreground/30",
+        ].join(" ")}
+      >
+        {index + 1}
+      </span>
+      <span
+        className={[
+          "flex-1 text-sm",
+          state === "done"   ? "text-muted-foreground/60" :
+          state === "active" ? "font-medium text-foreground" :
+                               "text-muted-foreground/40",
+        ].join(" ")}
+      >
+        {label}
+        {detail && state === "active" && (
+          <span className="ml-1.5 font-normal text-muted-foreground">{detail}</span>
+        )}
+      </span>
+      {state === "done" && (
+        <Check className="h-3.5 w-3.5 shrink-0 text-green-500" />
+      )}
+      {state === "active" && (
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+      )}
+      {state === "upcoming" && (
+        <Circle className="h-3 w-3 shrink-0 text-muted-foreground/20" />
+      )}
+    </div>
+  );
+}
+
+// In-flight: infer step from elapsed time, show full roadmap
+function InFlightSteps({ createdAt, isPending }: { createdAt: string; isPending: boolean }) {
+  const activeIndex = isPending ? 0 : inferActiveStep(createdAt);
+  return (
+    <div className="space-y-1.5">
+      {KNOWN_STEPS.map((step, i) => (
+        <StepCard
+          key={i}
+          index={i}
+          label={step.label}
+          detail={step.detail}
+          state={isPending && i > 0 ? "upcoming" : i < activeIndex ? "done" : i === activeIndex ? "active" : "upcoming"}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Complete: actual steps from result_data, all done, with detail if available
+function CompletedSteps({ steps }: { steps: ReasoningStep[] }) {
+  if (steps.length === 0) {
+    // Fallback: show canonical steps all done
+    return (
+      <div className="space-y-1.5">
+        {KNOWN_STEPS.map((step, i) => (
+          <StepCard key={i} index={i} label={step.label} state="done" />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1.5">
+      {steps.map((step, i) => (
+        <StepCard key={i} index={i} label={step.label} state="done" />
+      ))}
+    </div>
+  );
+}
 
 // ── Local display helpers ─────────────────────────────────────────────────────
 
@@ -155,7 +268,7 @@ function ResultView({ result }: { result: LiteratureResult }) {
       </TabsContent>
 
       <TabsContent value="reasoning" className="mt-3">
-        <ReasoningSteps steps={result.reasoning_steps} />
+        <CompletedSteps steps={result.reasoning_steps} />
       </TabsContent>
 
       <TabsContent value="evidence" className="mt-3">
@@ -231,23 +344,19 @@ export default function ResearchSessionPage({
               </p>
             </div>
 
-            {/* In-flight */}
+            {/* In-flight: step roadmap with live active inference */}
             {isInFlight && (
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                  <span>
-                    {session.status === "pending"
-                      ? "Queued — waiting to start"
-                      : "Searching scientific databases — usually 30–90 seconds"}
-                  </span>
-                </div>
+              <div className="space-y-3">
+                <InFlightSteps
+                  createdAt={session.createdAt}
+                  isPending={session.status === "pending"}
+                />
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => cancelMutation.mutate()}
                   disabled={cancelMutation.isPending}
-                  className="text-muted-foreground"
+                  className="text-muted-foreground h-7 px-2 text-xs"
                 >
                   Cancel
                 </Button>

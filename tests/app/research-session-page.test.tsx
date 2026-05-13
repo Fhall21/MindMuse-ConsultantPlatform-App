@@ -2,6 +2,7 @@
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // next/navigation must be mocked before component import
 vi.mock("next/navigation", () => ({
@@ -38,14 +39,21 @@ vi.mock("@/hooks/use-research", async (importOriginal) => {
 });
 
 // Stub heavy sub-components to keep test surface minimal
-vi.mock("@/components/research/reasoning-steps", () => ({
-  ReasoningSteps: () => <div data-testid="reasoning-steps" />,
-}));
 vi.mock("@/components/research/references-list", () => ({
   ReferencesList: () => <div data-testid="references-list" />,
 }));
 
 import ResearchSessionPage from "@/app/(app)/research/[id]/page";
+
+// Wrap with a fresh QueryClient per test (needed for useQueryClient / useMutation)
+function renderPage() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <ResearchSessionPage params={Promise.resolve({ id: "sess-1" })} />
+    </QueryClientProvider>
+  );
+}
 
 const baseSession = {
   id: "sess-1",
@@ -61,7 +69,7 @@ describe("ResearchSessionPage", () => {
   it("shows loading skeletons while data is loading", () => {
     hookMock.useResearchSession.mockReturnValue({ data: undefined, isLoading: true, error: null });
 
-    const { container } = render(<ResearchSessionPage params={Promise.resolve({ id: "sess-1" })} />);
+    const { container } = renderPage();
 
     // Skeletons render as divs with animate-pulse class
     expect(container.querySelector(".animate-pulse")).toBeTruthy();
@@ -74,7 +82,7 @@ describe("ResearchSessionPage", () => {
       error: new Error("Network error"),
     });
 
-    render(<ResearchSessionPage params={Promise.resolve({ id: "sess-1" })} />);
+    renderPage();
 
     expect(screen.getByText(/Could not load research session/)).toBeInTheDocument();
   });
@@ -86,7 +94,7 @@ describe("ResearchSessionPage", () => {
       error: null,
     });
 
-    render(<ResearchSessionPage params={Promise.resolve({ id: "sess-1" })} />);
+    renderPage();
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Does shift work cause burnout?");
     // Multiple "Queued" nodes may exist (status badge + status signal)
@@ -94,16 +102,19 @@ describe("ResearchSessionPage", () => {
     expect(queuedItems.length).toBeGreaterThan(0);
   });
 
-  it("shows searching message for running session", () => {
+  it("shows step cards for running session", () => {
     hookMock.useResearchSession.mockReturnValue({
       data: { ...baseSession, status: "running", resultData: null },
       isLoading: false,
       error: null,
     });
 
-    render(<ResearchSessionPage params={Promise.resolve({ id: "sess-1" })} />);
+    renderPage();
 
-    expect(screen.getByText(/Searching scientific databases/)).toBeInTheDocument();
+    // Step cards should be rendered — "Planning research" is always first
+    expect(screen.getByText("Planning research")).toBeInTheDocument();
+    // Cancel button present during in-flight
+    expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
   });
 
   it("shows error message for failed session", () => {
@@ -117,7 +128,7 @@ describe("ResearchSessionPage", () => {
       error: null,
     });
 
-    render(<ResearchSessionPage params={Promise.resolve({ id: "sess-1" })} />);
+    renderPage();
 
     expect(screen.getByText("Edison API timeout")).toBeInTheDocument();
   });
@@ -139,7 +150,7 @@ describe("ResearchSessionPage", () => {
       error: null,
     });
 
-    render(<ResearchSessionPage params={Promise.resolve({ id: "sess-1" })} />);
+    renderPage();
 
     expect(screen.getByRole("tab", { name: /Results/ })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Reasoning/ })).toBeInTheDocument();
@@ -154,7 +165,7 @@ describe("ResearchSessionPage", () => {
       error: null,
     });
 
-    render(<ResearchSessionPage params={Promise.resolve({ id: "sess-1" })} />);
+    renderPage();
 
     expect(screen.getByText(/No results/)).toBeInTheDocument();
   });
@@ -166,7 +177,7 @@ describe("ResearchSessionPage", () => {
       error: null,
     });
 
-    render(<ResearchSessionPage params={Promise.resolve({ id: "sess-1" })} />);
+    renderPage();
 
     const link = screen.getByRole("link", { name: /Research/ });
     expect(link).toHaveAttribute("href", "/research");

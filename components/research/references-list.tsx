@@ -18,7 +18,8 @@ export function ReferencesList({ references }: ReferencesListProps) {
       {references.map((ref) => (
         <li
           key={ref.number}
-          className="flex gap-3 py-3 text-sm"
+          id={`ref-${ref.number}`}
+          className="flex gap-3 py-3 text-sm scroll-mt-4 transition-colors data-[highlighted]:bg-accent/30 rounded-sm"
         >
           <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
             {ref.number}

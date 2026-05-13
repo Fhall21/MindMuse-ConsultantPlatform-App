@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { AlertCircle, Loader2, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,67 +14,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAIPreferences } from "@/hooks/use-ai-preferences";
 import { useLiteratureResearch } from "@/hooks/use-research";
+import { AnswerText } from "./answer-text";
 import { EvidenceList } from "./evidence-list";
 import { ReasoningSteps } from "./reasoning-steps";
 import { ReferencesList } from "./references-list";
-
-// Render Edison answer text: light markdown heading support + [N, M] citation badges.
-function AnswerText({ text }: { text: string }) {
-  const blocks = text.split(/\n\n+/);
-
-  return (
-    <div className="space-y-3 text-sm leading-relaxed">
-      {blocks.map((block, bi) => {
-        const trimmed = block.trim();
-        if (!trimmed) return null;
-
-        const h2 = /^## (.+)/.exec(trimmed);
-        if (h2) {
-          return (
-            <h3 key={bi} className="text-base font-semibold text-foreground pt-1">
-              {h2[1]}
-            </h3>
-          );
-        }
-        const h3 = /^### (.+)/.exec(trimmed);
-        if (h3) {
-          return (
-            <h4 key={bi} className="text-sm font-semibold text-foreground">
-              {h3[1]}
-            </h4>
-          );
-        }
-
-        // Paragraph with inline citation badges
-        const parts = trimmed.split(/(\[\d+(?:,\s*\d+)*\])/g);
-        return (
-          <p key={bi}>
-            {parts.map((part, pi) => {
-              const citMatch = /^\[(\d+(?:,\s*\d+)*)\]$/.exec(part);
-              if (citMatch) {
-                const nums = citMatch[1].split(",").map((n) => n.trim());
-                return (
-                  <span key={pi}>
-                    {nums.map((n) => (
-                      <Badge
-                        key={n}
-                        variant="outline"
-                        className="mx-0.5 px-1 py-0 text-xs font-semibold align-super"
-                      >
-                        {n}
-                      </Badge>
-                    ))}
-                  </span>
-                );
-              }
-              return <span key={pi}>{part}</span>;
-            })}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
 
 // Render an Edison artifact (markdown table) as a styled HTML table.
 function ArtifactTable({ markdown }: { markdown: string }) {
@@ -138,6 +81,8 @@ export function LiteraturePanel() {
     isCancellable,
   } = useLiteratureResearch();
 
+  const [activeTab, setActiveTab] = useState("results");
+
   const industry = preferences?.industry || undefined;
   const isLoading = status === "submitted" || status === "polling";
   const hasResult = status === "complete" && result !== null;
@@ -155,6 +100,19 @@ export function LiteraturePanel() {
       handleSubmit();
     }
   };
+
+  const handleReset = useCallback(() => {
+    setActiveTab("results");
+    reset();
+  }, [reset]);
+
+  const handleCitationClick = useCallback((num: string) => {
+    setActiveTab("references");
+    // Defer scroll until the tab content is mounted
+    setTimeout(() => {
+      document.getElementById(`ref-${num}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 60);
+  }, []);
 
   const activeSteps = hasResult ? result.reasoning_steps : reasoningSteps;
   const activeEvidence = hasResult ? result.evidence : [];
@@ -185,7 +143,7 @@ export function LiteraturePanel() {
             </Button>
           )}
           {(hasResult || status === "error") && (
-            <Button variant="ghost" size="sm" onClick={reset}>
+            <Button variant="ghost" size="sm" onClick={handleReset}>
               New search
             </Button>
           )}
@@ -236,7 +194,7 @@ export function LiteraturePanel() {
 
       {/* Results tabs — shown at completion */}
       {hasResult && (
-        <Tabs defaultValue="results" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList>
             <TabsTrigger value="results">Results</TabsTrigger>
             <TabsTrigger value="reasoning">
@@ -275,7 +233,11 @@ export function LiteraturePanel() {
               </div>
             )}
             <ScrollArea className="max-h-[480px] rounded-lg border bg-card p-4">
-              <AnswerText text={result.answer} />
+              <AnswerText
+                text={result.answer}
+                references={activeReferences}
+                onCitationClick={handleCitationClick}
+              />
             </ScrollArea>
           </TabsContent>
 

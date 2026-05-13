@@ -896,7 +896,6 @@ export const researchSessions = pgTable(
     taskId: text("task_id"),
     resultData: jsonb("result_data").$type<Record<string, unknown>>(),
     fileEntryId: text("file_entry_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     ...timestamps,
   },

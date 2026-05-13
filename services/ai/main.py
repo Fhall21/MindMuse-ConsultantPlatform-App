@@ -12,8 +12,8 @@ logging.basicConfig(
     level=getattr(logging, log_level),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-# Suppress noisy HTTP client debug logs unless explicitly requested
-for _noisy in ("httpcore", "httpx", "openai._base_client"):
+# Suppress noisy client logs unless explicitly requested
+for _noisy in ("httpcore", "httpx", "openai._base_client", "edison_client.utils.monitoring"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 SERVICE_ROOT = Path(__file__).resolve().parent

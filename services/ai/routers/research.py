@@ -183,8 +183,20 @@ def _extract_literature_payload(task_result: Any, verbose_result: Any) -> dict[s
 
 # ── SSE generators ────────────────────────────────────────────────────────────
 
+def _polling_message(elapsed: int) -> str:
+    if elapsed < 20:
+        return "Planning research query…"
+    if elapsed < 45:
+        return "Searching scientific databases…"
+    if elapsed < 75:
+        return "Gathering and reading evidence…"
+    if elapsed < 105:
+        return "Synthesising findings…"
+    return "Writing cited answer…"
+
+
 async def _run_literature_sse(query: str, industry_ctx: str | None) -> AsyncIterator[ResearchEvent]:
-    from ..core.config import settings
+    from core.config import settings
 
     if not settings.edison_api_key:
         async for event in _stub_research_events("literature"):
@@ -197,9 +209,7 @@ async def _run_literature_sse(query: str, industry_ctx: str | None) -> AsyncIter
     full_query = f"[Industry context: {industry_ctx}]\n\n{query}" if industry_ctx else query
 
     try:
-        task_id: str = await asyncio.to_thread(
-            client.create_task, {"name": JobNames.LITERATURE, "query": full_query}
-        )
+        task_id: str = await client.acreate_task({"name": JobNames.LITERATURE, "query": full_query})
     except Exception as exc:
         yield {"type": "error", "data": {"message": f"Failed to submit Edison task: {exc}"}}
         return
@@ -212,7 +222,7 @@ async def _run_literature_sse(query: str, industry_ctx: str | None) -> AsyncIter
         await asyncio.sleep(5)
 
         try:
-            result = await asyncio.to_thread(client.get_task, task_id)
+            result = await client.aget_task(task_id)
         except Exception as exc:
             yield {"type": "error", "data": {"message": f"Polling error: {exc}"}}
             return
@@ -221,20 +231,26 @@ async def _run_literature_sse(query: str, industry_ctx: str | None) -> AsyncIter
 
         if result.status == "success":
             try:
-                verbose_result = await asyncio.to_thread(client.get_task, task_id, True)
+                verbose_result = await client.aget_task(task_id, verbose=True)
             except Exception:
                 verbose_result = result
             payload = _extract_literature_payload(result, verbose_result)
             yield {"type": "complete", "data": payload}
             return
-        elif result.status not in {"queued", "in progress"}:
+        elif result.status in {"fail", "cancelled", "truncated"}:
             yield {
                 "type": "error",
                 "data": {"message": f"Edison task ended with status: {result.status}"},
             }
             return
         else:
-            yield {"type": "polling", "data": {"elapsed_seconds": elapsed}}
+            yield {
+                "type": "polling",
+                "data": {
+                    "elapsed_seconds": elapsed,
+                    "message": _polling_message(elapsed),
+                },
+            }
 
 
 async def _stub_research_events(

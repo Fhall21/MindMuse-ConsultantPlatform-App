@@ -79,7 +79,7 @@ function AnswerText({ text }: { text: string }) {
 export function LiteraturePanel() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { data: preferences } = useAIPreferences();
-  const { status, result, error, elapsedSeconds, submit, reset } =
+  const { status, result, error, elapsedSeconds, pollingMessage, submit, reset } =
     useLiteratureResearch();
 
   const industry = preferences?.industry || undefined;
@@ -135,7 +135,9 @@ export function LiteraturePanel() {
         <div className="flex flex-col items-center gap-3 rounded-xl border bg-muted/30 p-8 text-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           <div className="space-y-1">
-            <p className="text-sm font-medium">Searching literature</p>
+            <p className="text-sm font-medium">
+              {pollingMessage || "Searching literature"}
+            </p>
             <p className="text-xs text-muted-foreground">
               Usually 30–90 seconds
               {elapsedSeconds > 0 && ` · ${elapsedSeconds}s elapsed`}

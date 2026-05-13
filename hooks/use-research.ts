@@ -55,6 +55,7 @@ interface LiteratureState {
   result: LiteratureResult | null;
   error: string | null;
   elapsedSeconds: number;
+  pollingMessage: string;
   reasoningSteps: ReasoningStep[];
   sessionId: string | null;
 }
@@ -64,6 +65,7 @@ const INITIAL_STATE: LiteratureState = {
   result: null,
   error: null,
   elapsedSeconds: 0,
+  pollingMessage: "",
   reasoningSteps: [],
   sessionId: null,
 };
@@ -162,6 +164,7 @@ export function useLiteratureResearch() {
               ...s,
               status: "polling",
               elapsedSeconds: (event.data.elapsed_seconds as number) ?? s.elapsedSeconds,
+              pollingMessage: (event.data.message as string) || s.pollingMessage,
               reasoningSteps: (event.data.reasoning_steps as ReasoningStep[]) ?? s.reasoningSteps,
             }));
           } else if (event.type === "complete") {

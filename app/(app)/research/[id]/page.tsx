@@ -152,46 +152,15 @@ function InFlightSteps({
   );
 }
 
-// ── Local display helpers ─────────────────────────────────────────────────────
-
-function ArtifactTable({ markdown }: { markdown: string }) {
-  const rows = markdown
-    .split("\n")
-    .map((r) => r.trim())
-    .filter((r) => r.startsWith("|") && !r.match(/^\|[-| ]+\|$/));
-  if (rows.length < 2) return null;
-  const parseRow = (row: string) =>
-    row.split("|").slice(1, -1).map((c) => c.trim());
-  const [headerRow, ...bodyRows] = rows;
-  const headers = parseRow(headerRow);
-  return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/50">
-          <tr>
-            {headers.map((h, i) => (
-              <th key={i} className="px-3 py-2 text-left font-semibold">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {bodyRows.map((row, ri) => (
-            <tr key={ri} className="border-t">
-              {parseRow(row).map((cell, ci) => (
-                <td key={ci} className="px-3 py-2 text-muted-foreground">{cell}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 // ── Results view ──────────────────────────────────────────────────────────────
 
 function ResultView({ result }: { result: LiteratureResult }) {
   const [activeTab, setActiveTab] = useState("results");
+  const answerHasTable = /^\s*\|/m.test(result.answer);
+  const resultText =
+    answerHasTable || !result.artifact
+      ? result.answer
+      : `${result.answer}\n\n## Summary framework\n${result.artifact}`;
 
   const handleCitationClick = useCallback((num: string) => {
     setActiveTab("references");
@@ -230,17 +199,12 @@ function ResultView({ result }: { result: LiteratureResult }) {
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="results" className="mt-3 space-y-4">
-        {result.artifact && (
-          <div className="space-y-1.5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Summary</p>
-            <ArtifactTable markdown={result.artifact} />
-          </div>
-        )}
+      <TabsContent value="results" className="mt-3">
         <div className="border-t pt-4">
           <AnswerText
-            text={result.answer}
+            text={resultText}
             references={result.references}
+            evidence={result.evidence}
             onCitationClick={handleCitationClick}
           />
         </div>

@@ -19,52 +19,6 @@ import { EvidenceList } from "./evidence-list";
 import { ReasoningSteps } from "./reasoning-steps";
 import { ReferencesList } from "./references-list";
 
-// Render an Edison artifact (markdown table) as a styled HTML table.
-function ArtifactTable({ markdown }: { markdown: string }) {
-  const rows = markdown
-    .split("\n")
-    .map((r) => r.trim())
-    .filter((r) => r.startsWith("|") && !r.match(/^\|[-| ]+\|$/));
-
-  if (rows.length < 2) return null;
-
-  const parseRow = (row: string) =>
-    row
-      .split("|")
-      .slice(1, -1)
-      .map((c) => c.trim());
-
-  const [headerRow, ...bodyRows] = rows;
-  const headers = parseRow(headerRow);
-
-  return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/50">
-          <tr>
-            {headers.map((h, i) => (
-              <th key={i} className="px-3 py-2 text-left font-semibold text-foreground">
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {bodyRows.map((row, ri) => (
-            <tr key={ri} className="border-t">
-              {parseRow(row).map((cell, ci) => (
-                <td key={ci} className="px-3 py-2 text-muted-foreground">
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 export function LiteraturePanel() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { data: preferences } = useAIPreferences();
@@ -117,6 +71,10 @@ export function LiteraturePanel() {
   const activeSteps = hasResult ? result.reasoning_steps : reasoningSteps;
   const activeEvidence = hasResult ? result.evidence : [];
   const activeReferences = hasResult ? result.references : [];
+  const resultText =
+    hasResult && result.artifact && !/^\s*\|/m.test(result.answer)
+      ? `${result.answer}\n\n## Summary framework\n${result.artifact}`
+      : result?.answer ?? "";
 
   return (
     <div className="space-y-4">
@@ -223,19 +181,12 @@ export function LiteraturePanel() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="results" className="mt-3 space-y-3">
-            {result.artifact && (
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Summary
-                </p>
-                <ArtifactTable markdown={result.artifact} />
-              </div>
-            )}
+          <TabsContent value="results" className="mt-3">
             <ScrollArea className="max-h-[480px] rounded-lg border bg-card p-4">
               <AnswerText
-                text={result.answer}
+                text={resultText}
                 references={activeReferences}
+                evidence={activeEvidence}
                 onCitationClick={handleCitationClick}
               />
             </ScrollArea>

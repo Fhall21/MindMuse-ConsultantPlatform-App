@@ -7,6 +7,7 @@ RUN bun install --production
 
 COPY db ./db
 COPY drizzle ./drizzle
+COPY lib/digital-interview-frameworks.ts ./lib/digital-interview-frameworks.ts
 COPY lib/env.ts ./lib/env.ts
 COPY lib/runtime-diagnostics.ts ./lib/runtime-diagnostics.ts
 

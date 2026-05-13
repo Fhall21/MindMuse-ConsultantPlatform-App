@@ -18,7 +18,7 @@ import {
   vector,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { DIGITAL_INTERVIEW_FRAMEWORK_VALUES } from "@/lib/digital-interview-frameworks";
+import { DIGITAL_INTERVIEW_FRAMEWORK_VALUES } from "../../lib/digital-interview-frameworks";
 import { users } from "./auth";
 
 const timestamps = {

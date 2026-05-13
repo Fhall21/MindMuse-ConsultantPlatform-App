@@ -199,25 +199,64 @@ async def _run_literature(
     logger.info("[research_job_worker] session=%s submitted task_id=%s", session_id, task_id)
     await loop.run_in_executor(None, _set_task_id, engine, session_id, task_id)
 
+    poll_cycle = 0
     while True:
         await asyncio.sleep(EDISON_POLL_INTERVAL_SECONDS)
+        poll_cycle += 1
+        logger.debug(
+            "[research_job_worker] session=%s poll_cycle=%d", session_id, poll_cycle
+        )
+
         try:
-            verbose_poll = await client.aget_task(task_id, verbose=True)
+            verbose_poll = await asyncio.wait_for(
+                client.aget_task(task_id, verbose=True),
+                timeout=60.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[research_job_worker] session=%s poll_cycle=%d timed out, retrying",
+                session_id,
+                poll_cycle,
+            )
+            continue
         except Exception as exc:
             msg = f"Polling error: {exc}"
             logger.error("[research_job_worker] session=%s %s", session_id, msg)
-            await loop.run_in_executor(None, _write_failed, engine, session_id, msg)
+            try:
+                await loop.run_in_executor(None, _write_failed, engine, session_id, msg)
+            except Exception:
+                logger.exception(
+                    "[research_job_worker] session=%s failed to write failure status",
+                    session_id,
+                )
             return
 
         if verbose_poll.status == "success":
-            payload = _extract_literature_payload(verbose_poll)
-            await loop.run_in_executor(None, _write_complete, engine, session_id, payload)
-            logger.info("[research_job_worker] session=%s complete", session_id)
+            try:
+                payload = _extract_literature_payload(verbose_poll)
+                await loop.run_in_executor(None, _write_complete, engine, session_id, payload)
+                logger.info("[research_job_worker] session=%s complete", session_id)
+            except Exception as exc:
+                msg = f"Failed to write complete result: {exc}"
+                logger.exception("[research_job_worker] session=%s %s", session_id, msg)
+                try:
+                    await loop.run_in_executor(None, _write_failed, engine, session_id, msg)
+                except Exception:
+                    logger.exception(
+                        "[research_job_worker] session=%s also failed to write failure status",
+                        session_id,
+                    )
             return
         elif verbose_poll.status in {"fail", "cancelled", "truncated"}:
             msg = f"Edison task ended with status: {verbose_poll.status}"
             logger.error("[research_job_worker] session=%s %s", session_id, msg)
-            await loop.run_in_executor(None, _write_failed, engine, session_id, msg)
+            try:
+                await loop.run_in_executor(None, _write_failed, engine, session_id, msg)
+            except Exception:
+                logger.exception(
+                    "[research_job_worker] session=%s failed to write failure status",
+                    session_id,
+                )
             return
         # else: still running — continue polling
 
@@ -270,9 +309,15 @@ async def _process_one(engine: Any) -> None:
             logger.exception(
                 "[research_job_worker] session=%s unhandled error: %s", session_id, exc
             )
-            await loop.run_in_executor(
-                None, _write_failed, engine, session_id, f"Unhandled error: {exc}"
-            )
+            try:
+                await loop.run_in_executor(
+                    None, _write_failed, engine, session_id, f"Unhandled error: {exc}"
+                )
+            except Exception:
+                logger.exception(
+                    "[research_job_worker] session=%s failed to write failure status",
+                    session_id,
+                )
     else:
         # analysis and other types: mark failed until implemented
         await loop.run_in_executor(

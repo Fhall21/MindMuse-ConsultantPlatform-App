@@ -24,8 +24,12 @@ export async function POST(request: Request) {
 
   const parsed = extractResearchInsightSchema.safeParse(json);
   if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const detail = issue
+      ? `${issue.path.join(".") || "request"}: ${issue.message}`
+      : "Invalid request";
     return NextResponse.json(
-      { detail: "Invalid request", issues: parsed.error.issues },
+      { detail, issues: parsed.error.issues },
       { status: 400 }
     );
   }

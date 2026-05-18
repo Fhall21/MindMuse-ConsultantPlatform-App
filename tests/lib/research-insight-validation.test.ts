@@ -43,9 +43,9 @@ describe("extractResearchInsightSchema", () => {
 });
 
 describe("quoteLocatorSchema", () => {
-  it("requires at least one anchor", () => {
+  it("accepts an empty object (anchoring is best-effort)", () => {
     const r = quoteLocatorSchema.safeParse({});
-    expect(r.success).toBe(false);
+    expect(r.success).toBe(true);
   });
 
   it("accepts answerId only", () => {

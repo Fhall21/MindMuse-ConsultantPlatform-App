@@ -2,10 +2,10 @@ import { z } from "zod/v4";
 
 const trimmedString = z.string().transform((s) => s.trim());
 
-// Locator anchors the quote back to its source. All fields optional so the
-// extractor can supply whichever locators are available (text offsets in the
-// rendered answer, an explicit referenceId from the research result, a page
-// number for paged sources).
+// Locator captures whichever anchoring metadata is available — text offsets,
+// an explicit referenceId from the research result, a page number, a URL.
+// All fields optional; the empty object is a valid locator (the insight's
+// research_session_id is the canonical anchor; this object only narrows it).
 export const quoteLocatorSchema = z
   .object({
     answerId: trimmedString.pipe(z.string().min(1).max(200)).optional(),
@@ -24,16 +24,6 @@ export const quoteLocatorSchema = z
       return true;
     },
     { message: "endOffset must be greater than startOffset" }
-  )
-  .refine(
-    (loc) =>
-      loc.answerId !== undefined ||
-      loc.referenceId !== undefined ||
-      loc.sourceUrl !== undefined ||
-      loc.page !== undefined,
-    {
-      message: "locator must include at least one anchor (answerId, referenceId, sourceUrl, or page)",
-    }
   );
 
 export const extractResearchInsightSchema = z.object({
@@ -42,7 +32,7 @@ export const extractResearchInsightSchema = z.object({
   quote: trimmedString.pipe(
     z.string().min(8, "quote must be at least 8 characters").max(4000)
   ),
-  locator: quoteLocatorSchema,
+  locator: quoteLocatorSchema.default({}),
   label: trimmedString.pipe(z.string().min(1).max(500)),
   description: trimmedString
     .pipe(z.string().max(4000))

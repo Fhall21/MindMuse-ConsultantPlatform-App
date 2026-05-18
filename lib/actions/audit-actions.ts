@@ -79,4 +79,8 @@ export const AUDIT_ACTIONS = {
   QUOTE_PRIMARY_INSIGHT_SET: "quote.primary_insight_set",
   QUOTE_RISK_FLAGGED: "quote.risk_flagged",
   QUOTE_INSERTED_INTO_REPORT: "quote.inserted_into_report",
+  // Research insight extraction
+  RESEARCH_INSIGHT_EXTRACTED: "research_insight.extracted",
+  RESEARCH_INSIGHT_PLACED: "research_insight.placed_on_canvas",
+  RESEARCH_INSIGHT_REMOVED_FROM_CANVAS: "research_insight.removed_from_canvas",
 } as const;

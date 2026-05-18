@@ -45,6 +45,7 @@ import type {
   ExportAuditMilestone,
   ExportConnection,
   ExportFrameSnapshot,
+  ExportReference,
 } from "@/lib/report-export-content";
 
 // ─── Inline text parsing ──────────────────────────────────────────────────────
@@ -261,6 +262,43 @@ function frameSnapshotsToParagraphs(frames: ExportFrameSnapshot[]): Paragraph[] 
   return paras;
 }
 
+function referencesToParagraphs(references: ExportReference[]): Paragraph[] {
+  const paras: Paragraph[] = [];
+  for (const ref of references) {
+    paras.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: `[${ref.number}] `, bold: true }),
+          new TextRun({ text: ref.fullCite }),
+        ],
+        spacing: { after: 60 },
+      })
+    );
+    if (ref.sourceUrl) {
+      paras.push(
+        new Paragraph({
+          children: [new TextRun({ text: ref.sourceUrl, color: "555555", italics: true })],
+          spacing: { after: 60 },
+          indent: { left: 360 },
+        })
+      );
+    }
+    for (const q of ref.quotes) {
+      paras.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: `"${q.quote.replace(/\n+/g, " ")}"`, italics: true }),
+          ],
+          spacing: { after: 60 },
+          indent: { left: 360 },
+        })
+      );
+    }
+    paras.push(new Paragraph({ children: [], spacing: { after: 120 } }));
+  }
+  return paras;
+}
+
 function consultationsToParagraphs(consultations: ExportConsultation[]): Paragraph[] {
   const paras: Paragraph[] = [];
   for (const c of consultations) {
@@ -417,6 +455,9 @@ function sectionToChildren(section: ExportSection): FileChild[] {
         break;
       case "frameSnapshots":
         children.push(...frameSnapshotsToParagraphs(section.data.frames));
+        break;
+      case "references":
+        children.push(...referencesToParagraphs(section.data.references));
         break;
     }
   }

@@ -1,10 +1,18 @@
 import { NextResponse } from "next/server";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { meetings, insights, themeMembers, themes } from "@/db/schema";
+import {
+  canvasResearchInsights,
+  insights,
+  meetings,
+  researchSessions,
+  themeMembers,
+  themes,
+} from "@/db/schema";
 import { loadCanvasConnections, loadCanvasLayout } from "@/lib/data/canvas";
 import { jsonError, requireRouteClient } from "../../../_helpers";
 import { requireOwnedRound } from "@/lib/data/ownership";
+import { researchSessionShortCite } from "@/lib/citations/short-cite";
 import type { CanvasNode } from "@/types/canvas";
 
 const GROUP_COLUMNS = 2;
@@ -188,6 +196,9 @@ export async function GET(
       subgroup: null,
       sourceConsultationId: null,
       sourceConsultationTitle: null,
+      sourceType: "meeting",
+      researchSessionId: null,
+      researchReferenceLabel: null,
       groupId: null,
       memberIds: memberIdsByGroup.get(theme.id) ?? [],
       isUserAdded: false,
@@ -219,12 +230,63 @@ export async function GET(
       subgroup: null,
       sourceConsultationId: insight.meetingId,
       sourceConsultationTitle: meetingTitle,
+      sourceType: insight.flowId ? "flow" : "meeting",
+      researchSessionId: null,
+      researchReferenceLabel: null,
       groupId: groupIdByInsight.get(insight.id) ?? null,
       memberIds: [],
       isUserAdded: insight.isUserAdded,
       lockedFromSource: Boolean(groupIdByInsight.get(insight.id)),
       position: { x: 0, y: 0 },
     }));
+
+    // Research-sourced insights placed on this consultation's canvas.
+    // Joined via canvas_research_insights (the placement table) so the same
+    // library insight can appear on multiple consultations.
+    const researchInsightRows = await db
+      .select({
+        insight: insights,
+        placementX: canvasResearchInsights.positionX,
+        placementY: canvasResearchInsights.positionY,
+        researchSession: researchSessions,
+      })
+      .from(canvasResearchInsights)
+      .innerJoin(insights, eq(canvasResearchInsights.insightId, insights.id))
+      .innerJoin(
+        researchSessions,
+        eq(insights.researchSessionId, researchSessions.id)
+      )
+      .where(
+        and(
+          eq(canvasResearchInsights.consultationId, consultationId),
+          eq(researchSessions.userId, client.userId)
+        )
+      )
+      .orderBy(asc(canvasResearchInsights.createdAt));
+
+    const researchInsightNodes: CanvasNode[] = researchInsightRows.map(
+      ({ insight, placementX, placementY, researchSession }) => ({
+        id: insight.id,
+        type: "insight",
+        label: insight.label,
+        description: insight.description,
+        accepted: insight.accepted,
+        subgroup: null,
+        sourceConsultationId: null,
+        sourceConsultationTitle: null,
+        sourceType: "research",
+        researchSessionId: researchSession.id,
+        researchReferenceLabel: researchSessionShortCite(researchSession),
+        groupId: null,
+        memberIds: [],
+        isUserAdded: true,
+        lockedFromSource: false,
+        position: {
+          x: placementX ?? 0,
+          y: placementY ?? 0,
+        },
+      })
+    );
 
     // Load connections and layout
     const [edges, layout] = await Promise.all([
@@ -233,7 +295,7 @@ export async function GET(
     ]);
 
     // Apply saved positions to nodes
-    const allNodes = [...insightNodes, ...themeNodes];
+    const allNodes = [...insightNodes, ...researchInsightNodes, ...themeNodes];
     buildFallbackPositions(allNodes);
     for (const node of allNodes) {
       if (layout.positions[node.id]) {

@@ -10,6 +10,8 @@ import {
   type TocPageNumbers,
 } from "@/components/reports/report-print-layout";
 import { applyRenderPolicyToReport } from "@/lib/report-render-policy";
+import { loadReportReferences } from "@/lib/report-references";
+import { requireCurrentUserId } from "@/lib/data/auth-context";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -40,10 +42,20 @@ export async function GET(
     // Title = page 1, TOC = page 2, sections start at page 3.
     // On any error, fall back to rendering without TOC page numbers (TOC shows "—").
 
+    const userId = await requireCurrentUserId();
+    const consultationIds = Array.from(
+      new Set([
+        renderedReport.roundId,
+        ...renderedReport.consultations.map((c) => c.id),
+      ])
+    );
+    const refsBundle = await loadReportReferences(consultationIds, userId);
+    const references = refsBundle.references;
+
     let tocPageNumbers: TocPageNumbers | undefined;
 
     try {
-      const sections = buildSectionElements(renderedReport, template);
+      const sections = buildSectionElements(renderedReport, template, references);
       const accumulated: TocPageNumbers = {};
       let cursor = 3; // pages 1 (title) and 2 (TOC) are always present
 
@@ -78,6 +90,7 @@ export async function GET(
         report={renderedReport}
         template={template}
         tocPageNumbers={tocPageNumbers}
+        references={references}
       />
     );
 

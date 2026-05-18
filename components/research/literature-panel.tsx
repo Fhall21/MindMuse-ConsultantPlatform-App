@@ -18,6 +18,7 @@ import { AnswerText } from "./answer-text";
 import { EvidenceList } from "./evidence-list";
 import { ReasoningSteps } from "./reasoning-steps";
 import { ReferencesList } from "./references-list";
+import { ResearchExtractor } from "./research-extractor";
 
 export function LiteraturePanel() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -29,6 +30,7 @@ export function LiteraturePanel() {
     elapsedSeconds,
     pollingMessage,
     reasoningSteps,
+    sessionId,
     submit,
     reset,
     cancel,
@@ -183,12 +185,26 @@ export function LiteraturePanel() {
 
           <TabsContent value="results" className="mt-3">
             <ScrollArea className="max-h-[480px] rounded-lg border bg-card p-4">
-              <AnswerText
-                text={resultText}
-                references={activeReferences}
-                evidence={activeEvidence}
-                onCitationClick={handleCitationClick}
-              />
+              {sessionId ? (
+                <ResearchExtractor
+                  researchSessionId={sessionId}
+                  references={activeReferences}
+                >
+                  <AnswerText
+                    text={resultText}
+                    references={activeReferences}
+                    evidence={activeEvidence}
+                    onCitationClick={handleCitationClick}
+                  />
+                </ResearchExtractor>
+              ) : (
+                <AnswerText
+                  text={resultText}
+                  references={activeReferences}
+                  evidence={activeEvidence}
+                  onCitationClick={handleCitationClick}
+                />
+              )}
             </ScrollArea>
           </TabsContent>
 

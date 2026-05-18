@@ -120,6 +120,8 @@ export const insights = pgTable(
       .references(() => meetings.id, { onDelete: "cascade" }),
     flowId: uuid("flow_id")
       .references(() => digitalInterviewFlows.id, { onDelete: "cascade" }),
+    researchSessionId: uuid("research_session_id")
+      .references(() => researchSessions.id, { onDelete: "cascade" }),
     label: text("label").notNull(),
     description: text("description"),
     accepted: boolean("accepted").default(false).notNull(),
@@ -132,11 +134,57 @@ export const insights = pgTable(
   (table) => ({
     meetingIdx: index("idx_insights_meeting_id").on(table.meetingId),
     flowIdx: index("idx_insights_flow_id").on(table.flowId),
+    researchSessionIdx: index("idx_insights_research_session_id").on(table.researchSessionId),
     userAddedIdx: index("idx_insights_user_added").on(table.isUserAdded),
     sourceCheck: check(
       "insights_source_check",
-      sql`(meeting_id IS NOT NULL) OR (flow_id IS NOT NULL)`
+      sql`(meeting_id IS NOT NULL) OR (flow_id IS NOT NULL) OR (research_session_id IS NOT NULL)`
     ),
+  })
+);
+
+// Quotes that support a research-typed insight.
+// One insight can carry 1..N quotes from 1..N research sessions.
+// Locator JSON shape: { answerId?: string, referenceId?: string, startOffset?: number, endOffset?: number, page?: number }
+export const insightQuotes = pgTable(
+  "insight_quotes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    insightId: uuid("insight_id")
+      .notNull()
+      .references(() => insights.id, { onDelete: "cascade" }),
+    researchSessionId: uuid("research_session_id")
+      .notNull()
+      .references(() => researchSessions.id, { onDelete: "cascade" }),
+    quote: text("quote").notNull(),
+    locator: jsonb("locator").$type<Record<string, unknown> | null>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    insightIdx: index("idx_insight_quotes_insight_id").on(table.insightId),
+    sessionIdx: index("idx_insight_quotes_session_id").on(table.researchSessionId),
+  })
+);
+
+// Placement of a (library) research insight onto a specific consultation's canvas.
+// One insight can be placed on many consultations. Position is per-placement.
+export const canvasResearchInsights = pgTable(
+  "canvas_research_insights",
+  {
+    consultationId: uuid("consultation_id")
+      .notNull()
+      .references(() => consultations.id, { onDelete: "cascade" }),
+    insightId: uuid("insight_id")
+      .notNull()
+      .references(() => insights.id, { onDelete: "cascade" }),
+    positionX: doublePrecision("position_x"),
+    positionY: doublePrecision("position_y"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.consultationId, table.insightId] }),
+    consultationIdx: index("idx_canvas_research_insights_consultation").on(table.consultationId),
+    insightIdx: index("idx_canvas_research_insights_insight").on(table.insightId),
   })
 );
 
@@ -985,7 +1033,7 @@ export const canvasConnections = pgTable(
     toNodeId: uuid("to_node_id").notNull(),
     connectionType: text("connection_type")
       .notNull()
-      .$type<"causes" | "influences" | "supports" | "contradicts" | "related_to">(),
+      .$type<"causes" | "influences" | "supports" | "contradicts" | "context" | "related_to">(),
     notes: text("notes"),
     confidence: numeric("confidence", { precision: 4, scale: 3 }),
     origin: text("origin")
@@ -1010,7 +1058,7 @@ export const canvasConnections = pgTable(
     ),
     connectionTypeCheck: check(
       "canvas_connections_connection_type_check",
-      sql`${table.connectionType} in ('causes', 'influences', 'supports', 'contradicts', 'related_to')`
+      sql`${table.connectionType} in ('causes', 'influences', 'supports', 'contradicts', 'context', 'related_to')`
     ),
     originCheck: check(
       "canvas_connections_origin_check",

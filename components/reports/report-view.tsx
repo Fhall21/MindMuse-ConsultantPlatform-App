@@ -49,6 +49,9 @@ import {
 } from "@/lib/report-render-policy";
 import { cn } from "@/lib/utils";
 import { AuditTrailSection } from "@/components/reports/report-audit-trail-section";
+import { ReferencesSection, ReferenceCitationChip } from "@/components/reports/references-section";
+import { useReportReferences, type ReportReference } from "@/hooks/use-report-references";
+import { injectInlineCitationMarkers } from "@/lib/citations/inject-markers";
 import { ReportCoverPage, deriveMatterRef } from "@/components/reports/report-cover-page";
 import { NetworkDiagram } from "@/components/reports/network-diagram";
 import { GroupNetworkSection, CanvasPreviewSection } from "@/components/reports/theme-visualization";
@@ -666,20 +669,50 @@ export { AuditTrailSection };
 
 // ─── Inline bold renderer ─────────────────────────────────────────────────────
 
-function renderInline(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  if (parts.length === 1) return text;
-  return parts.map((part, i) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={i} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>;
+function renderInline(
+  text: string,
+  referenceByNumber?: Map<number, ReportReference>
+): React.ReactNode {
+  const tokens = text.split(/(\*\*[^*]+\*\*|\[\d+\])/g);
+  if (tokens.length === 1 && !/\[\d+\]/.test(text)) return text;
+  return tokens.map((token, i) => {
+    if (token.startsWith("**") && token.endsWith("**")) {
+      return (
+        <strong key={i} className="font-semibold text-foreground">
+          {token.slice(2, -2)}
+        </strong>
+      );
     }
-    return part;
+    const citeMatch = /^\[(\d+)\]$/.exec(token);
+    if (citeMatch) {
+      const number = Number(citeMatch[1]);
+      const ref = referenceByNumber?.get(number);
+      return (
+        <ReferenceCitationChip
+          key={i}
+          number={number}
+          reference={ref}
+          onJump={(n) =>
+            document
+              .getElementById(`report-reference-${n}`)
+              ?.scrollIntoView({ behavior: "smooth", block: "center" })
+          }
+        />
+      );
+    }
+    return <React.Fragment key={i}>{token}</React.Fragment>;
   });
 }
 
 // ─── Content renderer ────────────────────────────────────────────────────────
 
-export function ReportContent({ content }: { content: string }) {
+export function ReportContent({
+  content,
+  referenceByNumber,
+}: {
+  content: string;
+  referenceByNumber?: Map<number, ReportReference>;
+}) {
   const blocks = parseContentBlocks(content);
 
   return (
@@ -689,13 +722,13 @@ export function ReportContent({ content }: { content: string }) {
           case "heading1":
             return (
               <h2 key={i} className="pt-4 text-lg font-semibold text-foreground">
-                {renderInline(block.text)}
+                {renderInline(block.text, referenceByNumber)}
               </h2>
             );
           case "heading2":
             return (
               <h3 key={i} className="pt-3 text-base font-semibold text-foreground">
-                {renderInline(block.text)}
+                {renderInline(block.text, referenceByNumber)}
               </h3>
             );
           case "heading3":
@@ -704,7 +737,7 @@ export function ReportContent({ content }: { content: string }) {
                 key={i}
                 className="pt-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
               >
-                {renderInline(block.text)}
+                {renderInline(block.text, referenceByNumber)}
               </h4>
             );
           case "bullet":
@@ -714,7 +747,7 @@ export function ReportContent({ content }: { content: string }) {
                 className="list-inside list-disc space-y-1 pl-1 text-sm leading-relaxed text-foreground/90"
               >
                 {block.items.map((item, j) => (
-                  <li key={j}>{renderInline(item)}</li>
+                  <li key={j}>{renderInline(item, referenceByNumber)}</li>
                 ))}
               </ul>
             );
@@ -725,7 +758,7 @@ export function ReportContent({ content }: { content: string }) {
                 className="list-inside list-decimal space-y-1 pl-1 text-sm leading-relaxed text-foreground/90"
               >
                 {block.items.map((item, j) => (
-                  <li key={j}>{renderInline(item)}</li>
+                  <li key={j}>{renderInline(item, referenceByNumber)}</li>
                 ))}
               </ol>
             );
@@ -1003,6 +1036,12 @@ interface ReportViewProps {
 export function ReportView({ artifactId }: ReportViewProps) {
   const { data: report, isLoading, error } = useReportArtifact(artifactId);
   const { data: aiPreferences } = useAIPreferences();
+  const { data: referencesData } = useReportReferences(artifactId);
+  const referenceByNumber = useMemo(() => {
+    const map = new Map<number, ReportReference>();
+    for (const ref of referencesData?.references ?? []) map.set(ref.number, ref);
+    return map;
+  }, [referencesData]);
   const [template, setTemplate] = useState<ReportTemplate>("standard");
   const [exportingFormat, setExportingFormat] = useState<"pdf" | "markdown" | "docx" | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -1237,7 +1276,17 @@ export function ReportView({ artifactId }: ReportViewProps) {
       <div className="grid gap-8 lg:grid-cols-[1fr_260px]">
         {/* Main content */}
         <article className="min-w-0 space-y-8">
-          <ReportContent content={displayReport.content} />
+          <ReportContent
+            content={
+              referencesData && referencesData.references.length > 0
+                ? injectInlineCitationMarkers(displayReport.content, {
+                    labelByInsightId: referencesData.insightLabels,
+                    numberByInsightId: referencesData.insightNumbers,
+                  })
+                : displayReport.content
+            }
+            referenceByNumber={referenceByNumber}
+          />
 
           <Separator />
 
@@ -1315,6 +1364,13 @@ export function ReportView({ artifactId }: ReportViewProps) {
               <AuditTrailSection report={displayReport} />
             </>
           )}
+
+          {referencesData && referencesData.references.length > 0 ? (
+            <>
+              <Separator />
+              <ReferencesSection references={referencesData.references} />
+            </>
+          ) : null}
         </article>
 
         {/* Sidebar */}

@@ -21,6 +21,7 @@ const CONNECTION_LABELS: Record<ConnectionType, string> = {
   influences: "influences",
   supports: "supports",
   contradicts: "contradicts",
+  context: "context",
   related_to: "related to",
 };
 

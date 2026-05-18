@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { ChevronLeft, Sparkles } from "lucide-react";
+import { BookOpen, ChevronLeft, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import posthog from "posthog-js";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,8 @@ import { ConnectionTypePrompt } from "@/components/canvas/connection-type-prompt
 import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
 import { MultiSelectionPanel } from "@/components/canvas/multi-selection-panel";
+import { ResearchInsightLibraryModal } from "@/components/canvas/research-insight-library-modal";
+import { useResearchExtractionEnabled } from "@/hooks/use-feature-flags";
 import {
   useCanvas,
   useCanvasFrames,
@@ -349,6 +351,9 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
       onSelect={requestReorganise}
     />
   );
+
+  const researchExtractionEnabled = useResearchExtractionEnabled();
+  const [researchLibraryOpen, setResearchLibraryOpen] = useState(false);
 
   const panelOrganiseControl = (
     <CanvasOrganiseMenu
@@ -770,6 +775,16 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
         <div className="ml-auto flex items-center gap-2">
           {toolbarOrganiseControl}
+          {researchExtractionEnabled ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setResearchLibraryOpen(true)}
+            >
+              <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+              Research library
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             size="sm"
@@ -921,6 +936,12 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
           if (!open) setRenameTargetId(null);
         }}
         onSubmit={handleRenameDialogSubmit}
+      />
+
+      <ResearchInsightLibraryModal
+        open={researchLibraryOpen}
+        onOpenChange={setResearchLibraryOpen}
+        consultationId={roundId}
       />
     </div>
   );

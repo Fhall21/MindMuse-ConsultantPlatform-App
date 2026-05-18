@@ -15,6 +15,14 @@
 
 export type CanvasNodeType = "theme" | "insight";
 
+/**
+ * What the insight is sourced from. Drives the source-label slot on the card
+ * and the visual treatment (e.g. research nodes get a tinted fill + document icon).
+ * "meeting" = derived from a consultation/meeting; "flow" = digital interview;
+ * "research" = lifted from an in-app literature review session.
+ */
+export type InsightSourceType = "meeting" | "flow" | "research";
+
 export interface CanvasNode {
   id: string;
   type: CanvasNodeType;
@@ -29,6 +37,18 @@ export interface CanvasNode {
   /** Source consultation metadata for continuity with round grouping. */
   sourceConsultationId: string | null;
   sourceConsultationTitle: string | null;
+  /**
+   * Where this node's underlying insight comes from. Absent on legacy/meeting
+   * nodes (treated as non-research); set to "research" for nodes derived from
+   * a literature-review extraction.
+   */
+  sourceType?: InsightSourceType;
+  /**
+   * For sourceType="research": the underlying research session id and the
+   * short cite displayed in the slot otherwise used for sourceConsultationTitle.
+   */
+  researchSessionId?: string | null;
+  researchReferenceLabel?: string | null;
   /** Group-membership metadata used for canvas grouping actions. */
   groupId: string | null;
   memberIds: string[];

@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Sparkles } from "lucide-react";
+import { BookOpen, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { CanvasNode } from "@/types/canvas";
@@ -25,15 +25,22 @@ function InsightCard({
   isNestedInGroup: boolean;
   selected: boolean;
 }) {
+  const isResearch = node.sourceType === "research";
+  // Research nodes use a parchment-tinted fill + slate accent so they read as
+  // "evidence from the literature" at scanning distance, distinct from the
+  // amber meeting-source badge below.
   return (
     <div
       className={cn(
         "group relative h-full w-full rounded-xl border bg-background/95 px-4 py-3 shadow-sm transition-[border-color,box-shadow,transform]",
         "min-h-[56px]",
         isNestedInGroup && "border-violet-200 bg-white/95 dark:border-violet-900 dark:bg-slate-950/95",
+        isResearch &&
+          "border-stone-300 bg-stone-50/90 dark:border-stone-700 dark:bg-stone-900/60",
         selected && "border-primary ring-2 ring-primary/20 shadow-lg"
       )}
-      data-testid="canvas-insight-card"
+      data-testid={isResearch ? "canvas-research-insight-card" : "canvas-insight-card"}
+      data-source-type={node.sourceType}
     >
       <Handle
         id="target"
@@ -43,6 +50,12 @@ function InsightCard({
       />
 
       <div className="flex items-start gap-2">
+        {isResearch ? (
+          <BookOpen
+            className="mt-0.5 h-4 w-4 shrink-0 text-stone-600 dark:text-stone-300"
+            aria-label="Research insight"
+          />
+        ) : null}
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-semibold leading-tight text-foreground line-clamp-2">
             {node.label}
@@ -62,7 +75,15 @@ function InsightCard({
       </div>
 
       <div className="mt-3 flex items-center gap-2">
-        {node.sourceConsultationTitle ? (
+        {isResearch && node.researchReferenceLabel ? (
+          <Badge
+            variant="outline"
+            className="max-w-[180px] truncate border-stone-300 bg-stone-100 px-2 py-0.5 text-[10px] text-stone-700 dark:border-stone-700 dark:bg-stone-900/80 dark:text-stone-300"
+            title={node.researchReferenceLabel}
+          >
+            {node.researchReferenceLabel}
+          </Badge>
+        ) : node.sourceConsultationTitle ? (
           <Badge
             variant="outline"
             className="max-w-[140px] truncate border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
@@ -71,7 +92,7 @@ function InsightCard({
             {node.sourceConsultationTitle}
           </Badge>
         ) : null}
-        {node.isUserAdded ? (
+        {node.isUserAdded && !isResearch ? (
           <Badge variant="outline" className="px-2 py-0.5 text-[10px]">
             Manual
           </Badge>

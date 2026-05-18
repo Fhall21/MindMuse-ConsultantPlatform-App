@@ -33,11 +33,13 @@ export const extractResearchInsightSchema = z.object({
     z.string().min(8, "quote must be at least 8 characters").max(4000)
   ),
   locator: quoteLocatorSchema.default({}),
-  label: trimmedString.pipe(z.string().min(1).max(500)),
-  description: trimmedString
-    .pipe(z.string().max(4000))
-    .optional()
-    .transform((v) => (v && v.length > 0 ? v : null)),
+  label: trimmedString.pipe(z.string().min(1, "label is required").max(500)),
+  description: trimmedString.pipe(
+    z
+      .string()
+      .min(5, "notes must be at least 5 characters")
+      .max(4000)
+  ),
   positionX: z.number().finite().optional(),
   positionY: z.number().finite().optional(),
 });

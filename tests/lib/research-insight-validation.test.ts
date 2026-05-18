@@ -11,6 +11,7 @@ const baseExtract = {
   quote: "Workplace burnout is a structural problem, not a personal failing.",
   locator: { answerId: "ans-1" },
   label: "Burnout is structural",
+  description: "Anchors the structural framing for the cross-consultation theme.",
 };
 
 describe("extractResearchInsightSchema", () => {
@@ -32,13 +33,19 @@ describe("extractResearchInsightSchema", () => {
     expect(r.success).toBe(false);
   });
 
-  it("strips empty description to null", () => {
+  it("rejects a missing description (notes is required for audit trail)", () => {
+    const { description: _drop, ...rest } = baseExtract;
+    void _drop;
+    const r = extractResearchInsightSchema.safeParse(rest);
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects a description shorter than 5 characters", () => {
     const r = extractResearchInsightSchema.safeParse({
       ...baseExtract,
-      description: "  ",
+      description: "hi",
     });
-    expect(r.success).toBe(true);
-    if (r.success) expect(r.data.description).toBeNull();
+    expect(r.success).toBe(false);
   });
 });
 

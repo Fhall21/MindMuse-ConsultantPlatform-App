@@ -41,6 +41,18 @@ export interface ResearchExtractionDialogProps {
   onSuccess?: (insightId: string) => void;
 }
 
+function RequiredMark() {
+  return (
+    <span
+      aria-hidden
+      className="text-destructive"
+      title="Required"
+    >
+      *
+    </span>
+  );
+}
+
 function deriveDefaultLabel(quote: string): string {
   // First sentence or first 80 chars — readable on a node card.
   const firstStop = quote.search(/[.!?]\s|$/);
@@ -81,14 +93,22 @@ export function ResearchExtractionDialog({
     [consultations.data]
   );
 
+  const trimmedLabel = label.trim();
+  const trimmedDescription = description.trim();
+  const labelValid = trimmedLabel.length > 0;
+  const descriptionValid = trimmedDescription.length >= 5;
+  const consultationValid = Boolean(consultationId);
+  const quoteValid = quote.trim().length >= 8;
+
   const canSubmit =
-    Boolean(consultationId) &&
-    label.trim().length > 0 &&
-    quote.trim().length >= 8 &&
+    labelValid &&
+    descriptionValid &&
+    consultationValid &&
+    quoteValid &&
     !extract.isPending;
 
   const handleSubmit = async () => {
-    if (!consultationId) return;
+    if (!consultationId || !descriptionValid) return;
 
     const locator: Record<string, unknown> = {};
     if (referenceId) locator.referenceId = referenceId;
@@ -99,8 +119,8 @@ export function ResearchExtractionDialog({
         researchSessionId,
         quote,
         locator,
-        label: label.trim(),
-        description: description.trim() || null,
+        label: trimmedLabel,
+        description: trimmedDescription,
       });
       toast.success("Research insight added to canvas");
       onOpenChange(false);
@@ -124,9 +144,13 @@ export function ResearchExtractionDialog({
         </DialogHeader>
 
         <div className="min-w-0 flex-1 space-y-4 overflow-y-auto px-1 py-2">
+          <p className="text-[11px] text-muted-foreground">
+            Fields marked <RequiredMark /> are required.
+          </p>
+
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">
-              Quoted passage
+              Quoted passage <RequiredMark />
             </label>
             <blockquote className="max-h-[220px] overflow-y-auto whitespace-pre-wrap break-words rounded-md border-l-4 border-stone-300 bg-stone-50 px-3 py-2 text-sm leading-relaxed text-foreground dark:border-stone-700 dark:bg-stone-900/40">
               {quote}
@@ -134,8 +158,11 @@ export function ResearchExtractionDialog({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground" htmlFor="research-insight-label">
-              Insight label
+            <label
+              className="text-xs font-medium text-muted-foreground"
+              htmlFor="research-insight-label"
+            >
+              Insight label <RequiredMark />
             </label>
             <Input
               id="research-insight-label"
@@ -143,7 +170,12 @@ export function ResearchExtractionDialog({
               maxLength={500}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="Short label shown on the canvas card"
+              aria-invalid={!labelValid}
+              required
             />
+            {!labelValid ? (
+              <p className="text-[11px] text-destructive">A label is required.</p>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">
@@ -151,7 +183,7 @@ export function ResearchExtractionDialog({
               className="text-xs font-medium text-muted-foreground"
               htmlFor="research-insight-description"
             >
-              Notes (optional)
+              Notes <RequiredMark />
             </label>
             <Textarea
               id="research-insight-description"
@@ -160,17 +192,27 @@ export function ResearchExtractionDialog({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Why does this passage matter? How does it connect to consultation insights?"
               className="min-h-[72px]"
+              aria-invalid={!descriptionValid}
+              required
             />
+            {!descriptionValid ? (
+              <p className="text-[11px] text-destructive">
+                Notes are required (at least 5 characters) so the audit trail
+                records why this passage was lifted.
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Consultation</label>
+            <label className="text-xs font-medium text-muted-foreground">
+              Consultation <RequiredMark />
+            </label>
             <Select
               value={consultationId ?? undefined}
               onValueChange={(value) => setConsultationId(value)}
               disabled={consultations.isLoading || consultationOptions.length === 0}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-invalid={!consultationValid}>
                 <SelectValue
                   placeholder={
                     consultations.isLoading
@@ -189,12 +231,20 @@ export function ResearchExtractionDialog({
                 ))}
               </SelectContent>
             </Select>
+            {!consultationValid ? (
+              <p className="text-[11px] text-destructive">
+                Pick which consultation&rsquo;s canvas this insight belongs on.
+              </p>
+            ) : null}
           </div>
 
           {references.length > 0 ? (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
-                Source reference (optional)
+                Source reference{" "}
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                  optional
+                </span>
               </label>
               <Select
                 value={referenceId ?? undefined}

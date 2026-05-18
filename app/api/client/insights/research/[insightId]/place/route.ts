@@ -6,6 +6,7 @@ import {
   placeResearchInsightOnCanvas,
   removeResearchInsightFromCanvas,
 } from "@/lib/actions/research-insights";
+import { isResearchExtractionEnabledForUser } from "@/lib/feature-flags";
 
 export async function POST(
   request: Request,
@@ -13,6 +14,10 @@ export async function POST(
 ) {
   const auth = await requireRouteClient();
   if ("response" in auth) return auth.response;
+
+  if (!isResearchExtractionEnabledForUser(auth.userId)) {
+    return jsonError("Research extraction is not enabled for this account", 403);
+  }
 
   const { insightId } = await params;
 

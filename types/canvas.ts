@@ -59,6 +59,8 @@ export interface CanvasLayoutPosition extends CanvasPosition {
  * "influences"  — A shapes or affects B without direct causation
  * "supports"    — A provides evidence for B
  * "contradicts" — A and B are in tension
+ * "context"     — A provides contextual framing for B (used by research-sourced
+ *                 insights to mark background/methodological evidence)
  * "related_to"  — generic / unclassified relationship
  */
 export type ConnectionType =
@@ -66,6 +68,7 @@ export type ConnectionType =
   | "influences"
   | "supports"
   | "contradicts"
+  | "context"
   | "related_to";
 
 export interface CanvasEdge {

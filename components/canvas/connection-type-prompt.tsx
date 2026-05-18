@@ -12,6 +12,7 @@ export const CONNECTION_TYPE_LABELS: Record<ConnectionType, string> = {
   influences: "Influences",
   supports: "Supports",
   contradicts: "Contradicts",
+  context: "Context",
   related_to: "Related to",
 };
 
@@ -47,7 +48,8 @@ export function ConnectionTypePrompt({
       "2": "influences",
       "3": "supports",
       "4": "contradicts",
-      "5": "related_to",
+      "5": "context",
+      "6": "related_to",
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -93,7 +95,7 @@ export function ConnectionTypePrompt({
         <div>
           <p className="text-sm font-semibold">Set connection type</p>
           <p className="text-xs text-muted-foreground">
-            Pick relationship 1-5, then press Enter to save.
+            Pick relationship 1-6, then press Enter to save.
           </p>
         </div>
       </div>

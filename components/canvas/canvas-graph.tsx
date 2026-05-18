@@ -119,6 +119,9 @@ const CONNECTION_COLORS: Record<ConnectionType, string> = {
   influences: "#f97316",
   supports: "#22c55e",
   contradicts: "#dc2626",
+  // Context: muted slate — distinct from supports/contradicts but quieter than related_to,
+  // signalling "this provides background framing, not direct evidence".
+  context: "#64748b",
   related_to: "#6b7280",
 };
 

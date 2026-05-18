@@ -114,7 +114,7 @@ export function ResearchExtractionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent className="flex max-h-[85vh] flex-col gap-4 overflow-hidden sm:max-w-[640px]">
         <DialogHeader>
           <DialogTitle>Add as research insight</DialogTitle>
           <DialogDescription>
@@ -123,12 +123,12 @@ export function ResearchExtractionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="min-w-0 flex-1 space-y-4 overflow-y-auto px-1 py-2">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">
               Quoted passage
             </label>
-            <blockquote className="rounded-md border-l-4 border-stone-300 bg-stone-50 px-3 py-2 text-sm leading-relaxed text-foreground dark:border-stone-700 dark:bg-stone-900/40">
+            <blockquote className="max-h-[220px] overflow-y-auto whitespace-pre-wrap break-words rounded-md border-l-4 border-stone-300 bg-stone-50 px-3 py-2 text-sm leading-relaxed text-foreground dark:border-stone-700 dark:bg-stone-900/40">
               {quote}
             </blockquote>
           </div>

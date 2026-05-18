@@ -33,6 +33,7 @@ export interface TocPageNumbers {
   network?: number;
   evidence?: number;
   auditTrail?: number;
+  references?: number;
 }
 
 export interface SectionElement {
@@ -45,6 +46,19 @@ interface ReportPrintLayoutProps {
   report: ReportArtifactDetail;
   template: ReportTemplate;
   tocPageNumbers?: TocPageNumbers;
+  references?: ReportReference[];
+}
+
+export interface ReportReference {
+  number: number;
+  insightId: string;
+  insightLabel: string;
+  researchSessionId: string;
+  researchSessionQuery: string;
+  shortCite: string;
+  fullCite: string;
+  sourceUrl: string | null;
+  quotes: Array<{ quote: string; locator: Record<string, unknown> | null }>;
 }
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
@@ -284,6 +298,35 @@ const s = StyleSheet.create({
     color: colors.black,
     marginTop: 16,
     marginBottom: 8,
+  },
+  bodyMuted: {
+    color: colors.mid,
+    fontSize: 9,
+    marginBottom: 12,
+  },
+  referenceItem: {
+    marginBottom: 10,
+  },
+  referenceLine: {
+    fontSize: 10,
+    color: colors.dark,
+    marginBottom: 2,
+  },
+  referenceNumber: {
+    fontFamily: "Helvetica-Bold",
+  },
+  referenceUrl: {
+    fontSize: 9,
+    color: colors.mid,
+    marginLeft: 14,
+    marginBottom: 2,
+  },
+  referenceQuote: {
+    fontSize: 9,
+    fontStyle: "italic",
+    color: colors.mid,
+    marginLeft: 14,
+    marginBottom: 2,
   },
   h2: {
     fontFamily: "Helvetica-Bold",
@@ -1436,7 +1479,8 @@ function AuditTrailContent({ report }: { report: ReportArtifactDetail }) {
 
 export function buildSectionElements(
   report: ReportArtifactDetail,
-  template: ReportTemplate
+  template: ReportTemplate,
+  references: ReportReference[] = []
 ): SectionElement[] {
   const sections: SectionElement[] = [];
   const graphModel = buildReportGraphModel(report.inputSnapshot);
@@ -1500,7 +1544,45 @@ export function buildSectionElements(
     }
   }
 
+  if (references.length > 0) {
+    sections.push({
+      id: "references",
+      label: "References",
+      element: <ReferencesContent references={references} />,
+    });
+  }
+
   return sections;
+}
+
+// ─── References content (PDF) ─────────────────────────────────────────────────
+
+function ReferencesContent({ references }: { references: ReportReference[] }) {
+  return (
+    <View>
+      <Text style={s.h1}>References</Text>
+      <Text style={s.bodyMuted}>
+        Research sources cited in this report. Quotes shown are the exact
+        passages extracted from each source.
+      </Text>
+      {references.map((ref) => (
+        <View key={ref.researchSessionId} style={s.referenceItem} wrap={false}>
+          <Text style={s.referenceLine}>
+            <Text style={s.referenceNumber}>[{ref.number}]</Text>{" "}
+            {ref.fullCite}
+          </Text>
+          {ref.sourceUrl ? (
+            <Text style={s.referenceUrl}>{ref.sourceUrl}</Text>
+          ) : null}
+          {ref.quotes.map((q, i) => (
+            <Text key={i} style={s.referenceQuote}>
+              &ldquo;{q.quote.replace(/\n+/g, " ")}&rdquo;
+            </Text>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 // ─── Main document ────────────────────────────────────────────────────────────
@@ -1509,10 +1591,11 @@ export function ReportPrintLayout({
   report,
   template,
   tocPageNumbers,
+  references,
 }: ReportPrintLayoutProps) {
   const generatedDate = formatPdfDate(report.generatedAt);
   const typeLabel = artifactTypeLabels[report.artifactType] ?? report.artifactType;
-  const sections = buildSectionElements(report, template);
+  const sections = buildSectionElements(report, template, references ?? []);
 
   return (
     <Document

@@ -175,7 +175,27 @@ function serializeSectionData(data: ExportSectionData): string {
       return serializeConnections(data.connections);
     case "frameSnapshots":
       return serializeFrameSnapshots(data.frames);
+    case "references":
+      return serializeReferences(data.references);
   }
+}
+
+function serializeReferences(
+  references: import("@/lib/report-export-content").ExportReference[]
+): string {
+  if (references.length === 0) return "";
+  const lines: string[] = [];
+  for (const ref of references) {
+    lines.push(`**[${ref.number}]** ${ref.fullCite}`);
+    if (ref.sourceUrl) {
+      lines.push(`  ${ref.sourceUrl}`);
+    }
+    for (const q of ref.quotes) {
+      lines.push(`  > "${q.quote.replace(/\n+/g, " ")}"`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n").trimEnd();
 }
 
 // ─── Main serialiser ──────────────────────────────────────────────────────────

@@ -82,6 +82,23 @@ export interface ExportFrameSnapshot {
   connections: ExportConnection[];
 }
 
+export interface ExportReferenceQuote {
+  quote: string;
+  locator: Record<string, unknown> | null;
+}
+
+export interface ExportReference {
+  number: number;
+  insightId: string;
+  insightLabel: string;
+  researchSessionId: string;
+  researchSessionQuery: string;
+  shortCite: string;
+  fullCite: string;
+  sourceUrl: string | null;
+  quotes: ExportReferenceQuote[];
+}
+
 export type ExportSectionData =
   | { kind: "themes"; themes: ExportTheme[] }
   | { kind: "evidence"; consultations: ExportConsultation[] }
@@ -91,7 +108,8 @@ export type ExportSectionData =
       milestones: ExportAuditMilestone[];
     }
   | { kind: "connections"; connections: ExportConnection[] }
-  | { kind: "frameSnapshots"; frames: ExportFrameSnapshot[] };
+  | { kind: "frameSnapshots"; frames: ExportFrameSnapshot[] }
+  | { kind: "references"; references: ExportReference[] };
 
 export interface ExportSection {
   /** Section heading. null for the preamble (content before the first # heading). */
@@ -393,4 +411,57 @@ export function buildExportSections(
   }
 
   return sections;
+}
+
+/**
+ * Append a References section to the end of the export sections and inject
+ * inline `[N]` citation markers into every paragraph that mentions a
+ * research-insight label. Mutating return: callers should use the result, not
+ * the original `sections` array.
+ *
+ * Pure function — no DB calls. The references bundle should be loaded once at
+ * the route level via `loadReportReferences` and passed in here.
+ */
+export function applyReferencesToSections(
+  sections: ExportSection[],
+  references: ExportReference[],
+  numberByInsightLabel: Map<string, number>
+): ExportSection[] {
+  if (references.length === 0) return sections;
+
+  const rewritten = sections.map((section) => ({
+    ...section,
+    blocks: section.blocks.map((block) => {
+      if (block.type === "prose" || block.type === "heading2" || block.type === "heading3") {
+        return {
+          ...block,
+          text: injectMarkersIntoText(block.text, numberByInsightLabel),
+        };
+      }
+      return block;
+    }),
+  }));
+
+  rewritten.push({
+    heading: "References",
+    blocks: [],
+    isPageBreak: true,
+    data: { kind: "references", references },
+  });
+
+  return rewritten;
+}
+
+function injectMarkersIntoText(text: string, numberByLabel: Map<string, number>): string {
+  if (numberByLabel.size === 0) return text;
+  const entries = Array.from(numberByLabel.entries())
+    .filter(([label]) => label.trim().length > 0)
+    .sort((a, b) => b[0].length - a[0].length);
+  let output = text;
+  for (const [label, number] of entries) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`(${escaped})(?!\\s*\\[\\d)`, "g");
+    output = output.replace(pattern, `$1 [${number}]`);
+  }
+  return output;
 }

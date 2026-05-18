@@ -1,5 +1,6 @@
-"use server";
-
+// NOTE: NOT a "use server" file. These functions are called from API route
+// handlers (server context) — adding "use server" would force every export to
+// be an async function, which the error classes below cannot satisfy.
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {

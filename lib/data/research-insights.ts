@@ -1,5 +1,4 @@
-"use server";
-
+// Server-only helpers. Imported by API route handlers, not from client code.
 import { and, desc, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {

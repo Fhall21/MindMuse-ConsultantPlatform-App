@@ -18,6 +18,7 @@ import { ReasoningSteps, StepContent } from "@/components/research/reasoning-ste
 import { ReferencesList } from "@/components/research/references-list";
 import { AnswerText } from "@/components/research/answer-text";
 import { ResearchExtractor } from "@/components/research/research-extractor";
+import { ResearchExtractorHint } from "@/components/research/research-extractor-hint";
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/hooks/api";
 import { useLiteratureResearch, useResearchSession } from "@/hooks/use-research";
@@ -211,7 +212,8 @@ function ResultView({
       </TabsList>
 
       <TabsContent value="results" className="mt-3">
-        <div className="border-t pt-4">
+        <div className="border-t pt-4 space-y-4">
+          <ResearchExtractorHint />
           <ResearchExtractor
             researchSessionId={researchSessionId}
             references={result.references}

@@ -17,6 +17,7 @@ import { EvidenceList } from "@/components/research/evidence-list";
 import { ReasoningSteps, StepContent } from "@/components/research/reasoning-steps";
 import { ReferencesList } from "@/components/research/references-list";
 import { AnswerText } from "@/components/research/answer-text";
+import { ResearchExtractor } from "@/components/research/research-extractor";
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/hooks/api";
 import { useLiteratureResearch, useResearchSession } from "@/hooks/use-research";
@@ -158,7 +159,13 @@ function InFlightSteps({
 
 // ── Results view ──────────────────────────────────────────────────────────────
 
-function ResultView({ result }: { result: LiteratureResult }) {
+function ResultView({
+  result,
+  researchSessionId,
+}: {
+  result: LiteratureResult;
+  researchSessionId: string;
+}) {
   const [activeTab, setActiveTab] = useState("results");
   const answerHasTable = /^\s*\|/m.test(result.answer);
   const resultText =
@@ -205,12 +212,17 @@ function ResultView({ result }: { result: LiteratureResult }) {
 
       <TabsContent value="results" className="mt-3">
         <div className="border-t pt-4">
-          <AnswerText
-            text={resultText}
+          <ResearchExtractor
+            researchSessionId={researchSessionId}
             references={result.references}
-            evidence={result.evidence}
-            onCitationClick={handleCitationClick}
-          />
+          >
+            <AnswerText
+              text={resultText}
+              references={result.references}
+              evidence={result.evidence}
+              onCitationClick={handleCitationClick}
+            />
+          </ResearchExtractor>
         </div>
       </TabsContent>
 
@@ -443,7 +455,7 @@ export default function ResearchSessionPage({
 
             {/* Complete — live result or DB result */}
             {(session.status === "complete" || research.status === "complete") && displayResult && (
-              <ResultView result={displayResult} />
+              <ResultView result={displayResult} researchSessionId={id} />
             )}
             {session.status === "complete" && !displayResult && (
               <p className="text-sm text-muted-foreground">No results were returned for this search.</p>

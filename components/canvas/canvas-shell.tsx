@@ -19,7 +19,6 @@ import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
 import { MultiSelectionPanel } from "@/components/canvas/multi-selection-panel";
 import { ResearchInsightLibraryModal } from "@/components/canvas/research-insight-library-modal";
-import { GenerateReportFromCanvasButton } from "@/components/canvas/generate-report-from-canvas-button";
 import { useResearchExtractionEnabled } from "@/hooks/use-feature-flags";
 import {
   useCanvas,
@@ -798,10 +797,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
             AI suggestions
           </Button>
-          {/* Generate report (with implicit canvas capture). Primary affordance
-              so the canvas-to-report fidelity is the default flow, not an
-              opt-in attach step. */}
-          <GenerateReportFromCanvasButton roundId={roundId} frames={frames} edges={edges} />
           <span className="text-xs text-muted-foreground">
             Drag to box-select or Shift+click to multi-select
           </span>

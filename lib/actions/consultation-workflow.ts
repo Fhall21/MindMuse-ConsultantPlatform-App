@@ -2109,24 +2109,11 @@ export async function generateRoundReport(roundId: string) {
   return generateRoundOutput(roundId, "report");
 }
 
-/**
- * Optional payload captured client-side from the canvas DOM at the moment
- * the consultant clicks "Generate report" from the canvas page. Persisted
- * onto the new report row so the report can render per-frame visuals that
- * mirror the consultant's spatial arrangement.
- */
-export interface CanvasImageGenerationPayload {
-  full: string;
-  frames: Record<string, string>;
-  capturedAt: string;
-}
-
 export async function generateRoundReportWithTemplate(
   roundId: string,
-  templateId: string | null,
-  canvasImage?: CanvasImageGenerationPayload | null
+  templateId: string | null
 ) {
-  return generateRoundOutput(roundId, "report", templateId, canvasImage ?? null);
+  return generateRoundOutput(roundId, "report", templateId);
 }
 
 export async function generateRoundEmail(roundId: string) {
@@ -2357,11 +2344,7 @@ async function loadRoundOutputForContext(params: {
 async function generateRoundOutput(
   roundId: string,
   artifactType: RoundOutputArtifactType,
-  templateIdOverride?: string | null,
-  // Captured-from-canvas payload (data URLs). Browser-only capture, so this
-  // is only populated when the consultant triggered generation from the
-  // canvas page. Null otherwise — reports degrade to text-only.
-  canvasImage?: CanvasImageGenerationPayload | null
+  templateIdOverride?: string | null
 ) {
   const detail = await getRoundDetail(roundId);
   if (!detail) {
@@ -2603,6 +2586,61 @@ async function generateRoundOutput(
       })),
     graphNetwork,
   } satisfies ReportInputSnapshot;
+
+  // Render the canvas server-side from the persisted layout. Works regardless
+  // of which page triggered generation — no live DOM dependency. Failures
+  // (e.g. resvg-js missing a binary for this platform) degrade silently to a
+  // text-only report; we do not block generation on imagery.
+  const canvasImage = await (async () => {
+    if (artifactType !== "report") return null;
+    if (!canvasLayout || Object.keys(canvasLayout.positions).length === 0) {
+      return null;
+    }
+    try {
+      const { renderCanvasImagePayload } = await import("@/lib/server/canvas-svg-renderer");
+      // Node labels: pull from accepted + supporting theme members. We use
+      // insightId as the canvas node id (matches the live canvas data model
+      // used when canvas-layout-state rows are written).
+      const labelByNodeId = new Map<string, string>();
+      for (const group of detail.themeGroups) {
+        for (const member of group.members) {
+          if (member.insightId && member.label) {
+            labelByNodeId.set(member.insightId, member.label);
+          }
+        }
+      }
+      const renderNodes = Object.entries(canvasLayout.positions)
+        .map(([nodeId, pos]) => ({
+          id: nodeId,
+          label: labelByNodeId.get(nodeId) ?? "(insight)",
+          x: pos.x,
+          y: pos.y,
+        }));
+      const renderFrames = canvasFrames.map((frame) => ({
+        id: frame.id,
+        name: frame.name,
+        x: frame.x,
+        y: frame.y,
+        width: frame.width,
+        height: frame.height,
+        color: frame.color ?? null,
+      }));
+      const renderEdges = canvasConnections.map((edge) => ({
+        sourceNodeId: edge.source_node_id,
+        targetNodeId: edge.target_node_id,
+        connectionType: edge.connection_type,
+        note: edge.note,
+      }));
+      return renderCanvasImagePayload({
+        nodes: renderNodes,
+        edges: renderEdges,
+        frames: renderFrames,
+      });
+    } catch (error) {
+      console.warn("[round-workflow] canvas image render failed", error);
+      return null;
+    }
+  })();
   const [created] = await db
     .insert(roundOutputArtifacts)
     .values({
@@ -2613,7 +2651,7 @@ async function generateRoundOutput(
       title: generated.title,
       content: generated.content,
       inputSnapshot,
-      canvasImage: canvasImage ?? null,
+      canvasImage,
       createdBy: userId,
     })
     .returning()

@@ -120,6 +120,17 @@ export interface FigureRound {
   query: string;
   description: string;
   text_name?: string;
+  images?: Array<{ url: string }>;
+}
+
+export interface LiteratureFigure {
+  id: string;
+  url: string;
+  citation_key: string;
+  query?: string;
+  text_name?: string;
+  description?: string;
+  round_index?: number;
 }
 
 export interface FiguresStepData {
@@ -170,6 +181,7 @@ export interface LiteratureResult {
   evidence: EvidenceExcerpt[];
   artifact: string;
   stats?: LiteratureStats;
+  figures?: LiteratureFigure[];
 }
 
 export type LiteratureStatus = "idle" | "submitted" | "polling" | "complete" | "error" | "cancelled" | "reconnecting";

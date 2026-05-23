@@ -22,6 +22,21 @@ const researchHooksMock = vi.hoisted(() => ({
     submit: vi.fn(),
     reset: vi.fn(),
   })),
+  useDataAnalysis: vi.fn(() => ({
+    status: "idle" as const,
+    result: null,
+    error: null,
+    elapsedSeconds: 0,
+    pollingMessage: "",
+    notebookCells: [],
+    sessionId: null,
+    fileEntryId: null,
+    submit: vi.fn(),
+    reset: vi.fn(),
+    cancel: vi.fn(),
+    reconnectSession: vi.fn(),
+    isCancellable: false,
+  })),
 }));
 
 vi.mock("@/hooks/use-research", async (importOriginal) => {
@@ -29,6 +44,7 @@ vi.mock("@/hooks/use-research", async (importOriginal) => {
   return {
     ...actual,
     useLiteratureResearch: researchHooksMock.useLiteratureResearch,
+    useDataAnalysis: researchHooksMock.useDataAnalysis,
     useResearchSessions: researchHooksMock.useResearchSessions,
     useCreateResearchSession: researchHooksMock.useCreateResearchSession,
   };
@@ -52,7 +68,8 @@ describe("ResearchPage", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Data Analysis" }));
 
-    expect(screen.getByText("Edison-backed data analysis will appear here.")).toBeInTheDocument();
+    expect(screen.getByText(/Click to choose CSV files/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Run analysis/i })).toBeInTheDocument();
   });
 
   it("renders Search literature submit button", () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AnalysisPanel } from "@/components/research/analysis-panel";
 import { ResearchComposer } from "@/components/research/research-composer";
 import { ResearchSessionList } from "@/components/research/session-list";
 
@@ -25,13 +26,9 @@ export default function ResearchPage() {
           <ResearchSessionList />
         </TabsContent>
 
-        <TabsContent value="analysis" className="rounded-xl border p-6">
-          <div className="space-y-2">
-            <h2 className="text-lg font-medium">Data Analysis</h2>
-            <p className="text-sm text-muted-foreground">
-              Edison-backed data analysis will appear here.
-            </p>
-          </div>
+        <TabsContent value="analysis" className="space-y-6 rounded-xl border p-6">
+          <AnalysisPanel />
+          <ResearchSessionList />
         </TabsContent>
       </Tabs>
     </div>

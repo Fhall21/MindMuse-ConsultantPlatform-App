@@ -14,15 +14,24 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { EvidenceList } from "@/components/research/evidence-list";
+import {
+  FigureImageGrid,
+  literatureFigureCaption,
+} from "@/components/research/figure-image-grid";
 import { ReasoningSteps, StepContent } from "@/components/research/reasoning-steps";
 import { ReferencesList } from "@/components/research/references-list";
 import { AnswerText } from "@/components/research/answer-text";
+import { AnalysisSessionView } from "@/components/research/analysis-session-view";
 import { ResearchExtractor } from "@/components/research/research-extractor";
 import { ResearchExtractorHint } from "@/components/research/research-extractor-hint";
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/hooks/api";
 import { useLiteratureResearch, useResearchSession } from "@/hooks/use-research";
-import type { LiteratureResult, ReasoningStep } from "@/hooks/use-research";
+import type {
+  AnalysisResult,
+  LiteratureResult,
+  ReasoningStep,
+} from "@/hooks/use-research";
 
 // ── Canonical step sequence (mirrors backend TOOL_LABELS order) ───────────────
 
@@ -193,6 +202,14 @@ function ResultView({
             </Badge>
           )}
         </TabsTrigger>
+        {(result.figures?.length ?? 0) > 0 && (
+          <TabsTrigger value="figures">
+            Figures
+            <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-xs">
+              {result.figures!.length}
+            </Badge>
+          </TabsTrigger>
+        )}
         <TabsTrigger value="evidence">
           Evidence
           {result.evidence.length > 0 && (
@@ -231,6 +248,16 @@ function ResultView({
       <TabsContent value="reasoning" className="mt-3">
         <ReasoningSteps steps={result.reasoning_steps} />
       </TabsContent>
+
+      {(result.figures?.length ?? 0) > 0 && (
+        <TabsContent value="figures" className="mt-3">
+          <FigureImageGrid
+            variant="panel"
+            images={result.figures!.map((fig) => ({ url: fig.url }))}
+            getCaption={(idx) => literatureFigureCaption(result.figures![idx])}
+          />
+        </TabsContent>
+      )}
 
       <TabsContent value="evidence" className="mt-3">
         <EvidenceList
@@ -317,7 +344,35 @@ export default function ResearchSessionPage({
           <p className="text-sm text-destructive">Could not load research session.</p>
         )}
 
-        {session && (
+        {session && session.sessionType === "analysis" && (
+          <>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] tabular-nums text-muted-foreground/55 leading-none">
+                  {new Date(session.createdAt).toLocaleDateString("en-GB", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </span>
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground/60 leading-none">
+                  Data analysis
+                </span>
+              </div>
+              <h1 className="text-xl font-semibold tracking-tight leading-snug">
+                {session.query}
+              </h1>
+            </div>
+            <AnalysisSessionView
+              sessionId={id}
+              status={session.status}
+              resultData={session.resultData as AnalysisResult | null}
+              query={session.query}
+            />
+          </>
+        )}
+
+        {session && session.sessionType !== "analysis" && (
           <>
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">

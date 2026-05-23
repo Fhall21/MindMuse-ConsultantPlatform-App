@@ -120,6 +120,17 @@ export interface FigureRound {
   query: string;
   description: string;
   text_name?: string;
+  images?: Array<{ url: string }>;
+}
+
+export interface LiteratureFigure {
+  id: string;
+  url: string;
+  citation_key: string;
+  query?: string;
+  text_name?: string;
+  description?: string;
+  round_index?: number;
 }
 
 export interface FiguresStepData {
@@ -170,6 +181,7 @@ export interface LiteratureResult {
   evidence: EvidenceExcerpt[];
   artifact: string;
   stats?: LiteratureStats;
+  figures?: LiteratureFigure[];
 }
 
 export type LiteratureStatus = "idle" | "submitted" | "polling" | "complete" | "error" | "cancelled" | "reconnecting";
@@ -216,9 +228,8 @@ async function _runSseStream(
     });
   };
 
-  let openStream: (attempt: number) => Promise<void>;
-
-  const reconnect = async (attempt: number, reason: string): Promise<void> => {
+  // Hoisted function declarations so reconnect/openStream can forward-reference.
+  async function reconnect(attempt: number, reason: string): Promise<void> {
     const MAX_ATTEMPTS = 3;
     const backoffMs = [2000, 4000, 8000] as const;
     if (controller.signal.aborted) return;
@@ -235,9 +246,9 @@ async function _runSseStream(
     await new Promise<void>((res) => setTimeout(res, backoffMs[attempt] ?? 8000));
     if (controller.signal.aborted) return;
     return openStream(attempt + 1);
-  };
+  }
 
-  openStream = async (attempt: number): Promise<void> => {
+  async function openStream(attempt: number): Promise<void> {
     let response: Response;
     try {
       response = await fetch("/api/research/literature", {
@@ -327,7 +338,7 @@ async function _runSseStream(
     } finally {
       reader.releaseLock();
     }
-  };
+  }
 
   await openStream(0);
 }
@@ -405,6 +416,346 @@ export function useLiteratureResearch() {
   return { ...state, submit, reconnectSession, reset, cancel, isCancellable };
 }
 
+// ── Data analysis hook ────────────────────────────────────────────────────────
+
+export interface AnalysisCellOutput {
+  output_type: "stream" | "execute_result" | "display_data" | "error";
+  name?: string;
+  text?: string;
+  data?: {
+    "text/plain"?: string;
+    "text/html"?: string;
+    "image/png"?: string;
+    "image/jpeg"?: string;
+  };
+  ename?: string;
+  evalue?: string;
+  traceback?: string;
+}
+
+export interface AnalysisNotebookCell {
+  index: number;
+  execution_count: number | null;
+  display_text: string;
+  code: string;
+  outputs: AnalysisCellOutput[];
+  status: "ok" | "error";
+}
+
+export interface AnalysisArtifact {
+  entry_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes?: number;
+  inline_data_url?: string;
+  inline_text?: string;
+  error?: string;
+}
+
+export interface AnalysisStats {
+  cell_count: number;
+  error_cell_count: number;
+  artifact_count: number;
+}
+
+export interface AnalysisResult {
+  answer: string;
+  notebook_cells: AnalysisNotebookCell[];
+  artifacts: AnalysisArtifact[];
+  output_data?: Array<{ entry_id: string; filename: string }>;
+  stats?: AnalysisStats;
+  warnings?: string[];
+  stub?: boolean;
+}
+
+export type AnalysisStatus =
+  | "idle"
+  | "uploading"
+  | "submitted"
+  | "polling"
+  | "complete"
+  | "error"
+  | "cancelled"
+  | "reconnecting";
+
+export interface AnalysisUploadResult {
+  file_entry_id: string;
+  filename_count: number;
+  total_bytes: number;
+}
+
+interface AnalysisState {
+  status: AnalysisStatus;
+  result: AnalysisResult | null;
+  error: string | null;
+  elapsedSeconds: number;
+  pollingMessage: string;
+  notebookCells: AnalysisNotebookCell[];
+  sessionId: string | null;
+  fileEntryId: string | null;
+}
+
+const INITIAL_ANALYSIS_STATE: AnalysisState = {
+  status: "idle",
+  result: null,
+  error: null,
+  elapsedSeconds: 0,
+  pollingMessage: "",
+  notebookCells: [],
+  sessionId: null,
+  fileEntryId: null,
+};
+
+type SetAnalysisState = React.Dispatch<React.SetStateAction<AnalysisState>>;
+
+async function _runAnalysisSseStream(
+  sessionId: string,
+  controller: AbortController,
+  setState: SetAnalysisState,
+  lastPatchedCellCountRef: React.MutableRefObject<number>
+): Promise<void> {
+  const patchSession = (updates: Record<string, unknown>, terminal = false) => {
+    fetchJson(`/api/research/sessions/${sessionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    }).catch((err) => {
+      if (terminal) console.error("[analysis] failed to persist session update:", err);
+    });
+  };
+
+  // Hoisted function declarations so reconnect/openStream can forward-reference.
+  async function reconnect(attempt: number, reason: string): Promise<void> {
+    const MAX_ATTEMPTS = 3;
+    const backoffMs = [2000, 4000, 8000] as const;
+    if (controller.signal.aborted) return;
+    if (attempt >= MAX_ATTEMPTS) {
+      setState((s) => ({
+        ...s,
+        status: "error",
+        error: "Connection lost — check Research History for your result",
+      }));
+      return;
+    }
+    setState((s) => ({ ...s, status: "reconnecting" }));
+    console.warn(`[analysis] ${reason}, reconnecting (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+    await new Promise<void>((res) => setTimeout(res, backoffMs[attempt] ?? 8000));
+    if (controller.signal.aborted) return;
+    return openStream(attempt + 1);
+  }
+
+  async function openStream(attempt: number): Promise<void> {
+    let response: Response;
+    try {
+      response = await fetch("/api/research/analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      return reconnect(attempt, "Connection failed");
+    }
+
+    if (!response.ok || !response.body) {
+      setState((s) => ({
+        ...s,
+        status: "error",
+        error: `Analysis service returned ${response.status}`,
+      }));
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (!raw) continue;
+
+          let event: { type: string; data: Record<string, unknown> };
+          try {
+            event = JSON.parse(raw) as typeof event;
+          } catch {
+            continue;
+          }
+
+          if (event.type === "submitted") {
+            setState((s) => ({ ...s, status: "submitted" }));
+          } else if (event.type === "polling") {
+            const incomingCells = event.data.notebook_cells as
+              | AnalysisNotebookCell[]
+              | undefined;
+            setState((s) => ({
+              ...s,
+              status: "polling",
+              elapsedSeconds: (event.data.elapsed_seconds as number) ?? s.elapsedSeconds,
+              pollingMessage: (event.data.message as string) || s.pollingMessage,
+              notebookCells:
+                incomingCells && incomingCells.length > s.notebookCells.length
+                  ? incomingCells
+                  : s.notebookCells,
+            }));
+            // Persist partial cells so the detail page can render progress on reload.
+            if (incomingCells && incomingCells.length > lastPatchedCellCountRef.current) {
+              lastPatchedCellCountRef.current = incomingCells.length;
+              patchSession({ result_data: { partial_notebook_cells: incomingCells } });
+            }
+          } else if (event.type === "complete") {
+            const data = event.data as unknown as AnalysisResult;
+            setState((s) => ({
+              ...s,
+              status: "complete",
+              result: data,
+              notebookCells: data.notebook_cells ?? s.notebookCells,
+            }));
+            patchSession({ status: "complete", result_data: event.data }, true);
+            return;
+          } else if (event.type === "error") {
+            const msg = (event.data.message as string) || "Analysis failed";
+            setState((s) => ({ ...s, status: "error", error: msg }));
+            patchSession({ status: "failed" }, true);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      return reconnect(attempt, "Stream interrupted");
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  await openStream(0);
+}
+
+export function useDataAnalysis() {
+  const [state, setState] = useState<AnalysisState>(INITIAL_ANALYSIS_STATE);
+  const abortRef = useRef<AbortController | null>(null);
+  const lastPatchedCellCountRef = useRef(0);
+
+  const submit = useCallback(
+    async (params: { query: string; files: File[]; industryCtx?: string | null }) => {
+      const { query, files, industryCtx } = params;
+      abortRef.current?.abort();
+      lastPatchedCellCountRef.current = 0;
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setState({ ...INITIAL_ANALYSIS_STATE, status: "uploading" });
+
+      // 1. Upload CSVs to Edison via the FastAPI proxy.
+      let fileEntryId: string;
+      try {
+        const formData = new FormData();
+        for (const file of files) {
+          formData.append("files", file, file.name);
+        }
+        formData.append("name", `ConsultantPlatform analysis: ${query.slice(0, 80)}`);
+
+        const uploadResp = await fetch("/api/research/analysis/upload", {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
+        if (!uploadResp.ok) {
+          throw new Error(await readErrorMessage(uploadResp));
+        }
+        const uploadJson = (await uploadResp.json()) as AnalysisUploadResult;
+        fileEntryId = uploadJson.file_entry_id;
+        setState((s) => ({ ...s, fileEntryId }));
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        setState((s) => ({
+          ...s,
+          status: "error",
+          error: (err as Error).message || "Failed to upload files",
+        }));
+        return;
+      }
+
+      // 2. Create session row — worker picks up and submits to Edison.
+      let sessionId: string;
+      try {
+        const sessionRes = await fetchJson<{ id: string }>("/api/research/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query,
+            session_type: "analysis",
+            industry_ctx: industryCtx ?? null,
+            file_entry_id: fileEntryId,
+          }),
+          signal: controller.signal,
+        });
+        sessionId = sessionRes.id;
+        setState((s) => ({ ...s, sessionId, status: "submitted" }));
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        setState((s) => ({ ...s, status: "error", error: "Failed to create analysis session" }));
+        return;
+      }
+
+      // 3. Open SSE stream.
+      await _runAnalysisSseStream(sessionId, controller, setState, lastPatchedCellCountRef);
+    },
+    []
+  );
+
+  // Re-connect to an existing session's Edison task without creating a new one.
+  // Used by the detail page to recover failed sessions or reconnect dropped streams.
+  const reconnectSession = useCallback(async (existingSessionId: string) => {
+    abortRef.current?.abort();
+    lastPatchedCellCountRef.current = 0;
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setState({ ...INITIAL_ANALYSIS_STATE, status: "submitted", sessionId: existingSessionId });
+
+    await _runAnalysisSseStream(existingSessionId, controller, setState, lastPatchedCellCountRef);
+  }, []);
+
+  const cancel = useCallback(() => {
+    abortRef.current?.abort();
+    setState((s) => {
+      if (s.sessionId) {
+        fetchJson(`/api/research/sessions/${s.sessionId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "cancelled" }),
+        }).catch(() => {});
+      }
+      return INITIAL_ANALYSIS_STATE;
+    });
+  }, []);
+
+  const reset = useCallback(() => {
+    abortRef.current?.abort();
+    setState(INITIAL_ANALYSIS_STATE);
+  }, []);
+
+  const isCancellable =
+    state.status === "uploading" ||
+    state.status === "submitted" ||
+    state.status === "polling" ||
+    state.status === "reconnecting";
+
+  return { ...state, submit, reconnectSession, cancel, reset, isCancellable };
+}
+
 // ── Session list / detail hooks ───────────────────────────────────────────────
 
 export interface ResearchSessionSummary {
@@ -416,8 +767,16 @@ export interface ResearchSessionSummary {
   completedAt: string | null;
 }
 
+// Heterogeneous: literature sessions store LiteratureResult, analysis sessions
+// store AnalysisResult. Consumers cast based on sessionType.
+export type ResearchSessionResultData =
+  | LiteratureResult
+  | AnalysisResult
+  | (Record<string, unknown> & { error?: string })
+  | null;
+
 export interface ResearchSessionDetail extends ResearchSessionSummary {
-  resultData: LiteratureResult | null;
+  resultData: ResearchSessionResultData;
 }
 
 const IN_FLIGHT_STATUSES = new Set(["pending", "running"]);

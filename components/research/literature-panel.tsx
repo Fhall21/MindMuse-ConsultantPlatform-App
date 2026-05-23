@@ -16,6 +16,10 @@ import { useAIPreferences } from "@/hooks/use-ai-preferences";
 import { useLiteratureResearch } from "@/hooks/use-research";
 import { AnswerText } from "./answer-text";
 import { EvidenceList } from "./evidence-list";
+import {
+  FigureImageGrid,
+  literatureFigureCaption,
+} from "./figure-image-grid";
 import { ReasoningSteps } from "./reasoning-steps";
 import { ReferencesList } from "./references-list";
 import { ResearchExtractor } from "./research-extractor";
@@ -73,6 +77,7 @@ export function LiteraturePanel() {
   const activeSteps = hasResult ? result.reasoning_steps : reasoningSteps;
   const activeEvidence = hasResult ? result.evidence : [];
   const activeReferences = hasResult ? result.references : [];
+  const activeFigures = hasResult ? result.figures ?? [] : [];
   const resultText =
     hasResult && result.artifact && !/^\s*\|/m.test(result.answer)
       ? `${result.answer}\n\n## Summary framework\n${result.artifact}`
@@ -165,6 +170,14 @@ export function LiteraturePanel() {
                 </Badge>
               )}
             </TabsTrigger>
+            {activeFigures.length > 0 && (
+              <TabsTrigger value="figures">
+                Figures
+                <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-xs">
+                  {activeFigures.length}
+                </Badge>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="evidence">
               Evidence
               {activeEvidence.length > 0 && (
@@ -213,6 +226,18 @@ export function LiteraturePanel() {
               <ReasoningSteps steps={activeSteps} />
             </div>
           </TabsContent>
+
+          {activeFigures.length > 0 && (
+            <TabsContent value="figures" className="mt-3">
+              <ScrollArea className="max-h-[480px] rounded-lg border bg-card p-4">
+                <FigureImageGrid
+                  variant="panel"
+                  images={activeFigures.map((fig) => ({ url: fig.url }))}
+                  getCaption={(idx) => literatureFigureCaption(activeFigures[idx])}
+                />
+              </ScrollArea>
+            </TabsContent>
+          )}
 
           <TabsContent value="evidence" className="mt-3">
             <ScrollArea className="max-h-[480px]">

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/collapsible";
 import { ReasoningPlanTable } from "@/components/research/_reasoning-plan-table";
 import { ReasoningEvidenceQuotes } from "@/components/research/_reasoning-evidence-quotes";
+import { FigureImageGrid } from "@/components/research/figure-image-grid";
 import type {
   ArtifactStepData,
   FiguresStepData,
@@ -118,9 +119,19 @@ function FigureRounds({ data }: { data: FiguresStepData }) {
             <p className="text-xs italic text-muted-foreground">“{r.query}”</p>
           )}
           {r.description && (
-            <p className="border-l border-border/60 pl-3 text-xs leading-relaxed text-foreground/85">
+            <p className="text-xs leading-relaxed text-foreground/85">
               {r.description}
             </p>
+          )}
+          {r.images && r.images.length > 0 && (
+            <FigureImageGrid
+              images={r.images}
+              getCaption={(idx) =>
+                r.images!.length > 1
+                  ? `${r.citation_key} · figure ${idx + 1}`
+                  : r.citation_key
+              }
+            />
           )}
         </li>
       ))}

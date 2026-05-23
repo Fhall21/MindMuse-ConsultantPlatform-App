@@ -191,7 +191,7 @@ function ResultView({
   }, []);
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab}>
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 w-full">
       <TabsList>
         <TabsTrigger value="results">Results</TabsTrigger>
         <TabsTrigger value="reasoning">
@@ -228,8 +228,8 @@ function ResultView({
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="results" className="mt-3">
-        <div className="border-t pt-4 space-y-4">
+      <TabsContent value="results" className="mt-3 min-w-0">
+        <div className="min-w-0 w-full border-t pt-4 space-y-4">
           <ResearchExtractorHint />
           <ResearchExtractor
             researchSessionId={researchSessionId}
@@ -245,12 +245,12 @@ function ResultView({
         </div>
       </TabsContent>
 
-      <TabsContent value="reasoning" className="mt-3">
+      <TabsContent value="reasoning" className="mt-3 min-w-0">
         <ReasoningSteps steps={result.reasoning_steps} />
       </TabsContent>
 
       {(result.figures?.length ?? 0) > 0 && (
-        <TabsContent value="figures" className="mt-3">
+        <TabsContent value="figures" className="mt-3 min-w-0">
           <FigureImageGrid
             variant="panel"
             images={result.figures!.map((fig) => ({ url: fig.url }))}
@@ -259,7 +259,7 @@ function ResultView({
         </TabsContent>
       )}
 
-      <TabsContent value="evidence" className="mt-3">
+      <TabsContent value="evidence" className="mt-3 min-w-0">
         <EvidenceList
           evidence={result.evidence}
           references={result.references}
@@ -268,7 +268,7 @@ function ResultView({
         />
       </TabsContent>
 
-      <TabsContent value="references" className="mt-3">
+      <TabsContent value="references" className="mt-3 min-w-0">
         <ReferencesList
           references={result.references}
           onJumpToEvidence={() => setActiveTab("evidence")}
@@ -322,8 +322,8 @@ export default function ResearchSessionPage({
       : (session?.resultData as LiteratureResult | null) ?? null;
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
+    <div className="min-w-0 w-full space-y-6">
+      <div className="min-w-0 w-full space-y-4">
         <Link
           href="/research"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -345,7 +345,7 @@ export default function ResearchSessionPage({
         )}
 
         {session && session.sessionType === "analysis" && (
-          <div className="max-w-5xl space-y-4">
+          <div className="min-w-0 w-full space-y-4">
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] tabular-nums text-muted-foreground/55 leading-none">
@@ -395,7 +395,7 @@ export default function ResearchSessionPage({
         )}
 
         {session && session.sessionType !== "analysis" && (
-          <>
+          <div className="min-w-0 w-full space-y-4">
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] tabular-nums text-muted-foreground/55 leading-none">
@@ -539,7 +539,7 @@ export default function ResearchSessionPage({
             {session.status === "complete" && !displayResult && (
               <p className="text-sm text-muted-foreground">No results were returned for this search.</p>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>

@@ -179,7 +179,7 @@ function MarkdownTable({ raw }: { raw: string }) {
   const headers = parseTableRow(headerRow);
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs">
+      <table className="w-max min-w-full text-xs">
         <thead>
           <tr className="border-b border-border/50">
             {headers.map((h, hi) => (

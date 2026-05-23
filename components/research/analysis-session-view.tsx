@@ -252,7 +252,11 @@ function ResultTabs({
   const artifacts = result.artifacts ?? [];
 
   return (
-    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+    <Tabs
+      value={activeTab}
+      onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+      className="min-w-0 w-full"
+    >
       <TabsList>
         <TabsTrigger value="summary">Summary</TabsTrigger>
         <TabsTrigger value="notebook">
@@ -271,7 +275,7 @@ function ResultTabs({
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="summary" className="mt-3">
+      <TabsContent value="summary" className="mt-3 min-w-0">
         <AnalysisSummaryContent
           result={result}
           researchSessionId={researchSessionId}
@@ -279,13 +283,13 @@ function ResultTabs({
         />
       </TabsContent>
 
-      <TabsContent value="notebook" className="mt-3">
+      <TabsContent value="notebook" className="mt-3 min-w-0">
         <div className="rounded-lg border bg-card p-3">
           <NotebookCells cells={cells} variant="detail" />
         </div>
       </TabsContent>
 
-      <TabsContent value="artifacts" className="mt-3">
+      <TabsContent value="artifacts" className="mt-3 min-w-0">
         <ArtifactRows artifacts={artifacts} researchSessionId={researchSessionId} />
       </TabsContent>
     </Tabs>
@@ -372,7 +376,7 @@ export function AnalysisSessionView({
   }, [analysis.elapsedSeconds, createdAt, isInFlight, now]);
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 w-full space-y-4">
       {/* Reconnecting banner */}
       {analysis.status === "reconnecting" && (
         <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-3 py-2.5">

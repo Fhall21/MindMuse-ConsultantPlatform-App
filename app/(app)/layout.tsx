@@ -29,7 +29,7 @@ export default async function AppLayout({
             displayName={getSessionDisplayName(session)}
           />
         </header>
-        <main className="flex-1 px-4 py-5 sm:px-6">{children}</main>
+        <main className="min-w-0 w-full flex-1 px-4 py-5 sm:px-6">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -238,7 +238,7 @@ export function AnswerText({
   flush();
 
   return (
-    <div className="space-y-4 text-sm leading-relaxed">
+    <div className="min-w-0 w-full space-y-4 text-sm leading-relaxed">
       {blocks.map((block, bi) => {
         const trimmed = block.lines.join("\n").trim();
         if (!trimmed) return null;
@@ -260,14 +260,14 @@ export function AnswerText({
           const headers = parseTableRow(headerRow);
 
           return (
-            <div key={bi} className="overflow-x-auto rounded-md border">
-              <table className="w-full min-w-[960px] table-fixed text-sm">
+            <div key={bi} className="min-w-0 overflow-x-auto rounded-md border">
+              <table className="w-max min-w-full text-sm">
                 <thead className="bg-muted/35">
                   <tr>
                     {headers.map((header, hi) => (
                       <th
                         key={hi}
-                        className="px-3 py-2 text-left align-bottom text-xs font-semibold text-foreground"
+                        className="px-3 py-2 text-left align-bottom text-xs font-semibold text-foreground break-words"
                       >
                         {renderInline(header)}
                       </th>
@@ -280,7 +280,7 @@ export function AnswerText({
                       {parseTableRow(row).map((cell, ci) => (
                         <td
                           key={ci}
-                          className="px-3 py-3 align-top text-sm leading-relaxed text-muted-foreground"
+                          className="px-3 py-3 align-top text-sm leading-relaxed text-muted-foreground break-words"
                         >
                           {renderInline(cell)}
                         </td>

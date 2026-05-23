@@ -540,7 +540,7 @@ export function AnalysisSummaryContent({
   );
 
   return (
-    <div className="border-t pt-4 space-y-4">
+    <div className="min-w-0 w-full border-t pt-4 space-y-4">
       {showExtraction ? <ResearchExtractorHint sessionType="analysis" /> : null}
 
       {sectionBlocks.map(({ section, sectionArtifacts, sectionFigures }, i) => (

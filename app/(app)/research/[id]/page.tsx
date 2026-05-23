@@ -14,6 +14,10 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { EvidenceList } from "@/components/research/evidence-list";
+import {
+  FigureImageGrid,
+  literatureFigureCaption,
+} from "@/components/research/figure-image-grid";
 import { ReasoningSteps, StepContent } from "@/components/research/reasoning-steps";
 import { ReferencesList } from "@/components/research/references-list";
 import { AnswerText } from "@/components/research/answer-text";
@@ -193,6 +197,14 @@ function ResultView({
             </Badge>
           )}
         </TabsTrigger>
+        {(result.figures?.length ?? 0) > 0 && (
+          <TabsTrigger value="figures">
+            Figures
+            <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-xs">
+              {result.figures!.length}
+            </Badge>
+          </TabsTrigger>
+        )}
         <TabsTrigger value="evidence">
           Evidence
           {result.evidence.length > 0 && (
@@ -231,6 +243,16 @@ function ResultView({
       <TabsContent value="reasoning" className="mt-3">
         <ReasoningSteps steps={result.reasoning_steps} />
       </TabsContent>
+
+      {(result.figures?.length ?? 0) > 0 && (
+        <TabsContent value="figures" className="mt-3">
+          <FigureImageGrid
+            variant="panel"
+            images={result.figures!.map((fig) => ({ url: fig.url }))}
+            getCaption={(idx) => literatureFigureCaption(result.figures![idx])}
+          />
+        </TabsContent>
+      )}
 
       <TabsContent value="evidence" className="mt-3">
         <EvidenceList

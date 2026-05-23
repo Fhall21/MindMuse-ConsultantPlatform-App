@@ -6,8 +6,8 @@ import re
 from collections.abc import AsyncIterator
 from typing import Any, Literal, TypedDict
 
-from fastapi import APIRouter, Body
-from starlette.responses import StreamingResponse
+from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile
+from starlette.responses import Response, StreamingResponse
 
 # How long the SSE stream polls before giving up (slightly longer than worker's
 # STUCK_TIMEOUT_MINUTES=45 so the worker gets a chance to write a failure first).
@@ -1291,8 +1291,626 @@ async def literature_search(
     return await research_event_stream(_run_literature_sse(session_id, query, industry_ctx))
 
 
+# ── Analysis: notebook + artifact extraction ──────────────────────────────────
+
+# Cap individual cell output payload so the SSE polling event doesn't bloat.
+_MAX_CELL_OUTPUT_CHARS = 4000
+# Per-image cap (bytes) when we choose to inline base64 in the result.
+_MAX_INLINE_IMAGE_BYTES = 1_500_000
+# Max size before we stop inlining text outputs.
+_MAX_INLINE_TEXT_BYTES = 200_000
+# Per-file artifact size limit. Above this we surface metadata only and let the
+# user download via the proxy endpoint.
+_MAX_INLINE_ARTIFACT_BYTES = 2_000_000
+
+
+def _extract_nb_cells(verbose_result: Any) -> list[dict[str, Any]] | None:
+    """Pull the live Jupyter notebook from environment_frame.state.state.nb_state."""
+    try:
+        return (
+            verbose_result.environment_frame["state"]["state"]["nb_state"]["cells"]
+        )
+    except (AttributeError, KeyError, TypeError):
+        return None
+
+
+def _normalise_outputs(raw_outputs: list[Any]) -> list[dict[str, Any]]:
+    """Convert Jupyter outputs to a JSON-friendly subset for the UI.
+
+    We keep `stream`, `execute_result`, `display_data`, and `error` but discard
+    rich types we can't render (e.g. application/json metadata blobs).
+    """
+    normalised: list[dict[str, Any]] = []
+    for out in raw_outputs or []:
+        if not isinstance(out, dict):
+            continue
+        kind = out.get("output_type") or ""
+        entry: dict[str, Any] = {"output_type": kind}
+        if kind == "stream":
+            text = out.get("text", "")
+            if isinstance(text, list):
+                text = "".join(text)
+            entry["name"] = out.get("name") or "stdout"
+            entry["text"] = (str(text) or "")[:_MAX_CELL_OUTPUT_CHARS]
+        elif kind in {"execute_result", "display_data"}:
+            data = out.get("data") or {}
+            if not isinstance(data, dict):
+                continue
+            payload: dict[str, Any] = {}
+            text_val = data.get("text/plain")
+            if isinstance(text_val, list):
+                text_val = "".join(text_val)
+            if text_val:
+                payload["text/plain"] = str(text_val)[:_MAX_CELL_OUTPUT_CHARS]
+            html_val = data.get("text/html")
+            if isinstance(html_val, list):
+                html_val = "".join(html_val)
+            if html_val:
+                payload["text/html"] = str(html_val)[:_MAX_CELL_OUTPUT_CHARS]
+            for img_mime in ("image/png", "image/jpeg"):
+                img_val = data.get(img_mime)
+                if isinstance(img_val, list):
+                    img_val = "".join(img_val)
+                if img_val and isinstance(img_val, str):
+                    if len(img_val) <= _MAX_INLINE_IMAGE_BYTES * 2:  # base64 ~ 1.33×
+                        payload[img_mime] = img_val
+                    break
+            if payload:
+                entry["data"] = payload
+            else:
+                continue
+        elif kind == "error":
+            entry["ename"] = out.get("ename", "Error")
+            entry["evalue"] = str(out.get("evalue", ""))[:_MAX_CELL_OUTPUT_CHARS]
+            tb = out.get("traceback")
+            if isinstance(tb, list):
+                joined = "\n".join(str(line) for line in tb)
+                entry["traceback"] = joined[:_MAX_CELL_OUTPUT_CHARS]
+        else:
+            continue
+        normalised.append(entry)
+    return normalised
+
+
+def _normalise_notebook_cells(raw_cells: list[Any]) -> list[dict[str, Any]]:
+    """Map raw notebook cells to UI-friendly dicts."""
+    result: list[dict[str, Any]] = []
+    for idx, cell in enumerate(raw_cells or []):
+        if not isinstance(cell, dict):
+            continue
+        if cell.get("cell_type") != "code":
+            continue
+        source = cell.get("source", "")
+        if isinstance(source, list):
+            source = "".join(source)
+        outputs = _normalise_outputs(cell.get("outputs") or [])
+        meta = cell.get("metadata") or {}
+        display_text = ""
+        if isinstance(meta, dict):
+            display_text = str(meta.get("display_text") or meta.get("display") or "")
+        has_error = any(o.get("output_type") == "error" for o in outputs)
+        result.append(
+            {
+                "index": idx,
+                "execution_count": cell.get("execution_count"),
+                "code": str(source or ""),
+                "display_text": display_text,
+                "outputs": outputs,
+                "status": "error" if has_error else "ok",
+            }
+        )
+    return result
+
+
+def _extract_analysis_answer(verbose_result: Any) -> str:
+    """Pull the final answer text Edison wrote via submit_answer."""
+    # Primary: environment_frame.state.state.answer
+    try:
+        answer = verbose_result.environment_frame["state"]["state"]["answer"]
+        if isinstance(answer, str) and answer.strip():
+            return answer
+    except (AttributeError, KeyError, TypeError):
+        pass
+    # Secondary: scan messages for the last assistant message with content
+    try:
+        agent_state = verbose_result.agent_state or []
+        if agent_state:
+            messages = agent_state[-1]["state"]["transition"]["agent_state"]["messages"]
+            for msg in reversed(messages):
+                if not isinstance(msg, dict):
+                    continue
+                if msg.get("role") == "assistant" and msg.get("content"):
+                    content = msg["content"]
+                    if isinstance(content, str) and content.strip():
+                        return content
+                    if isinstance(content, list):
+                        joined = " ".join(
+                            c.get("text", "")
+                            for c in content
+                            if isinstance(c, dict)
+                        ).strip()
+                        if joined:
+                            return joined
+    except (AttributeError, KeyError, TypeError, IndexError):
+        pass
+    return ""
+
+
+def _extract_output_data(verbose_result: Any) -> list[dict[str, Any]]:
+    """Read the analysis output_data (artifacts) list from environment_frame."""
+    try:
+        info = verbose_result.environment_frame["state"]["info"]
+        out = info.get("output_data") or []
+        if isinstance(out, list):
+            return [item for item in out if isinstance(item, dict)]
+    except (AttributeError, KeyError, TypeError):
+        pass
+    return []
+
+
+def _extract_analysis_payload(verbose_result: Any) -> dict[str, Any]:
+    """Build the complete analysis payload from a finished verbose response."""
+    raw_cells = _extract_nb_cells(verbose_result) or []
+    cells = _normalise_notebook_cells(raw_cells)
+    answer = _extract_analysis_answer(verbose_result)
+    output_data = _extract_output_data(verbose_result)
+
+    cell_count = len(cells)
+    error_cells = sum(1 for c in cells if c.get("status") == "error")
+    return {
+        "answer": answer,
+        "notebook_cells": cells,
+        "output_data": output_data,
+        "stats": {
+            "cell_count": cell_count,
+            "error_cell_count": error_cells,
+            "artifact_count": len(output_data),
+        },
+    }
+
+
+def _partial_notebook_cells(verbose_result: Any) -> list[dict[str, Any]]:
+    raw = _extract_nb_cells(verbose_result) or []
+    return _normalise_notebook_cells(raw)
+
+
+async def _fetch_analysis_artifacts(
+    client: Any,
+    environment_frame: Any,
+) -> list[dict[str, Any]]:
+    """For each output_data entry, fetch metadata + (when small) inline content.
+
+    Heavy artifacts are surfaced as metadata only; the UI downloads them via
+    `/research/analysis/artifacts/{entry_id}` proxy.
+    """
+    import base64
+    import mimetypes
+
+    if environment_frame is None:
+        return []
+
+    try:
+        info = environment_frame["state"]["info"]
+    except (KeyError, TypeError):
+        return []
+
+    output_data = info.get("output_data") or []
+    if not isinstance(output_data, list):
+        return []
+
+    artifacts: list[dict[str, Any]] = []
+    for item in output_data:
+        if not isinstance(item, dict):
+            continue
+        entry_id = item.get("entry_id")
+        filename = item.get("filename") or "artifact"
+        mime, _ = mimetypes.guess_type(filename)
+        if not mime:
+            mime = "application/octet-stream"
+
+        artifact: dict[str, Any] = {
+            "entry_id": entry_id,
+            "filename": filename,
+            "mime_type": mime,
+        }
+
+        if entry_id:
+            try:
+                fetched = await asyncio.wait_for(
+                    client.afetch_data_from_storage(data_storage_id=entry_id),
+                    timeout=120.0,
+                )
+                content_bytes: bytes | None = None
+                if isinstance(fetched, (bytes, bytearray)):
+                    content_bytes = bytes(fetched)
+                elif hasattr(fetched, "content"):
+                    raw = getattr(fetched, "content")
+                    content_bytes = bytes(raw) if raw is not None else None
+                elif isinstance(fetched, dict) and fetched.get("content"):
+                    raw = fetched["content"]
+                    content_bytes = (
+                        raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
+                    )
+
+                if content_bytes is not None:
+                    size = len(content_bytes)
+                    artifact["size_bytes"] = size
+                    if size <= _MAX_INLINE_ARTIFACT_BYTES:
+                        if mime.startswith("image/"):
+                            artifact["inline_data_url"] = (
+                                f"data:{mime};base64,"
+                                + base64.b64encode(content_bytes).decode("ascii")
+                            )
+                        elif mime.startswith("text/") or mime == "text/csv":
+                            try:
+                                artifact["inline_text"] = content_bytes.decode(
+                                    "utf-8"
+                                )[:_MAX_INLINE_TEXT_BYTES]
+                            except UnicodeDecodeError:
+                                pass
+            except Exception as exc:  # noqa: BLE001 — never crash on artifact fetch
+                logger_msg = f"failed to fetch artifact {entry_id}: {exc}"
+                # No logger imported here; surface as error_message on the artifact.
+                artifact["error"] = logger_msg
+
+        artifacts.append(artifact)
+    return artifacts
+
+
+def _stub_analysis_payload() -> dict[str, Any]:
+    return {
+        "stub": True,
+        "answer": (
+            "## Demo summary\n\n"
+            "This is a stub analysis result. With an Edison API key configured, "
+            "the analysis worker will produce a real notebook-driven answer for "
+            "your uploaded CSVs."
+        ),
+        "notebook_cells": [
+            {
+                "index": 0,
+                "execution_count": 1,
+                "display_text": "Loading CSV data",
+                "code": "import pandas as pd\ndf = pd.read_csv('org_1_engagement.csv')\ndf.head()",
+                "outputs": [
+                    {
+                        "output_type": "stream",
+                        "name": "stdout",
+                        "text": "Loaded 1,250 rows × 12 columns",
+                    }
+                ],
+                "status": "ok",
+            },
+            {
+                "index": 1,
+                "execution_count": 2,
+                "display_text": "Computing summary statistics",
+                "code": "df.describe()",
+                "outputs": [
+                    {
+                        "output_type": "execute_result",
+                        "data": {"text/plain": "<descriptive stats table>"},
+                    }
+                ],
+                "status": "ok",
+            },
+        ],
+        "output_data": [],
+        "artifacts": [],
+        "stats": {"cell_count": 2, "error_cell_count": 0, "artifact_count": 0},
+    }
+
+
+def _polling_message_analysis(elapsed: int, cells: list[dict[str, Any]]) -> str:
+    if not cells:
+        if elapsed < 30:
+            return "Submitting to Edison Analysis…"
+        return "Edison is provisioning the notebook kernel…"
+    last = cells[-1]
+    label = last.get("display_text") or "Running notebook cell"
+    return f"Cell #{last.get('execution_count', '?')}: {label}"
+
+
+# ── Analysis SSE generator ────────────────────────────────────────────────────
+
+async def _run_analysis_sse(
+    session_id: str | None,
+) -> AsyncIterator[ResearchEvent]:
+    """Stream analysis progress for a previously-created session row.
+
+    Coordinator pattern: the worker has already (or will shortly) submit the
+    Edison ANALYSIS task and write `task_id` to the session row. This
+    generator waits for that, then polls Edison verbose to surface notebook
+    cells as they complete.
+
+    Stub path (no Edison key): emits a fake completion using stub data.
+    """
+    from core.config import settings
+
+    if not settings.edison_api_key:
+        yield {"type": "submitted", "data": {"session_type": "analysis", "stub": True}}
+        await asyncio.sleep(0)
+        yield {
+            "type": "polling",
+            "data": {
+                "session_type": "analysis",
+                "stub": True,
+                "elapsed_seconds": 5,
+                "message": "Stub analysis (no Edison key configured)",
+                "notebook_cells": [],
+            },
+        }
+        await asyncio.sleep(0)
+        yield {"type": "complete", "data": _stub_analysis_payload()}
+        return
+
+    if not session_id:
+        yield {"type": "error", "data": {"message": "session_id required for analysis"}}
+        return
+
+    from edison_client import EdisonClient  # type: ignore[import]
+
+    engine = _get_db_engine()
+    task_id = await _fetch_task_id(engine, session_id)
+    if not task_id:
+        yield {
+            "type": "error",
+            "data": {"message": "Analysis task did not start — worker may be down"},
+        }
+        return
+
+    yield {"type": "submitted", "data": {"task_id": task_id}}
+
+    client = EdisonClient(api_key=settings.edison_api_key)
+    start = asyncio.get_event_loop().time()
+    last_cell_count = 0
+
+    while True:
+        elapsed = int(asyncio.get_event_loop().time() - start)
+        if elapsed >= SSE_MAX_POLL_SECONDS:
+            yield {"type": "error", "data": {"message": "Analysis timed out"}}
+            return
+
+        await asyncio.sleep(5)
+
+        try:
+            verbose_poll = await asyncio.wait_for(
+                client.aget_task(task_id, verbose=True),
+                timeout=60.0,
+            )
+        except asyncio.TimeoutError:
+            continue
+        except Exception as exc:
+            yield {"type": "error", "data": {"message": f"Polling error: {exc}"}}
+            return
+
+        elapsed = int(asyncio.get_event_loop().time() - start)
+        status = (getattr(verbose_poll, "status", "") or "").lower()
+
+        if status == "success":
+            payload = _extract_analysis_payload(verbose_poll)
+            try:
+                env_frame = getattr(verbose_poll, "environment_frame", None)
+                payload["artifacts"] = await _fetch_analysis_artifacts(client, env_frame)
+            except Exception as exc:  # noqa: BLE001
+                payload["artifacts"] = []
+                payload.setdefault("warnings", []).append(
+                    f"Artifact fetch failed: {exc}"
+                )
+            yield {"type": "complete", "data": payload}
+            return
+        elif status in {"fail", "failed", "cancelled", "truncated"}:
+            yield {
+                "type": "error",
+                "data": {"message": f"Edison analysis ended with status: {status}"},
+            }
+            return
+
+        cells = _partial_notebook_cells(verbose_poll)
+        if len(cells) >= last_cell_count:
+            last_cell_count = len(cells)
+        yield {
+            "type": "polling",
+            "data": {
+                "elapsed_seconds": elapsed,
+                "message": _polling_message_analysis(elapsed, cells),
+                "notebook_cells": cells,
+            },
+        }
+
+
+# ── Analysis upload + download endpoints ──────────────────────────────────────
+
+# Hard caps mirror the plan. Enforced server-side regardless of client checks.
+_MAX_FILES = 50
+_MAX_FILE_BYTES = 50 * 1024 * 1024
+_MAX_TOTAL_BYTES = 200 * 1024 * 1024
+_ALLOWED_EXTENSIONS = {".csv"}
+
+
+@router.post("/analysis/upload")
+async def analysis_upload(
+    files: list[UploadFile] = File(...),
+    name: str = Form("ConsultantPlatform analysis upload"),
+) -> dict[str, Any]:
+    """Upload CSV files as an Edison data-storage collection.
+
+    Returns the storage entry_id which the caller persists on a
+    research_session before opening the SSE stream.
+    """
+    import os
+    import tempfile
+    from core.config import settings
+
+    if not files:
+        raise HTTPException(status_code=422, detail="At least one CSV file is required")
+    if len(files) > _MAX_FILES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Too many files (max {_MAX_FILES})",
+        )
+
+    # No Edison key → stub mode (matches research SSE).
+    if not settings.edison_api_key:
+        return {
+            "stub": True,
+            "file_entry_id": "stub-entry-id",
+            "filename_count": len(files),
+            "total_bytes": 0,
+        }
+
+    tmp_dir = tempfile.mkdtemp(prefix="cp-analysis-upload-")
+    total_bytes = 0
+    saved_files: list[str] = []
+    try:
+        for uf in files:
+            filename = (uf.filename or "").strip()
+            if not filename:
+                raise HTTPException(status_code=422, detail="Empty filename in upload")
+            ext = os.path.splitext(filename)[1].lower()
+            if ext not in _ALLOWED_EXTENSIONS:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Only CSV files are supported (got '{filename}')",
+                )
+            safe_name = os.path.basename(filename)
+            target = os.path.join(tmp_dir, safe_name)
+            file_size = 0
+            with open(target, "wb") as fh:
+                while True:
+                    chunk = await uf.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    file_size += len(chunk)
+                    if file_size > _MAX_FILE_BYTES:
+                        raise HTTPException(
+                            status_code=422,
+                            detail=(
+                                f"File '{filename}' exceeds the 50 MB per-file limit"
+                            ),
+                        )
+                    total_bytes += len(chunk)
+                    if total_bytes > _MAX_TOTAL_BYTES:
+                        raise HTTPException(
+                            status_code=422,
+                            detail="Upload exceeds the 200 MB total size limit",
+                        )
+                    fh.write(chunk)
+            saved_files.append(target)
+            await uf.close()
+
+        from edison_client import EdisonClient  # type: ignore[import]
+
+        client = EdisonClient(api_key=settings.edison_api_key)
+        try:
+            response = await client.astore_file_content(
+                name=name,
+                file_path=tmp_dir,
+                description=f"ConsultantPlatform analysis CSV collection ({len(saved_files)} files)",
+                as_collection=True,
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to upload to Edison data storage: {exc}",
+            ) from exc
+
+        # Normalise edison-client return shapes.
+        entry_id: str | None = None
+        if isinstance(response, dict):
+            ds = response.get("data_storage")
+            if isinstance(ds, dict):
+                entry_id = ds.get("id")
+        if not entry_id and hasattr(response, "data_storage"):
+            ds_obj = getattr(response, "data_storage")
+            entry_id = getattr(ds_obj, "id", None)
+        if not entry_id:
+            raise HTTPException(
+                status_code=502,
+                detail="Edison did not return a data_storage id",
+            )
+
+        return {
+            "file_entry_id": str(entry_id),
+            "filename_count": len(saved_files),
+            "total_bytes": total_bytes,
+        }
+    finally:
+        # Always clean up temp files even on early errors.
+        try:
+            for path in saved_files:
+                try:
+                    os.unlink(path)
+                except FileNotFoundError:
+                    pass
+            os.rmdir(tmp_dir)
+        except Exception:
+            pass
+
+
+@router.get("/analysis/artifacts/{entry_id}")
+async def download_analysis_artifact(entry_id: str) -> Response:
+    """Proxy an Edison data-storage entry as a download.
+
+    Streams the bytes through; never persists locally beyond the in-memory
+    fetch the edison-client returns.
+    """
+    import mimetypes
+    from core.config import settings
+
+    if not settings.edison_api_key:
+        raise HTTPException(status_code=503, detail="Edison not configured")
+    if not entry_id or not entry_id.strip():
+        raise HTTPException(status_code=422, detail="entry_id required")
+
+    from edison_client import EdisonClient  # type: ignore[import]
+
+    client = EdisonClient(api_key=settings.edison_api_key)
+    try:
+        fetched = await client.afetch_data_from_storage(data_storage_id=entry_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Failed to fetch artifact: {exc}"
+        ) from exc
+
+    content_bytes: bytes | None = None
+    filename: str | None = None
+    if isinstance(fetched, (bytes, bytearray)):
+        content_bytes = bytes(fetched)
+    elif hasattr(fetched, "content"):
+        raw = getattr(fetched, "content")
+        content_bytes = bytes(raw) if raw is not None else None
+        filename = getattr(fetched, "filename", None)
+    elif isinstance(fetched, dict):
+        if fetched.get("content"):
+            raw = fetched["content"]
+            content_bytes = (
+                raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
+            )
+        filename = fetched.get("filename")
+
+    if content_bytes is None:
+        raise HTTPException(status_code=502, detail="Empty artifact content")
+
+    mime = "application/octet-stream"
+    if filename:
+        guessed, _ = mimetypes.guess_type(filename)
+        if guessed:
+            mime = guessed
+    safe_filename = filename or f"{entry_id}.bin"
+    return Response(
+        content=content_bytes,
+        media_type=mime,
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+            "Cache-Control": "private, max-age=300",
+        },
+    )
+
+
 @router.post("/analysis")
 async def data_analysis(
-    _payload: dict[str, Any] = Body(default_factory=dict),
+    payload: dict[str, Any] = Body(default_factory=dict),
 ) -> StreamingResponse:
-    return await research_event_stream(_stub_research_events("analysis"))
+    session_id: str | None = payload.get("session_id") or None
+    return await research_event_stream(_run_analysis_sse(session_id))

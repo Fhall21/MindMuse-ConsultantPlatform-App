@@ -29,16 +29,27 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedApiUser();
   if (auth instanceof NextResponse) return auth;
 
-  let body: { query?: string; session_type?: string; industry_ctx?: string | null };
+  let body: {
+    query?: string;
+    session_type?: string;
+    industry_ctx?: string | null;
+    file_entry_id?: string | null;
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
     return NextResponse.json({ detail: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { query, session_type = "literature", industry_ctx } = body;
+  const { query, session_type = "literature", industry_ctx, file_entry_id } = body;
   if (!query?.trim()) {
     return NextResponse.json({ detail: "query is required" }, { status: 422 });
+  }
+  if (session_type === "analysis" && !file_entry_id) {
+    return NextResponse.json(
+      { detail: "file_entry_id is required for analysis sessions" },
+      { status: 422 }
+    );
   }
 
   const [session] = await db
@@ -48,6 +59,7 @@ export async function POST(request: NextRequest) {
       sessionType: (session_type as "literature" | "analysis") ?? "literature",
       query: query.trim(),
       industryCtx: industry_ctx ?? null,
+      fileEntryId: file_entry_id ?? null,
       status: "pending",
     })
     .returning({ id: researchSessions.id });

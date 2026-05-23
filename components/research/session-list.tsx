@@ -40,14 +40,30 @@ function StatusLabel({ status }: { status: ResearchSessionSummary["status"] }) {
   return null;
 }
 
-export function ResearchSessionList() {
-  const { data: sessions, isLoading, error } = useResearchSessions();
+interface ResearchSessionListProps {
+  /** When set, only sessions of this type are shown. */
+  sessionType?: ResearchSessionSummary["sessionType"];
+  /** Heading shown above the list. */
+  heading?: string;
+  /** Empty-state copy. */
+  emptyMessage?: string;
+}
+
+export function ResearchSessionList({
+  sessionType,
+  heading = "Previous searches",
+  emptyMessage = "No searches yet — try a question above.",
+}: ResearchSessionListProps = {}) {
+  const { data: allSessions, isLoading, error } = useResearchSessions();
+  const sessions = sessionType
+    ? allSessions?.filter((s) => s.sessionType === sessionType)
+    : allSessions;
 
   if (isLoading) {
     return (
       <div className="space-y-3 pt-6 border-t border-border/60">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Previous searches
+          {heading}
         </p>
         <div className="divide-y divide-border/40">
           {[1, 2, 3].map((i) => (
@@ -76,9 +92,7 @@ export function ResearchSessionList() {
   if (!sessions || sessions.length === 0) {
     return (
       <div className="pt-6 border-t border-border/60">
-        <p className="text-sm text-muted-foreground">
-          No searches yet — try a question above.
-        </p>
+        <p className="text-sm text-muted-foreground">{emptyMessage}</p>
       </div>
     );
   }
@@ -86,7 +100,7 @@ export function ResearchSessionList() {
   return (
     <div className="space-y-3 pt-6 border-t border-border/60">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Previous searches
+        {heading}
       </p>
       <div className="divide-y divide-border/40">
         {sessions.map((session) => {

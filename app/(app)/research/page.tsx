@@ -1,7 +1,7 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AnalysisPanel } from "@/components/research/analysis-panel";
+import { AnalysisComposer } from "@/components/research/analysis-composer";
 import { ResearchComposer } from "@/components/research/research-composer";
 import { ResearchSessionList } from "@/components/research/session-list";
 
@@ -23,12 +23,20 @@ export default function ResearchPage() {
 
         <TabsContent value="literature" className="space-y-6 rounded-xl border p-6">
           <ResearchComposer />
-          <ResearchSessionList />
+          <ResearchSessionList
+            sessionType="literature"
+            heading="Previous searches"
+            emptyMessage="No searches yet — try a question above."
+          />
         </TabsContent>
 
         <TabsContent value="analysis" className="space-y-6 rounded-xl border p-6">
-          <AnalysisPanel />
-          <ResearchSessionList />
+          <AnalysisComposer />
+          <ResearchSessionList
+            sessionType="analysis"
+            heading="Previous analyses"
+            emptyMessage="No analyses yet — upload data and ask a question above."
+          />
         </TabsContent>
       </Tabs>
     </div>

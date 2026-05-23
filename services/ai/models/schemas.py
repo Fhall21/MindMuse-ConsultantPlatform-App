@@ -422,3 +422,45 @@ class ReportTemplateAnalyseResponse(BaseModel):
     description: str                # 1-2 sentence summary of what this template is for
     sections: List[AnalysedTemplateSection]
     style_notes: AnalysedStyleNotes
+
+
+# --- Research analysis question enhancement ---
+
+
+class EnhanceFileMeta(BaseModel):
+    filename: str
+    columns: List[str] = []
+
+
+class EnhancePriorAnswer(BaseModel):
+    question_id: str
+    selected_option_ids: List[str]
+
+
+class EnhanceQuestionOption(BaseModel):
+    id: str
+    label: str
+
+
+class EnhanceClarificationQuestion(BaseModel):
+    id: str
+    question: str
+    rationale: str
+    options: List[EnhanceQuestionOption]
+    allow_multiple: bool = False
+
+
+class EnhanceQuestionRequest(BaseModel):
+    query: str
+    industry_ctx: Optional[str] = None
+    files: List[EnhanceFileMeta] = []
+    prior_answers: Optional[List[EnhancePriorAnswer]] = None
+
+
+class EnhanceQuestionResponse(BaseModel):
+    needs_clarification: bool
+    enhanced_query: Optional[str] = None
+    rationale: Optional[str] = None
+    background: str = ""
+    suggested_models: List[str] = []
+    questions: List[EnhanceClarificationQuestion] = []

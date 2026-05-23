@@ -817,3 +817,114 @@ export function useCreateResearchSession() {
     },
   });
 }
+
+// ── Analysis question enhancement ───────────────────────────────────────────
+
+export interface EnhanceFileMeta {
+  filename: string;
+  columns: string[];
+}
+
+export interface EnhancePriorAnswer {
+  question_id: string;
+  selected_option_ids: string[];
+}
+
+export interface EnhanceQuestionOption {
+  id: string;
+  label: string;
+}
+
+export interface EnhanceClarificationQuestion {
+  id: string;
+  question: string;
+  rationale: string;
+  options: EnhanceQuestionOption[];
+  allow_multiple: boolean;
+}
+
+export interface EnhanceQuestionResponse {
+  needs_clarification: boolean;
+  enhanced_query?: string | null;
+  rationale?: string | null;
+  background: string;
+  suggested_models: string[];
+  questions: EnhanceClarificationQuestion[];
+}
+
+export function useEnhanceQuestion() {
+  return useMutation({
+    mutationFn: async (payload: {
+      query: string;
+      industry_ctx?: string | null;
+      files: EnhanceFileMeta[];
+      prior_answers?: EnhancePriorAnswer[] | null;
+    }): Promise<EnhanceQuestionResponse> => {
+      const response = await fetch("/api/research/enhance-question", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: payload.query,
+          industry_ctx: payload.industry_ctx ?? null,
+          files: payload.files,
+          prior_answers: payload.prior_answers ?? null,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+      return (await response.json()) as EnhanceQuestionResponse;
+    },
+  });
+}
+
+// ── Analysis composer mutation: upload + create session ──────────────────────
+// Mirrors the literature composer pattern: upload files first, then create the
+// session row, returning the new id. The detail page handles all live progress
+// (matches the literature flow where the composer just hands off to /research/[id]).
+
+export function useCreateAnalysisSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      query: string;
+      files: File[];
+      industryCtx?: string | null;
+    }): Promise<{ id: string; fileEntryId: string }> => {
+      const { query, files, industryCtx } = payload;
+
+      // 1. Upload CSVs to Edison via the FastAPI proxy.
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append("files", file, file.name);
+      }
+      formData.append("name", `ConsultantPlatform analysis: ${query.slice(0, 80)}`);
+
+      const uploadResp = await fetch("/api/research/analysis/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!uploadResp.ok) {
+        throw new Error(await readErrorMessage(uploadResp));
+      }
+      const uploadJson = (await uploadResp.json()) as AnalysisUploadResult;
+
+      // 2. Create session row — worker picks up and submits to Edison.
+      const sessionRes = await fetchJson<{ id: string }>("/api/research/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query,
+          session_type: "analysis",
+          industry_ctx: industryCtx ?? null,
+          file_entry_id: uploadJson.file_entry_id,
+        }),
+      });
+
+      return { id: sessionRes.id, fileEntryId: uploadJson.file_entry_id };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["research-sessions"] });
+    },
+  });
+}

@@ -1304,6 +1304,56 @@ _MAX_INLINE_TEXT_BYTES = 200_000
 _MAX_INLINE_ARTIFACT_BYTES = 2_000_000
 
 
+def _parse_storage_fetch_result(fetched: Any) -> tuple[bytes | None, str | None]:
+    """Normalise Edison afetch_data_from_storage payloads to (bytes, filename)."""
+    import os
+
+    if fetched is None:
+        return None, None
+
+    if isinstance(fetched, (bytes, bytearray, memoryview)):
+        return bytes(fetched), None
+
+    if isinstance(fetched, str):
+        if os.path.isfile(fetched):
+            with open(fetched, "rb") as fh:
+                return fh.read(), os.path.basename(fetched)
+        return fetched.encode("utf-8"), None
+
+    filename: str | None = None
+    content: Any = None
+
+    if isinstance(fetched, dict):
+        raw_name = fetched.get("filename")
+        filename = raw_name if isinstance(raw_name, str) else None
+        path = fetched.get("path")
+        if isinstance(path, str) and os.path.isfile(path):
+            with open(path, "rb") as fh:
+                return fh.read(), filename or os.path.basename(path)
+        content = fetched.get("content")
+    elif hasattr(fetched, "content") or hasattr(fetched, "filename"):
+        raw_name = getattr(fetched, "filename", None)
+        filename = raw_name if isinstance(raw_name, str) else None
+        content = getattr(fetched, "content", None)
+    else:
+        return None, None
+
+    if content is None:
+        return None, filename
+
+    content_bytes, nested_name = _parse_storage_fetch_result(content)
+    return content_bytes, filename or nested_name
+
+
+def _guess_artifact_mime_type(filename: str) -> str:
+    import mimetypes
+
+    if filename.lower().endswith(".csv"):
+        return "text/csv"
+    mime, _ = mimetypes.guess_type(filename)
+    return mime or "application/octet-stream"
+
+
 def _extract_nb_cells(verbose_result: Any) -> list[dict[str, Any]] | None:
     """Pull the live Jupyter notebook from environment_frame.state.state.nb_state."""
     try:
@@ -1484,7 +1534,6 @@ async def _fetch_analysis_artifacts(
     `/research/analysis/artifacts/{entry_id}` proxy.
     """
     import base64
-    import mimetypes
 
     if environment_frame is None:
         return []
@@ -1504,9 +1553,7 @@ async def _fetch_analysis_artifacts(
             continue
         entry_id = item.get("entry_id")
         filename = item.get("filename") or "artifact"
-        mime, _ = mimetypes.guess_type(filename)
-        if not mime:
-            mime = "application/octet-stream"
+        mime = _guess_artifact_mime_type(filename)
 
         artifact: dict[str, Any] = {
             "entry_id": entry_id,
@@ -1520,17 +1567,12 @@ async def _fetch_analysis_artifacts(
                     client.afetch_data_from_storage(data_storage_id=entry_id),
                     timeout=120.0,
                 )
-                content_bytes: bytes | None = None
-                if isinstance(fetched, (bytes, bytearray)):
-                    content_bytes = bytes(fetched)
-                elif hasattr(fetched, "content"):
-                    raw = getattr(fetched, "content")
-                    content_bytes = bytes(raw) if raw is not None else None
-                elif isinstance(fetched, dict) and fetched.get("content"):
-                    raw = fetched["content"]
-                    content_bytes = (
-                        raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
-                    )
+                content_bytes, fetched_filename = _parse_storage_fetch_result(fetched)
+                if fetched_filename:
+                    filename = fetched_filename
+                    mime = _guess_artifact_mime_type(filename)
+                    artifact["filename"] = filename
+                    artifact["mime_type"] = mime
 
                 if content_bytes is not None:
                     size = len(content_bytes)
@@ -1855,7 +1897,6 @@ async def download_analysis_artifact(entry_id: str) -> Response:
     Streams the bytes through; never persists locally beyond the in-memory
     fetch the edison-client returns.
     """
-    import mimetypes
     from core.config import settings
 
     if not settings.edison_api_key:
@@ -1873,36 +1914,23 @@ async def download_analysis_artifact(entry_id: str) -> Response:
             status_code=502, detail=f"Failed to fetch artifact: {exc}"
         ) from exc
 
-    content_bytes: bytes | None = None
-    filename: str | None = None
-    if isinstance(fetched, (bytes, bytearray)):
-        content_bytes = bytes(fetched)
-    elif hasattr(fetched, "content"):
-        raw = getattr(fetched, "content")
-        content_bytes = bytes(raw) if raw is not None else None
-        filename = getattr(fetched, "filename", None)
-    elif isinstance(fetched, dict):
-        if fetched.get("content"):
-            raw = fetched["content"]
-            content_bytes = (
-                raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
-            )
-        filename = fetched.get("filename")
+    content_bytes, filename = _parse_storage_fetch_result(fetched)
 
     if content_bytes is None:
         raise HTTPException(status_code=502, detail="Empty artifact content")
 
-    mime = "application/octet-stream"
-    if filename:
-        guessed, _ = mimetypes.guess_type(filename)
-        if guessed:
-            mime = guessed
     safe_filename = filename or f"{entry_id}.bin"
+    mime = _guess_artifact_mime_type(safe_filename)
+    disposition = (
+        "inline"
+        if mime.startswith("text/") or mime.startswith("image/")
+        else "attachment"
+    )
     return Response(
         content=content_bytes,
         media_type=mime,
         headers={
-            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+            "Content-Disposition": f'{disposition}; filename="{safe_filename}"',
             "Cache-Control": "private, max-age=300",
         },
     )

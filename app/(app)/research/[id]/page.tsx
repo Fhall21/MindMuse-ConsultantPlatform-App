@@ -345,7 +345,7 @@ export default function ResearchSessionPage({
         )}
 
         {session && session.sessionType === "analysis" && (
-          <>
+          <div className="max-w-5xl space-y-4">
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] tabular-nums text-muted-foreground/55 leading-none">
@@ -358,18 +358,40 @@ export default function ResearchSessionPage({
                 <span className="text-[11px] uppercase tracking-wide text-muted-foreground/60 leading-none">
                   Data analysis
                 </span>
+                {session.status === "pending" && (
+                  <span className="text-[11px] text-muted-foreground/50 leading-none">
+                    Queued
+                  </span>
+                )}
+                {session.status === "failed" && (
+                  <span className="text-[11px] text-destructive/60 leading-none">
+                    Failed
+                  </span>
+                )}
+                {session.status === "cancelled" && (
+                  <span className="text-[11px] text-muted-foreground/50 leading-none">
+                    Cancelled
+                  </span>
+                )}
               </div>
-              <h1 className="text-xl font-semibold tracking-tight leading-snug">
-                {session.query}
-              </h1>
+              <div className="flex items-start gap-3">
+                {(session.status === "pending" || session.status === "running") && (
+                  <div className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/70" />
+                  </div>
+                )}
+                <h1 className="text-xl font-semibold tracking-tight leading-snug">
+                  {session.query}
+                </h1>
+              </div>
             </div>
             <AnalysisSessionView
               sessionId={id}
               status={session.status}
               resultData={session.resultData as AnalysisResult | null}
-              query={session.query}
+              createdAt={session.createdAt}
             />
-          </>
+          </div>
         )}
 
         {session && session.sessionType !== "analysis" && (

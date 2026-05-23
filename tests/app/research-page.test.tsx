@@ -12,6 +12,8 @@ vi.mock("@/hooks/use-ai-preferences", () => ({
 const researchHooksMock = vi.hoisted(() => ({
   useResearchSessions: vi.fn(() => ({ data: [] as ResearchSessionSummary[], isLoading: false, error: null })),
   useCreateResearchSession: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useCreateAnalysisSession: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useEnhanceQuestion: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
   useLiteratureResearch: vi.fn(() => ({
     status: "idle" as const,
     result: null,
@@ -47,6 +49,8 @@ vi.mock("@/hooks/use-research", async (importOriginal) => {
     useDataAnalysis: researchHooksMock.useDataAnalysis,
     useResearchSessions: researchHooksMock.useResearchSessions,
     useCreateResearchSession: researchHooksMock.useCreateResearchSession,
+    useCreateAnalysisSession: researchHooksMock.useCreateAnalysisSession,
+    useEnhanceQuestion: researchHooksMock.useEnhanceQuestion,
   };
 });
 

@@ -19,6 +19,7 @@ import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
 import { MultiSelectionPanel } from "@/components/canvas/multi-selection-panel";
 import { ResearchInsightLibraryModal } from "@/components/canvas/research-insight-library-modal";
+import { AttachCanvasToReportButton } from "@/components/canvas/attach-canvas-to-report-button";
 import { useResearchExtractionEnabled } from "@/hooks/use-feature-flags";
 import {
   useCanvas,
@@ -805,17 +806,26 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
       {/* Frame bar — hosts both tab selection and the Draw / Export actions
           so the top toolbar can stay focused on filters + AI controls. */}
-      <CanvasFrameBar
-        frames={frames}
-        activeFrameId={activeFrameId}
-        drawingMode={frameDrawingMode}
-        exporting={isExportingImages}
-        onSelectFrame={handleSelectFrame}
-        onRenameFrame={handleRenameFrame}
-        onDeleteFrame={handleDeleteFrame}
-        onToggleDrawingMode={() => setFrameDrawingMode((v) => !v)}
-        onExportImages={handleExportImages}
-      />
+      <div className="flex items-center gap-2 border-b">
+        <div className="flex-1">
+          <CanvasFrameBar
+            frames={frames}
+            activeFrameId={activeFrameId}
+            drawingMode={frameDrawingMode}
+            exporting={isExportingImages}
+            onSelectFrame={handleSelectFrame}
+            onRenameFrame={handleRenameFrame}
+            onDeleteFrame={handleDeleteFrame}
+            onToggleDrawingMode={() => setFrameDrawingMode((v) => !v)}
+            onExportImages={handleExportImages}
+          />
+        </div>
+        {/* Capture-and-attach: lets the consultant push the current spatial
+            layout into a specific report so it renders as the hero visual. */}
+        <div className="pr-3">
+          <AttachCanvasToReportButton roundId={roundId} frames={frames} edges={edges} />
+        </div>
+      </div>
 
       {/* Clutter banner — points consultants at drawing mode rather than the
           old default-spot create flow. */}

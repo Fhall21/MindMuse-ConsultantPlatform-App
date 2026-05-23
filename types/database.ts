@@ -123,6 +123,11 @@ export interface ConsultationOutputArtifact {
   title: string | null;
   content: string;
   input_snapshot: Record<string, unknown>;
+  canvas_image: {
+    full: string;
+    frames: Record<string, string>;
+    capturedAt: string;
+  } | null;
   generated_at: string;
   created_at: string;
   updated_at: string;

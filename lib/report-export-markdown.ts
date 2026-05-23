@@ -207,6 +207,12 @@ export interface MarkdownExportOptions {
   generatedAt: string;
   artifactType: string;
   sections: ExportSection[];
+  /**
+   * Optional captured canvas image (full-canvas PNG as data URL). When
+   * present, rendered as a hero image block after the frontmatter so the
+   * consultant's spatial arrangement survives into the markdown output.
+   */
+  canvasImageDataUrl?: string | null;
 }
 
 /**
@@ -214,7 +220,7 @@ export interface MarkdownExportOptions {
  * Includes YAML frontmatter and horizontal-rule section separators.
  */
 export function serializeToMarkdown(opts: MarkdownExportOptions): string {
-  const { id, title, roundLabel, generatedAt, artifactType, sections } = opts;
+  const { id, title, roundLabel, generatedAt, artifactType, sections, canvasImageDataUrl } = opts;
   const typeLabel = artifactTypeLabels[artifactType] ?? artifactType;
 
   const parts: string[] = [];
@@ -232,6 +238,14 @@ export function serializeToMarkdown(opts: MarkdownExportOptions): string {
       "---",
     ].join("\n")
   );
+
+  // ── Canvas hero image ──
+  // Renders before any section so the spatial layout is the first thing the
+  // reader sees, mirroring the live view. Data URLs render natively in
+  // GitHub/Obsidian/most markdown viewers.
+  if (canvasImageDataUrl) {
+    parts.push(`## Canvas overview\n\n![Captured canvas layout](${canvasImageDataUrl})`);
+  }
 
   // ── Sections ──
   for (const section of sections) {

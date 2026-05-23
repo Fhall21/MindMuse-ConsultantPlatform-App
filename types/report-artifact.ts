@@ -89,4 +89,13 @@ export interface ReportArtifactDetail {
   totalVersions: number;
   auditSummary: AuditSummaryEvent[];
   draftThemeGroups: Array<{ id: string; label: string; description: string | null }>;
+  /**
+   * Captured canvas image at attach time. Null/undefined when no snapshot has
+   * been attached to this report yet. Strings are PNG data URLs.
+   */
+  canvasImage?: {
+    full: string;
+    frames: Record<string, string>;
+    capturedAt: string;
+  } | null;
 }

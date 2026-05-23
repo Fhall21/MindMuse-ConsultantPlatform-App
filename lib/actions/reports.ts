@@ -554,6 +554,7 @@ export async function getReportArtifactForUserId(
     totalVersions: versions.length || 1,
     auditSummary,
     draftThemeGroups,
+    canvasImage: artifact.canvas_image ?? null,
   };
 }
 
@@ -722,4 +723,54 @@ export async function saveEditedReport(
   });
 
   return { newArtifactId: inserted.id };
+}
+
+/**
+ * Attach a captured canvas image payload to an existing report artifact.
+ *
+ * Called from the canvas page after the consultant has arranged their layout
+ * and wants that exact visual to appear in a specific report version.
+ * The payload (full canvas + per-frame crops as data URLs) is built client-side
+ * by `buildCanvasImagePayload()` so this action only needs DB authority.
+ *
+ * Auth: only the report's owner may attach. Returns silently if the report
+ * doesn't exist or isn't owned by the user (caller already authorised the
+ * round; we double-check here to avoid drive-by writes).
+ */
+export async function attachCanvasImageToReport(params: {
+  artifactId: string;
+  canvasImage: {
+    full: string;
+    frames: Record<string, string>;
+    capturedAt: string;
+  };
+}): Promise<{ updated: boolean }> {
+  const userId = await requireCurrentUserId();
+  const artifact = await getRoundOutputArtifactForUser(params.artifactId, userId);
+  if (!artifact) {
+    return { updated: false };
+  }
+
+  await db
+    .update(consultationOutputArtifacts)
+    .set({ canvasImage: params.canvasImage })
+    .where(
+      and(
+        eq(consultationOutputArtifacts.id, params.artifactId),
+        eq(consultationOutputArtifacts.userId, userId)
+      )
+    );
+
+  await emitAuditEvent({
+    action: "report.canvas_image_attached",
+    entityType: "artifact",
+    entityId: params.artifactId,
+    metadata: {
+      round_id: artifact.consultation_id,
+      frame_count: Object.keys(params.canvasImage.frames).length,
+      captured_at: params.canvasImage.capturedAt,
+    },
+  });
+
+  return { updated: true };
 }

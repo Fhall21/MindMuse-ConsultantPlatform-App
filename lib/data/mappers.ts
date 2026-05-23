@@ -198,6 +198,7 @@ export function mapRoundOutputArtifactRecord(
     title: row.title,
     content: row.content,
     input_snapshot: row.inputSnapshot,
+    canvas_image: row.canvasImage ?? null,
     generated_at: row.generatedAt.toISOString(),
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),

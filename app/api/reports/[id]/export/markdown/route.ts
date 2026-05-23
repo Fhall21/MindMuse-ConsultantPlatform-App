@@ -61,6 +61,7 @@ export async function GET(
     generatedAt: renderedReport.generatedAt,
     artifactType: renderedReport.artifactType,
     sections,
+    canvasImageDataUrl: renderedReport.canvasImage?.full ?? null,
   });
 
   const filename = `report-${renderedReport.id.slice(0, 8)}.md`;

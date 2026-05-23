@@ -43,6 +43,7 @@ import {
 } from "@/lib/report-graph";
 import { normalizeReportMarkdownForEditor } from "@/lib/report-editor-markdown";
 import { parseContentBlocks } from "@/lib/report-content-blocks";
+import { CanvasImageHero } from "@/components/reports/canvas-image-hero";
 import {
   applyRenderPolicyToReport,
   createReportRenderPolicy,
@@ -1266,6 +1267,13 @@ export function ReportView({ artifactId }: ReportViewProps) {
           </p>
         )}
       </header>
+
+      {/* ─── Canvas Hero ─── (kills the "report doesn't match my canvas" surprise) */}
+      <CanvasImageHero
+        imageDataUrl={displayReport.canvasImage?.full ?? null}
+        capturedAt={displayReport.canvasImage?.capturedAt}
+        roundId={displayReport.roundId}
+      />
 
       {/* ─── Quick Stats ─── */}
       <QuickStats report={displayReport} />

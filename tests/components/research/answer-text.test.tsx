@@ -77,3 +77,81 @@ describe("AnswerText", () => {
     expect(screen.getByText("This paragraph should remain visible too.")).toBeInTheDocument();
   });
 });
+
+describe("AnswerText list rendering", () => {
+  it("renders unordered bullet lists", () => {
+    const { container } = render(
+      <AnswerText text={"- First item\n- Second item\n- Third item"} />
+    );
+
+    const list = container.querySelector("ul");
+    expect(list).toBeTruthy();
+    expect(list?.className).toContain("list-disc");
+
+    const items = list?.querySelectorAll("li");
+    expect(items).toHaveLength(3);
+    expect(items?.[0]).toHaveTextContent("First item");
+    expect(items?.[1]).toHaveTextContent("Second item");
+    expect(items?.[2]).toHaveTextContent("Third item");
+  });
+
+  it("renders asterisk and plus unordered markers", () => {
+    const { container } = render(
+      <AnswerText text={"* Alpha\n+ Beta"} />
+    );
+
+    const items = container.querySelectorAll("ul li");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("Alpha");
+    expect(items[1]).toHaveTextContent("Beta");
+  });
+
+  it("renders ordered numbered lists", () => {
+    const { container } = render(
+      <AnswerText text={"1. Step one\n2. Step two\n3. Step three"} />
+    );
+
+    const list = container.querySelector("ol");
+    expect(list).toBeTruthy();
+    expect(list?.className).toContain("list-decimal");
+
+    const items = list?.querySelectorAll("li");
+    expect(items).toHaveLength(3);
+    expect(items?.[0]).toHaveTextContent("Step one");
+    expect(items?.[2]).toHaveTextContent("Step three");
+  });
+
+  it("renders paragraphs and lists in the same block", () => {
+    const { container } = render(
+      <AnswerText
+        text={
+          "Summary intro.\n\n- Finding one\n- Finding two\n\nClosing note."
+        }
+      />
+    );
+
+    expect(screen.getByText("Summary intro.")).toBeTruthy();
+    expect(screen.getByText("Closing note.")).toBeTruthy();
+
+    const items = container.querySelectorAll("ul li");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("Finding one");
+  });
+
+  it("preserves inline bold formatting in list items", () => {
+    render(<AnswerText text={"- **Key risk**: burnout\n- **Action**: review"} />);
+
+    expect(screen.getByText("Key risk")).toBeTruthy();
+    expect(screen.getByText("Action")).toBeTruthy();
+    expect(screen.getByText("Key risk").tagName).toBe("STRONG");
+  });
+
+  it("splits consecutive unordered and ordered lists", () => {
+    const { container } = render(
+      <AnswerText text={"- Bullet A\n- Bullet B\n1. Number one\n2. Number two"} />
+    );
+
+    expect(container.querySelectorAll("ul li")).toHaveLength(2);
+    expect(container.querySelectorAll("ol li")).toHaveLength(2);
+  });
+});

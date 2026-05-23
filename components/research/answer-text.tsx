@@ -85,6 +85,58 @@ function parseTableRow(row: string) {
     .map((cell) => cell.trim());
 }
 
+type TextSegment =
+  | { type: "paragraph"; content: string }
+  | { type: "ul"; items: string[] }
+  | { type: "ol"; items: string[] };
+
+function parseTextSegments(lines: string[]): TextSegment[] {
+  const segments: TextSegment[] = [];
+  let paragraphLines: string[] = [];
+  let list: { type: "ul" | "ol"; items: string[] } | null = null;
+
+  const flushParagraph = () => {
+    const content = paragraphLines.join("\n").trim();
+    if (content) segments.push({ type: "paragraph", content });
+    paragraphLines = [];
+  };
+
+  const flushList = () => {
+    if (list && list.items.length > 0) {
+      segments.push(list);
+      list = null;
+    }
+  };
+
+  for (const line of lines) {
+    const ulMatch = /^\s*[-*+]\s+(.+)$/.exec(line);
+    const olMatch = /^\s*\d+\.\s+(.+)$/.exec(line);
+
+    if (ulMatch) {
+      flushParagraph();
+      if (list?.type !== "ul") {
+        flushList();
+        list = { type: "ul", items: [] };
+      }
+      list.items.push(ulMatch[1]);
+    } else if (olMatch) {
+      flushParagraph();
+      if (list?.type !== "ol") {
+        flushList();
+        list = { type: "ol", items: [] };
+      }
+      list.items.push(olMatch[1]);
+    } else if (line.trim()) {
+      flushList();
+      paragraphLines.push(line);
+    }
+  }
+
+  flushParagraph();
+  flushList();
+  return segments;
+}
+
 /**
  * Renders a literature-research answer with light markdown headings and
  * interactive citation chips. Pass `references` to enable hover previews and
@@ -247,11 +299,39 @@ export function AnswerText({
           );
         }
 
-        // Paragraph with inline citation chips
+        const segments = parseTextSegments(block.lines);
+        if (segments.length === 0) return null;
+
         return (
-          <p key={bi}>
-            {renderInline(trimmed)}
-          </p>
+          <div key={bi} className="space-y-2">
+            {segments.map((segment, si) => {
+              if (segment.type === "paragraph") {
+                return <p key={si}>{renderInline(segment.content)}</p>;
+              }
+              if (segment.type === "ul") {
+                return (
+                  <ul
+                    key={si}
+                    className="list-inside list-disc space-y-1 pl-1 text-muted-foreground"
+                  >
+                    {segment.items.map((item, ii) => (
+                      <li key={ii}>{renderInline(item)}</li>
+                    ))}
+                  </ul>
+                );
+              }
+              return (
+                <ol
+                  key={si}
+                  className="list-inside list-decimal space-y-1 pl-1 text-muted-foreground"
+                >
+                  {segment.items.map((item, ii) => (
+                    <li key={ii}>{renderInline(item)}</li>
+                  ))}
+                </ol>
+              );
+            })}
+          </div>
         );
       })}
     </div>

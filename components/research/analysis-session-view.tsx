@@ -5,8 +5,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   Database,
-  Download,
-  FileSpreadsheet,
   Loader2,
   RotateCcw,
 } from "lucide-react";
@@ -31,103 +29,11 @@ import type {
   AnalysisResult,
 } from "@/hooks/use-research";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import { AnswerText } from "./answer-text";
 import { NotebookCells } from "./notebook-cells";
-
-const TEXT_PREVIEW_MAX_CHARS = 8000;
-
-function artifactDownloadHref(entryId: string): string {
-  return `/api/research/analysis/artifacts/${encodeURIComponent(entryId)}`;
-}
-
-function isFetchableTextMime(mimeType: string): boolean {
-  return mimeType === "text/csv" || mimeType === "application/json";
-}
-
-function TextPreviewBlock({
-  text,
-  truncated,
-}: {
-  text: string;
-  truncated?: boolean;
-}) {
-  return (
-    <div className="mt-3">
-      <pre className="max-h-[320px] overflow-auto rounded-md border bg-muted/20 p-3 text-xs whitespace-pre-wrap break-words text-foreground/90">
-        {text}
-      </pre>
-      {truncated && (
-        <p className="mt-1 text-xs text-muted-foreground">… truncated</p>
-      )}
-    </div>
-  );
-}
-
-function FetchedTextPreview({ entryId }: { entryId: string }) {
-  const [state, setState] = useState<
-    | { kind: "loading" }
-    | { kind: "error"; message: string }
-    | { kind: "text"; text: string; truncated: boolean }
-  >({ kind: "loading" });
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetch(artifactDownloadHref(entryId))
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.text();
-      })
-      .then((text) => {
-        if (cancelled) return;
-        const truncated = text.length > TEXT_PREVIEW_MAX_CHARS;
-        setState({
-          kind: "text",
-          text: truncated ? text.slice(0, TEXT_PREVIEW_MAX_CHARS) : text,
-          truncated,
-        });
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setState({
-          kind: "error",
-          message: (err as Error).message || "Failed to load preview",
-        });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [entryId]);
-
-  if (state.kind === "loading") {
-    return (
-      <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        Loading preview…
-      </p>
-    );
-  }
-  if (state.kind === "error") {
-    return <p className="mt-3 text-xs text-destructive">{state.message}</p>;
-  }
-  return <TextPreviewBlock text={state.text} truncated={state.truncated} />;
-}
-
-async function downloadArtifact(entryId: string, filename: string) {
-  try {
-    const res = await fetch(artifactDownloadHref(entryId));
-    if (!res.ok) throw new Error(`Download failed (${res.status})`);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  } catch (err) {
-    toast.error((err as Error).message || "Download failed");
-  }
-}
+import {
+  AnalysisSummaryContent,
+  ArtifactPreviewCard,
+} from "./analysis-artifact-preview";
 
 // ── Canonical analysis stages ─────────────────────────────────────────────────
 // Mirrors the literature InFlightSteps pattern: a fixed list of phases with
@@ -306,146 +212,17 @@ function InFlightAnalysisStages({
 
 // ── Result tabs ───────────────────────────────────────────────────────────────
 
-interface Figure {
-  key: string;
-  src: string;
-  alt: string;
-  href: string;
-}
-
-/** Collect every image produced by the analysis: inline cell outputs + image
- * artifacts. Cell outputs ship as base64 inside the result; artifacts use the
- * proxy URL so size is unbounded. */
-function collectFigures(result: AnalysisResult): Figure[] {
-  const figures: Figure[] = [];
-  for (const [ci, cell] of (result.notebook_cells ?? []).entries()) {
-    for (const [oi, out] of (cell.outputs ?? []).entries()) {
-      if (out.output_type !== "display_data" && out.output_type !== "execute_result") {
-        continue;
-      }
-      const png = out.data?.["image/png"];
-      const jpeg = out.data?.["image/jpeg"];
-      const src = png
-        ? `data:image/png;base64,${png}`
-        : jpeg
-          ? `data:image/jpeg;base64,${jpeg}`
-          : null;
-      if (!src) continue;
-      figures.push({
-        key: `cell-${ci}-${oi}`,
-        src,
-        href: src,
-        alt: cell.display_text || `Cell ${cell.execution_count ?? ci} output`,
-      });
-    }
-  }
-  for (const art of result.artifacts ?? []) {
-    if (!art.mime_type.startsWith("image/")) continue;
-    const proxy = artifactDownloadHref(art.entry_id);
-    figures.push({
-      key: `art-${art.entry_id}`,
-      src: art.inline_data_url ?? proxy,
-      href: proxy,
-      alt: art.filename,
-    });
-  }
-  return figures;
-}
-
-function FiguresGallery({ figures }: { figures: Figure[] }) {
-  if (figures.length === 0) return null;
-  return (
-    <section className="mt-6 space-y-3">
-      <h3 className="text-sm font-medium text-foreground/80">
-        Figures
-        <span className="ml-2 text-xs font-normal text-muted-foreground">
-          {figures.length}
-        </span>
-      </h3>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {figures.map((fig) => (
-          <a
-            key={fig.key}
-            href={fig.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group block overflow-hidden rounded-md border bg-card transition-colors hover:border-foreground/30"
-          >
-            <img
-              src={fig.src}
-              alt={fig.alt}
-              loading="lazy"
-              className="block h-auto w-full bg-muted/20 object-contain"
-            />
-          </a>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function ArtifactRows({ artifacts }: { artifacts: AnalysisArtifact[] }) {
   if (!artifacts || artifacts.length === 0) {
     return <p className="text-sm text-muted-foreground">No artifacts produced.</p>;
   }
   return (
     <ul className="space-y-2">
-      {artifacts.map((art, idx) => {
-        const isImage = art.mime_type.startsWith("image/");
-        const downloadHref = artifactDownloadHref(art.entry_id);
-        const showFetchedPreview =
-          !art.inline_text && isFetchableTextMime(art.mime_type);
-        return (
-          <li
-            key={`${art.entry_id}-${idx}`}
-            className="rounded-lg border bg-card p-3"
-          >
-            <div className="flex items-start gap-3">
-              <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{art.filename}</p>
-                <p className="text-xs text-muted-foreground">
-                  {art.mime_type}
-                  {art.size_bytes != null &&
-                    ` · ${(art.size_bytes / 1024).toFixed(1)} KB`}
-                </p>
-                {art.error && (
-                  <p className="mt-1 text-xs text-destructive">{art.error}</p>
-                )}
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void downloadArtifact(art.entry_id, art.filename)}
-              >
-                <Download className="mr-1.5 h-3.5 w-3.5" />
-                Download
-              </Button>
-            </div>
-            {art.inline_text && (
-              <TextPreviewBlock
-                text={
-                  art.inline_text.length > TEXT_PREVIEW_MAX_CHARS
-                    ? art.inline_text.slice(0, TEXT_PREVIEW_MAX_CHARS)
-                    : art.inline_text
-                }
-                truncated={art.inline_text.length > TEXT_PREVIEW_MAX_CHARS}
-              />
-            )}
-            {showFetchedPreview && (
-              <FetchedTextPreview entryId={art.entry_id} />
-            )}
-            {isImage && (
-              <img
-                src={art.inline_data_url ?? downloadHref}
-                alt={art.filename}
-                loading="lazy"
-                className="mt-3 max-h-[480px] w-full rounded-md border bg-muted/20 object-contain"
-              />
-            )}
-          </li>
-        );
-      })}
+      {artifacts.map((art, idx) => (
+        <li key={`${art.entry_id}-${idx}`}>
+          <ArtifactPreviewCard artifact={art} />
+        </li>
+      ))}
     </ul>
   );
 }
@@ -456,7 +233,6 @@ function ResultTabs({ result }: { result: AnalysisResult }) {
   );
   const cells = result.notebook_cells ?? [];
   const artifacts = result.artifacts ?? [];
-  const figures = useMemo(() => collectFigures(result), [result]);
 
   return (
     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
@@ -479,10 +255,7 @@ function ResultTabs({ result }: { result: AnalysisResult }) {
       </TabsList>
 
       <TabsContent value="summary" className="mt-3">
-        <div className="border-t pt-4">
-          <AnswerText text={result.answer || "_No summary returned._"} />
-          <FiguresGallery figures={figures} />
-        </div>
+        <AnalysisSummaryContent result={result} />
       </TabsContent>
 
       <TabsContent value="notebook" className="mt-3">

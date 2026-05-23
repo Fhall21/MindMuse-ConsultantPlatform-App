@@ -120,6 +120,7 @@ describe("lib/data/mappers", () => {
       title: "Draft report",
       content: "Body",
       input_snapshot: { themes: 2 },
+      canvas_image: null,
       generated_at: generatedAt.toISOString(),
       created_at: createdAt.toISOString(),
       updated_at: updatedAt.toISOString(),

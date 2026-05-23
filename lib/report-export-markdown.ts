@@ -103,6 +103,13 @@ function serializeFrameSnapshots(frames: ExportFrameSnapshot[]): string {
   for (const frame of frames) {
     lines.push(`## ${frame.name}`);
     lines.push(`${frame.nodeCount} nodes · ${frame.connectionCount} connections`);
+    // Inline captured frame imagery when available. Data URLs render in
+    // GitHub / Obsidian / most markdown viewers. No-op when capture didn't
+    // run so the textual structure stays clean.
+    if (frame.imageDataUrl) {
+      lines.push("");
+      lines.push(`![Captured layout of "${frame.name}"](${frame.imageDataUrl})`);
+    }
     if (frame.connections.length > 0) {
       lines.push("");
       lines.push(serializeConnections(frame.connections));
@@ -200,13 +207,6 @@ function serializeReferences(
 
 // ─── Main serialiser ──────────────────────────────────────────────────────────
 
-export interface MarkdownExportFrame {
-  id: string;
-  name: string;
-  /** Cropped frame PNG as a data URL; absent → frame renders text-only. */
-  imageDataUrl?: string | null;
-}
-
 export interface MarkdownExportOptions {
   id: string;
   title: string | null;
@@ -214,13 +214,6 @@ export interface MarkdownExportOptions {
   generatedAt: string;
   artifactType: string;
   sections: ExportSection[];
-  /**
-   * Per-frame inline imagery, in display order. When non-empty, rendered as
-   * a "Canvas frames" block after the frontmatter so the consultant's spatial
-   * groupings travel into the markdown output. No hero image — frames embed
-   * contextually under their own headings.
-   */
-  frames?: MarkdownExportFrame[];
 }
 
 /**
@@ -228,7 +221,7 @@ export interface MarkdownExportOptions {
  * Includes YAML frontmatter and horizontal-rule section separators.
  */
 export function serializeToMarkdown(opts: MarkdownExportOptions): string {
-  const { id, title, roundLabel, generatedAt, artifactType, sections, frames } = opts;
+  const { id, title, roundLabel, generatedAt, artifactType, sections } = opts;
   const typeLabel = artifactTypeLabels[artifactType] ?? artifactType;
 
   const parts: string[] = [];
@@ -246,23 +239,6 @@ export function serializeToMarkdown(opts: MarkdownExportOptions): string {
       "---",
     ].join("\n")
   );
-
-  // ── Per-frame canvas imagery ──
-  // One sub-block per frame, mirroring the live view. Embedded contextually
-  // (not as a hero) — the user explicitly rejected a single top-of-report
-  // image. Data URLs render natively in GitHub/Obsidian/most viewers.
-  if (frames && frames.length > 0) {
-    const frameBlock: string[] = [`## Canvas frames`];
-    for (const frame of frames) {
-      frameBlock.push(`### ${frame.name}`);
-      if (frame.imageDataUrl) {
-        frameBlock.push(`![Captured layout of "${frame.name}"](${frame.imageDataUrl})`);
-      } else {
-        frameBlock.push(`_No captured image for this frame._`);
-      }
-    }
-    parts.push(frameBlock.join("\n\n"));
-  }
 
   // ── Sections ──
   for (const section of sections) {

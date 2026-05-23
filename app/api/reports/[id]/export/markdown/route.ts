@@ -8,7 +8,6 @@ import {
   type ReportTemplate,
 } from "@/lib/report-export-content";
 import { serializeToMarkdown } from "@/lib/report-export-markdown";
-import { buildReportGraphFrameModels } from "@/lib/report-graph";
 import { applyRenderPolicyToReport } from "@/lib/report-render-policy";
 import { loadReportReferences } from "@/lib/report-references";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
@@ -62,11 +61,6 @@ export async function GET(
     generatedAt: renderedReport.generatedAt,
     artifactType: renderedReport.artifactType,
     sections,
-    frames: buildReportGraphFrameModels(renderedReport.inputSnapshot).map((frame) => ({
-      id: frame.id,
-      name: frame.name,
-      imageDataUrl: renderedReport.canvasImage?.frames?.[frame.id] ?? null,
-    })),
   });
 
   const filename = `report-${renderedReport.id.slice(0, 8)}.md`;

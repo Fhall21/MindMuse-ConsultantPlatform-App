@@ -76,10 +76,17 @@ export interface ExportConnection {
 }
 
 export interface ExportFrameSnapshot {
+  id: string;
   name: string;
   nodeCount: number;
   connectionCount: number;
   connections: ExportConnection[];
+  /**
+   * Cropped canvas image for this frame as a PNG data URL, captured at
+   * report-generation time. Absent when capture failed or no canvas was open.
+   * Renderers (PDF / DOCX) embed it inline so spatial layout survives.
+   */
+  imageDataUrl?: string | null;
 }
 
 export interface ExportReferenceQuote {
@@ -336,6 +343,10 @@ function buildFrameSnapshotsSection(report: ReportArtifactDetail): ExportSection
   const frames = buildReportGraphFrameModels(report.inputSnapshot);
   if (frames.length === 0) return null;
 
+  // Captured per-frame imagery from the canvas at report-generation time.
+  // Each renderer pulls these data URLs to embed inline.
+  const capturedImages = report.canvasImage?.frames ?? null;
+
   return {
     heading: "Curated Frame Snapshots",
     blocks: [],
@@ -343,6 +354,7 @@ function buildFrameSnapshotsSection(report: ReportArtifactDetail): ExportSection
     data: {
       kind: "frameSnapshots",
       frames: frames.map((frame) => ({
+        id: frame.id,
         name: frame.name,
         nodeCount: frame.graphModel.nodeCount,
         connectionCount: frame.graphModel.connectionCount,
@@ -352,6 +364,7 @@ function buildFrameSnapshotsSection(report: ReportArtifactDetail): ExportSection
           connectionType: formatConnectionTypeLabel(connection.connectionType),
           notes: connection.notes,
         })),
+        imageDataUrl: capturedImages?.[frame.id] ?? null,
       })),
     },
   };

@@ -33,8 +33,10 @@ import {
   AlignmentType,
   PageBreak,
   Footer,
+  ImageRun,
   type FileChild,
 } from "docx";
+import { dataUrlToBuffer } from "@/lib/report-canvas-assets";
 import type { ContentBlock } from "@/lib/report-content-blocks";
 import type {
   ExportSection,
@@ -232,6 +234,10 @@ function connectionsToParagraphs(connections: ExportConnection[]): Paragraph[] {
   });
 }
 
+// Word page width minus margins is roughly 6 inches @ 96 dpi = 576 px.
+// Captures are usually wider — fitting to this width preserves aspect ratio.
+const FRAME_IMAGE_WIDTH_PX = 560;
+
 function frameSnapshotsToParagraphs(frames: ExportFrameSnapshot[]): Paragraph[] {
   const paras: Paragraph[] = [];
 
@@ -253,6 +259,36 @@ function frameSnapshotsToParagraphs(frames: ExportFrameSnapshot[]): Paragraph[] 
         spacing: { after: 80 },
       })
     );
+    // Embed the captured cropped frame PNG when available so the consultant's
+    // spatial arrangement survives into Word. Falls back to text-only when
+    // capture didn't run (e.g. generated from the /reports page without an
+    // open canvas).
+    if (frame.imageDataUrl) {
+      try {
+        const { buffer } = dataUrlToBuffer(frame.imageDataUrl);
+        paras.push(
+          new Paragraph({
+            children: [
+              new ImageRun({
+                data: buffer,
+                transformation: {
+                  // Heuristic 16:10 ratio — actual aspect comes from the source
+                  // bitmap so this is just the bounding box.
+                  width: FRAME_IMAGE_WIDTH_PX,
+                  height: Math.round(FRAME_IMAGE_WIDTH_PX * 0.625),
+                },
+                // docx@8 type defs require this discriminator even though
+                // the image is raster, not SVG.
+                type: "png",
+              } as ConstructorParameters<typeof ImageRun>[0]),
+            ],
+            spacing: { after: 120 },
+          })
+        );
+      } catch (error) {
+        console.warn("[docx] failed to embed frame image", frame.id, error);
+      }
+    }
     if (frame.connections.length > 0) {
       paras.push(...connectionsToParagraphs(frame.connections));
     }

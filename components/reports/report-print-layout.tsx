@@ -1484,7 +1484,16 @@ export function buildSectionElements(
 ): SectionElement[] {
   const sections: SectionElement[] = [];
   const graphModel = buildReportGraphModel(report.inputSnapshot);
-  const frameModels = buildReportGraphFrameModels(report.inputSnapshot);
+  // Overlay the per-frame data URLs captured at report-generation time onto
+  // the frame models. The PDF layout already renders `frame.imageUrl` when
+  // present (added in sprint 16 task 03.5); this just supplies the data so
+  // the canvas-image-on-report fidelity now flows through to PDF.
+  const capturedFrameImages = report.canvasImage?.frames ?? null;
+  const frameModels = buildReportGraphFrameModels(report.inputSnapshot).map((frame) => {
+    const capturedUrl = capturedFrameImages?.[frame.id];
+    if (!capturedUrl) return frame;
+    return { ...frame, imageUrl: capturedUrl };
+  });
 
   sections.push({
     id: "executiveSummary",

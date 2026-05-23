@@ -395,6 +395,7 @@ describe("buildExportSections — frame snapshots", () => {
       kind: "frameSnapshots",
       frames: [
         {
+          id: "frame-1",
           name: "Risk story",
           nodeCount: 2,
           connectionCount: 1,
@@ -406,6 +407,7 @@ describe("buildExportSections — frame snapshots", () => {
               notes: "Evidence repeated across meetings.",
             },
           ],
+          imageDataUrl: null,
         },
       ],
     });

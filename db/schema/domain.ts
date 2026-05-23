@@ -677,6 +677,16 @@ export const consultationOutputArtifacts = pgTable(
       .$type<Record<string, unknown>>()
       .default(sql`'{}'::jsonb`)
       .notNull(),
+    // Captured PNGs of the source canvas at report-generation time.
+    // Shape: { full: dataUrl, frames: { [frameId]: dataUrl }, capturedAt: iso }
+    // Null when capture failed or no canvas existed. Reports render the `full`
+    // image as the hero visual and per-frame crops as section anchors so the
+    // consultant's spatial layout survives into PDF / DOCX / Markdown / live view.
+    canvasImage: jsonb("canvas_image").$type<{
+      full: string;
+      frames: Record<string, string>;
+      capturedAt: string;
+    } | null>(),
     generatedAt: timestamp("generated_at", { withTimezone: true }).defaultNow().notNull(),
     groupId: uuid("group_id"),
     createdBy: uuid("created_by")

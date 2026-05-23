@@ -1,0 +1,1 @@
+ALTER TABLE "consultation_output_artifacts" ADD COLUMN "canvas_image" jsonb;

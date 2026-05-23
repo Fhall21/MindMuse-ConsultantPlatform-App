@@ -185,6 +185,21 @@ export interface NetworkSnapshotV2 {
   graph_image_url: string | null;
 }
 
+/**
+ * Captured PNGs of the source canvas at report-generation time.
+ * Persisted as a jsonb column on `consultation_output_artifacts.canvas_image`.
+ * Strings are PNG data URLs (`data:image/png;base64,...`) so renderers can
+ * embed them inline without a separate fetch / storage layer.
+ *
+ * `frames` maps `CanvasFrame.id` → its cropped data URL. Missing keys mean
+ * the frame was outside the captured viewport at capture time and was skipped.
+ */
+export interface CapturedCanvasImagePayload {
+  full: string;
+  frames: Record<string, string>;
+  capturedAt: string;
+}
+
 /** v1 node shape — no spatial data. Kept for backward compat. */
 export interface NetworkSnapshotNodeV1 {
   id: string;

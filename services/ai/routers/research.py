@@ -438,6 +438,76 @@ _TOOL_LABELS: dict[str, tuple[str, str]] = {
     "answer": ("Writing answer", "Composing the final cited, evidence-grounded response."),
 }
 
+# Minimal 1×1 PNG for stub payloads — valid base64 without Edison.
+_STUB_FIGURE_URL = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+def _parse_tool_content(content: Any) -> tuple[str, list[str]]:
+    """Extract prose and inline image data URLs from Edison tool result content."""
+    if isinstance(content, str):
+        return content, []
+    if isinstance(content, list):
+        text_parts: list[str] = []
+        images: list[str] = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "image_url":
+                url_obj = block.get("image_url") or {}
+                url = url_obj.get("url") if isinstance(url_obj, dict) else None
+                if isinstance(url, str) and url.startswith("data:image/"):
+                    images.append(url)
+            else:
+                text = block.get("text", "")
+                if text:
+                    text_parts.append(str(text))
+        return " ".join(text_parts), images
+    return (str(content) if content else ""), []
+
+
+def _aggregate_figures_from_reasoning_steps(
+    steps: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Flatten view_images rounds into top-level figures for the Figures tab."""
+    for step in steps:
+        data = step.get("data")
+        if isinstance(data, dict) and data.get("kind") == "figures":
+            return _build_literature_figures(data.get("rounds") or [])
+    return []
+
+
+def _build_literature_figures(image_rounds: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    figures: list[dict[str, Any]] = []
+    for round_idx, rnd in enumerate(image_rounds):
+        raw_images = rnd.get("images") or []
+        image_urls = [
+            img.get("url")
+            for img in raw_images
+            if isinstance(img, dict) and isinstance(img.get("url"), str)
+        ]
+        if image_urls:
+            rnd["image_count"] = len(image_urls)
+        for img_idx, url in enumerate(image_urls):
+            if not url.startswith("data:image/"):
+                continue
+            entry: dict[str, Any] = {
+                "id": f"fig-{round_idx}-{img_idx}",
+                "url": url,
+                "citation_key": rnd.get("citation_key", ""),
+                "round_index": round_idx,
+            }
+            if rnd.get("query"):
+                entry["query"] = rnd["query"]
+            if rnd.get("text_name"):
+                entry["text_name"] = rnd["text_name"]
+            if rnd.get("description"):
+                entry["description"] = rnd["description"]
+            figures.append(entry)
+    return figures
+
 
 def _parse_messages_content(
     messages: list[Any],
@@ -451,7 +521,7 @@ def _parse_messages_content(
     """
     # Pair tool calls with their results by tool_call_id
     pending: dict[str, dict[str, Any]] = {}
-    results: dict[str, str] = {}
+    results: dict[str, dict[str, Any]] = {}
 
     for msg in messages:
         if not isinstance(msg, dict):
@@ -470,18 +540,19 @@ def _parse_messages_content(
                 pending[tc_id] = {"name": name, "args": args}
         elif role == "tool":
             tc_id = msg.get("tool_call_id", "")
-            content = msg.get("content", "")
-            if isinstance(content, list):
-                content = " ".join(
-                    c.get("text", "") for c in content if isinstance(c, dict)
-                )
-            results[tc_id] = str(content)
+            text, images = _parse_tool_content(msg.get("content", ""))
+            results[tc_id] = {"text": text, "images": images}
 
     # Group calls+results by tool name, preserving call order
     by_tool: dict[str, list[dict[str, Any]]] = {}
     for tc_id, call in pending.items():
         name = call["name"]
-        by_tool.setdefault(name, []).append({"args": call["args"], "result": results.get(tc_id, "")})
+        parsed = results.get(tc_id, {"text": "", "images": []})
+        by_tool.setdefault(name, []).append({
+            "args": call["args"],
+            "result": parsed.get("text", ""),
+            "images": parsed.get("images", []),
+        })
 
     formatted: dict[str, str] = {}
     structured: dict[str, dict[str, Any]] = {}
@@ -592,27 +663,37 @@ def _parse_messages_content(
     if first_question_text:
         formatted["gather_evidence"] = first_question_text[:600]
 
-    # ── view_images: per-call paper + figure-count + description.
+    # ── view_images: per-call paper + figure-count + description + inline images.
     image_rounds: list[dict[str, Any]] = []
     for call in by_tool.get("view_images", []):
         result_text = call["result"] or ""
+        raw_images = call.get("images") or []
+        image_entries = [
+            {"url": url}
+            for url in raw_images
+            if isinstance(url, str) and url.startswith("data:image/")
+        ]
         # "Retrieved N image(s) from <paper_key>"
         m = re.search(r"Retrieved\s+(\d+)\s+image\(s\)\s+from\s+([A-Za-z0-9_]+)", result_text)
-        count = int(m.group(1)) if m else 0
+        prose_count = int(m.group(1)) if m else 0
         ck = m.group(2) if m else ""
+        count = len(image_entries) if image_entries else prose_count
         # First narrative sentence after the header — Edison's prose
         # describing what was extracted.
         post_header = result_text[m.end() :] if m else result_text
         # Strip context-id headers; take the first 400 chars of prose.
         prose = re.sub(r"##\s+Context ID:\s*pqac-\w+\s*", "", post_header).strip()
         description = " ".join(prose.split())[:400]
-        image_rounds.append({
+        round_entry: dict[str, Any] = {
             "citation_key": ck,
             "image_count": count,
             "query": call["args"].get("query", ""),
             "description": description,
             "text_name": call["args"].get("text_name", ""),
-        })
+        }
+        if image_entries:
+            round_entry["images"] = image_entries
+        image_rounds.append(round_entry)
     if image_rounds:
         structured["view_images"] = {"kind": "figures", "rounds": image_rounds}
         formatted["view_images"] = "\n".join(
@@ -933,6 +1014,9 @@ def _extract_literature_payload(verbose_result: Any) -> dict[str, Any]:
     }
     if stats is not None:
         payload["stats"] = stats
+    figures = _aggregate_figures_from_reasoning_steps(reasoning_steps)
+    if figures:
+        payload["figures"] = figures
     return payload
 
 
@@ -1042,6 +1126,15 @@ async def _run_literature_sse(
 
 def _stub_literature_payload() -> dict[str, Any]:
     """Return a stub literature result dict for use when Edison API key is absent."""
+    stub_figure_round = {
+        "citation_key": "braun2006",
+        "image_count": 2,
+        "query": "thematic analysis workflow diagram",
+        "description": "Stub figure from thematic analysis paper.",
+        "text_name": "braun2006 pages 1-2",
+        "images": [{"url": _STUB_FIGURE_URL}, {"url": _STUB_FIGURE_URL}],
+    }
+    stub_figures = _build_literature_figures([stub_figure_round])
     return {
         "stub": True,
         "answer": (
@@ -1056,9 +1149,15 @@ def _stub_literature_payload() -> dict[str, Any]:
             {"label": "Planning research", "detail": "Creating a structured plan for the research query."},
             {"label": "Searching literature", "detail": "Querying scientific databases for relevant papers."},
             {"label": "Gathering evidence", "detail": "Collecting key excerpts from retrieved papers."},
+            {
+                "label": "Reviewing figures",
+                "detail": "Examining figures, tables, and diagrams from sources.",
+                "data": {"kind": "figures", "rounds": [stub_figure_round]},
+            },
             {"label": "Synthesising findings", "detail": "Structuring retrieved evidence into a coherent summary."},
             {"label": "Writing answer", "detail": "Composing the final cited, evidence-grounded response."},
         ],
+        "figures": stub_figures,
         "references": [
             {
                 "number": 1,
@@ -1115,6 +1214,9 @@ async def _stub_research_events(
         "data": {"session_type": session_type, "stub": True, "elapsed_seconds": 5},
     }
     await asyncio.sleep(0)
+    if session_type == "literature":
+        yield {"type": "complete", "data": _stub_literature_payload()}
+        return
     yield {
         "type": "complete",
         "data": {

@@ -109,8 +109,10 @@ function parseTextSegments(lines: string[]): TextSegment[] {
   };
 
   for (const line of lines) {
-    const ulMatch = /^\s*[-*+]\s+(.+)$/.exec(line);
-    const olMatch = /^\s*\d+\.\s+(.+)$/.exec(line);
+    // Require marker + space at line start (after 0–4 space indent). Bare dashes
+    // or mid-sentence "word - word" must not become list items.
+    const ulMatch = /^( {0,4})[-*+] (.+)$/.exec(line);
+    const olMatch = /^( {0,4})\d+\. (.+)$/.exec(line);
 
     if (ulMatch) {
       flushParagraph();
@@ -118,14 +120,14 @@ function parseTextSegments(lines: string[]): TextSegment[] {
         flushList();
         list = { type: "ul", items: [] };
       }
-      list.items.push(ulMatch[1]);
+      list.items.push(ulMatch[2]);
     } else if (olMatch) {
       flushParagraph();
       if (list?.type !== "ol") {
         flushList();
         list = { type: "ol", items: [] };
       }
-      list.items.push(olMatch[1]);
+      list.items.push(olMatch[2]);
     } else if (line.trim()) {
       flushList();
       paragraphLines.push(line);

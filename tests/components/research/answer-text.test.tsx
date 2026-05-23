@@ -154,4 +154,47 @@ describe("AnswerText list rendering", () => {
     expect(container.querySelectorAll("ul li")).toHaveLength(2);
     expect(container.querySelectorAll("ol li")).toHaveLength(2);
   });
+
+  it("renders dash-space bullet lines as unordered lists", () => {
+    const { container } = render(<AnswerText text={"- item one\n- item two"} />);
+
+    expect(container.querySelector("ul")).toBeTruthy();
+    expect(container.querySelectorAll("ul li")).toHaveLength(2);
+    expect(container.querySelector("ul li")).toHaveTextContent("item one");
+  });
+
+  it("does not treat mid-sentence dashes as bullet lists", () => {
+    const { container } = render(
+      <AnswerText text={"This is a sentence - with a dash\nAnother line - also fine"} />
+    );
+
+    expect(container.querySelector("ul")).toBeNull();
+    expect(container.querySelector("ol")).toBeNull();
+    expect(container.textContent).toContain("This is a sentence - with a dash");
+    expect(container.textContent).toContain("Another line - also fine");
+  });
+
+  it("does not treat dash-without-space as a bullet list", () => {
+    const { container } = render(<AnswerText text={"-no space\n-more dashes"} />);
+
+    expect(container.querySelector("ul")).toBeNull();
+    expect(container.querySelector("ol")).toBeNull();
+    expect(container.textContent).toContain("-no space");
+    expect(container.textContent).toContain("-more dashes");
+  });
+
+  it("renders asterisk and ordered markers", () => {
+    const { container } = render(<AnswerText text={"* item\n1. item"} />);
+
+    expect(container.querySelector("ul li")).toHaveTextContent("item");
+    expect(container.querySelector("ol li")).toHaveTextContent("item");
+  });
+
+  it("allows up to four spaces of indent for nested bullets", () => {
+    const { container } = render(
+      <AnswerText text={"- top level\n  - nested\n    - deeper"} />
+    );
+
+    expect(container.querySelectorAll("ul li")).toHaveLength(3);
+  });
 });

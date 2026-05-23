@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchJson } from "@/hooks/api";
 
+export { useResearchExtractionEnabled } from "@/hooks/use-feature-flags";
+
 export interface ResearchInsightLibraryEntry {
   insightId: string;
   label: string;

@@ -23,14 +23,22 @@ import {
 } from "@/components/ui/select";
 import { useConsultations } from "@/hooks/use-consultations";
 import { useExtractResearchInsight } from "@/hooks/use-research-extraction";
-import type { LiteratureReference } from "@/hooks/use-research";
+import type {
+  AnalysisArtifact,
+  LiteratureReference,
+  ResearchSessionType,
+} from "@/hooks/use-research";
 
 export interface ResearchExtractionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   researchSessionId: string;
+  sessionType?: ResearchSessionType;
   quote: string;
   references?: LiteratureReference[];
+  artifacts?: AnalysisArtifact[];
+  /** Display-only source label for analysis sessions (e.g. artifact filename). */
+  sourceHint?: string | null;
   /** Optional pre-selected reference (when quote sits next to a citation chip). */
   initialReferenceId?: string | null;
   /**
@@ -64,8 +72,11 @@ export function ResearchExtractionDialog({
   open,
   onOpenChange,
   researchSessionId,
+  sessionType = "literature",
   quote,
   references = [],
+  artifacts = [],
+  sourceHint = null,
   initialReferenceId = null,
   initialConsultationId = null,
   onSuccess,
@@ -111,7 +122,15 @@ export function ResearchExtractionDialog({
     if (!consultationId || !descriptionValid) return;
 
     const locator: Record<string, unknown> = {};
-    if (referenceId) locator.referenceId = referenceId;
+    if (sessionType === "literature" && referenceId) {
+      locator.referenceId = referenceId;
+    }
+    if (sessionType === "analysis" && sourceHint) {
+      const matchedArtifact = artifacts.find((a) => a.filename === sourceHint);
+      if (matchedArtifact) {
+        locator.answerId = matchedArtifact.entry_id;
+      }
+    }
 
     try {
       const result = await extract.mutateAsync({
@@ -138,8 +157,9 @@ export function ResearchExtractionDialog({
         <DialogHeader>
           <DialogTitle>Add as research insight</DialogTitle>
           <DialogDescription>
-            Lift this passage onto a consultation canvas as a research-sourced insight.
-            The full quote and reference are kept for the audit trail.
+            {sessionType === "analysis"
+              ? "Lift this passage onto a consultation canvas as a research-sourced insight from your data analysis."
+              : "Lift this passage onto a consultation canvas as a research-sourced insight. The full quote and reference are kept for the audit trail."}
           </DialogDescription>
         </DialogHeader>
 
@@ -238,7 +258,7 @@ export function ResearchExtractionDialog({
             ) : null}
           </div>
 
-          {references.length > 0 ? (
+          {sessionType === "literature" && references.length > 0 ? (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
                 Source reference{" "}
@@ -262,6 +282,20 @@ export function ResearchExtractionDialog({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          ) : null}
+
+          {sessionType === "analysis" && sourceHint ? (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Source{" "}
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                  optional
+                </span>
+              </label>
+              <p className="rounded-md border bg-muted/20 px-3 py-2 text-sm text-foreground/90">
+                {sourceHint}
+              </p>
             </div>
           ) : null}
         </div>

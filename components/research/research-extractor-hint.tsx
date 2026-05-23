@@ -13,23 +13,50 @@ const DISMISS_KEY = "research-extractor-hint-dismissed";
  * enabled. Explains the otherwise-hidden text-selection affordance. The banner
  * dismisses to localStorage so a returning user only sees it once.
  */
-export function ResearchExtractorHint({ className }: { className?: string }) {
+const DISMISS_KEYS = {
+  literature: DISMISS_KEY,
+  analysis: "research-extractor-hint-dismissed-analysis",
+} as const;
+
+export function ResearchExtractorHint({
+  className,
+  sessionType = "literature",
+}: {
+  className?: string;
+  sessionType?: "literature" | "analysis";
+}) {
   const enabled = useResearchExtractionEnabled();
+  const dismissKey = DISMISS_KEYS[sessionType];
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setDismissed(window.localStorage.getItem(DISMISS_KEY) === "1");
-  }, []);
+    setDismissed(window.localStorage.getItem(dismissKey) === "1");
+  }, [dismissKey]);
 
   if (!enabled || dismissed) return null;
 
   const handleDismiss = () => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(DISMISS_KEY, "1");
+      window.localStorage.setItem(dismissKey, "1");
     }
     setDismissed(true);
   };
+
+  const tipCopy =
+    sessionType === "analysis" ? (
+      <>
+        Select any passage in the summary or artifact previews to{" "}
+        <em>Add as insight</em>. The quote lands on a consultation canvas with
+        the analysis session attached.
+      </>
+    ) : (
+      <>
+        Select any passage in the answer to <em>Add as insight</em>. The
+        extracted quote lands on a consultation canvas with the source citation
+        attached, and appears in your report&rsquo;s References section.
+      </>
+    );
 
   return (
     <div
@@ -44,9 +71,7 @@ export function ResearchExtractorHint({ className }: { className?: string }) {
       <BookOpenCheck className="mt-0.5 h-4 w-4 shrink-0 text-stone-600 dark:text-stone-300" />
       <div className="min-w-0 flex-1 text-xs leading-relaxed text-stone-700 dark:text-stone-300">
         <span className="font-semibold">Tip — </span>
-        Select any passage in the answer to <em>Add as insight</em>. The
-        extracted quote lands on a consultation canvas with the source citation
-        attached, and appears in your report&rsquo;s References section.
+        {tipCopy}
       </div>
       <Button
         type="button"

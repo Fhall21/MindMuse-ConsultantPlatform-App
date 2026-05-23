@@ -43,6 +43,24 @@ vi.mock("@/components/research/references-list", () => ({
   ReferencesList: () => <div data-testid="references-list" />,
 }));
 
+vi.mock("@/components/research/research-extractor", () => ({
+  ResearchExtractor: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("@/components/research/research-extractor-hint", () => ({
+  ResearchExtractorHint: () => null,
+}));
+
+vi.mock("@/hooks/use-research-extraction", () => ({
+  useResearchExtractionEnabled: () => false,
+  useExtractResearchInsight: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
+vi.mock("@/hooks/use-feature-flags", () => ({
+  useResearchExtractionEnabled: () => false,
+  useFeatureFlags: () => ({ data: { researchExtractionEnabled: false } }),
+}));
+
 import ResearchSessionPage from "@/app/(app)/research/[id]/page";
 
 // Wrap with a fresh QueryClient per test (needed for useQueryClient / useMutation)

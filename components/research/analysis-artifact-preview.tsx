@@ -1,15 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Download, FileSpreadsheet, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type {
   AnalysisArtifact,
   AnalysisResult,
+  LiteratureReference,
+  ResearchSessionType,
 } from "@/hooks/use-research";
+import { useResearchExtractionEnabled } from "@/hooks/use-research-extraction";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AnswerText } from "./answer-text";
+import { ResearchExtractor } from "./research-extractor";
+import { ResearchExtractorHint } from "./research-extractor-hint";
 
 const TEXT_PREVIEW_MAX_CHARS = 8000;
 
@@ -25,21 +30,44 @@ function TextPreviewBlock({
   text,
   truncated,
   compact,
+  extraction,
 }: {
   text: string;
   truncated?: boolean;
   compact?: boolean;
+  extraction?: {
+    researchSessionId: string;
+    sessionType: ResearchSessionType;
+    artifacts: AnalysisArtifact[];
+    sourceHint: string;
+  };
 }) {
+  const content = (
+    <pre
+      className={cn(
+        "overflow-auto rounded-md border bg-muted/20 p-3 text-xs whitespace-pre-wrap break-words text-foreground/90",
+        compact ? "max-h-[200px]" : "max-h-[320px]"
+      )}
+    >
+      {text}
+    </pre>
+  );
+
   return (
     <div className={compact ? "mt-2" : "mt-3"}>
-      <pre
-        className={cn(
-          "overflow-auto rounded-md border bg-muted/20 p-3 text-xs whitespace-pre-wrap break-words text-foreground/90",
-          compact ? "max-h-[200px]" : "max-h-[320px]"
-        )}
-      >
-        {text}
-      </pre>
+      {extraction ? (
+        <ResearchExtractor
+          researchSessionId={extraction.researchSessionId}
+          sessionType={extraction.sessionType}
+          artifacts={extraction.artifacts}
+          sourceHint={extraction.sourceHint}
+          minSelectionLength={16}
+        >
+          {content}
+        </ResearchExtractor>
+      ) : (
+        content
+      )}
       {truncated && (
         <p className="mt-1 text-xs text-muted-foreground">… truncated</p>
       )}
@@ -50,9 +78,16 @@ function TextPreviewBlock({
 function FetchedTextPreview({
   entryId,
   compact,
+  extraction,
 }: {
   entryId: string;
   compact?: boolean;
+  extraction?: {
+    researchSessionId: string;
+    sessionType: ResearchSessionType;
+    artifacts: AnalysisArtifact[];
+    sourceHint: string;
+  };
 }) {
   const [state, setState] = useState<
     | { kind: "loading" }
@@ -113,6 +148,7 @@ function FetchedTextPreview({
       text={state.text}
       truncated={state.truncated}
       compact={compact}
+      extraction={extraction}
     />
   );
 }
@@ -247,14 +283,30 @@ export function collectFigures(result: AnalysisResult): AnalysisFigure[] {
 export function ArtifactPreviewCard({
   artifact,
   compact = false,
+  researchSessionId,
+  sessionType = "analysis",
+  artifacts = [],
 }: {
   artifact: AnalysisArtifact;
   compact?: boolean;
+  researchSessionId?: string;
+  sessionType?: ResearchSessionType;
+  artifacts?: AnalysisArtifact[];
 }) {
+  const extractionEnabled = useResearchExtractionEnabled();
   const isImage = artifact.mime_type.startsWith("image/");
   const downloadHref = artifactDownloadHref(artifact.entry_id);
   const showFetchedPreview =
     !artifact.inline_text && isFetchableTextMime(artifact.mime_type);
+  const extraction =
+    extractionEnabled && researchSessionId
+      ? {
+          researchSessionId,
+          sessionType,
+          artifacts,
+          sourceHint: artifact.filename,
+        }
+      : undefined;
 
   return (
     <div
@@ -297,10 +349,15 @@ export function ArtifactPreviewCard({
           }
           truncated={artifact.inline_text.length > TEXT_PREVIEW_MAX_CHARS}
           compact={compact}
+          extraction={extraction}
         />
       )}
       {showFetchedPreview && (
-        <FetchedTextPreview entryId={artifact.entry_id} compact={compact} />
+        <FetchedTextPreview
+          entryId={artifact.entry_id}
+          compact={compact}
+          extraction={extraction}
+        />
       )}
       {isImage && (
         <a
@@ -391,11 +448,41 @@ function splitAnswerSections(answer: string): { heading?: string; body: string }
   return sections.length > 0 ? sections : [{ body: answer }];
 }
 
-export function AnalysisSummaryContent({ result }: { result: AnalysisResult }) {
+export function AnalysisSummaryContent({
+  result,
+  researchSessionId,
+  sessionType = "analysis",
+  references = [],
+}: {
+  result: AnalysisResult;
+  researchSessionId?: string;
+  sessionType?: ResearchSessionType;
+  references?: LiteratureReference[];
+}) {
+  const extractionEnabled = useResearchExtractionEnabled();
+  const showExtraction = extractionEnabled && Boolean(researchSessionId);
   const answer = result.answer || "_No summary returned._";
   const artifacts = result.artifacts ?? [];
   const figures = collectFigures(result);
   const sections = splitAnswerSections(answer);
+
+  const artifactCardProps = showExtraction
+    ? { researchSessionId, sessionType, artifacts }
+    : {};
+
+  const wrapAnswer = (node: ReactNode) => {
+    if (!showExtraction || !researchSessionId) return node;
+    return (
+      <ResearchExtractor
+        researchSessionId={researchSessionId}
+        sessionType={sessionType}
+        references={references}
+        artifacts={artifacts}
+      >
+        {node}
+      </ResearchExtractor>
+    );
+  };
 
   const { sectionBlocks, remainingArtifacts, remainingFigures, anyReferenced } =
     (() => {
@@ -453,7 +540,9 @@ export function AnalysisSummaryContent({ result }: { result: AnalysisResult }) {
   );
 
   return (
-    <div className="border-t pt-4">
+    <div className="border-t pt-4 space-y-4">
+      {showExtraction ? <ResearchExtractorHint sessionType="analysis" /> : null}
+
       {sectionBlocks.map(({ section, sectionArtifacts, sectionFigures }, i) => (
         <div key={i} className={i > 0 ? "mt-6" : undefined}>
           {section.heading && (
@@ -461,11 +550,18 @@ export function AnalysisSummaryContent({ result }: { result: AnalysisResult }) {
               {section.heading}
             </h3>
           )}
-          <AnswerText text={section.body || (section.heading ? "" : answer)} />
+          {wrapAnswer(
+            <AnswerText text={section.body || (section.heading ? "" : answer)} />
+          )}
           {(sectionArtifacts.length > 0 || sectionFigures.length > 0) && (
             <div className="mt-3 space-y-2">
               {sectionArtifacts.map((art) => (
-                <ArtifactPreviewCard key={art.entry_id} artifact={art} compact />
+                <ArtifactPreviewCard
+                  key={art.entry_id}
+                  artifact={art}
+                  compact
+                  {...artifactCardProps}
+                />
               ))}
               {sectionFigures.map((fig) => (
                 <FigurePreviewCard key={fig.key} figure={fig} compact />
@@ -478,7 +574,12 @@ export function AnalysisSummaryContent({ result }: { result: AnalysisResult }) {
       {(remainingArtifacts.length > 0 || remainingFigures.length > 0) && (
         <div className="mt-4 space-y-2">
           {remainingArtifacts.map((art) => (
-            <ArtifactPreviewCard key={art.entry_id} artifact={art} compact />
+            <ArtifactPreviewCard
+              key={art.entry_id}
+              artifact={art}
+              compact
+              {...artifactCardProps}
+            />
           ))}
           {remainingFigures.map((fig) => (
             <FigurePreviewCard key={fig.key} figure={fig} compact />
@@ -491,7 +592,12 @@ export function AnalysisSummaryContent({ result }: { result: AnalysisResult }) {
           <h3 className="text-sm font-medium text-foreground/80">Outputs</h3>
           <div className="space-y-2">
             {fallbackArtifacts.map((art) => (
-              <ArtifactPreviewCard key={art.entry_id} artifact={art} compact />
+              <ArtifactPreviewCard
+                key={art.entry_id}
+                artifact={art}
+                compact
+                {...artifactCardProps}
+              />
             ))}
             {figures.map((fig) => (
               <FigurePreviewCard key={fig.key} figure={fig} compact />

@@ -1,4 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/hooks/use-research-extraction", () => ({
+  useResearchExtractionEnabled: () => false,
+}));
+
+vi.mock("@/components/research/research-extractor", () => ({
+  ResearchExtractor: ({ children }: { children: unknown }) => children,
+}));
+
+vi.mock("@/components/research/research-extractor-hint", () => ({
+  ResearchExtractorHint: () => null,
+}));
+
 import {
   artifactReferencedInText,
   figureReferencedInText,

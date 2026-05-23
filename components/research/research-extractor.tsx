@@ -4,9 +4,13 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { BookOpenCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useResearchExtractionEnabled } from "@/hooks/use-feature-flags";
+import { useResearchExtractionEnabled } from "@/hooks/use-research-extraction";
 import { ResearchExtractionDialog } from "./research-extraction-dialog";
-import type { LiteratureReference } from "@/hooks/use-research";
+import type {
+  AnalysisArtifact,
+  LiteratureReference,
+  ResearchSessionType,
+} from "@/hooks/use-research";
 
 interface FloatingPosition {
   /** Page-relative pixel coordinates (viewport + scroll). */
@@ -17,8 +21,13 @@ interface FloatingPosition {
 export interface ResearchExtractorProps {
   /** Required: the research session this answer belongs to. */
   researchSessionId: string;
-  /** Optional reference list for the per-extraction reference picker. */
+  sessionType?: ResearchSessionType;
+  /** Optional reference list for the per-extraction reference picker (literature). */
   references?: LiteratureReference[];
+  /** Analysis artifacts for source context in the dialog. */
+  artifacts?: AnalysisArtifact[];
+  /** Pre-filled source label (e.g. artifact filename) for analysis extractions. */
+  sourceHint?: string | null;
   /** Optional consultation to pre-select in the dialog. */
   initialConsultationId?: string | null;
   /**
@@ -37,7 +46,10 @@ export interface ResearchExtractorProps {
  */
 export function ResearchExtractor({
   researchSessionId,
+  sessionType = "literature",
   references = [],
+  artifacts = [],
+  sourceHint = null,
   initialConsultationId = null,
   minSelectionLength = 24,
   className,
@@ -156,8 +168,9 @@ export function ResearchExtractor({
         >
           <Button
             type="button"
+            variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 rounded-full px-3 shadow-md"
+            className="h-8 gap-1.5 rounded-full border bg-background/95 px-3 shadow-sm backdrop-blur-sm"
             onClick={handleOpen}
           >
             <BookOpenCheck className="h-3.5 w-3.5" />
@@ -173,8 +186,11 @@ export function ResearchExtractor({
           if (!open) clearFloating();
         }}
         researchSessionId={researchSessionId}
+        sessionType={sessionType}
         quote={pendingQuote}
         references={references}
+        artifacts={artifacts}
+        sourceHint={sourceHint}
         initialConsultationId={initialConsultationId}
         onSuccess={() => clearFloating()}
       />

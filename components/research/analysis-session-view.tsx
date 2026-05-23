@@ -212,7 +212,13 @@ function InFlightAnalysisStages({
 
 // ── Result tabs ───────────────────────────────────────────────────────────────
 
-function ArtifactRows({ artifacts }: { artifacts: AnalysisArtifact[] }) {
+function ArtifactRows({
+  artifacts,
+  researchSessionId,
+}: {
+  artifacts: AnalysisArtifact[];
+  researchSessionId?: string;
+}) {
   if (!artifacts || artifacts.length === 0) {
     return <p className="text-sm text-muted-foreground">No artifacts produced.</p>;
   }
@@ -220,14 +226,25 @@ function ArtifactRows({ artifacts }: { artifacts: AnalysisArtifact[] }) {
     <ul className="space-y-2">
       {artifacts.map((art, idx) => (
         <li key={`${art.entry_id}-${idx}`}>
-          <ArtifactPreviewCard artifact={art} />
+          <ArtifactPreviewCard
+            artifact={art}
+            researchSessionId={researchSessionId}
+            sessionType="analysis"
+            artifacts={artifacts}
+          />
         </li>
       ))}
     </ul>
   );
 }
 
-function ResultTabs({ result }: { result: AnalysisResult }) {
+function ResultTabs({
+  result,
+  researchSessionId,
+}: {
+  result: AnalysisResult;
+  researchSessionId: string;
+}) {
   const [activeTab, setActiveTab] = useState<"summary" | "notebook" | "artifacts">(
     "summary"
   );
@@ -255,7 +272,11 @@ function ResultTabs({ result }: { result: AnalysisResult }) {
       </TabsList>
 
       <TabsContent value="summary" className="mt-3">
-        <AnalysisSummaryContent result={result} />
+        <AnalysisSummaryContent
+          result={result}
+          researchSessionId={researchSessionId}
+          sessionType="analysis"
+        />
       </TabsContent>
 
       <TabsContent value="notebook" className="mt-3">
@@ -265,7 +286,7 @@ function ResultTabs({ result }: { result: AnalysisResult }) {
       </TabsContent>
 
       <TabsContent value="artifacts" className="mt-3">
-        <ArtifactRows artifacts={artifacts} />
+        <ArtifactRows artifacts={artifacts} researchSessionId={researchSessionId} />
       </TabsContent>
     </Tabs>
   );
@@ -455,7 +476,7 @@ export function AnalysisSessionView({
       {/* Complete result (live or DB) */}
       {displayResult &&
         (status === "complete" || analysis.status === "complete") && (
-          <ResultTabs result={displayResult} />
+          <ResultTabs result={displayResult} researchSessionId={sessionId} />
         )}
 
       {/* Edge: status complete in DB but no result payload */}

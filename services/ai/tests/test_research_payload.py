@@ -133,6 +133,33 @@ def test_reasoning_steps_carry_structured_data(payload):
             assert r["image_count"] >= 1
 
 
+def test_figure_rounds_carry_inline_images(payload):
+    """view_images tool results should preserve image_url data URLs."""
+    figures_step = next(
+        (s for s in payload["reasoning_steps"] if s.get("label") == "Reviewing figures"),
+        None,
+    )
+    assert figures_step is not None
+    rounds = figures_step["data"]["rounds"]
+    rounds_with_images = [r for r in rounds if r.get("images")]
+    assert len(rounds_with_images) >= 1
+    for rnd in rounds_with_images:
+        assert len(rnd["images"]) >= 1
+        assert rnd["image_count"] == len(rnd["images"])
+        for img in rnd["images"]:
+            assert img["url"].startswith("data:image/")
+
+
+def test_payload_includes_top_level_figures(payload):
+    """Flattened figures list powers the Figures tab."""
+    assert "figures" in payload
+    assert len(payload["figures"]) >= 1
+    for fig in payload["figures"]:
+        assert fig["id"]
+        assert fig["url"].startswith("data:image/")
+        assert fig["citation_key"]
+
+
 def test_artifact_step_carries_stats_footer(payload):
     artifact = next(
         (s for s in payload["reasoning_steps"]

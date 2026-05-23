@@ -40,12 +40,25 @@ describe("extractResearchInsightSchema", () => {
     expect(r.success).toBe(false);
   });
 
-  it("rejects a description shorter than 5 characters", () => {
+  it("accepts analysis locator fields end-to-end", () => {
     const r = extractResearchInsightSchema.safeParse({
       ...baseExtract,
-      description: "hi",
+      locator: {
+        sourceKind: "artifact",
+        artifactEntryId: "storage-entry-99",
+        startOffset: 0,
+        endOffset: 120,
+      },
     });
-    expect(r.success).toBe(false);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.locator).toEqual({
+        sourceKind: "artifact",
+        artifactEntryId: "storage-entry-99",
+        startOffset: 0,
+        endOffset: 120,
+      });
+    }
   });
 });
 
@@ -74,6 +87,64 @@ describe("quoteLocatorSchema", () => {
       answerId: "ans-1",
       startOffset: 12,
       endOffset: 80,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts analysis artifact locator", () => {
+    const r = quoteLocatorSchema.safeParse({
+      sourceKind: "artifact",
+      artifactEntryId: "entry-abc-123",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts analysis figure locator", () => {
+    const r = quoteLocatorSchema.safeParse({
+      sourceKind: "figure",
+      figureKey: "cell-0-1",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts analysis notebook cell locator", () => {
+    const r = quoteLocatorSchema.safeParse({
+      sourceKind: "notebook_cell",
+      notebookCellIndex: 3,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts analysis answer locator without companion fields", () => {
+    const r = quoteLocatorSchema.safeParse({
+      sourceKind: "answer",
+      startOffset: 0,
+      endOffset: 42,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects artifact sourceKind without artifactEntryId", () => {
+    const r = quoteLocatorSchema.safeParse({ sourceKind: "artifact" });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects figure sourceKind without figureKey", () => {
+    const r = quoteLocatorSchema.safeParse({ sourceKind: "figure" });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects notebook_cell sourceKind without notebookCellIndex", () => {
+    const r = quoteLocatorSchema.safeParse({ sourceKind: "notebook_cell" });
+    expect(r.success).toBe(false);
+  });
+
+  it("accepts analysis locator alongside literature fields", () => {
+    const r = quoteLocatorSchema.safeParse({
+      sourceKind: "artifact",
+      artifactEntryId: "entry-1",
+      startOffset: 10,
+      endOffset: 50,
     });
     expect(r.success).toBe(true);
   });

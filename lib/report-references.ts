@@ -9,7 +9,7 @@ import {
 } from "@/db/schema";
 import {
   extractResearchReferences,
-  researchReferenceFullCite,
+  researchSessionFullCite,
   researchSessionShortCite,
 } from "@/lib/citations/short-cite";
 
@@ -133,10 +133,9 @@ export async function loadReportReferences(
         researchSessionId: researchSession.id,
         researchSessionQuery: researchSession.query,
         shortCite: researchSessionShortCite(researchSession),
-        fullCite: firstRef
-          ? researchReferenceFullCite(firstRef)
-          : `Research session: ${researchSession.query}`,
-        sourceUrl: firstRef?.url ?? null,
+        fullCite: researchSessionFullCite(researchSession),
+        sourceUrl:
+          researchSession.sessionType === "analysis" ? null : (firstRef?.url ?? null),
         quotes: quotesByInsight.get(insight.id) ?? [],
       });
     } else {

@@ -12,9 +12,14 @@ interface LiteratureReferenceLike {
   url?: string | null;
 }
 
+interface AnalysisArtifactLike {
+  filename?: string | null;
+}
+
 interface ResearchResultLike {
   references?: LiteratureReferenceLike[];
   citation?: string;
+  artifacts?: AnalysisArtifactLike[];
 }
 
 /**
@@ -25,6 +30,14 @@ interface ResearchResultLike {
  * The result must be safe to display in tight UI slots (max ~40 chars).
  */
 export function researchSessionShortCite(session: ResearchSession): string {
+  if (session.sessionType === "analysis") {
+    const result = (session.resultData ?? {}) as ResearchResultLike;
+    const artifacts = Array.isArray(result.artifacts) ? result.artifacts : [];
+    const firstFilename = artifacts[0]?.filename?.trim();
+    if (firstFilename) return truncate(firstFilename, 40);
+    return truncate(session.query, 40);
+  }
+
   const result = (session.resultData ?? {}) as ResearchResultLike;
   const refs = Array.isArray(result.references) ? result.references : [];
   const firstRef = refs[0];
@@ -62,6 +75,39 @@ export function extractResearchReferences(
 ): LiteratureReferenceLike[] {
   const result = (session.resultData ?? {}) as ResearchResultLike;
   return Array.isArray(result.references) ? result.references : [];
+}
+
+function formatAnalysisSessionDate(session: ResearchSession): string | null {
+  const raw = session.completedAt ?? session.createdAt;
+  if (!raw) return null;
+  const date = raw instanceof Date ? raw : new Date(raw);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/** Full cite line for report References — branches on session type. */
+export function researchSessionFullCite(session: ResearchSession): string {
+  if (session.sessionType === "analysis") {
+    const result = (session.resultData ?? {}) as ResearchResultLike;
+    const artifacts = Array.isArray(result.artifacts) ? result.artifacts : [];
+    const firstFilename = artifacts[0]?.filename?.trim();
+    const datePart = formatAnalysisSessionDate(session);
+    const queryPart = session.query.trim() || "Untitled analysis";
+    const prefix = datePart ? `Data analysis (${datePart})` : "Data analysis";
+    if (firstFilename) {
+      return `${prefix}: ${queryPart}. Output: ${firstFilename}.`;
+    }
+    return `${prefix}: ${queryPart}.`;
+  }
+
+  const refs = extractResearchReferences(session);
+  const firstRef = refs[0];
+  if (firstRef) return researchReferenceFullCite(firstRef);
+  return `Research session: ${session.query}`;
 }
 
 function formatAuthorLastName(authors: string | string[] | null | undefined): string | null {

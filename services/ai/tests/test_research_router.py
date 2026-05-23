@@ -14,6 +14,7 @@ pytest.importorskip("starlette")
 
 from routers.research import (  # noqa: E402
     _fetch_task_id,
+    _parse_storage_fetch_result,
     _read_task_id,
     literature_search,
 )
@@ -216,3 +217,56 @@ def test_fetch_task_id_retries_until_available():
     result = asyncio.run(run())
     assert result == "task-xyz"
     assert call_count == 2
+
+
+# ── Storage fetch parser ───────────────────────────────────────────────────────
+
+def test_parse_storage_fetch_result_path(tmp_path):
+    artifact = tmp_path / "output.csv"
+    artifact.write_text("a,b\n1,2\n", encoding="utf-8")
+    content, filename = _parse_storage_fetch_result(artifact)
+    assert content == b"a,b\n1,2\n"
+    assert filename == "output.csv"
+
+
+def test_parse_storage_fetch_result_path_list(tmp_path):
+    first = tmp_path / "first.csv"
+    second = tmp_path / "second.csv"
+    first.write_text("one", encoding="utf-8")
+    second.write_text("two", encoding="utf-8")
+    content, filename = _parse_storage_fetch_result([second, first])
+    assert content == b"two"
+    assert filename == "second.csv"
+
+
+def test_parse_storage_fetch_result_raw_fetch_text():
+    class RawFetchResponse:
+        def __init__(self):
+            self.filename = None
+            self.content = "hello,world"
+            self.entry_name = "results.csv"
+
+    content, filename = _parse_storage_fetch_result(RawFetchResponse())
+    assert content == b"hello,world"
+    assert filename == "results.csv"
+
+
+def test_parse_storage_fetch_result_raw_fetch_base64_image():
+    import base64
+
+    png_bytes = b"\x89PNG\r\n\x1a\nfake"
+    encoded = base64.b64encode(png_bytes).decode("ascii")
+
+    class RawFetchResponse:
+        def __init__(self):
+            self.filename = "figure_1.png"
+            self.content = encoded
+            self.entry_name = "figure_1.png"
+
+    content, filename = _parse_storage_fetch_result(RawFetchResponse())
+    assert content == png_bytes
+    assert filename == "figure_1.png"
+
+
+def test_parse_storage_fetch_result_none():
+    assert _parse_storage_fetch_result(None) == (None, None)

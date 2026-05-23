@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import re
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any, Literal, TypedDict
 
 from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile
@@ -1304,6 +1306,17 @@ _MAX_INLINE_TEXT_BYTES = 200_000
 _MAX_INLINE_ARTIFACT_BYTES = 2_000_000
 
 
+def _decode_raw_fetch_content(content: str, filename: str | None) -> bytes:
+    """Decode RawFetchResponse.content — UTF-8 text or base64 for binary/image."""
+    mime = _guess_artifact_mime_type(filename) if filename else "application/octet-stream"
+    if mime.startswith("image/") or mime == "application/octet-stream":
+        try:
+            return base64.b64decode(content, validate=True)
+        except Exception:
+            pass
+    return content.encode("utf-8")
+
+
 def _parse_storage_fetch_result(fetched: Any) -> tuple[bytes | None, str | None]:
     """Normalise Edison afetch_data_from_storage payloads to (bytes, filename)."""
     import os
@@ -1314,10 +1327,22 @@ def _parse_storage_fetch_result(fetched: Any) -> tuple[bytes | None, str | None]
     if isinstance(fetched, (bytes, bytearray, memoryview)):
         return bytes(fetched), None
 
+    if isinstance(fetched, Path):
+        if fetched.is_file():
+            return fetched.read_bytes(), fetched.name
+        return None, fetched.name or None
+
+    if isinstance(fetched, list):
+        for item in fetched:
+            content_bytes, filename = _parse_storage_fetch_result(item)
+            if content_bytes is not None:
+                return content_bytes, filename
+        return None, None
+
     if isinstance(fetched, str):
         if os.path.isfile(fetched):
-            with open(fetched, "rb") as fh:
-                return fh.read(), os.path.basename(fetched)
+            path = Path(fetched)
+            return path.read_bytes(), path.name
         return fetched.encode("utf-8"), None
 
     filename: str | None = None
@@ -1325,21 +1350,39 @@ def _parse_storage_fetch_result(fetched: Any) -> tuple[bytes | None, str | None]
 
     if isinstance(fetched, dict):
         raw_name = fetched.get("filename")
-        filename = raw_name if isinstance(raw_name, str) else None
+        if isinstance(raw_name, Path):
+            filename = raw_name.name
+        elif isinstance(raw_name, str) and raw_name.strip():
+            filename = os.path.basename(raw_name)
+        if not filename:
+            entry_name = fetched.get("entry_name")
+            if isinstance(entry_name, str) and entry_name.strip():
+                filename = entry_name.strip()
         path = fetched.get("path")
+        if isinstance(path, Path) and path.is_file():
+            return path.read_bytes(), filename or path.name
         if isinstance(path, str) and os.path.isfile(path):
-            with open(path, "rb") as fh:
-                return fh.read(), filename or os.path.basename(path)
+            return Path(path).read_bytes(), filename or os.path.basename(path)
         content = fetched.get("content")
     elif hasattr(fetched, "content") or hasattr(fetched, "filename"):
         raw_name = getattr(fetched, "filename", None)
-        filename = raw_name if isinstance(raw_name, str) else None
+        if isinstance(raw_name, Path):
+            filename = raw_name.name
+        elif isinstance(raw_name, str) and raw_name.strip():
+            filename = os.path.basename(raw_name)
+        if not filename:
+            entry_name = getattr(fetched, "entry_name", None)
+            if isinstance(entry_name, str) and entry_name.strip():
+                filename = entry_name.strip()
         content = getattr(fetched, "content", None)
     else:
         return None, None
 
     if content is None:
         return None, filename
+
+    if isinstance(content, str):
+        return _decode_raw_fetch_content(content, filename), filename
 
     content_bytes, nested_name = _parse_storage_fetch_result(content)
     return content_bytes, filename or nested_name

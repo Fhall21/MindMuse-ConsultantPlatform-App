@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractResearchReferences,
   researchReferenceFullCite,
+  researchSessionFullCite,
   researchSessionShortCite,
 } from "@/lib/citations/short-cite";
 
@@ -65,6 +66,28 @@ describe("researchSessionShortCite", () => {
     });
     expect(researchSessionShortCite(session)).toBe("Smith 2023");
   });
+
+  it("uses first artifact filename for analysis sessions", () => {
+    const session = makeSession({
+      sessionType: "analysis",
+      query: "What patterns exist in employee turnover data?",
+      resultData: {
+        artifacts: [{ filename: "turnover_summary.csv" }],
+      },
+    });
+    expect(researchSessionShortCite(session)).toBe("turnover_summary.csv");
+  });
+
+  it("falls back to truncated query for analysis sessions without artifacts", () => {
+    const session = makeSession({
+      sessionType: "analysis",
+      query: "B".repeat(80),
+      resultData: { answer: "Some analysis result" },
+    });
+    const cite = researchSessionShortCite(session);
+    expect(cite.length).toBeLessThanOrEqual(40);
+    expect(cite.startsWith("B")).toBe(true);
+  });
 });
 
 describe("researchReferenceFullCite", () => {
@@ -100,5 +123,53 @@ describe("extractResearchReferences", () => {
     const refs = [{ title: "Paper one" }, { title: "Paper two" }];
     const session = makeSession({ resultData: { references: refs } });
     expect(extractResearchReferences(session)).toEqual(refs);
+  });
+});
+
+describe("researchSessionFullCite", () => {
+  it("renders literature full cite from first reference", () => {
+    const session = makeSession({
+      resultData: {
+        references: [
+          {
+            authors: "Smith, J.",
+            year: "2024",
+            title: "Burnout in modern workplaces",
+            url: "https://example.org/burnout",
+          },
+        ],
+      },
+    });
+    expect(researchSessionFullCite(session)).toBe(
+      "Smith, J. (2024). Burnout in modern workplaces. https://example.org/burnout"
+    );
+  });
+
+  it("renders analysis full cite with query and artifact filename", () => {
+    const session = makeSession({
+      sessionType: "analysis",
+      query: "What drives turnover in Q3?",
+      completedAt: new Date("2026-03-15T12:00:00Z"),
+      resultData: {
+        artifacts: [{ filename: "turnover_summary.csv" }],
+      },
+    });
+    const cite = researchSessionFullCite(session);
+    expect(cite).toContain("Data analysis");
+    expect(cite).toContain("What drives turnover in Q3?");
+    expect(cite).toContain("turnover_summary.csv");
+  });
+
+  it("falls back to query-only analysis cite when no artifacts", () => {
+    const session = makeSession({
+      sessionType: "analysis",
+      query: "Summarise the dataset trends",
+      completedAt: null,
+      createdAt: null as unknown as Date,
+      resultData: { answer: "Trends show…" },
+    });
+    expect(researchSessionFullCite(session)).toBe(
+      "Data analysis: Summarise the dataset trends."
+    );
   });
 });

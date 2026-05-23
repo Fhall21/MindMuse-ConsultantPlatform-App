@@ -1,21 +1,21 @@
 /**
- * Server-side canvas renderer.
+ * Server-side canvas → PNG renderer.
  *
- * Produces a PNG of the consultant's canvas from already-persisted layout
- * data (positions, frames, edges, node labels) — no browser DOM required.
- *
- * Why this exists: report generation is triggered from pages where the
- * canvas isn't mounted (`/consultations/rounds/[id]`, `/reports`). To
- * preserve the canvas → report visual fidelity, we render the canvas
- * here, then store the result on the new report row.
+ * Renders the consultant's canvas from the persisted state into a PNG per
+ * frame. No browser DOM, no html2canvas — we build an SVG that mimics the
+ * live canvas card design and rasterise via @resvg/resvg-js.
  *
  * Pipeline:
- *   stored layout → handcrafted SVG string → @resvg/resvg-js → PNG buffer
- *   → base64 data URL → `canvas_image` jsonb.
+ *   composeCanvasState() → CanvasNode[] + CanvasEdge[] + CanvasFrame[]
+ *   → SVG string per frame → resvg → PNG buffer → base64 data URL.
  *
- * The render is a *clean diagram*, not a pixel-for-pixel screenshot. It
- * trades the live canvas's exact Tailwind chrome for predictability and
- * fits the report's print aesthetic better than a html2canvas dump would.
+ * Card design is hand-coded to mirror the live components (canvas-node-card.tsx
+ * for theme groups + insights, canvas-frame-node.tsx for frames). When the
+ * live styles change, this renderer needs an update — keep the constants in
+ * sync with `lib/canvas-layout.ts` and `components/canvas/canvas-frame-node.tsx`.
+ *
+ * No hero / full-canvas image is produced. The user explicitly does not want
+ * one — only per-frame imagery, contextual to each section.
  */
 import { Resvg } from "@resvg/resvg-js";
 import {
@@ -23,57 +23,68 @@ import {
   CONNECTION_TYPE_LABELS,
   DASHED_CONNECTION_TYPES,
 } from "@/lib/canvas-constants";
-import type { ConnectionType } from "@/types/canvas";
+import type { CanvasNode, CanvasEdge, CanvasFrame, FrameColor } from "@/types/canvas";
 
-// ─── Input shape ──────────────────────────────────────────────────────────────
+// ─── Layout constants (mirror lib/canvas-layout.ts) ──────────────────────────
 
-export interface CanvasRenderNode {
-  id: string;
-  label: string;
-  /** Flow-space coordinates of the node's top-left corner. */
-  x: number;
-  y: number;
-  /** Defaults applied if persisted layout doesn't carry them. */
-  width?: number;
-  height?: number;
+const GROUP_WIDTH = 596;
+const GROUP_HEADER_HEIGHT = 118;
+const GROUP_PADDING_X = 28;
+const GROUP_PADDING_TOP = 24;
+const GROUP_PADDING_BOTTOM = 28;
+const GROUP_GAP_Y = 22;
+const GROUP_COLUMNS = 2;
+const INSIGHT_WIDTH = 258;
+const INSIGHT_HEIGHT = 110;
+const GROUP_GAP_X = 24;
+
+function getGroupHeight(memberCount: number) {
+  const visibleCount = Math.max(memberCount, 1);
+  const rowCount = Math.max(1, Math.ceil(visibleCount / GROUP_COLUMNS));
+  return Math.max(
+    246,
+    GROUP_HEADER_HEIGHT +
+      GROUP_PADDING_TOP +
+      GROUP_PADDING_BOTTOM +
+      rowCount * INSIGHT_HEIGHT +
+      Math.max(0, rowCount - 1) * GROUP_GAP_Y
+  );
 }
 
-export interface CanvasRenderEdge {
-  sourceNodeId: string;
-  targetNodeId: string;
-  connectionType: ConnectionType;
-  note?: string | null;
-}
+// ─── Visual constants ────────────────────────────────────────────────────────
 
-export interface CanvasRenderFrame {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  /** Hex colour. Falls back to neutral grey when null. */
-  color?: string | null;
-}
+// Mapping of FrameColor → Tailwind 500-shade hex. Keeps the report visual
+// in sync with the live canvas palette (lib/canvas-frame-node.tsx COLOR_CLASSES).
+const FRAME_COLOR_HEX: Record<FrameColor, string> = {
+  amber: "#f59e0b",
+  blue: "#3b82f6",
+  green: "#10b981", // Tailwind emerald-500 — the canvas uses emerald for "green".
+  purple: "#8b5cf6", // Tailwind violet-500
+  rose: "#f43f5e",
+  slate: "#64748b",
+};
 
-export interface CanvasRenderInput {
-  nodes: CanvasRenderNode[];
-  edges: CanvasRenderEdge[];
-  frames: CanvasRenderFrame[];
-}
-
-// ─── Rendering constants ──────────────────────────────────────────────────────
-
-const NODE_WIDTH = 200;
-const NODE_HEIGHT = 80;
-const NODE_RADIUS = 8;
-const NODE_FILL = "#ffffff";
-const NODE_BORDER = "#d4d4d8";
-const NODE_TEXT = "#1f2937";
-const FRAME_FILL_OPACITY = 0.06;
-const FRAME_BORDER_WIDTH = 2;
-const PADDING = 60;
-const FONT = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+const CARD_BG = "#ffffff";
+const CARD_BORDER = "#e4e4e7"; // zinc-200, matches border/80
+const CARD_RADIUS = 24;
+const INSIGHT_RADIUS = 16;
+const TEXT_PRIMARY = "#111827"; // gray-900
+const TEXT_MUTED = "#6b7280"; // gray-500
+const TEXT_SUBTLE = "#9ca3af"; // gray-400
+const ACCEPTED_DOT = "#10b981"; // emerald-500
+const PENDING_DOT = "#d4d4d8"; // zinc-300
+const FRAME_FILL_OPACITY = 0.08; // matches /8 Tailwind alpha
+const FRAME_BORDER_OPACITY = 0.6; // matches /60
+// Single-name font so resvg picks one cleanly. Compound declarations like
+// `-apple-system, "Segoe UI"` confuse the fallback chain on Linux and Mac
+// and produce missing-glyph boxes in place of punctuation.
+const FONT_FAMILY = `Helvetica`;
+// Use ASCII ellipsis (three dots) instead of the U+2026 single-glyph "…" —
+// many of the fonts resvg falls back to lack that codepoint and render it as
+// junk overlapping the line above.
+const ELLIPSIS = "...";
+const PADDING = 64;
+const FRAME_HEADER_PILL_OFFSET = 14;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -86,34 +97,61 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-/**
- * Approximate text width for our default font. resvg can't measure text up
- * front, and we don't want to ship a font file just for that — this is
- * good enough for label-truncation heuristics.
- */
+/** Rough sans-serif glyph width estimate (≈0.55em). */
 function approxTextWidth(text: string, fontSize: number): number {
-  // Average glyph width ≈ 0.55em for sans-serif body copy.
   return text.length * fontSize * 0.55;
 }
 
 /**
- * Truncate `label` so its rendered width fits inside `maxWidth`. Returns
- * the truncated string with an ellipsis suffix when needed.
+ * Greedy word-wrap into `maxLines` lines, each clipped to `maxWidth`. Returns
+ * the lines with ellipsis on the last when overflowing.
  */
+function wrapText(text: string, fontSize: number, maxWidth: number, maxLines: number): string[] {
+  if (!text) return [];
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const trial = current ? `${current} ${word}` : word;
+    if (approxTextWidth(trial, fontSize) <= maxWidth) {
+      current = trial;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+      if (lines.length >= maxLines) break;
+    }
+  }
+  if (current && lines.length < maxLines) lines.push(current);
+  if (lines.length === maxLines) {
+    // Re-clip the last line with ellipsis if the remaining input would have spilled.
+    const tail = lines[maxLines - 1];
+    if (tail && approxTextWidth(tail, fontSize) > maxWidth) {
+      lines[maxLines - 1] = clipLabel(tail, maxWidth, fontSize);
+    }
+  }
+  return lines;
+}
+
 function clipLabel(label: string, maxWidth: number, fontSize: number): string {
   if (approxTextWidth(label, fontSize) <= maxWidth) return label;
-  // Binary-search the cut point so we don't render off-card text.
   let lo = 0;
   let hi = label.length;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    if (approxTextWidth(label.slice(0, mid) + "…", fontSize) <= maxWidth) {
-      lo = mid;
-    } else {
-      hi = mid - 1;
-    }
+    if (approxTextWidth(label.slice(0, mid) + ELLIPSIS, fontSize) <= maxWidth) lo = mid;
+    else hi = mid - 1;
   }
-  return label.slice(0, lo) + "…";
+  return label.slice(0, lo) + ELLIPSIS;
+}
+
+/** Normalize text to characters resvg's font fallback handles cleanly. */
+function sanitizeForRender(text: string): string {
+  return text
+    .replace(/…/g, "...")
+    .replace(/—/g, "-") // em-dash
+    .replace(/–/g, "-") // en-dash
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"');
 }
 
 interface BBox {
@@ -123,96 +161,138 @@ interface BBox {
   maxY: number;
 }
 
-function unionBBox(a: BBox, b: BBox): BBox {
-  return {
-    minX: Math.min(a.minX, b.minX),
-    minY: Math.min(a.minY, b.minY),
-    maxX: Math.max(a.maxX, b.maxX),
-    maxY: Math.max(a.maxY, b.maxY),
-  };
-}
+// ─── Card SVG ────────────────────────────────────────────────────────────────
 
-function computeBBox(input: CanvasRenderInput): BBox | null {
-  let bbox: BBox | null = null;
-  for (const node of input.nodes) {
-    const w = node.width ?? NODE_WIDTH;
-    const h = node.height ?? NODE_HEIGHT;
-    const next: BBox = {
-      minX: node.x,
-      minY: node.y,
-      maxX: node.x + w,
-      maxY: node.y + h,
-    };
-    bbox = bbox ? unionBBox(bbox, next) : next;
-  }
-  for (const frame of input.frames) {
-    const next: BBox = {
-      minX: frame.x,
-      minY: frame.y,
-      maxX: frame.x + frame.width,
-      maxY: frame.y + frame.height,
-    };
-    bbox = bbox ? unionBBox(bbox, next) : next;
-  }
-  return bbox;
-}
+function svgInsightCard(node: CanvasNode, x: number, y: number, w = INSIGHT_WIDTH, h = INSIGHT_HEIGHT): string {
+  const labelLines = wrapText(sanitizeForRender(node.label.trim() || "(unnamed)"), 13, w - 24, 2);
+  const descLines = node.description
+    ? wrapText(sanitizeForRender(node.description.trim()), 11, w - 24, 2)
+    : [];
+  const dotColor = node.accepted ? ACCEPTED_DOT : PENDING_DOT;
 
-// ─── SVG fragment builders ────────────────────────────────────────────────────
+  const sourceLabel =
+    node.sourceType === "research"
+      ? node.researchReferenceLabel ?? null
+      : node.sourceConsultationTitle ?? null;
+  const sourceText = sourceLabel
+    ? clipLabel(sanitizeForRender(`1-1 with ${sourceLabel}`), w - 24, 11)
+    : null;
 
-function svgFrame(frame: CanvasRenderFrame): string {
-  const color = frame.color ?? "#94a3b8";
-  return (
-    `<g>` +
-    `<rect x="${frame.x}" y="${frame.y}" width="${frame.width}" height="${frame.height}" rx="12" ` +
-    `fill="${color}" fill-opacity="${FRAME_FILL_OPACITY}" ` +
-    `stroke="${color}" stroke-width="${FRAME_BORDER_WIDTH}" stroke-opacity="0.5"/>` +
-    `<rect x="${frame.x}" y="${frame.y - 22}" width="${Math.min(frame.width, approxTextWidth(frame.name, 12) + 16)}" height="22" rx="6" ` +
-    `fill="${color}" fill-opacity="0.9"/>` +
-    `<text x="${frame.x + 8}" y="${frame.y - 6}" font-size="12" fill="#ffffff" font-family="${FONT.split(",")[0]?.replace(/^\d+px /, "")}">` +
-    escapeXml(frame.name) +
-    `</text>` +
-    `</g>`
+  let cursor = y + 18;
+  const parts: string[] = [];
+  parts.push(
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${INSIGHT_RADIUS}" fill="${CARD_BG}" stroke="${CARD_BORDER}" stroke-width="1"/>`,
+    `<circle cx="${x + w - 14}" cy="${y + 14}" r="4" fill="${dotColor}"/>`
   );
+  for (const line of labelLines) {
+    parts.push(
+      `<text x="${x + 12}" y="${cursor}" font-family='${FONT_FAMILY}' font-size="13" font-weight="600" fill="${TEXT_PRIMARY}">${escapeXml(line)}</text>`
+    );
+    cursor += 16;
+  }
+  cursor += 2;
+  for (const line of descLines) {
+    parts.push(
+      `<text x="${x + 12}" y="${cursor}" font-family='${FONT_FAMILY}' font-size="11" fill="${TEXT_MUTED}">${escapeXml(line)}</text>`
+    );
+    cursor += 14;
+  }
+  if (sourceText) {
+    parts.push(
+      `<rect x="${x + 12}" y="${y + h - 26}" width="${approxTextWidth(sourceText, 10) + 12}" height="18" rx="9" fill="#fef3c7"/>`,
+      `<text x="${x + 18}" y="${y + h - 13}" font-family='${FONT_FAMILY}' font-size="10" fill="#92400e">${escapeXml(sourceText)}</text>`
+    );
+  }
+  return parts.join("");
 }
 
-function svgNode(node: CanvasRenderNode): string {
-  const w = node.width ?? NODE_WIDTH;
-  const h = node.height ?? NODE_HEIGHT;
-  const cx = node.x + w / 2;
-  const cy = node.y + h / 2;
-  // Two-line wrap: split on rough mid-point at a space if available.
-  const label = node.label.trim() || "(unnamed)";
-  const wrapWidth = w - 20;
-  let line1 = label;
-  let line2 = "";
-  if (approxTextWidth(label, 13) > wrapWidth) {
-    const half = Math.floor(label.length / 2);
-    const splitIdx = label.indexOf(" ", half - 6);
-    if (splitIdx > 0 && splitIdx < label.length - 4) {
-      line1 = label.slice(0, splitIdx);
-      line2 = label.slice(splitIdx + 1);
-    }
-    line1 = clipLabel(line1, wrapWidth, 13);
-    line2 = clipLabel(line2, wrapWidth, 13);
-  }
-  const fontFamily = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-  return (
-    `<g>` +
-    `<rect x="${node.x}" y="${node.y}" width="${w}" height="${h}" rx="${NODE_RADIUS}" ` +
-    `fill="${NODE_FILL}" stroke="${NODE_BORDER}" stroke-width="1"/>` +
-    `<text x="${cx}" y="${line2 ? cy - 4 : cy + 4}" font-size="13" fill="${NODE_TEXT}" ` +
-    `font-family='${fontFamily}' text-anchor="middle" dominant-baseline="middle">` +
-    escapeXml(line1) +
-    `</text>` +
-    (line2
-      ? `<text x="${cx}" y="${cy + 12}" font-size="13" fill="${NODE_TEXT}" ` +
-        `font-family='${fontFamily}' text-anchor="middle" dominant-baseline="middle">` +
-        escapeXml(line2) +
-        `</text>`
-      : "") +
-    `</g>`
+function svgThemeGroupCard(node: CanvasNode, x: number, y: number, members: CanvasNode[]): string {
+  const w = GROUP_WIDTH;
+  const h = getGroupHeight(node.memberIds.length);
+  const labelLines = wrapText(
+    sanitizeForRender(node.label.trim() || "Theme group"),
+    16,
+    w - 56 - 80,
+    2
   );
+  const descLines = node.description
+    ? wrapText(sanitizeForRender(node.description.trim()), 12, w - 56 - 80, 3)
+    : [];
+
+  const parts: string[] = [];
+  // Outer card with rounded corners + thin border + emerald left stripe.
+  parts.push(
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${CARD_RADIUS}" fill="${CARD_BG}" stroke="${CARD_BORDER}" stroke-width="1"/>`,
+    `<rect x="${x}" y="${y}" width="6" height="${h}" rx="${CARD_RADIUS}" fill="#10b981" fill-opacity="0.7"/>`
+  );
+
+  // Header section (label + description + member-count badge).
+  let cursor = y + 32;
+  for (const line of labelLines) {
+    parts.push(
+      `<text x="${x + 28}" y="${cursor}" font-family='${FONT_FAMILY}' font-size="16" font-weight="600" fill="${TEXT_PRIMARY}">${escapeXml(line)}</text>`
+    );
+    cursor += 20;
+  }
+  cursor += 4;
+  for (const line of descLines) {
+    parts.push(
+      `<text x="${x + 28}" y="${cursor}" font-family='${FONT_FAMILY}' font-size="12" fill="${TEXT_MUTED}">${escapeXml(line)}</text>`
+    );
+    cursor += 16;
+  }
+  // Member-count badge top-right.
+  const badge = `${node.memberIds.length} card${node.memberIds.length === 1 ? "" : "s"}`;
+  const badgeW = approxTextWidth(badge, 11) + 18;
+  parts.push(
+    `<rect x="${x + w - badgeW - 18}" y="${y + 20}" width="${badgeW}" height="22" rx="11" fill="#f4f4f5"/>`,
+    `<text x="${x + w - badgeW / 2 - 18}" y="${y + 35}" font-family='${FONT_FAMILY}' font-size="11" fill="${TEXT_MUTED}" text-anchor="middle">${escapeXml(badge)}</text>`
+  );
+
+  // Divider under header.
+  parts.push(
+    `<line x1="${x + 28}" y1="${y + GROUP_HEADER_HEIGHT}" x2="${x + w - 28}" y2="${y + GROUP_HEADER_HEIGHT}" stroke="${CARD_BORDER}"/>`
+  );
+
+  // Member cards laid out 2-up like the live canvas.
+  members.slice(0, node.memberIds.length).forEach((member, index) => {
+    const row = Math.floor(index / GROUP_COLUMNS);
+    const col = index % GROUP_COLUMNS;
+    const cardX = x + GROUP_PADDING_X + col * (INSIGHT_WIDTH + GROUP_GAP_X);
+    const cardY =
+      y + GROUP_HEADER_HEIGHT + GROUP_PADDING_TOP + row * (INSIGHT_HEIGHT + GROUP_GAP_Y);
+    parts.push(svgInsightCard(member, cardX, cardY));
+  });
+
+  return parts.join("");
 }
+
+function svgFrame(frame: CanvasFrame): string {
+  const colorHex = FRAME_COLOR_HEX[frame.color] ?? FRAME_COLOR_HEX.blue;
+  const parts: string[] = [];
+  // Filled rounded rect with tinted background + coloured border.
+  parts.push(
+    `<rect x="${frame.x}" y="${frame.y}" width="${frame.width}" height="${frame.height}" rx="14" ` +
+      `fill="${colorHex}" fill-opacity="${FRAME_FILL_OPACITY}" ` +
+      `stroke="${colorHex}" stroke-opacity="${FRAME_BORDER_OPACITY}" stroke-width="2"/>`
+  );
+  // Floating header pill (top-left, slightly above the frame edge — mirrors
+  // canvas-frame-node.tsx -top-3 left-3 absolute positioning).
+  const pillText = sanitizeForRender(frame.name || "Frame");
+  const textW = approxTextWidth(pillText, 12);
+  const pillW = textW + 32;
+  const pillH = 22;
+  const pillX = frame.x + FRAME_HEADER_PILL_OFFSET;
+  const pillY = frame.y - pillH / 2;
+  parts.push(
+    `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="6" fill="${CARD_BG}" stroke="${CARD_BORDER}"/>`,
+    `<circle cx="${pillX + 12}" cy="${pillY + pillH / 2}" r="4" fill="${colorHex}"/>`,
+    `<text x="${pillX + 22}" y="${pillY + 15}" font-family='${FONT_FAMILY}' font-size="12" font-weight="500" fill="${TEXT_PRIMARY}">${escapeXml(pillText)}</text>`
+  );
+  return parts.join("");
+}
+
+// ─── Edge SVG ────────────────────────────────────────────────────────────────
 
 interface NodeRect {
   x: number;
@@ -221,178 +301,219 @@ interface NodeRect {
   height: number;
 }
 
-function nodeRect(node: CanvasRenderNode): NodeRect {
+function rectFor(node: CanvasNode): NodeRect {
+  if (node.type === "theme") {
+    return {
+      x: node.position.x,
+      y: node.position.y,
+      width: GROUP_WIDTH,
+      height: getGroupHeight(node.memberIds.length),
+    };
+  }
   return {
-    x: node.x,
-    y: node.y,
-    width: node.width ?? NODE_WIDTH,
-    height: node.height ?? NODE_HEIGHT,
+    x: node.position.x,
+    y: node.position.y,
+    width: INSIGHT_WIDTH,
+    height: INSIGHT_HEIGHT,
   };
 }
 
-/**
- * Pick handle points on the two nodes so edges don't enter through the
- * middle. Simple right-edge → left-edge heuristic: source emits on its
- * right, target receives on its left. Mirrors the live ReactFlow default
- * "smoothstep" topology.
- */
-function handlePoints(src: NodeRect, tgt: NodeRect): { sx: number; sy: number; tx: number; ty: number } {
+/** Match ReactFlow default bezier: emit right edge of source → left edge of target. */
+function handlePoints(src: NodeRect, tgt: NodeRect) {
   return {
     sx: src.x + src.width,
-    sy: src.y + src.height / 2,
+    sy: src.y + 24, // theme cards have top-12 handles; insights use vertical center-ish
     tx: tgt.x,
-    ty: tgt.y + tgt.height / 2,
+    ty: tgt.y + 24,
   };
 }
 
-function svgEdge(
-  edge: CanvasRenderEdge,
-  source: CanvasRenderNode,
-  target: CanvasRenderNode
-): string {
-  const { sx, sy, tx, ty } = handlePoints(nodeRect(source), nodeRect(target));
-  const color = CONNECTION_COLORS[edge.connectionType] ?? "#6b7280";
-  const dash = DASHED_CONNECTION_TYPES.has(edge.connectionType) ? "6 4" : "0";
-  const dx = Math.abs(tx - sx) * 0.5;
+function svgEdgePath(edge: CanvasEdge, source: CanvasNode, target: CanvasNode): string {
+  const { sx, sy, tx, ty } = handlePoints(rectFor(source), rectFor(target));
+  const color = CONNECTION_COLORS[edge.connection_type] ?? "#6b7280";
+  const dash = DASHED_CONNECTION_TYPES.has(edge.connection_type) ? "6 4" : "0";
+
+  // Bezier control-point offset — matches React Flow's "smoothstep"/"bezier"
+  // default where curvature scales with horizontal distance.
+  const dx = Math.max(40, Math.abs(tx - sx) * 0.5);
   const cp1x = sx + dx;
   const cp1y = sy;
   const cp2x = tx - dx;
   const cp2y = ty;
+
   const mx = 0.125 * sx + 0.375 * cp1x + 0.375 * cp2x + 0.125 * tx;
   const my = 0.125 * sy + 0.375 * cp1y + 0.375 * cp2y + 0.125 * ty;
-  const label = CONNECTION_TYPE_LABELS[edge.connectionType];
-  const labelWidth = approxTextWidth(label, 10) + 12;
+  const label = CONNECTION_TYPE_LABELS[edge.connection_type];
+  const labelW = approxTextWidth(label, 10) + 14;
+
   return (
-    `<g>` +
     `<path d="M ${sx} ${sy} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${tx} ${ty}" ` +
-    `fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="${dash}" ` +
-    `marker-end="url(#arrow-${edge.connectionType})"/>` +
-    `<rect x="${mx - labelWidth / 2}" y="${my - 9}" width="${labelWidth}" height="18" rx="4" ` +
-    `fill="#ffffff" fill-opacity="0.92"/>` +
-    `<text x="${mx}" y="${my + 4}" font-size="10" fill="${color}" ` +
-    `font-family='-apple-system, sans-serif' text-anchor="middle">` +
-    escapeXml(label) +
-    `</text>` +
-    `</g>`
+    `fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" ` +
+    `marker-end="url(#arrow-${edge.connection_type})"/>` +
+    `<rect x="${mx - labelW / 2}" y="${my - 10}" width="${labelW}" height="18" rx="9" fill="${CARD_BG}" fill-opacity="0.94"/>` +
+    `<text x="${mx}" y="${my + 4}" font-family='${FONT_FAMILY}' font-size="10" fill="${color}" text-anchor="middle">${escapeXml(label)}</text>`
   );
 }
 
 function svgArrowDefs(): string {
-  // One marker per connection type so arrowheads share their edge's colour.
-  const types: ConnectionType[] = [
+  const types = [
     "causes",
     "influences",
     "supports",
     "contradicts",
     "context",
     "related_to",
-  ];
+  ] as const;
   return (
     `<defs>` +
     types
-      .map((t) => {
-        const color = CONNECTION_COLORS[t];
-        return (
-          `<marker id="arrow-${t}" markerWidth="10" markerHeight="10" refX="9" refY="5" ` +
-          `orient="auto" markerUnits="strokeWidth">` +
-          `<path d="M 0 0 L 10 5 L 0 10 z" fill="${color}"/>` +
+      .map(
+        (t) =>
+          `<marker id="arrow-${t}" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">` +
+          `<path d="M 0 0 L 10 5 L 0 10 z" fill="${CONNECTION_COLORS[t]}"/>` +
           `</marker>`
-        );
-      })
+      )
       .join("") +
     `</defs>`
   );
 }
 
-// ─── Top-level renderer ───────────────────────────────────────────────────────
+// ─── Public API ──────────────────────────────────────────────────────────────
 
-interface RenderOptions {
-  /** Override the viewport rather than computing it from input bounds. */
-  viewport?: BBox;
-  /** Maximum output width in pixels. Aspect ratio is preserved. */
-  maxWidth?: number;
+export interface CanvasRenderInput {
+  nodes: CanvasNode[];
+  edges: CanvasEdge[];
+  frames: CanvasFrame[];
 }
 
 /**
- * Build an SVG string for the given input, then rasterise to PNG and return
- * a `data:image/png;base64,...` URL. Returns null when the input has nothing
- * to render (no nodes and no frames).
- */
-export function renderCanvasToPng(input: CanvasRenderInput, opts: RenderOptions = {}): string | null {
-  const bbox = opts.viewport ?? computeBBox(input);
-  if (!bbox) return null;
-
-  const minX = bbox.minX - PADDING;
-  const minY = bbox.minY - PADDING - 28; // extra top padding for frame labels
-  const flowW = bbox.maxX - bbox.minX + PADDING * 2;
-  const flowH = bbox.maxY - bbox.minY + PADDING * 2;
-
-  // Index nodes by id so edge rendering can look up source/target.
-  const nodeById = new Map(input.nodes.map((n) => [n.id, n]));
-
-  // Frame label-only edges (those whose source or target isn't in the
-  // visible node set) are skipped to avoid floating arrows.
-  const visibleEdges = input.edges.filter(
-    (e) => nodeById.has(e.sourceNodeId) && nodeById.has(e.targetNodeId)
-  );
-
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${flowW} ${flowH}">` +
-    svgArrowDefs() +
-    // Background so PNGs aren't transparent (better for Word/PDF embeds).
-    `<rect x="${minX}" y="${minY}" width="${flowW}" height="${flowH}" fill="#fafafa"/>` +
-    input.frames.map(svgFrame).join("") +
-    visibleEdges
-      .map((e) => svgEdge(e, nodeById.get(e.sourceNodeId)!, nodeById.get(e.targetNodeId)!))
-      .join("") +
-    input.nodes.map(svgNode).join("") +
-    `</svg>`;
-
-  // Resvg's `fitTo` ensures the rasteriser scales to a sensible pixel size
-  // regardless of the underlying flow-coord dimensions.
-  const maxW = opts.maxWidth ?? 1400;
-  const resvg = new Resvg(svg, {
-    fitTo: { mode: "width", value: maxW },
-    background: "#fafafa",
-  });
-  const png = resvg.render().asPng();
-  return `data:image/png;base64,${png.toString("base64")}`;
-}
-
-/**
- * Render the full canvas plus a cropped PNG for each frame. Returns the
- * payload shape that `consultation_output_artifacts.canvas_image` expects.
+ * Render a single frame as a PNG data URL. Returns null on failure or when
+ * the frame has nothing inside it.
  *
- * `null` when there is nothing to render (caller should leave canvas_image
- * unset on the report row).
+ * Viewport: clipped to the frame's bbox + padding. Edges that exit the frame
+ * render only their visible portion (clipped naturally by SVG viewBox).
  */
-export function renderCanvasImagePayload(
-  input: CanvasRenderInput
-): { full: string; frames: Record<string, string>; capturedAt: string } | null {
-  if (input.nodes.length === 0 && input.frames.length === 0) return null;
+function renderFrameToPng(
+  input: CanvasRenderInput,
+  frame: CanvasFrame,
+  maxWidth: number
+): string | null {
+  const frameRect = {
+    minX: frame.x,
+    minY: frame.y,
+    maxX: frame.x + frame.width,
+    maxY: frame.y + frame.height,
+  };
+  // Pad slightly so the frame header pill + border are not clipped.
+  const minX = frameRect.minX - 32;
+  const minY = frameRect.minY - 32;
+  const w = frame.width + 64;
+  const h = frame.height + 64;
 
-  const full = renderCanvasToPng(input);
-  if (!full) return null;
+  const nodeById = new Map(input.nodes.map((n) => [n.id, n] as const));
 
-  const frames: Record<string, string> = {};
-  for (const frame of input.frames) {
-    // Per-frame render uses the same node/edge sets but a viewport clipped
-    // to the frame's bbox. Edges that exit the frame still render fully —
-    // crossing arrows are part of the spatial story.
-    const cropped = renderCanvasToPng(input, {
-      viewport: {
-        minX: frame.x,
-        minY: frame.y,
-        maxX: frame.x + frame.width,
-        maxY: frame.y + frame.height,
-      },
-      maxWidth: 1000,
-    });
-    if (cropped) frames[frame.id] = cropped;
+  // Theme-group memberships — show all member insight cards inside their
+  // parent theme card. We still draw insight nodes that are NOT inside any
+  // group as standalone cards.
+  const memberIdsClaimed = new Set<string>();
+  for (const node of input.nodes) {
+    if (node.type === "theme") {
+      for (const id of node.memberIds) memberIdsClaimed.add(id);
+    }
   }
 
+  // Decide which nodes are "visible" in this frame: anything whose bbox
+  // overlaps the frame's bbox. Members of a theme group are rendered with
+  // their parent (not as standalone), so we filter those out.
+  const visibleStandaloneNodes = input.nodes.filter((node) => {
+    if (memberIdsClaimed.has(node.id)) return false;
+    const r = rectFor(node);
+    return (
+      r.x + r.width > frameRect.minX &&
+      r.x < frameRect.maxX &&
+      r.y + r.height > frameRect.minY &&
+      r.y < frameRect.maxY
+    );
+  });
+
+  const visibleEdges = input.edges.filter(
+    (e) => nodeById.has(e.source_node_id) && nodeById.has(e.target_node_id)
+  );
+
+  const parts: string[] = [];
+  parts.push(svgArrowDefs());
+  parts.push(
+    `<rect x="${minX}" y="${minY}" width="${w}" height="${h}" fill="#fafafa"/>`
+  );
+  // Draw the frame's chrome first so cards sit on top.
+  parts.push(svgFrame(frame));
+
+  // Draw edges between the visible standalone-or-theme nodes.
+  for (const edge of visibleEdges) {
+    const source = nodeById.get(edge.source_node_id)!;
+    const target = nodeById.get(edge.target_node_id)!;
+    parts.push(svgEdgePath(edge, source, target));
+  }
+
+  // Draw cards.
+  for (const node of visibleStandaloneNodes) {
+    if (node.type === "theme") {
+      const members = node.memberIds
+        .map((id) => nodeById.get(id))
+        .filter((m): m is CanvasNode => Boolean(m));
+      parts.push(svgThemeGroupCard(node, node.position.x, node.position.y, members));
+    } else {
+      parts.push(svgInsightCard(node, node.position.x, node.position.y));
+    }
+  }
+
+  if (visibleStandaloneNodes.length === 0) {
+    // Empty frame — still emit the chrome so the report shows the frame
+    // outline rather than "No captured image".
+  }
+
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${w} ${h}">` +
+    parts.join("") +
+    `</svg>`;
+
+  try {
+    const resvg = new Resvg(svg, {
+      fitTo: { mode: "width", value: maxWidth },
+      background: "#fafafa",
+    });
+    const png = resvg.render().asPng();
+    return `data:image/png;base64,${png.toString("base64")}`;
+  } catch (error) {
+    console.warn("[canvas-svg-renderer] frame render failed", frame.id, error);
+    return null;
+  }
+}
+
+/**
+ * Render one PNG per frame and return the persistence-ready payload.
+ *
+ * No full / hero image is produced — only per-frame imagery. Returns null
+ * when there are no frames at all (caller should leave canvas_image unset).
+ */
+export function renderCanvasImagePayload(
+  input: CanvasRenderInput,
+  opts: { perFrameMaxWidth?: number } = {}
+): { full: string | null; frames: Record<string, string>; capturedAt: string } | null {
+  if (input.frames.length === 0) return null;
+
+  const perFrameMaxWidth = opts.perFrameMaxWidth ?? 1200;
+  const frames: Record<string, string> = {};
+  for (const frame of input.frames) {
+    const dataUrl = renderFrameToPng(input, frame, perFrameMaxWidth);
+    if (dataUrl) frames[frame.id] = dataUrl;
+  }
+  if (Object.keys(frames).length === 0) return null;
+
   return {
-    full,
+    // No hero image — `full` stays null. The shape is preserved for backward
+    // compatibility with any existing readers that may dereference it.
+    full: null,
     frames,
     capturedAt: new Date().toISOString(),
   };

@@ -195,7 +195,8 @@ export interface NetworkSnapshotV2 {
  * the frame was outside the captured viewport at capture time and was skipped.
  */
 export interface CapturedCanvasImagePayload {
-  full: string;
+  /** Hero/full-canvas image, always null in v3 — no hero is rendered. */
+  full: string | null;
   frames: Record<string, string>;
   capturedAt: string;
 }

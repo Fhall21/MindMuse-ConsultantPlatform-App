@@ -124,7 +124,7 @@ export interface ConsultationOutputArtifact {
   content: string;
   input_snapshot: Record<string, unknown>;
   canvas_image: {
-    full: string;
+    full: string | null;
     frames: Record<string, string>;
     capturedAt: string;
   } | null;

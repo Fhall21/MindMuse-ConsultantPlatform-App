@@ -2587,54 +2587,22 @@ async function generateRoundOutput(
     graphNetwork,
   } satisfies ReportInputSnapshot;
 
-  // Render the canvas server-side from the persisted layout. Works regardless
-  // of which page triggered generation — no live DOM dependency. Failures
-  // (e.g. resvg-js missing a binary for this platform) degrade silently to a
-  // text-only report; we do not block generation on imagery.
+  // Render the canvas server-side from the persisted state — same composer
+  // the canvas page uses (composeCanvasState), fed into an SVG renderer that
+  // mirrors the live card design and rasterises via @resvg/resvg-js. Works
+  // regardless of which page triggered generation (no live DOM dependency).
+  // Failures degrade silently to text-only so we never block on imagery.
   const canvasImage = await (async () => {
     if (artifactType !== "report") return null;
-    if (!canvasLayout || Object.keys(canvasLayout.positions).length === 0) {
-      return null;
-    }
+    if (canvasFrames.length === 0) return null;
     try {
+      const { composeCanvasState } = await import("@/lib/data/canvas-state");
       const { renderCanvasImagePayload } = await import("@/lib/server/canvas-svg-renderer");
-      // Node labels: pull from accepted + supporting theme members. We use
-      // insightId as the canvas node id (matches the live canvas data model
-      // used when canvas-layout-state rows are written).
-      const labelByNodeId = new Map<string, string>();
-      for (const group of detail.themeGroups) {
-        for (const member of group.members) {
-          if (member.insightId && member.label) {
-            labelByNodeId.set(member.insightId, member.label);
-          }
-        }
-      }
-      const renderNodes = Object.entries(canvasLayout.positions)
-        .map(([nodeId, pos]) => ({
-          id: nodeId,
-          label: labelByNodeId.get(nodeId) ?? "(insight)",
-          x: pos.x,
-          y: pos.y,
-        }));
-      const renderFrames = canvasFrames.map((frame) => ({
-        id: frame.id,
-        name: frame.name,
-        x: frame.x,
-        y: frame.y,
-        width: frame.width,
-        height: frame.height,
-        color: frame.color ?? null,
-      }));
-      const renderEdges = canvasConnections.map((edge) => ({
-        sourceNodeId: edge.source_node_id,
-        targetNodeId: edge.target_node_id,
-        connectionType: edge.connection_type,
-        note: edge.note,
-      }));
+      const state = await composeCanvasState(roundId, userId);
       return renderCanvasImagePayload({
-        nodes: renderNodes,
-        edges: renderEdges,
-        frames: renderFrames,
+        nodes: state.nodes,
+        edges: state.edges,
+        frames: canvasFrames,
       });
     } catch (error) {
       console.warn("[round-workflow] canvas image render failed", error);

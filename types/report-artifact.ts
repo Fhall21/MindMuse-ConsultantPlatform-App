@@ -94,7 +94,7 @@ export interface ReportArtifactDetail {
    * been attached to this report yet. Strings are PNG data URLs.
    */
   canvasImage?: {
-    full: string;
+    full: string | null;
     frames: Record<string, string>;
     capturedAt: string;
   } | null;

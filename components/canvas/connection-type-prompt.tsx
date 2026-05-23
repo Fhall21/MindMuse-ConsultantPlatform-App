@@ -6,15 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import type { ConnectionType } from "@/types/canvas";
+import { CONNECTION_TYPE_LABELS } from "@/lib/canvas-constants";
 
-export const CONNECTION_TYPE_LABELS: Record<ConnectionType, string> = {
-  causes: "Causes",
-  influences: "Influences",
-  supports: "Supports",
-  contradicts: "Contradicts",
-  context: "Context",
-  related_to: "Related to",
-};
+export { CONNECTION_TYPE_LABELS };
 
 const CONNECTION_TYPE_OPTIONS = Object.entries(CONNECTION_TYPE_LABELS) as Array<
   [ConnectionType, string]

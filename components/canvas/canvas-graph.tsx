@@ -32,6 +32,7 @@ import {
   type CanvasFrameNodeData,
 } from "@/components/canvas/canvas-frame-node";
 import { CONNECTION_TYPE_LABELS } from "@/components/canvas/connection-type-prompt";
+import { CONNECTION_COLORS } from "@/lib/canvas-constants";
 import { useCanvas, useSaveLayout, type CreateEdgePayload } from "@/hooks/use-canvas";
 import {
   buildCanvasReorganiseLayout,
@@ -113,17 +114,6 @@ interface CanvasGraphProps {
     insertionIndex?: number;
   }) => Promise<void>;
 }
-
-const CONNECTION_COLORS: Record<ConnectionType, string> = {
-  causes: "#ef4444",
-  influences: "#f97316",
-  supports: "#22c55e",
-  contradicts: "#dc2626",
-  // Context: muted slate — distinct from supports/contradicts but quieter than related_to,
-  // signalling "this provides background framing, not direct evidence".
-  context: "#64748b",
-  related_to: "#6b7280",
-};
 
 // Canvas interaction contract:
 // 1. Use React Flow local node state so drag stays locked to the cursor.

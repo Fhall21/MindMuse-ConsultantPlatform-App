@@ -30,24 +30,11 @@
 // colors which the original html2canvas can't parse.
 import html2canvas from "html2canvas-pro";
 import type { CanvasEdge, CanvasFrame } from "@/types/canvas";
-
-// ─── Edge overlay constants (mirror canvas-graph.tsx) ────────────────────────
-
-const CONNECTION_COLORS: Record<string, string> = {
-  causes: "#ef4444",
-  influences: "#f97316",
-  supports: "#22c55e",
-  contradicts: "#dc2626",
-  related_to: "#6b7280",
-};
-
-const CONNECTION_TYPE_LABELS: Record<string, string> = {
-  causes: "Causes",
-  influences: "Influences",
-  supports: "Supports",
-  contradicts: "Contradicts",
-  related_to: "Related to",
-};
+import {
+  CONNECTION_COLORS,
+  CONNECTION_TYPE_LABELS,
+  DASHED_CONNECTION_TYPES,
+} from "@/lib/canvas-constants";
 
 // ─── Handle point reading ─────────────────────────────────────────────────────
 
@@ -150,7 +137,7 @@ function overlayEdges(
     ctx.save();
     ctx.strokeStyle = color;
     ctx.lineWidth = strokeWidth;
-    ctx.setLineDash(edge.connection_type === "contradicts" ? [6 * scale, 4 * scale] : []);
+    ctx.setLineDash(DASHED_CONNECTION_TYPES.has(edge.connection_type) ? [6 * scale, 4 * scale] : []);
 
     ctx.beginPath();
     ctx.moveTo(sx, sy);

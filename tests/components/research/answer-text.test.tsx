@@ -76,6 +76,53 @@ describe("AnswerText", () => {
     expect(screen.getByText("1.1 Core construct")).toBeInTheDocument();
     expect(screen.getByText("This paragraph should remain visible too.")).toBeInTheDocument();
   });
+
+  it("renders tables when body rows omit the trailing pipe", () => {
+    render(
+      <AnswerText
+        text={[
+          "| Dimension | Evidence |",
+          "|---|---|",
+          "| Visual style | Flat design cues",
+        ].join("\n")}
+      />
+    );
+
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Dimension")).toBeInTheDocument();
+    expect(within(table).getByText("Visual style")).toBeInTheDocument();
+    expect(within(table).getByText("Flat design cues")).toBeInTheDocument();
+  });
+
+  it("keeps table blocks together when blank lines appear inside the table", () => {
+    render(
+      <AnswerText
+        text={[
+          "| Dimension | Evidence |",
+          "",
+          "|---|---|",
+          "",
+          "| Visual style | Flat design cues |",
+        ].join("\n")}
+      />
+    );
+
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Dimension")).toBeInTheDocument();
+    expect(within(table).getByText("Visual style")).toBeInTheDocument();
+    expect(within(table).getByText("Flat design cues")).toBeInTheDocument();
+  });
+
+  it("falls back to preformatted text for header-only table blocks", () => {
+    const text = ["| Dimension | Evidence |", "|---|---|"].join("\n");
+    const { container } = render(<AnswerText text={text} />);
+
+    expect(container.querySelector("table")).toBeNull();
+    const pre = container.querySelector("pre");
+    expect(pre).toBeTruthy();
+    expect(pre?.textContent).toContain("| Dimension | Evidence |");
+    expect(pre?.textContent).toContain("|---|---|");
+  });
 });
 
 describe("AnswerText list rendering", () => {

@@ -3,6 +3,11 @@
 import type { ReactNode } from "react";
 import { HoverCard as HoverCardPrimitive } from "radix-ui";
 import type { EvidenceExcerpt, LiteratureReference } from "@/hooks/use-research";
+import {
+  isTableLine,
+  normalizeTableBlock,
+  parseTableRow,
+} from "@/lib/markdown-table";
 import { cn } from "@/lib/utils";
 import { CitationChip } from "./citation-chip";
 
@@ -76,13 +81,6 @@ function EvidenceChip({ item }: { item: EvidenceExcerpt }) {
       </HoverCardPrimitive.Portal>
     </HoverCardPrimitive.Root>
   );
-}
-
-function parseTableRow(row: string) {
-  return row
-    .split("|")
-    .slice(1, -1)
-    .map((cell) => cell.trim());
 }
 
 type TextSegment =
@@ -212,7 +210,7 @@ export function AnswerText({
   };
 
   text.split("\n").forEach((line) => {
-    const isTableLine = line.trim().startsWith("|");
+    const tableLine = isTableLine(line);
     const isHeadingLine = /^#{2,3}\s+/.test(line.trim());
 
     if (isHeadingLine) {
@@ -222,11 +220,15 @@ export function AnswerText({
       return;
     }
 
-    if (isTableLine !== inTable) {
-      flush();
-      inTable = isTableLine;
+    if (inTable && !line.trim()) {
+      return;
     }
-    if (!isTableLine && !line.trim()) {
+
+    if (tableLine !== inTable) {
+      flush();
+      inTable = tableLine;
+    }
+    if (!tableLine && !line.trim()) {
       flush();
       inTable = false;
       return;
@@ -242,10 +244,17 @@ export function AnswerText({
         if (!trimmed) return null;
 
         if (block.type === "table") {
-          const rows = block.lines
-            .map((line) => line.trim())
-            .filter((line) => line.startsWith("|") && !line.match(/^\|[-| :]+\|$/));
-          if (rows.length < 2) return null;
+          const { rows, isValid } = normalizeTableBlock(block.lines);
+          if (!isValid) {
+            return (
+              <pre
+                key={bi}
+                className="overflow-x-auto rounded-md border bg-muted/20 p-3 text-xs leading-relaxed text-muted-foreground"
+              >
+                {block.lines.join("\n")}
+              </pre>
+            );
+          }
 
           const [headerRow, ...bodyRows] = rows;
           const headers = parseTableRow(headerRow);

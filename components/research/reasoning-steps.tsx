@@ -4,6 +4,10 @@ import { useState } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
+  normalizeTableBlock,
+  parseTableRow,
+} from "@/lib/markdown-table";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -166,17 +170,13 @@ function ArtifactBlock({ data }: { data: ArtifactStepData }) {
 }
 
 function MarkdownTable({ raw }: { raw: string }) {
-  const rows = raw
-    .split("\n")
-    .map((r) => r.trim())
-    .filter((r) => r.startsWith("|") && !r.match(/^\|[-| ]+\|$/));
-  if (rows.length < 2) {
+  const { rows, isValid } = normalizeTableBlock(raw.split("\n"));
+  if (!isValid) {
     return <p className="whitespace-pre-wrap text-sm text-muted-foreground">{raw}</p>;
   }
-  const parseRow = (row: string) =>
-    row.split("|").slice(1, -1).map((c) => c.trim());
+
   const [headerRow, ...bodyRows] = rows;
-  const headers = parseRow(headerRow);
+  const headers = parseTableRow(headerRow);
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
@@ -192,7 +192,7 @@ function MarkdownTable({ raw }: { raw: string }) {
         <tbody className="divide-y divide-border/30">
           {bodyRows.map((row, ri) => (
             <tr key={ri}>
-              {parseRow(row).map((cell, ci) => (
+              {parseTableRow(row).map((cell, ci) => (
                 <td key={ci} className="py-2 pr-4 align-top text-muted-foreground">
                   {cell}
                 </td>
@@ -300,42 +300,7 @@ export function StepContent({
 
   // Synthesising findings: markdown table — no card wrapper, just dividers
   if (label === "Synthesising findings" && content.includes("|")) {
-    const rows = content
-      .split("\n")
-      .map((r) => r.trim())
-      .filter((r) => r.startsWith("|") && !r.match(/^\|[-| ]+\|$/));
-    if (rows.length >= 2) {
-      const parseRow = (row: string) =>
-        row.split("|").slice(1, -1).map((c) => c.trim());
-      const [headerRow, ...bodyRows] = rows;
-      const headers = parseRow(headerRow);
-      return (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border/50">
-                {headers.map((h, hi) => (
-                  <th key={hi} className="pb-2 pr-4 text-left font-medium text-foreground/70">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/30">
-              {bodyRows.map((row, ri) => (
-                <tr key={ri}>
-                  {parseRow(row).map((cell, ci) => (
-                    <td key={ci} className="py-2 pr-4 text-muted-foreground">
-                      {cell}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
+    return <MarkdownTable raw={content} />;
   }
 
   // Default: plain pre-wrap text

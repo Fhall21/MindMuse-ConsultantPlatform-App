@@ -2109,11 +2109,24 @@ export async function generateRoundReport(roundId: string) {
   return generateRoundOutput(roundId, "report");
 }
 
+/**
+ * Optional payload captured client-side from the canvas DOM at the moment
+ * the consultant clicks "Generate report" from the canvas page. Persisted
+ * onto the new report row so the report can render per-frame visuals that
+ * mirror the consultant's spatial arrangement.
+ */
+export interface CanvasImageGenerationPayload {
+  full: string;
+  frames: Record<string, string>;
+  capturedAt: string;
+}
+
 export async function generateRoundReportWithTemplate(
   roundId: string,
-  templateId: string | null
+  templateId: string | null,
+  canvasImage?: CanvasImageGenerationPayload | null
 ) {
-  return generateRoundOutput(roundId, "report", templateId);
+  return generateRoundOutput(roundId, "report", templateId, canvasImage ?? null);
 }
 
 export async function generateRoundEmail(roundId: string) {
@@ -2344,7 +2357,11 @@ async function loadRoundOutputForContext(params: {
 async function generateRoundOutput(
   roundId: string,
   artifactType: RoundOutputArtifactType,
-  templateIdOverride?: string | null
+  templateIdOverride?: string | null,
+  // Captured-from-canvas payload (data URLs). Browser-only capture, so this
+  // is only populated when the consultant triggered generation from the
+  // canvas page. Null otherwise — reports degrade to text-only.
+  canvasImage?: CanvasImageGenerationPayload | null
 ) {
   const detail = await getRoundDetail(roundId);
   if (!detail) {
@@ -2596,6 +2613,7 @@ async function generateRoundOutput(
       title: generated.title,
       content: generated.content,
       inputSnapshot,
+      canvasImage: canvasImage ?? null,
       createdBy: userId,
     })
     .returning()

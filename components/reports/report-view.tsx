@@ -43,7 +43,7 @@ import {
 } from "@/lib/report-graph";
 import { normalizeReportMarkdownForEditor } from "@/lib/report-editor-markdown";
 import { parseContentBlocks } from "@/lib/report-content-blocks";
-import { CanvasImageHero } from "@/components/reports/canvas-image-hero";
+import { CanvasFramesSection } from "@/components/reports/canvas-frames-section";
 import {
   applyRenderPolicyToReport,
   createReportRenderPolicy,
@@ -1268,15 +1268,16 @@ export function ReportView({ artifactId }: ReportViewProps) {
         )}
       </header>
 
-      {/* ─── Canvas Hero ─── (kills the "report doesn't match my canvas" surprise) */}
-      <CanvasImageHero
-        imageDataUrl={displayReport.canvasImage?.full ?? null}
-        capturedAt={displayReport.canvasImage?.capturedAt}
-        roundId={displayReport.roundId}
-      />
-
       {/* ─── Quick Stats ─── */}
       <QuickStats report={displayReport} />
+
+      {/* ─── Canvas frames ─── one card per frame, image inline. Mirrors the
+          consultant's spatial groupings so the report stops feeling like a
+          flat list. */}
+      <CanvasFramesSection
+        frames={graphFrameModels}
+        frameImages={displayReport.canvasImage?.frames ?? null}
+      />
 
       <Separator />
 

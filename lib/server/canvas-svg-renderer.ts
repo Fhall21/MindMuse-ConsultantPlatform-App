@@ -17,7 +17,9 @@
  * No hero / full-canvas image is produced. The user explicitly does not want
  * one — only per-frame imagery, contextual to each section.
  */
-import { Resvg } from "@resvg/resvg-js";
+import { Resvg, initWasm } from "@resvg/resvg-wasm";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   CONNECTION_COLORS,
   CONNECTION_TYPE_LABELS,
@@ -75,10 +77,10 @@ const ACCEPTED_DOT = "#10b981"; // emerald-500
 const PENDING_DOT = "#d4d4d8"; // zinc-300
 const FRAME_FILL_OPACITY = 0.08; // matches /8 Tailwind alpha
 const FRAME_BORDER_OPACITY = 0.6; // matches /60
-// Single-name font so resvg picks one cleanly. Compound declarations like
-// `-apple-system, "Segoe UI"` confuse the fallback chain on Linux and Mac
-// and produce missing-glyph boxes in place of punctuation.
-const FONT_FAMILY = `Helvetica`;
+// Single font name — matches the buffer we hand to Resvg (Noto Sans, loaded
+// from the @vercel/og copy bundled with Next.js). Compound declarations
+// confuse the fallback chain and produce missing-glyph boxes in punctuation.
+const FONT_FAMILY = `Noto Sans`;
 // Use ASCII ellipsis (three dots) instead of the U+2026 single-glyph "…" —
 // many of the fonts resvg falls back to lack that codepoint and render it as
 // junk overlapping the line above.
@@ -223,7 +225,9 @@ function svgThemeGroupCard(node: CanvasNode, x: number, y: number, members: Canv
   // Outer card with rounded corners + thin border + emerald left stripe.
   parts.push(
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${CARD_RADIUS}" fill="${CARD_BG}" stroke="${CARD_BORDER}" stroke-width="1"/>`,
-    `<rect x="${x}" y="${y}" width="6" height="${h}" rx="${CARD_RADIUS}" fill="#10b981" fill-opacity="0.7"/>`
+    // Left accent stripe — clamp rx to width/2 so resvg doesn't panic on the
+    // geometry (a 6px-wide rect with rx=24 has rx > width/2 = invalid).
+    `<rect x="${x}" y="${y}" width="6" height="${h}" rx="3" fill="#10b981" fill-opacity="0.7"/>`
   );
 
   // Header section (label + description + member-count badge).
@@ -378,6 +382,47 @@ function svgArrowDefs(): string {
   );
 }
 
+// ─── WASM init ───────────────────────────────────────────────────────────────
+
+// @resvg/resvg-wasm needs the WASM blob loaded once before `new Resvg(...)`.
+// We read it from disk at runtime (not bundled) so Turbopack / webpack don't
+// need to handle the binary. node_modules layout is stable enough across
+// package managers (bun, npm, pnpm) for this path to resolve in production.
+let wasmInitPromise: Promise<void> | null = null;
+function ensureWasmInitialised(): Promise<void> {
+  if (!wasmInitPromise) {
+    wasmInitPromise = (async () => {
+      const wasmPath = join(
+        process.cwd(),
+        "node_modules/@resvg/resvg-wasm/index_bg.wasm"
+      );
+      const wasmBuffer = await readFile(wasmPath);
+      await initWasm(wasmBuffer);
+    })();
+  }
+  return wasmInitPromise;
+}
+
+// resvg-wasm has no access to system fonts — text in SVG renders as empty
+// boxes unless we explicitly pass a font buffer. Next.js bundles a Noto
+// Sans TTF via `@vercel/og` (used for OG image generation); we piggyback
+// on that so we don't have to vendor our own font file. Path is stable
+// across Next 14/15.
+let fontPromise: Promise<Uint8Array> | null = null;
+function loadFont(): Promise<Uint8Array> {
+  if (!fontPromise) {
+    fontPromise = (async () => {
+      const fontPath = join(
+        process.cwd(),
+        "node_modules/next/dist/compiled/@vercel/og/noto-sans-v27-latin-regular.ttf"
+      );
+      const buf = await readFile(fontPath);
+      return new Uint8Array(buf);
+    })();
+  }
+  return fontPromise;
+}
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export interface CanvasRenderInput {
@@ -386,18 +431,31 @@ export interface CanvasRenderInput {
   frames: CanvasFrame[];
 }
 
+/** Treat a frame as renderable only if it has positive, finite dimensions. */
+function isFrameRenderable(frame: CanvasFrame): boolean {
+  return (
+    Number.isFinite(frame.x) &&
+    Number.isFinite(frame.y) &&
+    Number.isFinite(frame.width) &&
+    Number.isFinite(frame.height) &&
+    frame.width >= 40 &&
+    frame.height >= 40
+  );
+}
+
 /**
  * Render a single frame as a PNG data URL. Returns null on failure or when
- * the frame has nothing inside it.
+ * the frame has degenerate dimensions.
  *
  * Viewport: clipped to the frame's bbox + padding. Edges that exit the frame
  * render only their visible portion (clipped naturally by SVG viewBox).
  */
-function renderFrameToPng(
+async function renderFrameToPng(
   input: CanvasRenderInput,
   frame: CanvasFrame,
   maxWidth: number
-): string | null {
+): Promise<string | null> {
+  if (!isFrameRenderable(frame)) return null;
   const frameRect = {
     minX: frame.x,
     minY: frame.y,
@@ -478,12 +536,19 @@ function renderFrameToPng(
     `</svg>`;
 
   try {
+    await ensureWasmInitialised();
+    const fontBuffer = await loadFont();
     const resvg = new Resvg(svg, {
       fitTo: { mode: "width", value: maxWidth },
       background: "#fafafa",
+      font: {
+        fontBuffers: [fontBuffer],
+        loadSystemFonts: false,
+        defaultFontFamily: "Noto Sans",
+      },
     });
     const png = resvg.render().asPng();
-    return `data:image/png;base64,${png.toString("base64")}`;
+    return `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
   } catch (error) {
     console.warn("[canvas-svg-renderer] frame render failed", frame.id, error);
     return null;
@@ -496,16 +561,16 @@ function renderFrameToPng(
  * No full / hero image is produced — only per-frame imagery. Returns null
  * when there are no frames at all (caller should leave canvas_image unset).
  */
-export function renderCanvasImagePayload(
+export async function renderCanvasImagePayload(
   input: CanvasRenderInput,
   opts: { perFrameMaxWidth?: number } = {}
-): { full: string | null; frames: Record<string, string>; capturedAt: string } | null {
+): Promise<{ full: string | null; frames: Record<string, string>; capturedAt: string } | null> {
   if (input.frames.length === 0) return null;
 
   const perFrameMaxWidth = opts.perFrameMaxWidth ?? 1200;
   const frames: Record<string, string> = {};
   for (const frame of input.frames) {
-    const dataUrl = renderFrameToPng(input, frame, perFrameMaxWidth);
+    const dataUrl = await renderFrameToPng(input, frame, perFrameMaxWidth);
     if (dataUrl) frames[frame.id] = dataUrl;
   }
   if (Object.keys(frames).length === 0) return null;

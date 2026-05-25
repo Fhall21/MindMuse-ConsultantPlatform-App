@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useRef } from "react";
+import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
 import { Handle, Position, type NodeProps, useUpdateNodeInternals } from "@xyflow/react";
 import { BookOpen, ChevronDown, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,8 @@ import type { CanvasNode } from "@/types/canvas";
 const CANVAS_HANDLE_BASE =
   "canvas-connection-handle !h-5 !w-5 !border-2 !border-background";
 
-const HOVER_EXPAND_MS = 200;
+/** Matches canvas-handles.css hover expand duration. */
+export const HOVER_EXPAND_MS = 240;
 
 export interface CanvasNodeCardData {
   node: CanvasNode;
@@ -39,25 +40,120 @@ function hoverPreviewEnabled(
   return !resolved && perCardExpanded !== false;
 }
 
-function useHoverNodeResize(nodeId: string, enabled: boolean) {
-  const updateNodeInternals = useUpdateNodeInternals();
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+function measureHoverContentHeights(contentEl: HTMLElement): {
+  compact: number;
+  expanded: number;
+} {
+  const compact = contentEl.getBoundingClientRect().height;
+  contentEl.classList.add("canvas-is-measuring");
+  const expanded = contentEl.scrollHeight;
+  contentEl.classList.remove("canvas-is-measuring");
+  return { compact, expanded: Math.max(compact, expanded) };
+}
 
-  const scheduleResize = useCallback(() => {
-    if (!enabled) return;
+function useHoverExpandPreview(
+  nodeId: string,
+  enabled: boolean,
+  contentRef: React.RefObject<HTMLDivElement | null>,
+  contentKey: string
+) {
+  const updateNodeInternals = useUpdateNodeInternals();
+  const [isOpen, setIsOpen] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const [heights, setHeights] = useState<{ compact: number; expanded: number } | null>(
+    null
+  );
+  const isOpenRef = useRef(false);
+  const reducedMotionRef = useRef(false);
+
+  useLayoutEffect(() => {
+    reducedMotionRef.current = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+  }, []);
+
+  const measureHeights = useCallback(() => {
+    const el = contentRef.current;
+    if (!el) return null;
+    return measureHoverContentHeights(el);
+  }, [contentRef]);
+
+  useLayoutEffect(() => {
+    if (!enabled) {
+      setHeights(null);
+      setIsOpen(false);
+      setRevealed(false);
+      isOpenRef.current = false;
+      return;
+    }
+    const measured = measureHeights();
+    if (measured) setHeights(measured);
+  }, [enabled, measureHeights, contentKey]);
+
+  const syncNodeInternals = useCallback(() => {
     requestAnimationFrame(() => updateNodeInternals(nodeId));
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
+  }, [nodeId, updateNodeInternals]);
+
+  const openPreview = useCallback(() => {
+    if (!enabled) return;
+    const measured = measureHeights();
+    if (measured) setHeights(measured);
+    isOpenRef.current = true;
+    setRevealed(true);
+    setIsOpen(true);
+    syncNodeInternals();
+  }, [enabled, measureHeights, syncNodeInternals]);
+
+  const closePreview = useCallback(() => {
+    if (!enabled) return;
+    isOpenRef.current = false;
+    setIsOpen(false);
+    if (reducedMotionRef.current) {
+      setRevealed(false);
+      syncNodeInternals();
+    }
+  }, [enabled, syncNodeInternals]);
+
+  const onTransitionEnd = useCallback(
+    (event: React.TransitionEvent<HTMLDivElement>) => {
+      if (event.target !== event.currentTarget || event.propertyName !== "max-height") {
+        return;
+      }
+      if (!isOpenRef.current) setRevealed(false);
       updateNodeInternals(nodeId);
-      timerRef.current = null;
-    }, HOVER_EXPAND_MS);
-  }, [enabled, nodeId, updateNodeInternals]);
+    },
+    [nodeId, updateNodeInternals]
+  );
+
+  const onBlur = useCallback(
+    (event: React.FocusEvent<HTMLElement>) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        closePreview();
+      }
+    },
+    [closePreview]
+  );
 
   return {
-    onMouseEnter: scheduleResize,
-    onMouseLeave: scheduleResize,
-    onFocus: scheduleResize,
-    onBlur: scheduleResize,
+    cardHandlers: enabled
+      ? {
+          onMouseEnter: openPreview,
+          onMouseLeave: closePreview,
+          onFocus: openPreview,
+          onBlur,
+        }
+      : {},
+    contentProps: enabled
+      ? {
+          ref: contentRef,
+          className: cn("canvas-hover-content canvas-hover-content--animate"),
+          style: heights
+            ? { maxHeight: isOpen ? heights.expanded : heights.compact }
+            : undefined,
+          "data-hover-expanded": revealed ? "true" : "false",
+          onTransitionEnd,
+        }
+      : {},
   };
 }
 
@@ -166,7 +262,14 @@ function InsightCard({
   onToggleExpand?: () => void;
 }) {
   const isResearch = node.sourceType === "research";
-  const hoverHandlers = useHoverNodeResize(nodeId, hoverPreview);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const contentKey = `${node.label}|${node.description ?? ""}|${node.researchReferenceLabel ?? ""}|${node.sourceConsultationTitle ?? ""}`;
+  const { cardHandlers, contentProps } = useHoverExpandPreview(
+    nodeId,
+    hoverPreview,
+    contentRef,
+    contentKey
+  );
 
   return (
     <div
@@ -183,7 +286,7 @@ function InsightCard({
       data-source-type={node.sourceType}
       data-expanded={expanded ? "true" : "false"}
       data-hover-preview={hoverPreview ? "true" : "false"}
-      {...hoverHandlers}
+      {...cardHandlers}
     >
       <Handle
         id="target"
@@ -192,67 +295,69 @@ function InsightCard({
         className={cn(CANVAS_HANDLE_BASE, "!bg-primary")}
       />
 
-      <div className="flex items-start gap-2">
-        {isResearch ? (
-          <BookOpen
-            className="mt-0.5 h-4 w-4 shrink-0 text-stone-600 dark:text-stone-300"
-            aria-label="Research insight"
+      <div {...contentProps}>
+        <div className="flex items-start gap-2">
+          {isResearch ? (
+            <BookOpen
+              className="mt-0.5 h-4 w-4 shrink-0 text-stone-600 dark:text-stone-300"
+              aria-label="Research insight"
+            />
+          ) : null}
+          <div className="min-w-0 flex-1 space-y-1">
+            <p
+              className={cn(
+                "text-sm font-semibold leading-tight text-foreground",
+                !expanded && "line-clamp-2",
+                hoverPreview && !expanded && "canvas-hover-clamp"
+              )}
+            >
+              {node.label}
+            </p>
+            {node.description ? (
+              <ClampedText
+                text={node.description}
+                expanded={expanded}
+                hoverPreview={hoverPreview}
+                clampClass="line-clamp-2"
+                textClassName="text-xs leading-5 text-muted-foreground"
+              />
+            ) : null}
+          </div>
+          <ExpandChevron
+            expanded={expanded}
+            visible={showExpandControl}
+            onToggle={() => onToggleExpand?.()}
           />
-        ) : null}
-        <div className="min-w-0 flex-1 space-y-1">
-          <p
-            className={cn(
-              "text-sm font-semibold leading-tight text-foreground",
-              !expanded && "line-clamp-2",
-              hoverPreview && !expanded && "canvas-hover-clamp"
-            )}
-          >
-            {node.label}
-          </p>
-          {node.description ? (
-            <ClampedText
-              text={node.description}
-              expanded={expanded}
-              hoverPreview={hoverPreview}
-              clampClass="line-clamp-2"
-              textClassName="text-xs leading-5 text-muted-foreground"
+          {node.accepted ? (
+            <span
+              className="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"
+              title="Accepted"
             />
           ) : null}
         </div>
-        <ExpandChevron
-          expanded={expanded}
-          visible={showExpandControl}
-          onToggle={() => onToggleExpand?.()}
-        />
-        {node.accepted ? (
-          <span
-            className="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"
-            title="Accepted"
-          />
-        ) : null}
-      </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {isResearch && node.researchReferenceLabel ? (
-          <SourceBadge
-            label={node.researchReferenceLabel}
-            expanded={expanded}
-            hoverPreview={hoverPreview}
-            className="max-w-[180px] border-stone-300 bg-stone-100 text-stone-700 dark:border-stone-700 dark:bg-stone-900/80 dark:text-stone-300"
-          />
-        ) : node.sourceConsultationTitle ? (
-          <SourceBadge
-            label={node.sourceConsultationTitle}
-            expanded={expanded}
-            hoverPreview={hoverPreview}
-            className="max-w-[140px] border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
-          />
-        ) : null}
-        {node.isUserAdded && !isResearch ? (
-          <Badge variant="outline" className="px-2 py-0.5 text-[10px]">
-            Manual
-          </Badge>
-        ) : null}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {isResearch && node.researchReferenceLabel ? (
+            <SourceBadge
+              label={node.researchReferenceLabel}
+              expanded={expanded}
+              hoverPreview={hoverPreview}
+              className="max-w-[180px] border-stone-300 bg-stone-100 text-stone-700 dark:border-stone-700 dark:bg-stone-900/80 dark:text-stone-300"
+            />
+          ) : node.sourceConsultationTitle ? (
+            <SourceBadge
+              label={node.sourceConsultationTitle}
+              expanded={expanded}
+              hoverPreview={hoverPreview}
+              className="max-w-[140px] border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
+            />
+          ) : null}
+          {node.isUserAdded && !isResearch ? (
+            <Badge variant="outline" className="px-2 py-0.5 text-[10px]">
+              Manual
+            </Badge>
+          ) : null}
+        </div>
       </div>
 
       <Handle
@@ -288,7 +393,14 @@ function ThemeCard({
 }) {
   const memberCount = node.memberIds.length;
   const hasDescription = Boolean(node.description?.trim());
-  const hoverHandlers = useHoverNodeResize(nodeId, hoverPreview);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const contentKey = `${node.label}|${node.description ?? ""}|${memberCount}`;
+  const { cardHandlers, contentProps } = useHoverExpandPreview(
+    nodeId,
+    hoverPreview,
+    contentRef,
+    contentKey
+  );
 
   return (
     <div
@@ -302,7 +414,7 @@ function ThemeCard({
       data-testid="canvas-group-card"
       data-expanded={expanded ? "true" : "false"}
       data-hover-preview={hoverPreview ? "true" : "false"}
-      {...hoverHandlers}
+      {...cardHandlers}
     >
       <div className="absolute inset-y-0 left-0 w-1.5 bg-emerald-500/70" />
 
@@ -315,47 +427,49 @@ function ThemeCard({
 
       <div className="relative flex h-full flex-col">
         <div className="border-b border-border/80 px-7 py-6">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 space-y-1">
-              <p
-                className={cn(
-                  "text-base font-semibold leading-tight text-foreground",
-                  !expanded && "line-clamp-2",
-                  hoverPreview && !expanded && "canvas-hover-clamp"
-                )}
-              >
-                {node.label}
-              </p>
-              {hasDescription ? (
-                <ClampedText
-                  text={node.description!}
-                  expanded={expanded}
-                  hoverPreview={hoverPreview}
-                  clampClass="line-clamp-3"
-                  textClassName="max-w-[42ch] text-sm leading-6 text-muted-foreground"
-                />
-              ) : (
-                <p className="max-w-[42ch] text-sm leading-6 text-muted-foreground">
-                  Cluster related evidence cards here and keep enough room between them to read each one cleanly.
+          <div {...contentProps}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <p
+                  className={cn(
+                    "text-base font-semibold leading-tight text-foreground",
+                    !expanded && "line-clamp-2",
+                    hoverPreview && !expanded && "canvas-hover-clamp"
+                  )}
+                >
+                  {node.label}
                 </p>
-              )}
-            </div>
+                {hasDescription ? (
+                  <ClampedText
+                    text={node.description!}
+                    expanded={expanded}
+                    hoverPreview={hoverPreview}
+                    clampClass="line-clamp-3"
+                    textClassName="max-w-[42ch] text-sm leading-6 text-muted-foreground"
+                  />
+                ) : (
+                  <p className="max-w-[42ch] text-sm leading-6 text-muted-foreground">
+                    Cluster related evidence cards here and keep enough room between them to read each one cleanly.
+                  </p>
+                )}
+              </div>
 
-            <div className="flex shrink-0 items-start gap-1">
-              <ExpandChevron
-                expanded={expanded}
-                visible={showExpandControl}
-                onToggle={() => onToggleExpand?.()}
-              />
-              {aiGenerated ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-200">
-                  <Sparkles className="h-3 w-3" />
-                  AI
-                </span>
-              ) : null}
-              <Badge className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-semibold text-secondary-foreground hover:bg-secondary">
-                {memberCount} card{memberCount === 1 ? "" : "s"}
-              </Badge>
+              <div className="flex shrink-0 items-start gap-1">
+                <ExpandChevron
+                  expanded={expanded}
+                  visible={showExpandControl}
+                  onToggle={() => onToggleExpand?.()}
+                />
+                {aiGenerated ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-200">
+                    <Sparkles className="h-3 w-3" />
+                    AI
+                  </span>
+                ) : null}
+                <Badge className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-semibold text-secondary-foreground hover:bg-secondary">
+                  {memberCount} card{memberCount === 1 ? "" : "s"}
+                </Badge>
+              </div>
             </div>
           </div>
         </div>

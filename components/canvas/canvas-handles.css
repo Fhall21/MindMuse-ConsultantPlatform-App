@@ -27,25 +27,34 @@
   box-shadow: 0 0 0 3px hsl(var(--primary) / 0.25);
 }
 
-/* Compact-mode hover height expand — card grows to show full text. */
-.evidence-canvas .canvas-card-hover-expand {
-  transition: height 200ms cubic-bezier(0.165, 0.84, 0.44, 1);
+/* Compact-mode hover height expand — measured max-height transition. */
+.evidence-canvas .canvas-hover-content {
+  overflow: hidden;
 }
 
-.evidence-canvas .canvas-card-hover-expand:hover .canvas-hover-clamp,
-.evidence-canvas .canvas-card-hover-expand:focus-within .canvas-hover-clamp {
+.evidence-canvas .canvas-hover-content--animate {
+  transition: max-height 240ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.evidence-canvas .canvas-hover-content[data-hover-expanded="true"] .canvas-hover-clamp,
+.evidence-canvas .canvas-is-measuring .canvas-hover-clamp {
   display: block;
   overflow: visible;
   -webkit-line-clamp: unset;
   line-clamp: unset;
 }
 
-.evidence-canvas .canvas-card-hover-expand:hover .canvas-hover-badge,
-.evidence-canvas .canvas-card-hover-expand:focus-within .canvas-hover-badge {
+.evidence-canvas .canvas-hover-content[data-hover-expanded="true"] .canvas-hover-badge,
+.evidence-canvas .canvas-is-measuring .canvas-hover-badge {
   max-width: none;
   overflow: visible;
   text-overflow: unset;
   white-space: normal;
+}
+
+.evidence-canvas .canvas-is-measuring {
+  max-height: none !important;
+  overflow: visible;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -57,7 +66,7 @@
     transform: none;
   }
 
-  .evidence-canvas .canvas-card-hover-expand {
+  .evidence-canvas .canvas-hover-content--animate {
     transition: none;
   }
 }

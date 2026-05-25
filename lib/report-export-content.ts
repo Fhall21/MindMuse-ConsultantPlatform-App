@@ -329,14 +329,20 @@ function buildConnectionsSection(
   report: ReportArtifactDetail
 ): ExportSection | null {
   const graphModel = buildReportGraphModel(report.inputSnapshot);
-  if (!graphModel || graphModel.connections.length === 0) return null;
+  const hasConnections = !!graphModel && graphModel.connections.length > 0;
+  const hasImages =
+    !!(report.canvasImage?.full) ||
+    Object.keys(report.canvasImage?.frames ?? {}).length > 0;
+  if (!hasConnections && !hasImages) return null;
 
-  const connections: ExportConnection[] = graphModel.connections.map((c) => ({
-    fromLabel: c.fromLabel,
-    toLabel: c.toLabel,
-    connectionType: formatConnectionTypeLabel(c.connectionType),
-    notes: c.notes,
-  }));
+  const connections: ExportConnection[] = hasConnections
+    ? graphModel!.connections.map((c) => ({
+        fromLabel: c.fromLabel,
+        toLabel: c.toLabel,
+        connectionType: formatConnectionTypeLabel(c.connectionType),
+        notes: c.notes,
+      }))
+    : [];
 
   return {
     heading: "Evidence Network",

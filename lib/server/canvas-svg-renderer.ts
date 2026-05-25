@@ -451,10 +451,7 @@ function canvasBBox(input: CanvasRenderInput): BBox | null {
  * Render the entire canvas (all frames + nodes + edges) as a single PNG.
  * Returns null when the canvas is empty or rendering fails.
  */
-async function renderFullGraphToPng(
-  input: CanvasRenderInput,
-  maxWidth: number
-): Promise<string | null> {
+function buildFullGraphSvgString(input: CanvasRenderInput): string | null {
   if (input.nodes.length === 0) return null;
 
   const bbox = canvasBBox(input);
@@ -481,19 +478,16 @@ async function renderFullGraphToPng(
   parts.push(svgArrowDefs());
   parts.push(`<rect x="${minX}" y="${minY}" width="${w}" height="${h}" fill="#fafafa"/>`);
 
-  // Frames behind everything else.
   for (const frame of input.frames) {
     if (isFrameRenderable(frame)) parts.push(svgFrame(frame));
   }
 
-  // Edges.
   for (const edge of input.edges) {
     const source = nodeById.get(edge.source_node_id);
     const target = nodeById.get(edge.target_node_id);
     if (source && target) parts.push(svgEdgePath(edge, source, target));
   }
 
-  // Cards.
   for (const node of standaloneNodes) {
     if (node.type === "theme") {
       const members = node.memberIds
@@ -505,29 +499,11 @@ async function renderFullGraphToPng(
     }
   }
 
-  const svg =
+  return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${w} ${h}">` +
     parts.join("") +
-    `</svg>`;
-
-  try {
-    await ensureWasmInitialised();
-    const fontBuffer = await loadFont();
-    const resvg = new Resvg(svg, {
-      fitTo: { mode: "width", value: maxWidth },
-      background: "#fafafa",
-      font: {
-        fontBuffers: [fontBuffer],
-        loadSystemFonts: false,
-        defaultFontFamily: "Noto Sans",
-      },
-    });
-    const png = resvg.render().asPng();
-    return `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
-  } catch (error) {
-    console.warn("[canvas-svg-renderer] full-graph render failed", error);
-    return null;
-  }
+    `</svg>`
+  );
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -551,35 +527,24 @@ function isFrameRenderable(frame: CanvasFrame): boolean {
 }
 
 /**
- * Render a single frame as a PNG data URL. Returns null on failure or when
- * the frame has degenerate dimensions.
- *
- * Viewport: clipped to the frame's bbox + padding. Edges that exit the frame
- * render only their visible portion (clipped naturally by SVG viewBox).
+ * Build the SVG string for a single frame viewport. Returns null when the
+ * frame has degenerate dimensions. Synchronous — no WASM involved.
  */
-async function renderFrameToPng(
-  input: CanvasRenderInput,
-  frame: CanvasFrame,
-  maxWidth: number
-): Promise<string | null> {
+function buildFrameSvgString(input: CanvasRenderInput, frame: CanvasFrame): string | null {
   if (!isFrameRenderable(frame)) return null;
+
   const frameRect = {
     minX: frame.x,
     minY: frame.y,
     maxX: frame.x + frame.width,
     maxY: frame.y + frame.height,
   };
-  // Pad slightly so the frame header pill + border are not clipped.
   const minX = frameRect.minX - 32;
   const minY = frameRect.minY - 32;
   const w = frame.width + 64;
   const h = frame.height + 64;
 
   const nodeById = new Map(input.nodes.map((n) => [n.id, n] as const));
-
-  // Theme-group memberships — show all member insight cards inside their
-  // parent theme card. We still draw insight nodes that are NOT inside any
-  // group as standalone cards.
   const memberIdsClaimed = new Set<string>();
   for (const node of input.nodes) {
     if (node.type === "theme") {
@@ -587,9 +552,6 @@ async function renderFrameToPng(
     }
   }
 
-  // Decide which nodes are "visible" in this frame: anything whose bbox
-  // overlaps the frame's bbox. Members of a theme group are rendered with
-  // their parent (not as standalone), so we filter those out.
   const visibleStandaloneNodes = input.nodes.filter((node) => {
     if (memberIdsClaimed.has(node.id)) return false;
     const r = rectFor(node);
@@ -607,20 +569,15 @@ async function renderFrameToPng(
 
   const parts: string[] = [];
   parts.push(svgArrowDefs());
-  parts.push(
-    `<rect x="${minX}" y="${minY}" width="${w}" height="${h}" fill="#fafafa"/>`
-  );
-  // Draw the frame's chrome first so cards sit on top.
+  parts.push(`<rect x="${minX}" y="${minY}" width="${w}" height="${h}" fill="#fafafa"/>`);
   parts.push(svgFrame(frame));
 
-  // Draw edges between the visible standalone-or-theme nodes.
   for (const edge of visibleEdges) {
     const source = nodeById.get(edge.source_node_id)!;
     const target = nodeById.get(edge.target_node_id)!;
     parts.push(svgEdgePath(edge, source, target));
   }
 
-  // Draw cards.
   for (const node of visibleStandaloneNodes) {
     if (node.type === "theme") {
       const members = node.memberIds
@@ -632,16 +589,27 @@ async function renderFrameToPng(
     }
   }
 
-  if (visibleStandaloneNodes.length === 0) {
-    // Empty frame — still emit the chrome so the report shows the frame
-    // outline rather than "No captured image".
-  }
-
-  const svg =
+  return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${w} ${h}">` +
     parts.join("") +
-    `</svg>`;
+    `</svg>`
+  );
+}
 
+// ─── SVG ↔ data URL helpers ───────────────────────────────────────────────────
+
+function svgStringToDataUrl(svg: string): string {
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
+/**
+ * Rasterize an SVG string to a PNG data URL via resvg-wasm.
+ * Called only when raster output is needed (PDF, DOCX).
+ */
+async function svgStringToPngDataUrl(
+  svg: string,
+  maxWidth: number
+): Promise<string | null> {
   try {
     await ensureWasmInitialised();
     const fontBuffer = await loadFont();
@@ -657,36 +625,78 @@ async function renderFrameToPng(
     const png = resvg.render().asPng();
     return `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
   } catch (error) {
-    console.warn("[canvas-svg-renderer] frame render failed", frame.id, error);
+    console.warn("[canvas-svg-renderer] rasterization failed", error);
     return null;
   }
 }
 
+export type CanvasImagePayload = {
+  full: string | null;
+  frames: Record<string, string>;
+  capturedAt: string;
+};
+
 /**
- * Render the full canvas + one PNG per frame. Returns null only when the
- * canvas has no nodes at all (nothing to render).
+ * Build the canvas image payload as SVG data URLs. Synchronous-equivalent:
+ * no WASM, no font loading. SVG is vector-sharp, significantly smaller than
+ * base64 PNG for storage. Rasterize only when PDF/DOCX export actually needs it.
+ *
+ * Returns null when the canvas has no nodes at all (nothing to render).
  */
-export async function renderCanvasImagePayload(
-  input: CanvasRenderInput,
-  opts: { perFrameMaxWidth?: number; fullMaxWidth?: number } = {}
-): Promise<{ full: string | null; frames: Record<string, string>; capturedAt: string } | null> {
+export function renderCanvasImagePayload(
+  input: CanvasRenderInput
+): CanvasImagePayload | null {
   if (input.nodes.length === 0 && input.frames.length === 0) return null;
 
-  const perFrameMaxWidth = opts.perFrameMaxWidth ?? 1200;
-  const fullMaxWidth = opts.fullMaxWidth ?? 1600;
-
-  const [full, ...frameResults] = await Promise.all([
-    renderFullGraphToPng(input, fullMaxWidth),
-    ...input.frames.map((frame) => renderFrameToPng(input, frame, perFrameMaxWidth)),
-  ]);
+  const fullSvg = buildFullGraphSvgString(input);
+  const full = fullSvg ? svgStringToDataUrl(fullSvg) : null;
 
   const frames: Record<string, string> = {};
-  input.frames.forEach((frame, i) => {
-    const dataUrl = frameResults[i];
-    if (dataUrl) frames[frame.id] = dataUrl;
-  });
+  for (const frame of input.frames) {
+    const svg = buildFrameSvgString(input, frame);
+    if (svg) frames[frame.id] = svgStringToDataUrl(svg);
+  }
 
   if (!full && Object.keys(frames).length === 0) return null;
 
   return { full, frames, capturedAt: new Date().toISOString() };
+}
+
+/**
+ * Convert a CanvasImagePayload's SVG data URLs to PNG for raster-only
+ * renderers (PDF, DOCX). Pass-through if data URLs are already PNG
+ * (backward compat with reports generated before this change).
+ */
+export async function rasterizeCanvasImagePayload(
+  payload: CanvasImagePayload | null | undefined,
+  opts: { fullMaxWidth?: number; perFrameMaxWidth?: number } = {}
+): Promise<CanvasImagePayload | null> {
+  if (!payload) return null;
+
+  const fullMaxWidth = opts.fullMaxWidth ?? 1600;
+  const perFrameMaxWidth = opts.perFrameMaxWidth ?? 1200;
+
+  async function toRaster(dataUrl: string, maxWidth: number): Promise<string | null> {
+    if (dataUrl.startsWith("data:image/png;base64,")) return dataUrl; // already PNG
+    if (!dataUrl.startsWith("data:image/svg+xml;base64,")) return null;
+    const svg = Buffer.from(
+      dataUrl.slice("data:image/svg+xml;base64,".length),
+      "base64"
+    ).toString("utf-8");
+    return svgStringToPngDataUrl(svg, maxWidth);
+  }
+
+  const frameEntries = Object.entries(payload.frames);
+  const [rasterFull, ...rasterFrames] = await Promise.all([
+    payload.full ? toRaster(payload.full, fullMaxWidth) : Promise.resolve(null),
+    ...frameEntries.map(([, url]) => toRaster(url, perFrameMaxWidth)),
+  ]);
+
+  const frames: Record<string, string> = {};
+  frameEntries.forEach(([id], i) => {
+    const png = rasterFrames[i];
+    if (png) frames[id] = png;
+  });
+
+  return { full: rasterFull ?? null, frames, capturedAt: payload.capturedAt };
 }

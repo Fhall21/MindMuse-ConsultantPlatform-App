@@ -2594,7 +2594,6 @@ async function generateRoundOutput(
   // Failures degrade silently to text-only so we never block on imagery.
   const canvasImage = await (async () => {
     if (artifactType !== "report") return null;
-    if (canvasFrames.length === 0) return null;
     try {
       const { composeCanvasState } = await import("@/lib/data/canvas-state");
       const { renderCanvasImagePayload } = await import("@/lib/server/canvas-svg-renderer");

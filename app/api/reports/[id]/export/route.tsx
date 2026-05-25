@@ -12,6 +12,7 @@ import {
 import { applyRenderPolicyToReport } from "@/lib/report-render-policy";
 import { loadReportReferences } from "@/lib/report-references";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
+import { rasterizeCanvasImagePayload } from "@/lib/server/canvas-svg-renderer";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -35,6 +36,15 @@ export async function GET(
       preferences?.anonymous_mode ?? false
     );
 
+    // Rasterize SVG data URLs to PNG — react-pdf Image doesn't support SVG.
+    // Pass-through if data URLs are already PNG (backward compat).
+    const rasterCanvasImage = await rasterizeCanvasImagePayload(
+      renderedReport.canvasImage
+    );
+    const reportForPdf = rasterCanvasImage
+      ? { ...renderedReport, canvasImage: rasterCanvasImage }
+      : renderedReport;
+
     // ── Two-pass TOC page numbers ────────────────────────────────────────────
     // Pass 1: render each section in isolation to count its pages.
     // Pass 2: render the full document with accurate TOC page numbers.
@@ -55,7 +65,7 @@ export async function GET(
     let tocPageNumbers: TocPageNumbers | undefined;
 
     try {
-      const sections = buildSectionElements(renderedReport, template, references);
+      const sections = buildSectionElements(reportForPdf, template, references);
       const accumulated: TocPageNumbers = {};
       let cursor = 3; // pages 1 (title) and 2 (TOC) are always present
 
@@ -87,7 +97,7 @@ export async function GET(
     // ── Pass 2: full render ──────────────────────────────────────────────────
     const buffer = await renderToBuffer(
       <ReportPrintLayout
-        report={renderedReport}
+        report={reportForPdf}
         template={template}
         tocPageNumbers={tocPageNumbers}
         references={references}

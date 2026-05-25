@@ -22,6 +22,7 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import "@/components/canvas/canvas-handles.css";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -1411,7 +1412,7 @@ function CanvasGraphInner({
     <DropTargetFrameContext.Provider value={dropTargetFrameId ?? null}>
     <div
       ref={wrapperRef}
-      className="relative h-full w-full"
+      className="evidence-canvas relative h-full w-full"
       onMouseDown={handleDrawMouseDown}
       onMouseMove={handleDrawMouseMove}
       onMouseUp={handleDrawMouseUp}

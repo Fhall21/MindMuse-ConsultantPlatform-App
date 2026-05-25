@@ -7,6 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { CanvasNode } from "@/types/canvas";
 
+/** 16px visual dot + canvas-handles.css 24px hit target (matches frame resize handles). */
+const CANVAS_HANDLE_BASE =
+  "canvas-connection-handle !h-4 !w-4 !border-2 !border-background";
+
 export interface CanvasNodeCardData {
   node: CanvasNode;
   isNestedInGroup: boolean;
@@ -46,7 +50,7 @@ function InsightCard({
         id="target"
         type="target"
         position={Position.Left}
-        className="!h-3 !w-3 !border-2 !border-background !bg-primary"
+        className={cn(CANVAS_HANDLE_BASE, "!bg-primary")}
       />
 
       <div className="flex items-start gap-2">
@@ -103,7 +107,7 @@ function InsightCard({
         id="source"
         type="source"
         position={Position.Right}
-        className="!h-3 !w-3 !border-2 !border-background !bg-primary"
+        className={cn(CANVAS_HANDLE_BASE, "!bg-primary")}
       />
     </div>
   );
@@ -138,7 +142,7 @@ function ThemeCard({
         id="target"
         type="target"
         position={Position.Left}
-        className="!top-12 !left-3 !h-3 !w-3 !border-2 !border-background !bg-emerald-500"
+        className={cn(CANVAS_HANDLE_BASE, "!top-12 !left-3 !bg-emerald-500")}
       />
 
       <div className="relative flex h-full flex-col">
@@ -182,7 +186,7 @@ function ThemeCard({
         id="source"
         type="source"
         position={Position.Right}
-        className="!top-12 !h-3 !w-3 !border-2 !border-background !bg-emerald-500"
+        className={cn(CANVAS_HANDLE_BASE, "!top-12 !bg-emerald-500")}
       />
     </div>
   );

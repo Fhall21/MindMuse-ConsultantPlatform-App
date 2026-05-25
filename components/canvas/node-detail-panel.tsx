@@ -119,8 +119,8 @@ function NodeInfoCard({
 
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">
-          Drag from the visible Connect handle on a card to create a relationship.
-          Dropping an insight card onto another insight creates a new group.
+          Drag from a card&apos;s connection dot on the left or right edge to link
+          evidence. Dropping an insight card onto another insight creates a new group.
         </p>
         {isInsight && node.groupId ? (
           <Button

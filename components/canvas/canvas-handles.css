@@ -1,0 +1,38 @@
+/**
+ * Evidence Canvas connection handles — scoped to `.evidence-canvas` wrapper only.
+ * Always visible (no hover fade); enlarged hit targets for first-session discoverability.
+ */
+
+.evidence-canvas .react-flow__handle.canvas-connection-handle {
+  opacity: 1;
+  width: 16px;
+  height: 16px;
+  transition: box-shadow 150ms ease, transform 150ms ease;
+}
+
+/* 24px transparent hit box; visual dot stays 16px */
+.evidence-canvas .react-flow__handle.canvas-connection-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+}
+
+.evidence-canvas .react-flow__handle.canvas-connection-handle.connectingto.valid {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .evidence-canvas .react-flow__handle.canvas-connection-handle {
+    transition: none;
+  }
+
+  .evidence-canvas .react-flow__handle.canvas-connection-handle.connectingto.valid {
+    transform: none;
+  }
+}

@@ -35,4 +35,14 @@
   .evidence-canvas .react-flow__handle.canvas-connection-handle.connectingto.valid {
     transform: none;
   }
+
+  .evidence-canvas .canvas-muted-text-preview {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Hover/focus preview for muted secondary text — absolute overlay, no layout shift. */
+.evidence-canvas .canvas-muted-text-preview {
+  pointer-events: none;
 }

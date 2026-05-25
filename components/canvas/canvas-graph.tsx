@@ -49,6 +49,10 @@ import {
   GROUP_WIDTH,
 } from "@/lib/canvas-layout";
 import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
+import {
+  EVIDENCE_INSIGHT_MIME,
+  REACTFLOW_INSIGHT_MIME,
+} from "@/components/canvas/evidence-dnd-provider";
 import type {
   CanvasEdge,
   CanvasFilterState,
@@ -114,6 +118,13 @@ interface CanvasGraphProps {
     targetGroupId?: string | null;
     insertionIndex?: number;
   }) => Promise<void>;
+  /** Flow-space centre of the visible canvas pane (for click-to-place). */
+  onViewportCenterReady?: (getter: () => { x: number; y: number } | null) => void;
+  /** Drop from research library onto the canvas. */
+  onResearchInsightDrop?: (params: {
+    insightId: string;
+    position: { x: number; y: number };
+  }) => void | Promise<void>;
 }
 
 // Canvas interaction contract:
@@ -684,6 +695,8 @@ function CanvasGraphInner({
   onLayoutComplete,
   onCreateEdge,
   onGroupDrop,
+  onViewportCenterReady,
+  onResearchInsightDrop,
 }: CanvasGraphProps) {
   const { data, isLoading } = useCanvas(roundId);
   const saveLayout = useSaveLayout(roundId);
@@ -1332,6 +1345,59 @@ function CanvasGraphInner({
   >(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
+  const getViewportCenterFlowPosition = useCallback((): { x: number; y: number } | null => {
+    const pane = wrapperRef.current?.querySelector(".react-flow__pane")?.getBoundingClientRect();
+    if (!pane) return null;
+    return screenToFlowPosition({
+      x: pane.left + pane.width / 2,
+      y: pane.top + pane.height / 2,
+    });
+  }, [screenToFlowPosition]);
+
+  useEffect(() => {
+    onViewportCenterReady?.(getViewportCenterFlowPosition);
+  }, [getViewportCenterFlowPosition, onViewportCenterReady]);
+
+  const onResearchInsightDropRef = useRef(onResearchInsightDrop);
+  onResearchInsightDropRef.current = onResearchInsightDrop;
+
+  const handleEvidenceDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    const types = event.dataTransfer.types;
+    if (
+      types.includes(EVIDENCE_INSIGHT_MIME) ||
+      types.includes(REACTFLOW_INSIGHT_MIME)
+    ) {
+      event.dataTransfer.dropEffect = "move";
+    }
+  }, []);
+
+  const handleEvidenceDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      let insightId = event.dataTransfer.getData(EVIDENCE_INSIGHT_MIME);
+      if (!insightId) {
+        try {
+          const raw = event.dataTransfer.getData(REACTFLOW_INSIGHT_MIME);
+          if (raw) {
+            const parsed = JSON.parse(raw) as { insightId?: string };
+            insightId = parsed.insightId ?? "";
+          }
+        } catch {
+          insightId = "";
+        }
+      }
+      if (!insightId || !onResearchInsightDropRef.current) return;
+
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      void onResearchInsightDropRef.current({ insightId, position });
+    },
+    [screenToFlowPosition]
+  );
+
   const handleDrawMouseDown = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (!frameDrawingMode) return;
@@ -1423,6 +1489,8 @@ function CanvasGraphInner({
         edges={flowEdges}
         nodeTypes={nodeTypes}
         defaultViewport={data?.viewport ?? lastViewportRef.current}
+        onDragOver={handleEvidenceDragOver}
+        onDrop={handleEvidenceDrop}
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}

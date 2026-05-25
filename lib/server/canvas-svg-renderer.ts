@@ -336,7 +336,9 @@ function handlePoints(src: NodeRect, tgt: NodeRect) {
 function svgEdgePath(edge: CanvasEdge, source: CanvasNode, target: CanvasNode): string {
   const { sx, sy, tx, ty } = handlePoints(rectFor(source), rectFor(target));
   const color = CONNECTION_COLORS[edge.connection_type] ?? "#6b7280";
-  const dash = DASHED_CONNECTION_TYPES.has(edge.connection_type) ? "6 4" : "0";
+  const dash = DASHED_CONNECTION_TYPES.has(edge.connection_type)
+    ? ' stroke-dasharray="6 4"'
+    : "";
 
   const [pathD, labelX, labelY] = getBezierPath({
     sourceX: sx,
@@ -352,7 +354,7 @@ function svgEdgePath(edge: CanvasEdge, source: CanvasNode, target: CanvasNode): 
 
   return (
     `<path d="${pathD}" ` +
-    `fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}"/>` +
+    `fill="none" stroke="${color}" stroke-width="2.5"${dash}/>` +
     `<rect x="${labelX - labelW / 2}" y="${labelY - 10}" width="${labelW}" height="18" rx="9" fill="${CARD_BG}" fill-opacity="0.94"/>` +
     `<text x="${labelX}" y="${labelY + 4}" font-family='${FONT_FAMILY}' font-size="10" fill="${color}" text-anchor="middle">${escapeXml(label)}</text>`
   );

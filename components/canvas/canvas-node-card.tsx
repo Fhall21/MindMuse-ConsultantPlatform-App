@@ -1,7 +1,7 @@
 "use client";
 
-import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { memo, useCallback, useRef } from "react";
+import { Handle, Position, type NodeProps, useUpdateNodeInternals } from "@xyflow/react";
 import { BookOpen, ChevronDown, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,8 @@ import type { CanvasNode } from "@/types/canvas";
 const CANVAS_HANDLE_BASE =
   "canvas-connection-handle !h-5 !w-5 !border-2 !border-background";
 
+const HOVER_EXPAND_MS = 200;
+
 export interface CanvasNodeCardData {
   node: CanvasNode;
   isNestedInGroup: boolean;
@@ -27,6 +29,36 @@ export interface CanvasNodeCardData {
   expanded?: boolean;
   globalDensity?: CardDensity;
   onToggleExpand?: (nodeId: string) => void;
+}
+
+function hoverPreviewEnabled(
+  perCardExpanded: boolean | undefined,
+  globalDensity: CardDensity
+): boolean {
+  const resolved = resolveCardExpanded(perCardExpanded, globalDensity);
+  return !resolved && perCardExpanded !== false;
+}
+
+function useHoverNodeResize(nodeId: string, enabled: boolean) {
+  const updateNodeInternals = useUpdateNodeInternals();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleResize = useCallback(() => {
+    if (!enabled) return;
+    requestAnimationFrame(() => updateNodeInternals(nodeId));
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      updateNodeInternals(nodeId);
+      timerRef.current = null;
+    }, HOVER_EXPAND_MS);
+  }, [enabled, nodeId, updateNodeInternals]);
+
+  return {
+    onMouseEnter: scheduleResize,
+    onMouseLeave: scheduleResize,
+    onFocus: scheduleResize,
+    onBlur: scheduleResize,
+  };
 }
 
 function ExpandChevron({
@@ -62,79 +94,86 @@ function ExpandChevron({
   );
 }
 
-function MutedDescription({
+function ClampedText({
   text,
   expanded,
+  hoverPreview,
   clampClass,
   textClassName,
 }: {
   text: string;
   expanded: boolean;
+  hoverPreview: boolean;
   clampClass: string;
   textClassName: string;
 }) {
   return (
-    <div className="relative min-w-0">
-      <p className={cn(textClassName, !expanded && clampClass)}>{text}</p>
-      {!expanded ? (
-        <div
-          className="canvas-muted-text-preview pointer-events-none absolute left-0 top-0 z-20 hidden w-max max-w-[min(42ch,calc(100vw-2rem))] rounded-md border border-border bg-popover px-2.5 py-2 text-popover-foreground shadow-sm group-hover:block group-focus-within:block"
-          aria-hidden
-        >
-          <p className={textClassName}>{text}</p>
-        </div>
-      ) : null}
-    </div>
+    <p
+      className={cn(
+        textClassName,
+        !expanded && clampClass,
+        hoverPreview && !expanded && "canvas-hover-clamp"
+      )}
+    >
+      {text}
+    </p>
   );
 }
 
-function BylineBadge({
+function SourceBadge({
   label,
   className,
+  expanded,
+  hoverPreview,
 }: {
   label: string;
   className?: string;
+  expanded: boolean;
+  hoverPreview: boolean;
 }) {
   return (
-    <span className="relative inline-flex max-w-full">
-      <Badge
-        variant="outline"
-        className={cn("max-w-full truncate px-2 py-0.5 text-[10px]", className)}
-      >
-        {label}
-      </Badge>
-      <span
-        className="canvas-muted-text-preview pointer-events-none absolute bottom-full left-0 z-30 mb-1 hidden w-max max-w-[min(36ch,calc(100vw-2rem))] rounded-md border border-border bg-popover px-2 py-1 text-[10px] leading-snug text-popover-foreground shadow-sm group-hover:block group-focus-within:block"
-        aria-hidden
-      >
-        {label}
-      </span>
-    </span>
+    <Badge
+      variant="outline"
+      className={cn(
+        "px-2 py-0.5 text-[10px]",
+        !expanded && "max-w-full truncate",
+        hoverPreview && !expanded && "canvas-hover-badge",
+        className
+      )}
+    >
+      {label}
+    </Badge>
   );
 }
 
 function InsightCard({
+  nodeId,
   node,
   isNestedInGroup,
   selected,
   expanded,
+  hoverPreview,
   showExpandControl,
   onToggleExpand,
 }: {
+  nodeId: string;
   node: CanvasNode;
   isNestedInGroup: boolean;
   selected: boolean;
   expanded: boolean;
+  hoverPreview: boolean;
   showExpandControl: boolean;
   onToggleExpand?: () => void;
 }) {
   const isResearch = node.sourceType === "research";
+  const hoverHandlers = useHoverNodeResize(nodeId, hoverPreview);
 
   return (
     <div
       className={cn(
         "group relative h-full w-full rounded-xl border bg-background/95 px-4 py-3 shadow-sm transition-[border-color,box-shadow,transform] motion-reduce:transition-none",
         "min-h-[56px]",
+        hoverPreview && "canvas-card-hover-expand",
         isNestedInGroup && "border-violet-200 bg-white/95 dark:border-violet-900 dark:bg-slate-950/95",
         isResearch &&
           "border-stone-300 bg-stone-50/90 dark:border-stone-700 dark:bg-stone-900/60",
@@ -143,6 +182,8 @@ function InsightCard({
       data-testid={isResearch ? "canvas-research-insight-card" : "canvas-insight-card"}
       data-source-type={node.sourceType}
       data-expanded={expanded ? "true" : "false"}
+      data-hover-preview={hoverPreview ? "true" : "false"}
+      {...hoverHandlers}
     >
       <Handle
         id="target"
@@ -162,15 +203,17 @@ function InsightCard({
           <p
             className={cn(
               "text-sm font-semibold leading-tight text-foreground",
-              !expanded && "line-clamp-2"
+              !expanded && "line-clamp-2",
+              hoverPreview && !expanded && "canvas-hover-clamp"
             )}
           >
             {node.label}
           </p>
           {node.description ? (
-            <MutedDescription
+            <ClampedText
               text={node.description}
               expanded={expanded}
+              hoverPreview={hoverPreview}
               clampClass="line-clamp-2"
               textClassName="text-xs leading-5 text-muted-foreground"
             />
@@ -189,15 +232,19 @@ function InsightCard({
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         {isResearch && node.researchReferenceLabel ? (
-          <BylineBadge
+          <SourceBadge
             label={node.researchReferenceLabel}
+            expanded={expanded}
+            hoverPreview={hoverPreview}
             className="max-w-[180px] border-stone-300 bg-stone-100 text-stone-700 dark:border-stone-700 dark:bg-stone-900/80 dark:text-stone-300"
           />
         ) : node.sourceConsultationTitle ? (
-          <BylineBadge
+          <SourceBadge
             label={node.sourceConsultationTitle}
+            expanded={expanded}
+            hoverPreview={hoverPreview}
             className="max-w-[140px] border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
           />
         ) : null}
@@ -219,35 +266,43 @@ function InsightCard({
 }
 
 function ThemeCard({
+  nodeId,
   node,
   selected,
   aiGenerated,
   dragging,
   expanded,
+  hoverPreview,
   showExpandControl,
   onToggleExpand,
 }: {
+  nodeId: string;
   node: CanvasNode;
   selected: boolean;
   aiGenerated?: boolean;
   dragging?: boolean;
   expanded: boolean;
+  hoverPreview: boolean;
   showExpandControl: boolean;
   onToggleExpand?: () => void;
 }) {
   const memberCount = node.memberIds.length;
   const hasDescription = Boolean(node.description?.trim());
+  const hoverHandlers = useHoverNodeResize(nodeId, hoverPreview);
 
   return (
     <div
       className={cn(
-        "group relative h-full w-full overflow-hidden rounded-[24px] border bg-card shadow-sm transition-opacity motion-reduce:transition-none",
+        "group relative h-full w-full rounded-[24px] border bg-card shadow-sm transition-opacity motion-reduce:transition-none",
         "border-border/80",
+        hoverPreview ? "canvas-card-hover-expand" : "overflow-hidden",
         dragging && "opacity-45",
         selected && "border-foreground/20 ring-2 ring-foreground/10 shadow-lg"
       )}
       data-testid="canvas-group-card"
       data-expanded={expanded ? "true" : "false"}
+      data-hover-preview={hoverPreview ? "true" : "false"}
+      {...hoverHandlers}
     >
       <div className="absolute inset-y-0 left-0 w-1.5 bg-emerald-500/70" />
 
@@ -265,15 +320,17 @@ function ThemeCard({
               <p
                 className={cn(
                   "text-base font-semibold leading-tight text-foreground",
-                  !expanded && "line-clamp-2"
+                  !expanded && "line-clamp-2",
+                  hoverPreview && !expanded && "canvas-hover-clamp"
                 )}
               >
                 {node.label}
               </p>
               {hasDescription ? (
-                <MutedDescription
+                <ClampedText
                   text={node.description!}
                   expanded={expanded}
+                  hoverPreview={hoverPreview}
                   clampClass="line-clamp-3"
                   textClassName="max-w-[42ch] text-sm leading-6 text-muted-foreground"
                 />
@@ -321,16 +378,20 @@ function ThemeCard({
 function CanvasNodeCardComponent({ id, data, selected, dragging }: NodeProps) {
   const typedData = data as unknown as CanvasNodeCardData;
   const node = typedData.node;
-  const expanded = resolveCardExpanded(typedData.expanded, typedData.globalDensity ?? "compact");
+  const globalDensity = typedData.globalDensity ?? "compact";
+  const expanded = resolveCardExpanded(typedData.expanded, globalDensity);
+  const hoverPreview = hoverPreviewEnabled(typedData.expanded, globalDensity);
   const showExpandControl = cardHasClampableText(node);
 
   if (node.type === "insight") {
     return (
       <InsightCard
+        nodeId={id}
         node={node}
         isNestedInGroup={typedData.isNestedInGroup}
         selected={Boolean(selected)}
         expanded={expanded}
+        hoverPreview={hoverPreview}
         showExpandControl={showExpandControl}
         onToggleExpand={() => typedData.onToggleExpand?.(id)}
       />
@@ -339,11 +400,13 @@ function CanvasNodeCardComponent({ id, data, selected, dragging }: NodeProps) {
 
   return (
     <ThemeCard
+      nodeId={id}
       node={node}
       selected={Boolean(selected)}
       aiGenerated={typedData.aiGenerated}
       dragging={Boolean(dragging)}
       expanded={expanded}
+      hoverPreview={hoverPreview}
       showExpandControl={showExpandControl}
       onToggleExpand={() => typedData.onToggleExpand?.(id)}
     />

@@ -27,6 +27,27 @@
   box-shadow: 0 0 0 3px hsl(var(--primary) / 0.25);
 }
 
+/* Compact-mode hover height expand — card grows to show full text. */
+.evidence-canvas .canvas-card-hover-expand {
+  transition: height 200ms cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.evidence-canvas .canvas-card-hover-expand:hover .canvas-hover-clamp,
+.evidence-canvas .canvas-card-hover-expand:focus-within .canvas-hover-clamp {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+.evidence-canvas .canvas-card-hover-expand:hover .canvas-hover-badge,
+.evidence-canvas .canvas-card-hover-expand:focus-within .canvas-hover-badge {
+  max-width: none;
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .evidence-canvas .react-flow__handle.canvas-connection-handle {
     transition: none;
@@ -36,13 +57,7 @@
     transform: none;
   }
 
-  .evidence-canvas .canvas-muted-text-preview {
-    transition: none !important;
-    animation: none !important;
+  .evidence-canvas .canvas-card-hover-expand {
+    transition: none;
   }
-}
-
-/* Hover/focus preview for muted secondary text — absolute overlay, no layout shift. */
-.evidence-canvas .canvas-muted-text-preview {
-  pointer-events: none;
 }

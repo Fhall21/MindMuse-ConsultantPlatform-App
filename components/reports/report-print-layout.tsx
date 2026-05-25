@@ -1185,10 +1185,12 @@ function NetworkContent({
   graphModel,
   frameModels = [],
   template,
+  fullImageUrl,
 }: {
   graphModel: ReportGraphModel;
   frameModels?: ReportGraphFrameModel[];
   template: ReportTemplate;
+  fullImageUrl?: string | null;
 }) {
   const groupsToShow =
     template === "executive"
@@ -1205,6 +1207,12 @@ function NetworkContent({
     <View>
       <Text style={s.sectionHeading}>Evidence Network</Text>
       <View style={s.dividerAccent} />
+
+      {fullImageUrl ? (
+        <View style={{ marginVertical: 8 }}>
+          <PdfImage src={fullImageUrl} style={{ width: "100%" }} />
+        </View>
+      ) : null}
 
       <View style={s.statsRow}>
         <View style={s.statBox}>
@@ -1528,6 +1536,7 @@ export function buildSectionElements(
             graphModel={graphModel}
             frameModels={frameModels}
             template={template}
+            fullImageUrl={report.canvasImage?.full ?? null}
           />
         ),
       });

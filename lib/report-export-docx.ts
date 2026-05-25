@@ -46,7 +46,6 @@ import type {
   ExportAuditEvent,
   ExportAuditMilestone,
   ExportConnection,
-  ExportFrameSnapshot,
   ExportReference,
 } from "@/lib/report-export-content";
 
@@ -235,67 +234,34 @@ function connectionsToParagraphs(connections: ExportConnection[]): Paragraph[] {
 }
 
 // Word page width minus margins is roughly 6 inches @ 96 dpi = 576 px.
-// Captures are usually wider — fitting to this width preserves aspect ratio.
-const FRAME_IMAGE_WIDTH_PX = 560;
+const CANVAS_IMAGE_WIDTH_PX = 560;
 
-function frameSnapshotsToParagraphs(frames: ExportFrameSnapshot[]): Paragraph[] {
-  const paras: Paragraph[] = [];
-
-  for (const frame of frames) {
-    paras.push(
-      new Paragraph({
-        heading: HeadingLevel.HEADING_2,
-        children: [new TextRun({ text: frame.name })],
-      })
-    );
-    paras.push(
+/**
+ * Produce a single-image paragraph from a PNG data URL.
+ * Returns an empty array on failure so callers can safely spread the result.
+ */
+function imageDataUrlToParagraph(dataUrl: string, context?: string): Paragraph[] {
+  try {
+    const { buffer } = dataUrlToBuffer(dataUrl);
+    return [
       new Paragraph({
         children: [
-          new TextRun({
-            text: `${frame.nodeCount} nodes  ·  ${frame.connectionCount} connections`,
-            color: "666666",
-          }),
+          new ImageRun({
+            data: buffer,
+            transformation: {
+              width: CANVAS_IMAGE_WIDTH_PX,
+              height: Math.round(CANVAS_IMAGE_WIDTH_PX * 0.625),
+            },
+            type: "png",
+          } as ConstructorParameters<typeof ImageRun>[0]),
         ],
-        spacing: { after: 80 },
-      })
-    );
-    // Embed the captured cropped frame PNG when available so the consultant's
-    // spatial arrangement survives into Word. Falls back to text-only when
-    // capture didn't run (e.g. generated from the /reports page without an
-    // open canvas).
-    if (frame.imageDataUrl) {
-      try {
-        const { buffer } = dataUrlToBuffer(frame.imageDataUrl);
-        paras.push(
-          new Paragraph({
-            children: [
-              new ImageRun({
-                data: buffer,
-                transformation: {
-                  // Heuristic 16:10 ratio — actual aspect comes from the source
-                  // bitmap so this is just the bounding box.
-                  width: FRAME_IMAGE_WIDTH_PX,
-                  height: Math.round(FRAME_IMAGE_WIDTH_PX * 0.625),
-                },
-                // docx@8 type defs require this discriminator even though
-                // the image is raster, not SVG.
-                type: "png",
-              } as ConstructorParameters<typeof ImageRun>[0]),
-            ],
-            spacing: { after: 120 },
-          })
-        );
-      } catch (error) {
-        console.warn("[docx] failed to embed frame image", frame.id, error);
-      }
-    }
-    if (frame.connections.length > 0) {
-      paras.push(...connectionsToParagraphs(frame.connections));
-    }
-    paras.push(new Paragraph({ children: [], spacing: { after: 120 } }));
+        spacing: { after: 120 },
+      }),
+    ];
+  } catch (error) {
+    console.warn("[docx] failed to embed canvas image", context ?? "", error);
+    return [];
   }
-
-  return paras;
 }
 
 function referencesToParagraphs(references: ExportReference[]): Paragraph[] {
@@ -486,11 +452,21 @@ function sectionToChildren(section: ExportSection): FileChild[] {
           )
         );
         break;
-      case "connections":
-        children.push(...connectionsToParagraphs(section.data.connections));
+      case "connections": {
+        const { connections, fullImageUrl, frameImages } = section.data;
+        if (fullImageUrl) {
+          children.push(...imageDataUrlToParagraph(fullImageUrl, "full-canvas"));
+        }
+        if (frameImages) {
+          for (const [frameId, url] of Object.entries(frameImages)) {
+            children.push(...imageDataUrlToParagraph(url, `frame-${frameId}`));
+          }
+        }
+        children.push(...connectionsToParagraphs(connections));
         break;
+      }
       case "frameSnapshots":
-        children.push(...frameSnapshotsToParagraphs(section.data.frames));
+        // Handled by PDF only; DOCX no longer emits a separate frame-snapshots section.
         break;
       case "references":
         children.push(...referencesToParagraphs(section.data.references));

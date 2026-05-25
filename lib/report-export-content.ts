@@ -114,7 +114,14 @@ export type ExportSectionData =
       sessions: ExportAuditEvent[];
       milestones: ExportAuditMilestone[];
     }
-  | { kind: "connections"; connections: ExportConnection[] }
+  | {
+      kind: "connections";
+      connections: ExportConnection[];
+      /** Full-canvas PNG data URL from the server renderer, if available. */
+      fullImageUrl?: string | null;
+      /** Per-frame PNG data URLs keyed by frame id, if available. */
+      frameImages?: Record<string, string> | null;
+    }
   | { kind: "frameSnapshots"; frames: ExportFrameSnapshot[] }
   | { kind: "references"; references: ExportReference[] };
 
@@ -335,7 +342,12 @@ function buildConnectionsSection(
     heading: "Evidence Network",
     blocks: [],
     isPageBreak: true,
-    data: { kind: "connections", connections },
+    data: {
+      kind: "connections",
+      connections,
+      fullImageUrl: report.canvasImage?.full ?? null,
+      frameImages: report.canvasImage?.frames ?? null,
+    },
   };
 }
 

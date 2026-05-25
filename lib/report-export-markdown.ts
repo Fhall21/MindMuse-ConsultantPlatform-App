@@ -16,7 +16,6 @@ import type {
   ExportAuditEvent,
   ExportAuditMilestone,
   ExportConnection,
-  ExportFrameSnapshot,
   ExportSectionData,
 } from "@/lib/report-export-content";
 import { formatDate } from "@/lib/report-formatting";
@@ -97,28 +96,6 @@ function serializeConnections(connections: ExportConnection[]): string {
     .join("\n");
 }
 
-function serializeFrameSnapshots(frames: ExportFrameSnapshot[]): string {
-  const lines: string[] = [];
-
-  for (const frame of frames) {
-    lines.push(`## ${frame.name}`);
-    lines.push(`${frame.nodeCount} nodes · ${frame.connectionCount} connections`);
-    // Inline captured frame imagery when available. Data URLs render in
-    // GitHub / Obsidian / most markdown viewers. No-op when capture didn't
-    // run so the textual structure stays clean.
-    if (frame.imageDataUrl) {
-      lines.push("");
-      lines.push(`![Captured layout of "${frame.name}"](${frame.imageDataUrl})`);
-    }
-    if (frame.connections.length > 0) {
-      lines.push("");
-      lines.push(serializeConnections(frame.connections));
-    }
-    lines.push("");
-  }
-
-  return lines.join("\n").trimEnd();
-}
 
 function serializeConsultations(consultations: ExportConsultation[]): string {
   const lines: string[] = [];
@@ -178,10 +155,22 @@ function serializeSectionData(data: ExportSectionData): string {
       return serializeConsultations(data.consultations);
     case "audit":
       return serializeAuditTrail(data.sessions, data.milestones);
-    case "connections":
-      return serializeConnections(data.connections);
+    case "connections": {
+      const parts: string[] = [];
+      if (data.fullImageUrl) {
+        parts.push(`![Evidence Network](${data.fullImageUrl})\n`);
+      }
+      if (data.frameImages) {
+        for (const url of Object.values(data.frameImages)) {
+          parts.push(`![Frame](${url})\n`);
+        }
+      }
+      const connectionText = serializeConnections(data.connections);
+      if (connectionText) parts.push(connectionText);
+      return parts.join("\n");
+    }
     case "frameSnapshots":
-      return serializeFrameSnapshots(data.frames);
+      return "";
     case "references":
       return serializeReferences(data.references);
   }

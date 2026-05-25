@@ -60,6 +60,7 @@ function useHoverExpandPreview(
   const updateNodeInternals = useUpdateNodeInternals();
   const [isOpen, setIsOpen] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const [pinning, setPinning] = useState(false);
   const [heights, setHeights] = useState<{ compact: number; expanded: number } | null>(
     null
   );
@@ -83,6 +84,7 @@ function useHoverExpandPreview(
       setHeights(null);
       setIsOpen(false);
       setRevealed(false);
+      setPinning(false);
       isOpenRef.current = false;
       return;
     }
@@ -99,9 +101,15 @@ function useHoverExpandPreview(
     const measured = measureHeights();
     if (measured) setHeights(measured);
     isOpenRef.current = true;
-    setRevealed(true);
-    setIsOpen(true);
+    setPinning(true);
+    setRevealed(false);
+    setIsOpen(false);
     syncNodeInternals();
+    requestAnimationFrame(() => {
+      setIsOpen(true);
+      setRevealed(true);
+      syncNodeInternals();
+    });
   }, [enabled, measureHeights, syncNodeInternals]);
 
   const closePreview = useCallback(() => {
@@ -110,6 +118,7 @@ function useHoverExpandPreview(
     setIsOpen(false);
     if (reducedMotionRef.current) {
       setRevealed(false);
+      setPinning(false);
       syncNodeInternals();
     }
   }, [enabled, syncNodeInternals]);
@@ -119,7 +128,10 @@ function useHoverExpandPreview(
       if (event.target !== event.currentTarget || event.propertyName !== "max-height") {
         return;
       }
-      if (!isOpenRef.current) setRevealed(false);
+      if (!isOpenRef.current) {
+        setRevealed(false);
+        setPinning(false);
+      }
       updateNodeInternals(nodeId);
     },
     [nodeId, updateNodeInternals]
@@ -146,10 +158,14 @@ function useHoverExpandPreview(
     contentProps: enabled
       ? {
           ref: contentRef,
-          className: cn("canvas-hover-content canvas-hover-content--animate"),
-          style: heights
-            ? { maxHeight: isOpen ? heights.expanded : heights.compact }
-            : undefined,
+          className: cn(
+            "canvas-hover-content",
+            pinning && "canvas-hover-content--clip canvas-hover-content--animate"
+          ),
+          style:
+            heights && pinning
+              ? { maxHeight: isOpen ? heights.expanded : heights.compact }
+              : undefined,
           "data-hover-expanded": revealed ? "true" : "false",
           onTransitionEnd,
         }
@@ -276,7 +292,6 @@ function InsightCard({
       className={cn(
         "group relative h-full w-full rounded-xl border bg-background/95 px-4 py-3 shadow-sm transition-[border-color,box-shadow,transform] motion-reduce:transition-none",
         "min-h-[56px]",
-        hoverPreview && "canvas-card-hover-expand",
         isNestedInGroup && "border-violet-200 bg-white/95 dark:border-violet-900 dark:bg-slate-950/95",
         isResearch &&
           "border-stone-300 bg-stone-50/90 dark:border-stone-700 dark:bg-stone-900/60",
@@ -371,50 +386,28 @@ function InsightCard({
 }
 
 function ThemeCard({
-  nodeId,
   node,
   selected,
   aiGenerated,
   dragging,
-  expanded,
-  hoverPreview,
-  showExpandControl,
-  onToggleExpand,
 }: {
-  nodeId: string;
   node: CanvasNode;
   selected: boolean;
   aiGenerated?: boolean;
   dragging?: boolean;
-  expanded: boolean;
-  hoverPreview: boolean;
-  showExpandControl: boolean;
-  onToggleExpand?: () => void;
 }) {
   const memberCount = node.memberIds.length;
   const hasDescription = Boolean(node.description?.trim());
-  const contentRef = useRef<HTMLDivElement>(null);
-  const contentKey = `${node.label}|${node.description ?? ""}|${memberCount}`;
-  const { cardHandlers, contentProps } = useHoverExpandPreview(
-    nodeId,
-    hoverPreview,
-    contentRef,
-    contentKey
-  );
 
   return (
     <div
       className={cn(
-        "group relative h-full w-full rounded-[24px] border bg-card shadow-sm transition-opacity motion-reduce:transition-none",
+        "group relative h-full w-full overflow-hidden rounded-[24px] border bg-card shadow-sm transition-opacity motion-reduce:transition-none",
         "border-border/80",
-        hoverPreview ? "canvas-card-hover-expand" : "overflow-hidden",
         dragging && "opacity-45",
         selected && "border-foreground/20 ring-2 ring-foreground/10 shadow-lg"
       )}
       data-testid="canvas-group-card"
-      data-expanded={expanded ? "true" : "false"}
-      data-hover-preview={hoverPreview ? "true" : "false"}
-      {...cardHandlers}
     >
       <div className="absolute inset-y-0 left-0 w-1.5 bg-emerald-500/70" />
 
@@ -427,49 +420,32 @@ function ThemeCard({
 
       <div className="relative flex h-full flex-col">
         <div className="border-b border-border/80 px-7 py-6">
-          <div {...contentProps}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1 space-y-1">
-                <p
-                  className={cn(
-                    "text-base font-semibold leading-tight text-foreground",
-                    !expanded && "line-clamp-2",
-                    hoverPreview && !expanded && "canvas-hover-clamp"
-                  )}
-                >
-                  {node.label}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="text-base font-semibold leading-tight text-foreground">
+                {node.label}
+              </p>
+              {hasDescription ? (
+                <p className="max-w-[42ch] text-sm leading-6 text-muted-foreground">
+                  {node.description}
                 </p>
-                {hasDescription ? (
-                  <ClampedText
-                    text={node.description!}
-                    expanded={expanded}
-                    hoverPreview={hoverPreview}
-                    clampClass="line-clamp-3"
-                    textClassName="max-w-[42ch] text-sm leading-6 text-muted-foreground"
-                  />
-                ) : (
-                  <p className="max-w-[42ch] text-sm leading-6 text-muted-foreground">
-                    Cluster related evidence cards here and keep enough room between them to read each one cleanly.
-                  </p>
-                )}
-              </div>
+              ) : (
+                <p className="max-w-[42ch] text-sm leading-6 text-muted-foreground">
+                  Cluster related evidence cards here and keep enough room between them to read each one cleanly.
+                </p>
+              )}
+            </div>
 
-              <div className="flex shrink-0 items-start gap-1">
-                <ExpandChevron
-                  expanded={expanded}
-                  visible={showExpandControl}
-                  onToggle={() => onToggleExpand?.()}
-                />
-                {aiGenerated ? (
+            <div className="flex shrink-0 items-start gap-1">
+              {aiGenerated ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-200">
                     <Sparkles className="h-3 w-3" />
                     AI
                   </span>
                 ) : null}
-                <Badge className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-semibold text-secondary-foreground hover:bg-secondary">
-                  {memberCount} card{memberCount === 1 ? "" : "s"}
-                </Badge>
-              </div>
+              <Badge className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-semibold text-secondary-foreground hover:bg-secondary">
+                {memberCount} card{memberCount === 1 ? "" : "s"}
+              </Badge>
             </div>
           </div>
         </div>
@@ -514,15 +490,10 @@ function CanvasNodeCardComponent({ id, data, selected, dragging }: NodeProps) {
 
   return (
     <ThemeCard
-      nodeId={id}
       node={node}
       selected={Boolean(selected)}
       aiGenerated={typedData.aiGenerated}
       dragging={Boolean(dragging)}
-      expanded={expanded}
-      hoverPreview={hoverPreview}
-      showExpandControl={showExpandControl}
-      onToggleExpand={() => typedData.onToggleExpand?.(id)}
     />
   );
 }

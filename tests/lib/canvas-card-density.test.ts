@@ -65,4 +65,16 @@ describe("cardHasClampableText", () => {
       )
     ).toBe(true);
   });
+
+  it("never treats theme groups as clampable", () => {
+    expect(
+      cardHasClampableText(
+        makeNode({
+          type: "theme",
+          description: "Long group description that would clamp on insight cards",
+          label: "A".repeat(60),
+        })
+      )
+    ).toBe(false);
+  });
 });

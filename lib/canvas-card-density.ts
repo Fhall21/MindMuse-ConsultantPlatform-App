@@ -26,6 +26,7 @@ export function toggleExpandedOverride(
 
 /** Heuristic for showing the per-card expand chevron when text is likely clamped. */
 export function cardHasClampableText(node: CanvasNode): boolean {
+  if (node.type === "theme") return false;
   if (node.description?.trim()) return true;
   return node.label.length > 48;
 }

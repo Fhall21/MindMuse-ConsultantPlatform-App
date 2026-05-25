@@ -28,7 +28,7 @@
 }
 
 /* Compact-mode hover height expand — measured max-height transition. */
-.evidence-canvas .canvas-hover-content {
+.evidence-canvas .canvas-hover-content--clip {
   overflow: hidden;
 }
 

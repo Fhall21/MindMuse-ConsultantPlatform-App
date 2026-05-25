@@ -39,7 +39,8 @@ export async function GET(
     // Rasterize SVG data URLs to PNG — react-pdf Image doesn't support SVG.
     // Pass-through if data URLs are already PNG (backward compat).
     const rasterCanvasImage = await rasterizeCanvasImagePayload(
-      renderedReport.canvasImage
+      renderedReport.canvasImage,
+      { fullMaxWidth: 2400, perFrameMaxWidth: 2400 }
     );
     const reportForPdf = rasterCanvasImage
       ? { ...renderedReport, canvasImage: rasterCanvasImage }

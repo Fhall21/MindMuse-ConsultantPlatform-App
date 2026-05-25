@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   ReportPrintLayout,
   buildSectionElements,
+  getPdfCanvasImageStyle,
 } from "@/components/reports/report-print-layout";
 import { applyRenderPolicyToReport } from "@/lib/report-render-policy";
 import type { ReportArtifactDetail } from "@/types/report-artifact";
@@ -156,6 +157,19 @@ function normalizeText(node: React.ReactNode): string {
 }
 
 describe("ReportPrintLayout", () => {
+  it("sizes canvas images from natural aspect ratio", () => {
+    const svg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600"></svg>'
+    ).toString("base64");
+
+    expect(
+      getPdfCanvasImageStyle(`data:image/svg+xml;base64,${svg}`, {
+        maxWidth: 492,
+        maxHeight: 320,
+      })
+    ).toMatchObject({ width: 492, height: 246 });
+  });
+
   it("builds stacked evidence, grouped network cards, and audit trail sections", () => {
     const sections = buildSectionElements(makeReport(), "standard");
 

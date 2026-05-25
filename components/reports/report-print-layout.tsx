@@ -20,6 +20,7 @@ import {
   hasComplianceAuditTrailContent,
 } from "@/lib/report-audit";
 import { parseContentBlocks } from "@/lib/report-content-blocks";
+import { fitDataUrlImage } from "@/lib/report-canvas-assets";
 import type { ReportArtifactDetail } from "@/types/report-artifact";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -127,6 +128,25 @@ export const CONTENT_PAGE_STYLE = {
   paddingHorizontal: 50,
   backgroundColor: colors.white,
 };
+
+const LETTER_PAGE_WIDTH_PT = 612;
+const CONTENT_WIDTH_PT =
+  LETTER_PAGE_WIDTH_PT - CONTENT_PAGE_STYLE.paddingHorizontal * 2;
+const FRAME_CARD_IMAGE_WIDTH_PT = CONTENT_WIDTH_PT - 20;
+const FULL_CANVAS_IMAGE_MAX_HEIGHT_PT = 360;
+const FRAME_CANVAS_IMAGE_MAX_HEIGHT_PT = 320;
+
+export function getPdfCanvasImageStyle(
+  dataUrl: string,
+  options: { maxWidth: number; maxHeight: number }
+) {
+  const fitted = fitDataUrlImage(dataUrl, options);
+  return {
+    width: fitted.width,
+    height: fitted.height,
+    alignSelf: "center" as const,
+  };
+}
 
 // ─── StyleSheet ──────────────────────────────────────────────────────────────
 
@@ -1210,7 +1230,13 @@ function NetworkContent({
 
       {fullImageUrl ? (
         <View style={{ marginVertical: 8 }}>
-          <PdfImage src={fullImageUrl} style={{ width: "100%" }} />
+          <PdfImage
+            src={fullImageUrl}
+            style={getPdfCanvasImageStyle(fullImageUrl, {
+              maxWidth: CONTENT_WIDTH_PT,
+              maxHeight: FULL_CANVAS_IMAGE_MAX_HEIGHT_PT,
+            })}
+          />
         </View>
       ) : null}
 
@@ -1279,7 +1305,7 @@ function NetworkContent({
             Curated frame snapshots ({frameModels.length})
           </Text>
           {frameModels.map((frame) => (
-            <View key={frame.id} style={s.connectionGroupCard} wrap={false}>
+            <View key={frame.id} style={s.connectionGroupCard}>
               <View style={s.connectionGroupHeader}>
                 <Text style={s.connectionGroupTitle}>{frame.name}</Text>
                 <View style={s.connectionGroupCountBox}>
@@ -1293,7 +1319,13 @@ function NetworkContent({
                   connection list for back-compat with v1 snapshots. */}
               {frame.imageUrl ? (
                 <View style={{ marginVertical: 6 }}>
-                  <PdfImage src={frame.imageUrl} style={{ width: "100%" }} />
+                  <PdfImage
+                    src={frame.imageUrl}
+                    style={getPdfCanvasImageStyle(frame.imageUrl, {
+                      maxWidth: FRAME_CARD_IMAGE_WIDTH_PT,
+                      maxHeight: FRAME_CANVAS_IMAGE_MAX_HEIGHT_PT,
+                    })}
+                  />
                 </View>
               ) : null}
               {frame.graphModel.connections.slice(0, 4).map((conn) => (

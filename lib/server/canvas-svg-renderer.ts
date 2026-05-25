@@ -20,6 +20,7 @@
 import { Resvg, initWasm } from "@resvg/resvg-wasm";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { getBezierPath, Position } from "@xyflow/system";
 import {
   CONNECTION_COLORS,
   CONNECTION_TYPE_LABELS,
@@ -337,25 +338,24 @@ function svgEdgePath(edge: CanvasEdge, source: CanvasNode, target: CanvasNode): 
   const color = CONNECTION_COLORS[edge.connection_type] ?? "#6b7280";
   const dash = DASHED_CONNECTION_TYPES.has(edge.connection_type) ? "6 4" : "0";
 
-  // Bezier control-point offset — matches React Flow's "smoothstep"/"bezier"
-  // default where curvature scales with horizontal distance.
-  const dx = Math.max(40, Math.abs(tx - sx) * 0.5);
-  const cp1x = sx + dx;
-  const cp1y = sy;
-  const cp2x = tx - dx;
-  const cp2y = ty;
+  const [pathD, labelX, labelY] = getBezierPath({
+    sourceX: sx,
+    sourceY: sy,
+    sourcePosition: Position.Right,
+    targetX: tx,
+    targetY: ty,
+    targetPosition: Position.Left,
+  });
 
-  const mx = 0.125 * sx + 0.375 * cp1x + 0.375 * cp2x + 0.125 * tx;
-  const my = 0.125 * sy + 0.375 * cp1y + 0.375 * cp2y + 0.125 * ty;
   const label = CONNECTION_TYPE_LABELS[edge.connection_type];
   const labelW = approxTextWidth(label, 10) + 14;
 
   return (
-    `<path d="M ${sx} ${sy} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${tx} ${ty}" ` +
+    `<path d="${pathD}" ` +
     `fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" ` +
     `marker-end="url(#arrow-${edge.connection_type})"/>` +
-    `<rect x="${mx - labelW / 2}" y="${my - 10}" width="${labelW}" height="18" rx="9" fill="${CARD_BG}" fill-opacity="0.94"/>` +
-    `<text x="${mx}" y="${my + 4}" font-family='${FONT_FAMILY}' font-size="10" fill="${color}" text-anchor="middle">${escapeXml(label)}</text>`
+    `<rect x="${labelX - labelW / 2}" y="${labelY - 10}" width="${labelW}" height="18" rx="9" fill="${CARD_BG}" fill-opacity="0.94"/>` +
+    `<text x="${labelX}" y="${labelY + 4}" font-family='${FONT_FAMILY}' font-size="10" fill="${color}" text-anchor="middle">${escapeXml(label)}</text>`
   );
 }
 
@@ -421,6 +421,113 @@ function loadFont(): Promise<Uint8Array> {
     })();
   }
   return fontPromise;
+}
+
+// ─── Full-graph helpers ───────────────────────────────────────────────────────
+
+function canvasBBox(input: CanvasRenderInput): BBox | null {
+  const rects: Array<{ x: number; y: number; width: number; height: number }> = [
+    ...input.nodes.map(rectFor),
+    ...input.frames.filter(isFrameRenderable).map((f) => ({
+      x: f.x,
+      y: f.y,
+      width: f.width,
+      height: f.height,
+    })),
+  ];
+  if (rects.length === 0) return null;
+  return rects.reduce<BBox>(
+    (acc, r) => ({
+      minX: Math.min(acc.minX, r.x),
+      minY: Math.min(acc.minY, r.y),
+      maxX: Math.max(acc.maxX, r.x + r.width),
+      maxY: Math.max(acc.maxY, r.y + r.height),
+    }),
+    { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+  );
+}
+
+/**
+ * Render the entire canvas (all frames + nodes + edges) as a single PNG.
+ * Returns null when the canvas is empty or rendering fails.
+ */
+async function renderFullGraphToPng(
+  input: CanvasRenderInput,
+  maxWidth: number
+): Promise<string | null> {
+  if (input.nodes.length === 0) return null;
+
+  const bbox = canvasBBox(input);
+  if (!bbox || !Number.isFinite(bbox.minX) || !Number.isFinite(bbox.minY)) return null;
+
+  const minX = bbox.minX - PADDING;
+  const minY = bbox.minY - PADDING;
+  const w = (bbox.maxX - bbox.minX) + PADDING * 2;
+  const h = (bbox.maxY - bbox.minY) + PADDING * 2;
+
+  if (w < 1 || h < 1 || !Number.isFinite(w) || !Number.isFinite(h)) return null;
+
+  const nodeById = new Map(input.nodes.map((n) => [n.id, n] as const));
+  const memberIdsClaimed = new Set<string>();
+  for (const node of input.nodes) {
+    if (node.type === "theme") {
+      for (const id of node.memberIds) memberIdsClaimed.add(id);
+    }
+  }
+
+  const standaloneNodes = input.nodes.filter((n) => !memberIdsClaimed.has(n.id));
+
+  const parts: string[] = [];
+  parts.push(svgArrowDefs());
+  parts.push(`<rect x="${minX}" y="${minY}" width="${w}" height="${h}" fill="#fafafa"/>`);
+
+  // Frames behind everything else.
+  for (const frame of input.frames) {
+    if (isFrameRenderable(frame)) parts.push(svgFrame(frame));
+  }
+
+  // Edges.
+  for (const edge of input.edges) {
+    const source = nodeById.get(edge.source_node_id);
+    const target = nodeById.get(edge.target_node_id);
+    if (source && target) parts.push(svgEdgePath(edge, source, target));
+  }
+
+  // Cards.
+  for (const node of standaloneNodes) {
+    if (node.type === "theme") {
+      const members = node.memberIds
+        .map((id) => nodeById.get(id))
+        .filter((m): m is CanvasNode => Boolean(m));
+      parts.push(svgThemeGroupCard(node, node.position.x, node.position.y, members));
+    } else {
+      parts.push(svgInsightCard(node, node.position.x, node.position.y));
+    }
+  }
+
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${w} ${h}">` +
+    parts.join("") +
+    `</svg>`;
+
+  try {
+    await ensureWasmInitialised();
+    const fontBuffer = await loadFont();
+    const resvg = new Resvg(svg, {
+      fitTo: { mode: "width", value: maxWidth },
+      background: "#fafafa",
+      font: {
+        fontBuffers: [fontBuffer],
+        loadSystemFonts: false,
+        defaultFontFamily: "Noto Sans",
+      },
+    });
+    const png = resvg.render().asPng();
+    return `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
+  } catch (error) {
+    console.warn("[canvas-svg-renderer] full-graph render failed", error);
+    return null;
+  }
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -556,30 +663,30 @@ async function renderFrameToPng(
 }
 
 /**
- * Render one PNG per frame and return the persistence-ready payload.
- *
- * No full / hero image is produced — only per-frame imagery. Returns null
- * when there are no frames at all (caller should leave canvas_image unset).
+ * Render the full canvas + one PNG per frame. Returns null only when the
+ * canvas has no nodes at all (nothing to render).
  */
 export async function renderCanvasImagePayload(
   input: CanvasRenderInput,
-  opts: { perFrameMaxWidth?: number } = {}
+  opts: { perFrameMaxWidth?: number; fullMaxWidth?: number } = {}
 ): Promise<{ full: string | null; frames: Record<string, string>; capturedAt: string } | null> {
-  if (input.frames.length === 0) return null;
+  if (input.nodes.length === 0 && input.frames.length === 0) return null;
 
   const perFrameMaxWidth = opts.perFrameMaxWidth ?? 1200;
-  const frames: Record<string, string> = {};
-  for (const frame of input.frames) {
-    const dataUrl = await renderFrameToPng(input, frame, perFrameMaxWidth);
-    if (dataUrl) frames[frame.id] = dataUrl;
-  }
-  if (Object.keys(frames).length === 0) return null;
+  const fullMaxWidth = opts.fullMaxWidth ?? 1600;
 
-  return {
-    // No hero image — `full` stays null. The shape is preserved for backward
-    // compatibility with any existing readers that may dereference it.
-    full: null,
-    frames,
-    capturedAt: new Date().toISOString(),
-  };
+  const [full, ...frameResults] = await Promise.all([
+    renderFullGraphToPng(input, fullMaxWidth),
+    ...input.frames.map((frame) => renderFrameToPng(input, frame, perFrameMaxWidth)),
+  ]);
+
+  const frames: Record<string, string> = {};
+  input.frames.forEach((frame, i) => {
+    const dataUrl = frameResults[i];
+    if (dataUrl) frames[frame.id] = dataUrl;
+  });
+
+  if (!full && Object.keys(frames).length === 0) return null;
+
+  return { full, frames, capturedAt: new Date().toISOString() };
 }

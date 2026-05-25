@@ -115,6 +115,20 @@ function NodeInfoCard({
         </>
       ) : null}
 
+      {node.sourceType === "research" && node.researchQuotePreview ? (
+        <>
+          <Separator />
+          <div className="space-y-1">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Source quote
+            </p>
+            <blockquote className="border-l-2 border-stone-300 pl-3 text-xs leading-relaxed text-muted-foreground dark:border-stone-600">
+              {node.researchQuotePreview}
+            </blockquote>
+          </div>
+        </>
+      ) : null}
+
       <Separator />
 
       <div className="space-y-2">

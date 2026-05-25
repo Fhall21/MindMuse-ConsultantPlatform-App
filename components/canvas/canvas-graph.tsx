@@ -20,6 +20,7 @@ import {
   useEdgesState,
   useNodesState,
   useReactFlow,
+  useUpdateNodeInternals,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "@/components/canvas/canvas-handles.css";
@@ -49,6 +50,10 @@ import {
   GROUP_WIDTH,
 } from "@/lib/canvas-layout";
 import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
+import {
+  toggleExpandedOverride,
+  type CardDensity,
+} from "@/lib/canvas-card-density";
 import {
   EVIDENCE_INSIGHT_MIME,
   REACTFLOW_INSIGHT_MIME,
@@ -118,6 +123,8 @@ interface CanvasGraphProps {
     targetGroupId?: string | null;
     insertionIndex?: number;
   }) => Promise<void>;
+  /** Session-local card density — compact (default) or expanded. */
+  cardDensity?: CardDensity;
   /** Flow-space centre of the visible canvas pane (for click-to-place). */
   onViewportCenterReady?: (getter: () => { x: number; y: number } | null) => void;
   /** Drop from research library onto the canvas. */
@@ -433,10 +440,16 @@ function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds:
       const shouldPreservePosition = currentNode && currentNode.type === nextNode.type;
 
       if (shouldPreservePosition) {
+        const currentData = currentNode.data as unknown as CanvasNodeCardData | undefined;
+        const nextData = nextNode.data as unknown as CanvasNodeCardData;
         return {
           ...nextNode,
           position: currentNode.position,
           selected: selectedSet.has(nextNode.id),
+          data: {
+            ...nextData,
+            expanded: currentData?.expanded,
+          },
         } satisfies Node;
       }
 
@@ -697,11 +710,13 @@ function CanvasGraphInner({
   onGroupDrop,
   onViewportCenterReady,
   onResearchInsightDrop,
+  cardDensity = "compact",
 }: CanvasGraphProps) {
   const { data, isLoading } = useCanvas(roundId);
   const saveLayout = useSaveLayout(roundId);
-  const { getViewport, getIntersectingNodes, setViewport, screenToFlowPosition } =
+  const { getViewport, getIntersectingNodes, setViewport, screenToFlowPosition, updateNodeData } =
     useReactFlow();
+  const updateNodeInternals = useUpdateNodeInternals();
   const dragRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const layoutResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -845,6 +860,57 @@ function CanvasGraphInner({
   );
   const flowNodesRef = useRef(flowNodes);
   flowNodesRef.current = flowNodes;
+  const cardDensityRef = useRef(cardDensity);
+  cardDensityRef.current = cardDensity;
+
+  const handleToggleExpand = useCallback(
+    (nodeId: string) => {
+      setFlowNodes((currentNodes) => {
+        const target = currentNodes.find((node) => node.id === nodeId);
+        if (!target) return currentNodes;
+
+        const cardData = target.data as unknown as CanvasNodeCardData;
+        const nextExpanded = toggleExpandedOverride(
+          cardData.expanded,
+          cardDensityRef.current
+        );
+
+        updateNodeData(nodeId, { expanded: nextExpanded });
+
+        return currentNodes.map((node) =>
+          node.id === nodeId
+            ? {
+                ...node,
+                data: {
+                  ...cardData,
+                  expanded: nextExpanded,
+                  globalDensity: cardDensityRef.current,
+                  onToggleExpand: handleToggleExpand,
+                },
+              }
+            : node
+        );
+      });
+
+      requestAnimationFrame(() => updateNodeInternals(nodeId));
+    },
+    [setFlowNodes, updateNodeData, updateNodeInternals]
+  );
+
+  const attachCardUiData = useCallback(
+    (node: Node) => {
+      const data = node.data as unknown as CanvasNodeCardData;
+      return {
+        ...node,
+        data: {
+          ...data,
+          globalDensity: cardDensity,
+          onToggleExpand: handleToggleExpand,
+        },
+      } satisfies Node;
+    },
+    [cardDensity, handleToggleExpand]
+  );
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -927,9 +993,11 @@ function CanvasGraphInner({
   // data on every render reintroduces cursor lag and snap-back.
   useEffect(() => {
     setFlowNodes((currentNodes) =>
-      syncFlowNodes(currentNodes, nextFlowNodes, selectedNodeIds)
+      syncFlowNodes(currentNodes, nextFlowNodes, selectedNodeIds).map((node) =>
+        attachCardUiData(node)
+      )
     );
-  }, [nextFlowNodes, selectedNodeIds, setFlowNodes]);
+  }, [nextFlowNodes, selectedNodeIds, setFlowNodes, attachCardUiData]);
 
   useEffect(() => {
     setFlowEdges((currentEdges) =>

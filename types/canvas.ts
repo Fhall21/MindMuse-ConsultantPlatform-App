@@ -49,6 +49,8 @@ export interface CanvasNode {
    */
   researchSessionId?: string | null;
   researchReferenceLabel?: string | null;
+  /** First supporting quote for research-sourced insights (detail panel preview). */
+  researchQuotePreview?: string | null;
   /** Group-membership metadata used for canvas grouping actions. */
   groupId: string | null;
   memberIds: string[];

@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { BookOpen, ChevronLeft, Sparkles } from "lucide-react";
+import { BookOpen, ChevronLeft, Rows3, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import posthog from "posthog-js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { CanvasGraph } from "@/components/canvas/canvas-graph";
 import { CanvasOrganiseMenu } from "@/components/canvas/canvas-organise-menu";
 import { CanvasFrameBar } from "@/components/canvas/canvas-frame-bar";
@@ -32,6 +33,7 @@ import {
   useUpdateFrame,
 } from "@/hooks/use-canvas";
 import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
+import type { CardDensity } from "@/lib/canvas-card-density";
 import type { CanvasLayoutDirection, FrameBoundsRect } from "@/lib/canvas-layout";
 import { createTheme, moveThemeToGroup, updateTheme } from "@/lib/actions/consultation-workflow";
 import { suggestGroupLabel } from "@/lib/actions/canvas-ai";
@@ -109,6 +111,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
   } | null>(null);
   const nextViewportRequestIdRef = useRef(1);
   const [clutterDismissed, setClutterDismissed] = useState(false);
+  const [cardDensity, setCardDensity] = useState<CardDensity>("compact");
 
   const nodes = useMemo(() => canvasQuery.data?.nodes ?? [], [canvasQuery.data?.nodes]);
   const edges = useMemo(() => canvasQuery.data?.edges ?? [], [canvasQuery.data?.edges]);
@@ -828,6 +831,19 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
               setFilters((current) => ({ ...current, acceptedOnly: !current.acceptedOnly }))
             }
           />
+          <Separator orientation="vertical" className="h-4" />
+          <div className="flex items-center gap-1 rounded-md border bg-background p-0.5">
+            <ToolbarDensityButton
+              label="Compact"
+              active={cardDensity === "compact"}
+              onClick={() => setCardDensity("compact")}
+            />
+            <ToolbarDensityButton
+              label="Expanded"
+              active={cardDensity === "expanded"}
+              onClick={() => setCardDensity("expanded")}
+            />
+          </div>
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -904,6 +920,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
             frames={frames}
             frameDrawingMode={frameDrawingMode}
             dropTargetFrameId={dropTargetFrameId}
+            cardDensity={cardDensity}
             onFrameDraw={handleFrameDraw}
             onFramePersist={handleFramePersist}
             onNodeFrameAssign={handleNodeFrameAssign}
@@ -1026,5 +1043,32 @@ function ToolbarFilterBadge({
     >
       {label}
     </Badge>
+  );
+}
+
+function ToolbarDensityButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors motion-reduce:transition-none",
+        active
+          ? "bg-secondary text-secondary-foreground"
+          : "text-muted-foreground hover:text-foreground"
+      )}
+      aria-pressed={active}
+      onClick={onClick}
+    >
+      {label === "Compact" ? <Rows3 className="h-3 w-3" aria-hidden /> : null}
+      {label}
+    </button>
   );
 }

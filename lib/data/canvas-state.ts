@@ -17,10 +17,11 @@
  * Layout fallback rules mirror the canvas route exactly so a freshly-rendered
  * report and the live canvas read the same positions on first load.
  */
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   canvasResearchInsights,
+  insightQuotes,
   insights,
   meetings,
   researchSessions,
@@ -250,6 +251,25 @@ export async function composeCanvasState(
     )
     .orderBy(asc(canvasResearchInsights.createdAt));
 
+  const researchInsightIds = researchInsightRows.map(({ insight }) => insight.id);
+  const quotePreviewByInsightId = new Map<string, string>();
+  if (researchInsightIds.length > 0) {
+    const quoteRows = await db
+      .select({
+        insightId: insightQuotes.insightId,
+        quote: insightQuotes.quote,
+      })
+      .from(insightQuotes)
+      .where(inArray(insightQuotes.insightId, researchInsightIds))
+      .orderBy(asc(insightQuotes.createdAt));
+
+    for (const row of quoteRows) {
+      if (!quotePreviewByInsightId.has(row.insightId)) {
+        quotePreviewByInsightId.set(row.insightId, row.quote);
+      }
+    }
+  }
+
   const researchInsightNodes: CanvasNode[] = researchInsightRows.map(
     ({ insight, placementX, placementY, researchSession }) => ({
       id: insight.id,
@@ -263,6 +283,7 @@ export async function composeCanvasState(
       sourceType: "research",
       researchSessionId: researchSession.id,
       researchReferenceLabel: researchSessionShortCite(researchSession),
+      researchQuotePreview: quotePreviewByInsightId.get(insight.id) ?? null,
       groupId: null,
       memberIds: [],
       isUserAdded: true,

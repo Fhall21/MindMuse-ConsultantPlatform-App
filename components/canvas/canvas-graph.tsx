@@ -54,10 +54,6 @@ import {
   toggleExpandedOverride,
   type CardDensity,
 } from "@/lib/canvas-card-density";
-import {
-  EVIDENCE_INSIGHT_MIME,
-  REACTFLOW_INSIGHT_MIME,
-} from "@/components/canvas/evidence-dnd-provider";
 import type {
   CanvasEdge,
   CanvasFilterState,
@@ -127,11 +123,6 @@ interface CanvasGraphProps {
   cardDensity?: CardDensity;
   /** Flow-space centre of the visible canvas pane (for click-to-place). */
   onViewportCenterReady?: (getter: () => { x: number; y: number } | null) => void;
-  /** Drop from research library onto the canvas. */
-  onResearchInsightDrop?: (params: {
-    insightId: string;
-    position: { x: number; y: number };
-  }) => void | Promise<void>;
 }
 
 // Canvas interaction contract:
@@ -709,7 +700,6 @@ function CanvasGraphInner({
   onCreateEdge,
   onGroupDrop,
   onViewportCenterReady,
-  onResearchInsightDrop,
   cardDensity = "compact",
 }: CanvasGraphProps) {
   const { data, isLoading } = useCanvas(roundId);
@@ -1426,46 +1416,6 @@ function CanvasGraphInner({
     onViewportCenterReady?.(getViewportCenterFlowPosition);
   }, [getViewportCenterFlowPosition, onViewportCenterReady]);
 
-  const onResearchInsightDropRef = useRef(onResearchInsightDrop);
-  onResearchInsightDropRef.current = onResearchInsightDrop;
-
-  const handleEvidenceDragOver = useCallback((event: React.DragEvent) => {
-    event.preventDefault();
-    const types = event.dataTransfer.types;
-    if (
-      types.includes(EVIDENCE_INSIGHT_MIME) ||
-      types.includes(REACTFLOW_INSIGHT_MIME)
-    ) {
-      event.dataTransfer.dropEffect = "move";
-    }
-  }, []);
-
-  const handleEvidenceDrop = useCallback(
-    (event: React.DragEvent) => {
-      event.preventDefault();
-      let insightId = event.dataTransfer.getData(EVIDENCE_INSIGHT_MIME);
-      if (!insightId) {
-        try {
-          const raw = event.dataTransfer.getData(REACTFLOW_INSIGHT_MIME);
-          if (raw) {
-            const parsed = JSON.parse(raw) as { insightId?: string };
-            insightId = parsed.insightId ?? "";
-          }
-        } catch {
-          insightId = "";
-        }
-      }
-      if (!insightId || !onResearchInsightDropRef.current) return;
-
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-      void onResearchInsightDropRef.current({ insightId, position });
-    },
-    [screenToFlowPosition]
-  );
-
   const handleDrawMouseDown = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (!frameDrawingMode) return;
@@ -1557,8 +1507,6 @@ function CanvasGraphInner({
         edges={flowEdges}
         nodeTypes={nodeTypes}
         defaultViewport={data?.viewport ?? lastViewportRef.current}
-        onDragOver={handleEvidenceDragOver}
-        onDrop={handleEvidenceDrop}
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}

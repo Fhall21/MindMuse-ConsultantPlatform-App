@@ -20,9 +20,7 @@ import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
 import { MultiSelectionPanel } from "@/components/canvas/multi-selection-panel";
 import { ResearchInsightLibraryModal } from "@/components/canvas/research-insight-library-modal";
-import { EvidenceDnDProvider } from "@/components/canvas/evidence-dnd-provider";
 import { useResearchExtractionEnabled } from "@/hooks/use-feature-flags";
-import { usePlaceResearchInsight } from "@/hooks/use-research-extraction";
 import {
   useCanvas,
   useCanvasFrames,
@@ -48,7 +46,6 @@ import {
 import {
   frameContainingPoint,
   nodeIdsInsideFrame,
-  pointInFrameBounds,
   reconcileNodeFrameMembership,
 } from "@/lib/canvas-frame-spatial";
 
@@ -359,7 +356,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
   );
 
   const researchExtractionEnabled = useResearchExtractionEnabled();
-  const placeResearchInsight = usePlaceResearchInsight();
   const [researchLibraryOpen, setResearchLibraryOpen] = useState(false);
   const [libraryDropPosition, setLibraryDropPosition] = useState<{
     x: number;
@@ -679,39 +675,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     if (ops.length > 0) await Promise.all(ops);
   }
 
-  async function handleResearchInsightDrop({
-    insightId,
-    position,
-  }: {
-    insightId: string;
-    position: { x: number; y: number };
-  }) {
-    try {
-      await placeResearchInsight.mutateAsync({
-        consultationId: roundId,
-        insightId,
-        positionX: position.x,
-        positionY: position.y,
-      });
-      await handleNodeFrameAssign(insightId, position);
-
-      if (activeFrame && !pointInFrameBounds(position, activeFrame)) {
-        toast.info(
-          "Insight placed outside the current frame. Switch to All canvas to see it."
-        );
-      } else {
-        toast.success("Research insight added to canvas");
-      }
-
-      setResearchLibraryOpen(false);
-      void invalidateCanvas();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not place research insight"
-      );
-    }
-  }
-
   const handleViewportCenterReady = useCallback(
     (getter: () => { x: number; y: number } | null) => {
       getViewportCenterRef.current = getter;
@@ -785,7 +748,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
   }
 
   return (
-    <EvidenceDnDProvider>
     <div className="flex h-full flex-col">
       {/* Toolbar */}
       <div className="flex items-center gap-3 border-b px-4 py-3">
@@ -934,7 +896,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
             onCreateEdge={handleCreateEdge}
             onGroupDrop={handleGroupDrop}
             onViewportCenterReady={handleViewportCenterReady}
-            onResearchInsightDrop={handleResearchInsightDrop}
           />
 
           {connectionPrompt ? (
@@ -1022,7 +983,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
         onPlaced={() => void invalidateCanvas()}
       />
     </div>
-    </EvidenceDnDProvider>
   );
 }
 

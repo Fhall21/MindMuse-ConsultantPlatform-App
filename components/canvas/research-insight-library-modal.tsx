@@ -18,13 +18,7 @@ import { useResearchExtractionEnabled } from "@/hooks/use-feature-flags";
 import {
   useResearchInsightLibrary,
   usePlaceResearchInsight,
-  type ResearchInsightLibraryEntry,
 } from "@/hooks/use-research-extraction";
-import {
-  EVIDENCE_INSIGHT_MIME,
-  REACTFLOW_INSIGHT_MIME,
-  useEvidenceDnDOptional,
-} from "@/components/canvas/evidence-dnd-provider";
 
 export interface ResearchInsightLibraryModalProps {
   open: boolean;
@@ -66,24 +60,8 @@ export function ResearchInsightLibraryModal({
 
   const library = useResearchInsightLibrary(debounced.length > 0 ? debounced : null);
   const place = usePlaceResearchInsight();
-  const evidenceDnD = useEvidenceDnDOptional();
 
   const items = useMemo(() => library.data ?? [], [library.data]);
-
-  const handleDragStart = (item: ResearchInsightLibraryEntry, event: React.DragEvent) => {
-    event.dataTransfer.setData(EVIDENCE_INSIGHT_MIME, item.insightId);
-    event.dataTransfer.setData(
-      REACTFLOW_INSIGHT_MIME,
-      JSON.stringify({ insightId: item.insightId })
-    );
-    event.dataTransfer.setData("text/plain", item.label);
-    event.dataTransfer.effectAllowed = "move";
-    evidenceDnD?.setDragPayload(item);
-  };
-
-  const handleDragEnd = () => {
-    evidenceDnD?.clearDrag();
-  };
 
   const handlePlace = async (insightId: string) => {
     try {
@@ -146,15 +124,7 @@ export function ResearchInsightLibraryModal({
           ) : (
             <ul className="divide-y">
               {items.map((item) => (
-                <li
-                  key={item.insightId}
-                  draggable
-                  onDragStart={(event) => handleDragStart(item, event)}
-                  onDragEnd={handleDragEnd}
-                  className={`flex cursor-grab items-start gap-3 p-3 active:cursor-grabbing ${
-                    evidenceDnD?.draggedInsightId === item.insightId ? "opacity-60" : ""
-                  }`}
-                >
+                <li key={item.insightId} className="flex items-start gap-3 p-3">
                   <BookOpen className="mt-1 h-4 w-4 shrink-0 text-stone-600 dark:text-stone-300" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold leading-tight text-foreground line-clamp-2">

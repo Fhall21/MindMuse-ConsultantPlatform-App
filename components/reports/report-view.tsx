@@ -43,7 +43,7 @@ import {
 } from "@/lib/report-graph";
 import { normalizeReportMarkdownForEditor } from "@/lib/report-editor-markdown";
 import { parseContentBlocks } from "@/lib/report-content-blocks";
-import { CanvasFramesSection } from "@/components/reports/canvas-frames-section";
+import { EvidenceNetworkImageSection } from "@/components/reports/network-diagram";
 import {
   applyRenderPolicyToReport,
   createReportRenderPolicy,
@@ -1271,14 +1271,6 @@ export function ReportView({ artifactId }: ReportViewProps) {
       {/* ─── Quick Stats ─── */}
       <QuickStats report={displayReport} />
 
-      {/* ─── Canvas frames ─── one card per frame, image inline. Mirrors the
-          consultant's spatial groupings so the report stops feeling like a
-          flat list. */}
-      <CanvasFramesSection
-        frames={graphFrameModels}
-        frameImages={displayReport.canvasImage?.frames ?? null}
-      />
-
       <Separator />
 
       {/* ─── Report body + sidebar layout ─── */}
@@ -1312,43 +1304,19 @@ export function ReportView({ artifactId }: ReportViewProps) {
               <GroupNetworkSection graphModel={graphModel} />
 
               <Separator />
-              {/* ─── Section 3: Full canvas preview with nested groups ─── */}
-              <CanvasPreviewSection
-                graphModel={graphModel}
-                allGroups={allThemeGroups}
-                roundId={displayReport.roundId}
+              {/* ─── Section 3: Evidence Network imagery (server-rendered) ─── */}
+              <EvidenceNetworkImageSection
+                canvasImage={displayReport.canvasImage}
+                graphFrameModels={graphFrameModels}
               />
-
-              {graphFrameModels.length > 0 ? (
-                <section className="space-y-4 print:hidden">
-                  <div className="flex flex-wrap items-end justify-between gap-3">
-                    <div className="space-y-1">
-                      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                        Curated Frame Snapshots
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        {graphFrameModels.length} saved view
-                        {graphFrameModels.length === 1 ? "" : "s"} from the source canvas.
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="text-[10px] uppercase tracking-[0.16em]">
-                      Frame-derived
-                    </Badge>
-                  </div>
-                  <div className="space-y-6">
-                    {graphFrameModels.map((frame) => (
-                      <CanvasPreviewSection
-                        key={frame.id}
-                        graphModel={frame.graphModel}
-                        allGroups={allThemeGroups}
-                        roundId={displayReport.roundId}
-                        title={frame.name}
-                        description={`${frame.graphModel.nodeCount} nodes · ${frame.graphModel.connectionCount} connections`}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
+              {/* Fallback: live canvas preview when no server image is available */}
+              {!displayReport.canvasImage?.full && (
+                <CanvasPreviewSection
+                  graphModel={graphModel}
+                  allGroups={allThemeGroups}
+                  roundId={displayReport.roundId}
+                />
+              )}
 
               {/* ─── Node degree table (analytics) ─── */}
               <GraphNodesSection

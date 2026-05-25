@@ -15,6 +15,7 @@ import type { GraphNodeType } from "@/lib/graph/types";
 import {
   formatConnectionTypeLabel,
   type ReportGraphModel,
+  type ReportGraphFrameModel,
 } from "@/lib/report-graph";
 
 const MAX_DIAGRAM_NODES = 15;
@@ -365,6 +366,70 @@ export function NetworkDiagram({ graphModel }: { graphModel: ReportGraphModel })
           </ReactFlow>
         </ReactFlowProvider>
       </div>
+    </div>
+  );
+}
+
+// ─── Server-rendered imagery ──────────────────────────────────────────────────
+
+interface EvidenceNetworkImageProps {
+  canvasImage:
+    | { full: string | null; frames: Record<string, string> }
+    | null
+    | undefined;
+  graphFrameModels: ReportGraphFrameModel[];
+}
+
+/**
+ * Renders the server-captured canvas image(s) inside the Evidence Network
+ * section. Shows the full-graph hero image followed by per-frame breakdowns.
+ * Returns null when no server imagery is available (caller handles fallback).
+ */
+export function EvidenceNetworkImageSection({
+  canvasImage,
+  graphFrameModels,
+}: EvidenceNetworkImageProps) {
+  const hasFrameImages =
+    canvasImage?.frames && Object.keys(canvasImage.frames).length > 0;
+
+  if (!canvasImage?.full && !hasFrameImages) return null;
+
+  return (
+    <div className="space-y-6">
+      {canvasImage?.full && (
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-slate-50/50">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={canvasImage.full}
+            alt="Full evidence network canvas"
+            className="block h-auto w-full"
+          />
+        </div>
+      )}
+
+      {hasFrameImages && graphFrameModels.length > 0 && (
+        <div className="space-y-4">
+          {graphFrameModels.map((frame) => {
+            const img = canvasImage?.frames?.[frame.id];
+            if (!img) return null;
+            return (
+              <div key={frame.id} className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  {frame.name}
+                </h4>
+                <div className="overflow-hidden rounded-xl border border-border/60 bg-slate-50/50">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={img}
+                    alt={`Canvas frame: ${frame.name}`}
+                    className="block h-auto w-full"
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

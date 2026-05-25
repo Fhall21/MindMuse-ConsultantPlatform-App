@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { CanvasNode } from "@/types/canvas";
 
-/** 16px visual dot + canvas-handles.css 24px hit target (matches frame resize handles). */
+/** 20px visual dot + canvas-handles.css 32px hit target. */
 const CANVAS_HANDLE_BASE =
-  "canvas-connection-handle !h-4 !w-4 !border-2 !border-background";
+  "canvas-connection-handle !h-5 !w-5 !border-2 !border-background";
 
 export interface CanvasNodeCardData {
   node: CanvasNode;

@@ -1433,7 +1433,7 @@ function CanvasGraphInner({
         onNodeDrag={handleNodeDrag}
         onNodeDragStop={handleNodeDragStop}
         onConnect={handleConnect}
-        connectionRadius={40}
+        connectionRadius={48}
         multiSelectionKeyCode={["Meta", "Control", "Shift"]}
         // Disable selection-on-drag and pan-on-drag while drawing a frame so
         // the rubber-band gesture isn't intercepted.

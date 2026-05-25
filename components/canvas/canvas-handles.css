@@ -5,19 +5,19 @@
 
 .evidence-canvas .react-flow__handle.canvas-connection-handle {
   opacity: 1;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   transition: box-shadow 150ms ease, transform 150ms ease;
 }
 
-/* 24px transparent hit box; visual dot stays 16px */
+/* 32px transparent hit box; visual dot stays 20px */
 .evidence-canvas .react-flow__handle.canvas-connection-handle::after {
   content: "";
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   transform: translate(-50%, -50%);
   border-radius: 9999px;
 }

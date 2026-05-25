@@ -36,7 +36,7 @@ import {
   ImageRun,
   type FileChild,
 } from "docx";
-import { dataUrlToBuffer } from "@/lib/report-canvas-assets";
+import { dataUrlToBuffer, fitDataUrlImage } from "@/lib/report-canvas-assets";
 import type { ContentBlock } from "@/lib/report-content-blocks";
 import type {
   ExportSection,
@@ -48,6 +48,7 @@ import type {
   ExportConnection,
   ExportReference,
 } from "@/lib/report-export-content";
+import { rasterizeCanvasDataUrl } from "@/lib/server/canvas-svg-renderer";
 
 // ─── Inline text parsing ──────────────────────────────────────────────────────
 // Converts markdown **bold** and _italic_ markers into TextRun children.
@@ -235,25 +236,55 @@ function connectionsToParagraphs(connections: ExportConnection[]): Paragraph[] {
 
 // Word page width minus margins is roughly 6 inches @ 96 dpi = 576 px.
 const CANVAS_IMAGE_WIDTH_PX = 560;
+const CANVAS_IMAGE_MAX_HEIGHT_PX = 720;
+const CANVAS_IMAGE_FALLBACK_WIDTH_PX = 2400;
 
 /**
- * Produce a single-image paragraph from a PNG data URL.
+ * Produce a single-image paragraph from a canvas data URL.
  * Returns an empty array on failure so callers can safely spread the result.
  */
-function imageDataUrlToParagraph(dataUrl: string, context?: string): Paragraph[] {
+async function imageDataUrlToParagraph(
+  dataUrl: string,
+  context?: string
+): Promise<Paragraph[]> {
   try {
-    const { buffer } = dataUrlToBuffer(dataUrl);
+    const { buffer, mime } = dataUrlToBuffer(dataUrl);
+    const transformation = fitDataUrlImage(dataUrl, {
+      maxWidth: CANVAS_IMAGE_WIDTH_PX,
+      maxHeight: CANVAS_IMAGE_MAX_HEIGHT_PX,
+    });
+    const imageOptions = await (async (): Promise<
+      ConstructorParameters<typeof ImageRun>[0]
+    > => {
+      if (mime === "image/svg+xml") {
+        const fallbackDataUrl = await rasterizeCanvasDataUrl(
+          dataUrl,
+          CANVAS_IMAGE_FALLBACK_WIDTH_PX
+        );
+        const fallback = fallbackDataUrl
+          ? dataUrlToBuffer(fallbackDataUrl)
+          : null;
+        if (fallback?.mime === "image/png") {
+          return {
+            data: buffer,
+            fallback: { data: fallback.buffer, type: "png" },
+            transformation,
+            type: "svg",
+          };
+        }
+      }
+
+      return {
+        data: buffer,
+        transformation,
+        type: "png",
+      };
+    })();
+
     return [
       new Paragraph({
         children: [
-          new ImageRun({
-            data: buffer,
-            transformation: {
-              width: CANVAS_IMAGE_WIDTH_PX,
-              height: Math.round(CANVAS_IMAGE_WIDTH_PX * 0.625),
-            },
-            type: "png",
-          } as ConstructorParameters<typeof ImageRun>[0]),
+          new ImageRun(imageOptions),
         ],
         spacing: { after: 120 },
       }),
@@ -416,7 +447,7 @@ function auditTrailToParagraphs(
 
 // ─── Section → FileChild[] ────────────────────────────────────────────────────
 
-function sectionToChildren(section: ExportSection): FileChild[] {
+async function sectionToChildren(section: ExportSection): Promise<FileChild[]> {
   const children: FileChild[] = [];
 
   if (section.isPageBreak) {
@@ -455,11 +486,11 @@ function sectionToChildren(section: ExportSection): FileChild[] {
       case "connections": {
         const { connections, fullImageUrl, frameImages } = section.data;
         if (fullImageUrl) {
-          children.push(...imageDataUrlToParagraph(fullImageUrl, "full-canvas"));
+          children.push(...(await imageDataUrlToParagraph(fullImageUrl, "full-canvas")));
         }
         if (frameImages) {
           for (const [frameId, url] of Object.entries(frameImages)) {
-            children.push(...imageDataUrlToParagraph(url, `frame-${frameId}`));
+            children.push(...(await imageDataUrlToParagraph(url, `frame-${frameId}`)));
           }
         }
         children.push(...connectionsToParagraphs(connections));
@@ -629,7 +660,7 @@ export async function buildDocxBuffer(opts: DocxExportOptions): Promise<Buffer> 
   const children: FileChild[] = [
     ...buildTitlePage({ title, roundLabel, generatedAt, artifactType }),
     ...buildContentsPage(sections),
-    ...sections.flatMap(sectionToChildren),
+    ...(await Promise.all(sections.map(sectionToChildren))).flat(),
   ];
 
   const doc = new Document({

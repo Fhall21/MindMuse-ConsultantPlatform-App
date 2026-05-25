@@ -9,7 +9,6 @@ import {
 } from "@/lib/report-export-content";
 import { buildDocxBuffer } from "@/lib/report-export-docx";
 import { applyRenderPolicyToReport } from "@/lib/report-render-policy";
-import { rasterizeCanvasImagePayload } from "@/lib/server/canvas-svg-renderer";
 import { loadReportReferences } from "@/lib/report-references";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
 import { type NextRequest, NextResponse } from "next/server";
@@ -35,13 +34,7 @@ export async function GET(
   );
 
   try {
-    // Rasterize SVG data URLs → PNG before building DOCX (ImageRun needs raster).
-    const rasterCanvasImage = await rasterizeCanvasImagePayload(renderedReport.canvasImage);
-    const reportForDocx = rasterCanvasImage
-      ? { ...renderedReport, canvasImage: rasterCanvasImage }
-      : renderedReport;
-
-    let sections = buildExportSections(reportForDocx, template);
+    let sections = buildExportSections(renderedReport, template);
 
     const userId = await requireCurrentUserId();
     const consultationIds = Array.from(

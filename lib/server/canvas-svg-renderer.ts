@@ -606,6 +606,19 @@ async function svgStringToPngDataUrl(
   }
 }
 
+export async function rasterizeCanvasDataUrl(
+  dataUrl: string,
+  maxWidth: number
+): Promise<string | null> {
+  if (dataUrl.startsWith("data:image/png;base64,")) return dataUrl;
+  if (!dataUrl.startsWith("data:image/svg+xml;base64,")) return null;
+  const svg = Buffer.from(
+    dataUrl.slice("data:image/svg+xml;base64,".length),
+    "base64"
+  ).toString("utf-8");
+  return svgStringToPngDataUrl(svg, maxWidth);
+}
+
 export type CanvasImagePayload = {
   full: string | null;
   frames: Record<string, string>;
@@ -652,20 +665,10 @@ export async function rasterizeCanvasImagePayload(
   const fullMaxWidth = opts.fullMaxWidth ?? 1600;
   const perFrameMaxWidth = opts.perFrameMaxWidth ?? 1200;
 
-  async function toRaster(dataUrl: string, maxWidth: number): Promise<string | null> {
-    if (dataUrl.startsWith("data:image/png;base64,")) return dataUrl; // already PNG
-    if (!dataUrl.startsWith("data:image/svg+xml;base64,")) return null;
-    const svg = Buffer.from(
-      dataUrl.slice("data:image/svg+xml;base64,".length),
-      "base64"
-    ).toString("utf-8");
-    return svgStringToPngDataUrl(svg, maxWidth);
-  }
-
   const frameEntries = Object.entries(payload.frames);
   const [rasterFull, ...rasterFrames] = await Promise.all([
-    payload.full ? toRaster(payload.full, fullMaxWidth) : Promise.resolve(null),
-    ...frameEntries.map(([, url]) => toRaster(url, perFrameMaxWidth)),
+    payload.full ? rasterizeCanvasDataUrl(payload.full, fullMaxWidth) : Promise.resolve(null),
+    ...frameEntries.map(([, url]) => rasterizeCanvasDataUrl(url, perFrameMaxWidth)),
   ]);
 
   const frames: Record<string, string> = {};

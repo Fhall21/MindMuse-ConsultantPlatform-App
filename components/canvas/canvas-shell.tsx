@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { BookOpen, ChevronLeft, Rows3, Sparkles } from "lucide-react";
+import { ChevronLeft, Rows3, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import posthog from "posthog-js";
 import { Badge } from "@/components/ui/badge";
@@ -19,8 +19,6 @@ import { ConnectionTypePrompt } from "@/components/canvas/connection-type-prompt
 import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
 import { MultiSelectionPanel } from "@/components/canvas/multi-selection-panel";
-import { ResearchInsightLibraryModal } from "@/components/canvas/research-insight-library-modal";
-import { useResearchExtractionEnabled } from "@/hooks/use-feature-flags";
 import {
   useCanvas,
   useCanvasFrames,
@@ -355,21 +353,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     />
   );
 
-  const researchExtractionEnabled = useResearchExtractionEnabled();
-  const [researchLibraryOpen, setResearchLibraryOpen] = useState(false);
-  const [libraryDropPosition, setLibraryDropPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-  const getViewportCenterRef = useRef<(() => { x: number; y: number } | null) | null>(
-    null
-  );
-
-  const openResearchLibrary = useCallback(() => {
-    setLibraryDropPosition(getViewportCenterRef.current?.() ?? null);
-    setResearchLibraryOpen(true);
-  }, []);
-
   const panelOrganiseControl = (
     <CanvasOrganiseMenu
       disabled={!canReorganiseCanvas}
@@ -675,13 +658,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
     if (ops.length > 0) await Promise.all(ops);
   }
 
-  const handleViewportCenterReady = useCallback(
-    (getter: () => { x: number; y: number } | null) => {
-      getViewportCenterRef.current = getter;
-    },
-    []
-  );
-
   function handleNodeFrameDragOver(_nodeId: string, position: { x: number; y: number }) {
     const target = frameContainingPoint(frames, position);
     setDropTargetFrameId(target?.id ?? null);
@@ -810,16 +786,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
 
         <div className="ml-auto flex items-center gap-2">
           {toolbarOrganiseControl}
-          {researchExtractionEnabled ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={openResearchLibrary}
-            >
-              <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-              Research library
-            </Button>
-          ) : null}
           <Button
             variant="outline"
             size="sm"
@@ -895,7 +861,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
             onLayoutComplete={handleLayoutComplete}
             onCreateEdge={handleCreateEdge}
             onGroupDrop={handleGroupDrop}
-            onViewportCenterReady={handleViewportCenterReady}
           />
 
           {connectionPrompt ? (
@@ -973,14 +938,6 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
           if (!open) setRenameTargetId(null);
         }}
         onSubmit={handleRenameDialogSubmit}
-      />
-
-      <ResearchInsightLibraryModal
-        open={researchLibraryOpen}
-        onOpenChange={setResearchLibraryOpen}
-        consultationId={roundId}
-        dropPosition={libraryDropPosition}
-        onPlaced={() => void invalidateCanvas()}
       />
     </div>
   );

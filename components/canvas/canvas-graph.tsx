@@ -121,8 +121,6 @@ interface CanvasGraphProps {
   }) => Promise<void>;
   /** Session-local card density — compact (default) or expanded. */
   cardDensity?: CardDensity;
-  /** Flow-space centre of the visible canvas pane (for click-to-place). */
-  onViewportCenterReady?: (getter: () => { x: number; y: number } | null) => void;
 }
 
 // Canvas interaction contract:
@@ -699,7 +697,6 @@ function CanvasGraphInner({
   onLayoutComplete,
   onCreateEdge,
   onGroupDrop,
-  onViewportCenterReady,
   cardDensity = "compact",
 }: CanvasGraphProps) {
   const { data, isLoading } = useCanvas(roundId);
@@ -1402,19 +1399,6 @@ function CanvasGraphInner({
       }
   >(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-
-  const getViewportCenterFlowPosition = useCallback((): { x: number; y: number } | null => {
-    const pane = wrapperRef.current?.querySelector(".react-flow__pane")?.getBoundingClientRect();
-    if (!pane) return null;
-    return screenToFlowPosition({
-      x: pane.left + pane.width / 2,
-      y: pane.top + pane.height / 2,
-    });
-  }, [screenToFlowPosition]);
-
-  useEffect(() => {
-    onViewportCenterReady?.(getViewportCenterFlowPosition);
-  }, [getViewportCenterFlowPosition, onViewportCenterReady]);
 
   const handleDrawMouseDown = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {

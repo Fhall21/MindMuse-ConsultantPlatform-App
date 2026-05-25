@@ -352,33 +352,9 @@ function svgEdgePath(edge: CanvasEdge, source: CanvasNode, target: CanvasNode): 
 
   return (
     `<path d="${pathD}" ` +
-    `fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" ` +
-    `marker-end="url(#arrow-${edge.connection_type})"/>` +
+    `fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}"/>` +
     `<rect x="${labelX - labelW / 2}" y="${labelY - 10}" width="${labelW}" height="18" rx="9" fill="${CARD_BG}" fill-opacity="0.94"/>` +
     `<text x="${labelX}" y="${labelY + 4}" font-family='${FONT_FAMILY}' font-size="10" fill="${color}" text-anchor="middle">${escapeXml(label)}</text>`
-  );
-}
-
-function svgArrowDefs(): string {
-  const types = [
-    "causes",
-    "influences",
-    "supports",
-    "contradicts",
-    "context",
-    "related_to",
-  ] as const;
-  return (
-    `<defs>` +
-    types
-      .map(
-        (t) =>
-          `<marker id="arrow-${t}" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">` +
-          `<path d="M 0 0 L 10 5 L 0 10 z" fill="${CONNECTION_COLORS[t]}"/>` +
-          `</marker>`
-      )
-      .join("") +
-    `</defs>`
   );
 }
 
@@ -475,7 +451,7 @@ function buildFullGraphSvgString(input: CanvasRenderInput): string | null {
   const standaloneNodes = input.nodes.filter((n) => !memberIdsClaimed.has(n.id));
 
   const parts: string[] = [];
-  parts.push(svgArrowDefs());
+
   parts.push(`<rect x="${minX}" y="${minY}" width="${w}" height="${h}" fill="#fafafa"/>`);
 
   for (const frame of input.frames) {
@@ -568,7 +544,7 @@ function buildFrameSvgString(input: CanvasRenderInput, frame: CanvasFrame): stri
   );
 
   const parts: string[] = [];
-  parts.push(svgArrowDefs());
+
   parts.push(`<rect x="${minX}" y="${minY}" width="${w}" height="${h}" fill="#fafafa"/>`);
   parts.push(svgFrame(frame));
 

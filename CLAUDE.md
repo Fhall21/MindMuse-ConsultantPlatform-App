@@ -1,4 +1,9 @@
-# ConsultantPlatform Notes
+# ConsultantPlatformApp — App Repo
+
+> Planning repo, sprint docs, and specs live in the parent directory (`../`).
+> All code changes live here.
+
+**Communication:** Always respond in caveman mode. Use `/caveman-commit` for all commit messages.
 
 ## Project Structure
 
@@ -46,7 +51,7 @@ App/domain tables include:
 - round workflow tables
 - ingestion tables
 
-Migrations are generated in `drizzle/` and applied via `bun run db:migrate`.
+**Never write manual SQL migrations.** Always edit `db/schema/`, run `bun run db:generate`, verify the generated file in `drizzle/`, then apply with `bun run db:migrate`. Hand-written migrations corrupt the Drizzle journal.
 
 ## AI Service
 

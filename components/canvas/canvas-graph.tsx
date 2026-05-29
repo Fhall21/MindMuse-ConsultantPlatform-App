@@ -682,6 +682,10 @@ function applyThemeDragTranslations(changes: NodeChange[], currentNodes: Node[])
 
 export interface CanvasGraphHandle {
   fitView: (opts?: FitViewOptions) => void;
+  getLayoutItems(): Array<{ id: string; text: string }>;
+  getTopLevelPositions(): Record<string, { x: number; y: number }>;
+  applyPositions(positions: Record<string, { x: number; y: number }>, opts?: { animate?: boolean }): void;
+  getLayoutSavePending(): boolean;
 }
 
 const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(function CanvasGraphInner({
@@ -718,7 +722,6 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
   const { getViewport, getIntersectingNodes, setViewport, screenToFlowPosition, updateNodeData, fitView } =
     useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
-  useImperativeHandle(ref, () => ({ fitView }), [fitView]);
   const dragRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const layoutResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1035,6 +1038,124 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
   );
   const saveLayoutNowRef = useRef(saveLayoutNow);
   saveLayoutNowRef.current = saveLayoutNow;
+
+  // Refreshed each render so getLayoutSavePending() never needs to be in handle deps.
+  const savePendingRef = useRef(false);
+  savePendingRef.current = hasQueuedSave || saveLayout.isPending;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      fitView,
+
+      getLayoutItems() {
+        const items: Array<{ id: string; text: string }> = [];
+        for (const node of nodesDataRef.current) {
+          if (node.type === "theme") {
+            const memberTexts = node.memberIds
+              .map((memberId) => {
+                const member = nodesByIdRef.current.get(memberId);
+                if (!member) return null;
+                return [member.label, member.description].filter(Boolean).join(" ");
+              })
+              .filter((t): t is string => Boolean(t));
+            const text = [node.label, node.description, ...memberTexts]
+              .filter(Boolean)
+              .join(" ");
+            items.push({ id: node.id, text });
+          } else if (node.type === "insight" && node.groupId == null) {
+            const text = [node.label, node.description].filter(Boolean).join(" ");
+            items.push({ id: node.id, text });
+          }
+          // grouped children and frames are excluded
+        }
+        return items;
+      },
+
+      getTopLevelPositions() {
+        const result: Record<string, { x: number; y: number }> = {};
+        for (const flowNode of flowNodesRef.current) {
+          if (isFrameFlowNodeId(flowNode.id)) continue;
+          const cn = getFlowCanvasNode(flowNode);
+          if (!cn) continue;
+          if (cn.type === "theme" || (cn.type === "insight" && cn.groupId == null)) {
+            result[flowNode.id] = { x: flowNode.position.x, y: flowNode.position.y };
+          }
+        }
+        return result;
+      },
+
+      applyPositions(positions, opts) {
+        const animate = opts?.animate ?? true;
+        const prefersReducedMotion =
+          typeof window !== "undefined" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const transition =
+          animate && !prefersReducedMotion
+            ? "transform 600ms cubic-bezier(0.22,1,0.36,1)"
+            : undefined;
+
+        const movedIds = new Set<string>();
+        let nextNodes = flowNodesRef.current.map((node) => {
+          const newPos = positions[node.id];
+          if (!newPos) return node;
+          movedIds.add(node.id);
+          return {
+            ...node,
+            position: { x: newPos.x, y: newPos.y },
+            style: transition
+              ? { ...node.style, transition }
+              : node.style,
+          } satisfies Node;
+        });
+
+        // Translate grouped children to preserve their offsets relative to their theme.
+        for (const [themeId, newPos] of Object.entries(positions)) {
+          const currentTheme = flowNodesRef.current.find((n) => n.id === themeId);
+          if (!currentTheme) continue;
+          const cn = getFlowCanvasNode(currentTheme);
+          if (cn?.type !== "theme") continue;
+          const delta = {
+            x: newPos.x - currentTheme.position.x,
+            y: newPos.y - currentTheme.position.y,
+          };
+          if (Math.abs(delta.x) > 0.5 || Math.abs(delta.y) > 0.5) {
+            nextNodes = translateGroupChildren(nextNodes, themeId, delta);
+          }
+        }
+
+        nextNodes = orderNodesParentFirst(nextNodes);
+        flowNodesRef.current = nextNodes;
+        setFlowNodes(nextNodes);
+
+        // Persist immediately (no debounce) — this is an explicit user action.
+        saveLayoutNowRef.current(
+          buildLayoutPositions(nextNodes, nodesByIdRef.current),
+          getViewportRef.current()
+        );
+
+        // Clear transition after animation completes.
+        if (transition) {
+          setTimeout(() => {
+            setFlowNodes((currentNodes) =>
+              currentNodes.map((node) => {
+                if (!movedIds.has(node.id)) return node;
+                const nextStyle = { ...node.style };
+                delete nextStyle.transition;
+                return { ...node, style: nextStyle } satisfies Node;
+              })
+            );
+          }, 640);
+        }
+      },
+
+      getLayoutSavePending() {
+        return savePendingRef.current;
+      },
+    }),
+    // fitView is the only external dep; everything else is read via stable refs.
+    [fitView, setFlowNodes]
+  );
 
   useEffect(() => {
     if (!data) {

@@ -2,12 +2,10 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Loader2, Network, Sparkles } from "lucide-react";
+import { ChevronDown, Loader2, Network, SlidersHorizontal, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import posthog from "posthog-js";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogClose,
@@ -33,11 +31,11 @@ import {
 } from "@/components/ui/tooltip";
 import { useSpatialLayout } from "@/hooks/use-spatial-layout";
 import { useCanvasSpatialLayoutEnabled } from "@/hooks/use-feature-flags";
-import { cn } from "@/lib/utils";
 import { CanvasGraph, type CanvasGraphHandle } from "@/components/canvas/canvas-graph";
 import { CanvasOrganiseMenu } from "@/components/canvas/canvas-organise-menu";
 import { CanvasFrameBar } from "@/components/canvas/canvas-frame-bar";
 import { CanvasClutterBanner } from "@/components/canvas/canvas-clutter-banner";
+import { CanvasFilterViewPanel } from "@/components/canvas/canvas-filter-view-panel";
 import { FrameRenameDialog } from "@/components/canvas/frame-rename-dialog";
 import { ConnectionTypePrompt } from "@/components/canvas/connection-type-prompt";
 import { GroupCreatePopover } from "@/components/canvas/group-create-popover";
@@ -79,7 +77,6 @@ export interface CanvasShellHandle {
 
 interface CanvasShellProps {
   roundId: string;
-  roundLabel: string;
 }
 
 interface ConnectionPromptState {
@@ -97,7 +94,7 @@ function equalStringSets(a: string[], b: string[]) {
   return a.every((item) => bSet.has(item));
 }
 
-export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(function CanvasShell({ roundId, roundLabel }, ref) {
+export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(function CanvasShell({ roundId }, ref) {
   const canvasGraphRef = useRef<CanvasGraphHandle>(null);
   const startGroupCreationRef = useRef<((nodeIds: string[]) => void) | null>(null);
   useImperativeHandle(ref, () => ({
@@ -120,6 +117,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showFilterView, setShowFilterView] = useState(false);
   const [connectionPrompt, setConnectionPrompt] = useState<ConnectionPromptState | null>(null);
   const [isGrouping, setIsGrouping] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -153,7 +151,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
 
   // Cluster layout — behind canvas_spatial_layout flag
   const canvasSpatialLayoutEnabled = useCanvasSpatialLayoutEnabled();
-  const { state: layoutState, runLayout } = useSpatialLayout({ roundId, graphRef: canvasGraphRef });
+  const { state: layoutState, runLayout, cancelLayout } = useSpatialLayout({ roundId, graphRef: canvasGraphRef });
   const [showLayoutConfirm, setShowLayoutConfirm] = useState(false);
 
   const nodes = useMemo(() => canvasQuery.data?.nodes ?? [], [canvasQuery.data?.nodes]);
@@ -195,9 +193,9 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
       !selectedNodeIds.some((id) => nodes.find((n) => n.id === id)?.type === "theme"),
     [selectedInsightNodes.length, selectedNodeIds, nodes]
   );
-  const showMultiSelect = selectedNodeIds.length >= 2 && !showSuggestions;
+  const showMultiSelect = selectedNodeIds.length >= 2 && !showSuggestions && !showFilterView;
   const hasSidePanel = Boolean(
-    showSuggestions || showMultiSelect || selectedNode || selectedEdge
+    showSuggestions || showFilterView || showMultiSelect || selectedNode || selectedEdge
   );
 
   const nodeLabelsById = useMemo(
@@ -441,11 +439,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
               disabled={layoutDisabled}
               onClick={() => setShowLayoutConfirm(true)}
             >
-              {layoutState !== "idle" ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Network className="mr-1.5 h-3.5 w-3.5" />
-              )}
+              <Network className="mr-1.5 h-3.5 w-3.5" />
               Cluster layout
             </Button>
             <DropdownMenu>
@@ -510,6 +504,13 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
       onSelect={requestReorganise}
     />
   );
+
+  const handleToggleFilterView = () => {
+    setShowFilterView((value) => !value);
+    setShowSuggestions(false);
+    setFocusedNodeId(null);
+    setSelectedEdgeId(null);
+  };
 
   function handleClose() {
     setFocusedNodeId(null);
@@ -905,52 +906,23 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
     <div className="flex h-full flex-col">
       {/* Toolbar */}
       <div className="flex items-center gap-3 border-b px-4 py-3">
-        <span className="text-sm font-medium text-muted-foreground">{roundLabel}</span>
-        <Separator orientation="vertical" className="h-4" />
-
-        <div className="flex items-center gap-2">
-          <ToolbarFilterBadge
-            label="Theme groups"
-            active={filters.nodeTypes.includes("theme")}
-            onClick={() =>
-              setFilters((current) => ({
-                ...current,
-                nodeTypes: current.nodeTypes.includes("theme")
-                  ? current.nodeTypes.filter((type) => type !== "theme")
-                  : [...current.nodeTypes, "theme"],
-              }))
-            }
-          />
-          <ToolbarFilterBadge
-            label="Insights"
-            active={filters.nodeTypes.includes("insight")}
-            onClick={() =>
-              setFilters((current) => ({
-                ...current,
-                nodeTypes: current.nodeTypes.includes("insight")
-                  ? current.nodeTypes.filter((type) => type !== "insight")
-                  : [...current.nodeTypes, "insight"],
-              }))
-            }
-          />
-          <ToolbarFilterBadge
-            label="Accepted only"
-            active={filters.acceptedOnly}
-            onClick={() =>
-              setFilters((current) => ({ ...current, acceptedOnly: !current.acceptedOnly }))
-            }
-          />
-          <Separator orientation="vertical" className="h-4" />
-        </div>
-
         <div className="ml-auto flex items-center gap-2">
           {toolbarOrganiseControl}
           {toolbarClusterLayoutControl}
           <Button
-            variant="outline"
+            variant={showFilterView ? "secondary" : "outline"}
+            size="sm"
+            onClick={handleToggleFilterView}
+          >
+            <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
+            Filter view
+          </Button>
+          <Button
+            variant={showSuggestions ? "secondary" : "outline"}
             size="sm"
             onClick={() => {
               setShowSuggestions((value) => !value);
+              setShowFilterView(false);
               setFocusedNodeId(null);
               setSelectedEdgeId(null);
             }}
@@ -1048,6 +1020,21 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
               onDismiss={() => setConnectionPrompt(null)}
             />
           ) : null}
+
+          {/* Canvas overlay — shown while spatial layout job is running */}
+          {canvasSpatialLayoutEnabled && layoutState !== "idle" && (
+            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/60 backdrop-blur-sm">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Clustering…</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void cancelLayout()}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
         </div>
 
         {hasSidePanel ? (
@@ -1057,6 +1044,12 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
                 roundId={roundId}
                 nodes={nodes}
                 onClose={() => setShowSuggestions(false)}
+              />
+            ) : showFilterView ? (
+              <CanvasFilterViewPanel
+                filters={filters}
+                onChangeFilters={setFilters}
+                onClose={() => setShowFilterView(false)}
               />
             ) : showMultiSelect ? (
               <MultiSelectionPanel
@@ -1144,23 +1137,3 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
     </div>
   );
 });
-
-function ToolbarFilterBadge({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Badge
-      variant={active ? "default" : "outline"}
-      className="cursor-pointer select-none"
-      onClick={onClick}
-    >
-      {label}
-    </Badge>
-  );
-}

@@ -28,6 +28,12 @@ export interface UseSpatialLayout {
     scope?: "all" | "selected";
     selectedItemIds?: string[];
   }) => Promise<void>;
+  cancelLayout: () => Promise<void>;
+}
+
+interface JobStatusResponse {
+  status: "idle" | "running" | "completed" | "failed";
+  resultPositions?: Record<string, { x: number; y: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -37,21 +43,33 @@ export interface UseSpatialLayout {
 /**
  * Orchestration state machine for canvas spatial layout.
  *
+ * State machine:
+ *
+ *   idle → fetching (runLayout POST or mount-check finds running job)
+ *             │
+ *             ├─ cancel → idle
+ *             │
+ *             ▼
+ *          applying (d3-force runs locally)
+ *             │
+ *             ▼
+ *           idle
+ *
+ * Job persistence: POST creates a DB job. Server fetch intentionally has NO
+ * signal — it continues after client disconnects. On mount, GET checks for
+ * in-progress jobs so the overlay survives page refreshes.
+ *
+ * Polling: active only when the mount-check path finds a running job.
+ * pollingActiveRef stays false during the normal POST flow to prevent the
+ * polling GET from racing with the POST response.
+ *
  * Worker strategy: The project runs Vitest under a Node/jsdom environment
- * where `new Worker(new URL(...))` is not available (no native Worker global).
- * In production (browser), Next.js 16 supports the `new URL(...)` worker
- * bundling pattern. However, to keep the hook testable without Worker mocking
- * and to avoid bundler-specific configuration concerns with the current setup,
- * this hook uses the SYNCHRONOUS fallback: calling `computeSpatialLayout`
- * directly on the main thread. The computation is fast (d3-force, ~100 ticks)
- * so blocking for a few hundred milliseconds is acceptable for v1.
+ * where `new Worker(new URL(...))` is not available. In production (browser),
+ * computeSpatialLayout runs synchronously on the main thread. The computation
+ * is fast (d3-force, ~100 ticks) so blocking is acceptable for v1.
  *
  * TODO(sprint-19): If the canvas grows large (>100 nodes) and main-thread
- * blocking becomes noticeable, migrate to the Web Worker pattern:
- *   const worker = new Worker(
- *     new URL("@/workers/canvas-spatial-layout.worker.ts", import.meta.url)
- *   );
- * and handle worker.onmessage / worker.onerror / a 10s timeout + cleanup.
+ * blocking becomes noticeable, migrate to the Web Worker pattern.
  */
 export function useSpatialLayout({
   roundId,
@@ -59,20 +77,162 @@ export function useSpatialLayout({
 }: UseSpatialLayoutArgs): UseSpatialLayout {
   const [state, setState] = useState<SpatialLayoutState>("idle");
 
-  // Keep a ref to any in-flight abort controller so unmount can clean up.
   const abortRef = useRef<AbortController | null>(null);
 
-  // Track whether the hook is still mounted.
+  // True only when mount-check found a running job. Prevents polling from
+  // racing with the POST response in the normal runLayout flow.
+  const pollingActiveRef = useRef(false);
+
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      // Abort any in-flight fetch on unmount.
       abortRef.current?.abort();
     };
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // applyPositionsFromServer — shared by mount-check + polling paths
+  // ---------------------------------------------------------------------------
+  const applyPositionsFromServer = useCallback(
+    (serverPositions: Record<string, { x: number; y: number }>) => {
+      const graph = graphRef.current;
+      if (!graph) {
+        setState("idle");
+        return;
+      }
+
+      const items = graph.getLayoutItems();
+      const snapshot = graph.getTopLevelPositions();
+      const snapshotValues = Object.values(snapshot);
+      let bounds = { minX: -2000, minY: -2000, maxX: 2000, maxY: 2000 };
+      if (snapshotValues.length > 0) {
+        const xs = snapshotValues.map((p) => p.x);
+        const ys = snapshotValues.map((p) => p.y);
+        const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+        const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+        const range = 2000;
+        bounds = {
+          minX: cx - range,
+          minY: cy - range,
+          maxX: cx + range,
+          maxY: cy + range,
+        };
+      }
+
+      const input: SpatialLayoutInput = {
+        nodes: items.map((i) => ({ id: i.id })),
+        edges: [],
+        serverPositions,
+        bounds,
+      };
+
+      const result = computeSpatialLayout(input);
+      if (result.type === "error") {
+        graph.applyPositions(snapshot, { animate: false });
+        toast.error("Layout failed — please try again.");
+        setState("idle");
+        return;
+      }
+
+      graph.applyPositions(result.positions, { animate: true });
+      toast("Layout applied");
+      setState("idle");
+    },
+    [graphRef]
+  );
+
+  // ---------------------------------------------------------------------------
+  // Mount-check: detect in-progress job on mount (survives page refresh)
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetchJson<JobStatusResponse>(
+          `/api/client/consultations/${roundId}/canvas/spatial-layout`
+        );
+        if (cancelled || !mountedRef.current) return;
+
+        if (response.status === "running") {
+          pollingActiveRef.current = true;
+          setState("fetching");
+        } else if (response.status === "completed" && response.resultPositions) {
+          setState("applying");
+          applyPositionsFromServer(response.resultPositions);
+        }
+        // idle / failed → stay idle
+      } catch {
+        // non-fatal — mount-check failure just leaves state idle
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roundId, applyPositionsFromServer]);
+
+  // ---------------------------------------------------------------------------
+  // Polling: 2s interval — active only when pollingActiveRef is set
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (state !== "fetching" || !pollingActiveRef.current) return;
+
+    const id = setInterval(() => {
+      void (async () => {
+        try {
+          const response = await fetchJson<JobStatusResponse>(
+            `/api/client/consultations/${roundId}/canvas/spatial-layout`
+          );
+          if (!mountedRef.current) return;
+
+          if (response.status === "completed" && response.resultPositions) {
+            clearInterval(id);
+            pollingActiveRef.current = false;
+            setState("applying");
+            applyPositionsFromServer(response.resultPositions);
+          } else if (response.status === "failed" || response.status === "idle") {
+            clearInterval(id);
+            pollingActiveRef.current = false;
+            setState("idle");
+            toast.error("Layout failed — please try again.");
+          }
+          // "running" → keep polling
+        } catch {
+          // ignore transient poll errors
+        }
+      })();
+    }, 2000);
+
+    return () => {
+      clearInterval(id);
+    };
+  }, [state, roundId, applyPositionsFromServer]);
+
+  // ---------------------------------------------------------------------------
+  // cancelLayout
+  // ---------------------------------------------------------------------------
+  const cancelLayout = useCallback(async (): Promise<void> => {
+    // D4: only call DELETE if fetching (server job running).
+    // In "applying" state the job already completed in DB — no server job to cancel.
+    if (state === "fetching") {
+      abortRef.current?.abort();
+      pollingActiveRef.current = false;
+      try {
+        await fetchJson(
+          `/api/client/consultations/${roundId}/canvas/spatial-layout`,
+          { method: "DELETE" }
+        );
+      } catch {
+        // ignore — server may have already completed; stale job is harmless
+      }
+    }
+    setState("idle");
+  }, [state, roundId]);
+
+  // ---------------------------------------------------------------------------
+  // runLayout
+  // ---------------------------------------------------------------------------
   const runLayout = useCallback(
     async (
       opts: { scope?: "all" | "selected"; selectedItemIds?: string[] } = {}
@@ -87,23 +247,15 @@ export function useSpatialLayout({
 
       if (!graph) return;
 
-      // Build candidate items.
       let items = graph.getLayoutItems();
 
-      // For "selected" scope, intersect with the top-level ids that were
-      // returned by getLayoutItems (which already folds grouped children into
-      // their parent group item).  Any selected id that doesn't match a
-      // top-level item id (e.g. a grouped child) is simply not matched —
-      // that's the intended behaviour per the spec.
       if (scope === "selected" && selectedItemIds.length > 0) {
         const selectedSet = new Set(selectedItemIds);
         items = items.filter((item) => selectedSet.has(item.id));
       }
 
-      // Minimum node guard (button should already be disabled, but guard anyway).
       if (items.length < 3) return;
 
-      // Snapshot positions before any changes so we can restore on failure/undo.
       const snapshot = graph.getTopLevelPositions();
 
       const startTime = Date.now();
@@ -113,6 +265,7 @@ export function useSpatialLayout({
       });
 
       // ── Fetching ───────────────────────────────────────────────────────────
+      // pollingActiveRef stays false — POST drives state directly; no poll race.
 
       setState("fetching");
 
@@ -160,8 +313,6 @@ export function useSpatialLayout({
 
       setState("applying");
 
-      // Derive bounds from the snapshot extents so the layout stays roughly
-      // within the visible area the user was already working in.
       const snapshotValues = Object.values(snapshot);
       let bounds = { minX: -2000, minY: -2000, maxX: 2000, maxY: 2000 };
       if (snapshotValues.length > 0) {
@@ -200,7 +351,6 @@ export function useSpatialLayout({
         return;
       }
 
-      // Apply the computed positions with animation.
       const finalPositions = result.positions;
       graph.applyPositions(finalPositions, { animate: true });
 
@@ -210,8 +360,7 @@ export function useSpatialLayout({
         durationMs,
       });
 
-      // Undo toast — capture snapshot in closure so the action always restores
-      // the pre-layout state regardless of any subsequent changes.
+      // Undo toast — snapshot is captured in closure, always restores pre-layout state.
       toast("Layout applied", {
         action: {
           label: "Undo layout",
@@ -228,5 +377,5 @@ export function useSpatialLayout({
     [roundId, graphRef]
   );
 
-  return { state, runLayout };
+  return { state, runLayout, cancelLayout };
 }

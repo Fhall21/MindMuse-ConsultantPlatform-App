@@ -1,8 +1,8 @@
 "use client";
 
-import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Handle, Position, type NodeProps, useUpdateNodeInternals } from "@xyflow/react";
-import { BookOpen, ChevronDown, Sparkles } from "lucide-react";
+import { BookOpen, ChevronDown, Pencil, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -30,6 +30,7 @@ export interface CanvasNodeCardData {
   expanded?: boolean;
   globalDensity?: CardDensity;
   onToggleExpand?: (nodeId: string) => void;
+  onRenameGroup?: (id: string, name: string, description: string) => void;
 }
 
 function hoverPreviewEnabled(
@@ -386,18 +387,64 @@ function InsightCard({
 }
 
 function ThemeCard({
+  nodeId,
   node,
   selected,
   aiGenerated,
   dragging,
+  onRenameGroup,
 }: {
+  nodeId: string;
   node: CanvasNode;
   selected: boolean;
   aiGenerated?: boolean;
   dragging?: boolean;
+  onRenameGroup?: (id: string, name: string, description: string) => void;
 }) {
+  const [editingField, setEditingField] = useState<"name" | "description" | null>(null);
+  const [draftName, setDraftName] = useState(node.label);
+  const [draftDescription, setDraftDescription] = useState(node.description ?? "");
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const descRef = useRef<HTMLTextAreaElement>(null);
+
+  const canEdit = Boolean(onRenameGroup);
   const memberCount = node.memberIds.length;
   const hasDescription = Boolean(node.description?.trim());
+
+  useEffect(() => {
+    if (editingField === "name") {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.select();
+    } else if (editingField === "description") {
+      descRef.current?.focus();
+    }
+  }, [editingField]);
+
+  function commitEdit() {
+    if (!onRenameGroup) return;
+    const name = draftName.trim() || node.label;
+    const description = draftDescription.trim();
+    onRenameGroup(nodeId, name, description);
+    setEditingField(null);
+  }
+
+  function cancelEdit() {
+    setDraftName(node.label);
+    setDraftDescription(node.description ?? "");
+    setEditingField(null);
+  }
+
+  function startEditName() {
+    if (!canEdit) return;
+    setDraftName(node.label);
+    setEditingField("name");
+  }
+
+  function startEditDescription() {
+    if (!canEdit) return;
+    setDraftDescription(node.description ?? "");
+    setEditingField("description");
+  }
 
   return (
     <div
@@ -421,28 +468,100 @@ function ThemeCard({
       <div className="relative flex h-full flex-col">
         <div className="border-b border-border/80 px-7 py-6">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 space-y-1">
-              <p className="text-base font-semibold leading-tight text-foreground">
-                {node.label}
-              </p>
-              {hasDescription ? (
-                <p className="max-w-[42ch] text-sm leading-6 text-muted-foreground">
-                  {node.description}
-                </p>
+            <div className="min-w-0 flex-1 space-y-1.5">
+              {/* Name — inline editable */}
+              {editingField === "name" ? (
+                <input
+                  ref={nameInputRef}
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  onBlur={commitEdit}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
+                    if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  maxLength={80}
+                  className="w-full rounded-sm border-0 border-b border-foreground/30 bg-transparent pb-0.5 text-base font-semibold leading-tight text-foreground focus:outline-none focus:border-foreground/60"
+                />
               ) : (
-                <p className="max-w-[42ch] text-sm leading-6 text-muted-foreground">
-                  Cluster related evidence cards here and keep enough room between them to read each one cleanly.
-                </p>
+                <div
+                  className={cn(
+                    "group/name flex items-center gap-1.5",
+                    canEdit && "cursor-text"
+                  )}
+                  onPointerDown={(e) => { if (canEdit) e.stopPropagation(); }}
+                  onClick={startEditName}
+                >
+                  <p
+                    className={cn(
+                      "text-base font-semibold leading-tight text-foreground",
+                      canEdit && "group-hover/name:underline decoration-muted-foreground/35 decoration-dotted underline-offset-2"
+                    )}
+                  >
+                    {node.label}
+                  </p>
+                  {canEdit ? (
+                    <Pencil className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/name:opacity-50" />
+                  ) : null}
+                </div>
+              )}
+
+              {/* Description — inline editable */}
+              {editingField === "description" ? (
+                <textarea
+                  ref={descRef}
+                  value={draftDescription}
+                  onChange={(e) => setDraftDescription(e.target.value)}
+                  onBlur={commitEdit}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  maxLength={300}
+                  rows={3}
+                  className="w-full resize-none rounded-sm border-0 border-b border-foreground/30 bg-transparent pb-0.5 text-sm leading-6 text-muted-foreground focus:outline-none focus:border-foreground/60"
+                />
+              ) : (
+                <div
+                  className={cn(
+                    "group/desc flex items-start gap-1.5",
+                    canEdit && "cursor-text"
+                  )}
+                  onPointerDown={(e) => { if (canEdit) e.stopPropagation(); }}
+                  onClick={startEditDescription}
+                >
+                  <p
+                    className={cn(
+                      "max-w-[42ch] text-sm leading-6",
+                      hasDescription
+                        ? "text-muted-foreground"
+                        : canEdit
+                          ? "text-muted-foreground/45 italic"
+                          : "text-muted-foreground",
+                      canEdit && hasDescription && "group-hover/desc:underline decoration-muted-foreground/35 decoration-dotted underline-offset-2"
+                    )}
+                  >
+                    {hasDescription
+                      ? node.description
+                      : canEdit
+                        ? "Add a description…"
+                        : "Cluster related evidence cards here and keep enough room between them to read each one cleanly."}
+                  </p>
+                  {canEdit ? (
+                    <Pencil className="mt-1 h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/desc:opacity-50" />
+                  ) : null}
+                </div>
               )}
             </div>
 
             <div className="flex shrink-0 items-start gap-1">
               {aiGenerated ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-200">
-                    <Sparkles className="h-3 w-3" />
-                    AI
-                  </span>
-                ) : null}
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-200">
+                  <Sparkles className="h-3 w-3" />
+                  AI
+                </span>
+              ) : null}
               <Badge className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-semibold text-secondary-foreground hover:bg-secondary">
                 {memberCount} card{memberCount === 1 ? "" : "s"}
               </Badge>
@@ -490,10 +609,12 @@ function CanvasNodeCardComponent({ id, data, selected, dragging }: NodeProps) {
 
   return (
     <ThemeCard
+      nodeId={id}
       node={node}
       selected={Boolean(selected)}
       aiGenerated={typedData.aiGenerated}
       dragging={Boolean(dragging)}
+      onRenameGroup={typedData.onRenameGroup}
     />
   );
 }

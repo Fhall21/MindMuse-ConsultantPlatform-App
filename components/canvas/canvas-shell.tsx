@@ -16,6 +16,7 @@ import { CanvasFrameBar } from "@/components/canvas/canvas-frame-bar";
 import { CanvasClutterBanner } from "@/components/canvas/canvas-clutter-banner";
 import { FrameRenameDialog } from "@/components/canvas/frame-rename-dialog";
 import { ConnectionTypePrompt } from "@/components/canvas/connection-type-prompt";
+import { GroupCreatePopover } from "@/components/canvas/group-create-popover";
 import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
 import { MultiSelectionPanel } from "@/components/canvas/multi-selection-panel";
@@ -32,7 +33,7 @@ import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-in
 
 import type { CanvasLayoutDirection, FrameBoundsRect } from "@/lib/canvas-layout";
 import { createTheme, moveThemeToGroup, updateTheme } from "@/lib/actions/consultation-workflow";
-import { suggestGroupLabel } from "@/lib/actions/canvas-ai";
+import { suggestGroupMeta } from "@/lib/actions/canvas-ai";
 import {
   CANVAS_CLUTTER_THRESHOLD,
   DEFAULT_FRAME_COLOR,
@@ -49,6 +50,7 @@ import {
 
 export interface CanvasShellHandle {
   fitView: CanvasGraphHandle['fitView'];
+  startGroupCreation: (nodeIds: string[]) => void;
 }
 
 interface CanvasShellProps {
@@ -73,8 +75,10 @@ function equalStringSets(a: string[], b: string[]) {
 
 export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(function CanvasShell({ roundId, roundLabel }, ref) {
   const canvasGraphRef = useRef<CanvasGraphHandle>(null);
+  const startGroupCreationRef = useRef<((nodeIds: string[]) => void) | null>(null);
   useImperativeHandle(ref, () => ({
     fitView: (opts) => canvasGraphRef.current?.fitView(opts),
+    startGroupCreation: (nodeIds: string[]) => startGroupCreationRef.current?.(nodeIds),
   }));
 
   const queryClient = useQueryClient();
@@ -106,6 +110,13 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
   const organiseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track which theme group IDs were titled by AI so cards can show the indicator
   const [aiGeneratedGroupIds, setAiGeneratedGroupIds] = useState<Set<string>>(new Set());
+
+  // Group creation popover state
+  const [groupPopover, setGroupPopover] = useState<{
+    insightIds: string[];
+    suggestion: { name: string; description: string } | null;
+    confirming: boolean;
+  } | null>(null);
 
   // Frame state
   const [activeFrameId, setActiveFrameId] = useState<string | null>(null);
@@ -148,6 +159,12 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
   const selectedInsightNodes = useMemo(
     () => nodes.filter((n) => selectedNodeIds.includes(n.id) && n.type === "insight"),
     [nodes, selectedNodeIds]
+  );
+  const canGroupSelected = useMemo(
+    () =>
+      selectedInsightNodes.length >= 2 &&
+      !selectedNodeIds.some((id) => nodes.find((n) => n.id === id)?.type === "theme"),
+    [selectedInsightNodes.length, selectedNodeIds, nodes]
   );
   const showMultiSelect = selectedNodeIds.length >= 2 && !showSuggestions;
   const hasSidePanel = Boolean(
@@ -417,29 +434,60 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
 
   // ─── Multi-select: group selected insights into a theme ─────────────────────
 
-  async function handleGroupSelected() {
-    const insightIds = selectedInsightNodes.map((n) => n.id);
-    if (insightIds.length < 2) return;
+  async function handleGroupSelected(explicitNodeIds?: string[]) {
+    const ids = explicitNodeIds ?? selectedInsightNodes.map((n) => n.id);
+    if (ids.length < 2) return;
+
+    // Get node metadata for AI suggestion
+    const nodeData = ids
+      .map((id) => nodes.find((n) => n.id === id))
+      .filter(Boolean) as typeof nodes;
 
     setIsGrouping(true);
+    setGroupPopover({ insightIds: ids, suggestion: null, confirming: false });
+
     try {
-      const { groupId } = await createTheme(roundId, insightIds);
-
-      // Ask AI to name the group from the insight labels/descriptions
-      const aiLabel = await suggestGroupLabel(
-        selectedInsightNodes.map((n) => n.label),
-        selectedInsightNodes.map((n) => n.description ?? null)
+      const suggestion = await suggestGroupMeta(
+        nodeData.map((n) => n.label),
+        nodeData.map((n) => n.description ?? null)
       );
-      if (aiLabel) {
-        await updateTheme(groupId, { label: aiLabel });
-        setAiGeneratedGroupIds((prev) => new Set([...prev, groupId]));
-      }
-
-      void invalidateCanvas();
-      setSelectedNodeIds([]);
-      setFocusedNodeId(null);
+      setGroupPopover((prev) =>
+        prev ? { ...prev, suggestion: suggestion ?? { name: "New group", description: "" } } : null
+      );
     } finally {
       setIsGrouping(false);
+    }
+  }
+
+  // Update startGroupCreationRef so the imperative handle always has the latest closure
+  startGroupCreationRef.current = (nodeIds: string[]) => { void handleGroupSelected(nodeIds); };
+
+  async function handleGroupConfirm(name: string, description: string) {
+    if (!groupPopover) return;
+    const { insightIds, suggestion } = groupPopover;
+    setGroupPopover((prev) => (prev ? { ...prev, confirming: true } : null));
+    try {
+      const { groupId } = await createTheme(roundId, insightIds);
+      await updateTheme(groupId, { label: name, description: description || null });
+      if (suggestion?.name === name) {
+        setAiGeneratedGroupIds((prev) => new Set([...prev, groupId]));
+      }
+      void invalidateCanvas();
+      setGroupPopover(null);
+      setSelectedNodeIds([]);
+      setFocusedNodeId(null);
+    } catch {
+      toast.error("Could not create group — try again");
+      setGroupPopover((prev) => (prev ? { ...prev, confirming: false } : null));
+    }
+  }
+
+  async function handleRenameGroup(id: string, name: string, description: string) {
+    try {
+      await updateTheme(id, { label: name, description: description || null });
+      void invalidateCanvas();
+    } catch {
+      toast.error("Could not rename group");
     }
   }
 
@@ -858,7 +906,20 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
             onLayoutComplete={handleLayoutComplete}
             onCreateEdge={handleCreateEdge}
             onGroupDrop={handleGroupDrop}
+            canGroupSelected={canGroupSelected}
+            onGroupSelected={() => void handleGroupSelected()}
+            onRenameGroup={handleRenameGroup}
           />
+
+          {groupPopover ? (
+            <GroupCreatePopover
+              isLoading={isGrouping}
+              isConfirming={groupPopover.confirming}
+              suggestion={groupPopover.suggestion}
+              onConfirm={handleGroupConfirm}
+              onCancel={() => setGroupPopover(null)}
+            />
+          ) : null}
 
           {connectionPrompt ? (
             <ConnectionTypePrompt

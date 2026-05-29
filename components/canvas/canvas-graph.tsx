@@ -25,7 +25,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "@/components/canvas/canvas-handles.css";
-import { Loader2 } from "lucide-react";
+import { Layers3, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { CanvasNodeCard, type CanvasNodeCardData } from "@/components/canvas/canvas-node-card";
@@ -120,6 +120,12 @@ interface CanvasGraphProps {
     targetGroupId?: string | null;
     insertionIndex?: number;
   }) => Promise<void>;
+  /** When true, show the floating "Create group" panel inside the canvas. */
+  canGroupSelected?: boolean;
+  /** Called when user clicks the floating "Create group" panel. */
+  onGroupSelected?: () => void;
+  /** Called when user inline-edits a group card's name or description. */
+  onRenameGroup?: (id: string, name: string, description: string) => void;
   /** Session-local card density — compact (default) or expanded. */
   cardDensity?: CardDensity;
 }
@@ -702,6 +708,9 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
   onLayoutComplete,
   onCreateEdge,
   onGroupDrop,
+  canGroupSelected = false,
+  onGroupSelected,
+  onRenameGroup,
   cardDensity = "compact",
 }: CanvasGraphProps, ref) {
   const { data, isLoading } = useCanvas(roundId);
@@ -899,10 +908,11 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
           ...data,
           globalDensity: cardDensity,
           onToggleExpand: handleToggleExpand,
+          onRenameGroup,
         },
       } satisfies Node;
     },
-    [cardDensity, handleToggleExpand]
+    [cardDensity, handleToggleExpand, onRenameGroup]
   );
 
   const handleNodesChange = useCallback(
@@ -1535,6 +1545,18 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
             <div className="rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium text-foreground shadow-sm backdrop-blur">
               Click and drag to draw a frame · press Esc to cancel
             </div>
+          </Panel>
+        ) : null}
+        {canGroupSelected && onGroupSelected ? (
+          <Panel position="top-center">
+            <button
+              type="button"
+              onClick={onGroupSelected}
+              className="flex items-center gap-2 rounded-full border bg-background/95 px-3.5 py-1.5 text-xs font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent/60"
+            >
+              <Layers3 className="h-3.5 w-3.5 text-emerald-600" />
+              Create group
+            </button>
           </Panel>
         ) : null}
         <Controls />

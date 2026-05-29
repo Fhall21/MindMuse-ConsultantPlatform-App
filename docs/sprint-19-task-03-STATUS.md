@@ -26,44 +26,26 @@ const { state, runLayout } = useSpatialLayout({ roundId, graphRef: canvasGraphRe
 
 ---
 
-## NOT DONE — remaining work for takeover agent
+## DONE (continued — sprint-19 session 2)
 
-### 1. Toolbar split control in `components/canvas/canvas-shell.tsx`  (MAIN remaining piece)
-Plan = split button, placed right after `{toolbarOrganiseControl}` in the `ml-auto`
-toolbar div (~line 784+), styled `variant="outline" size="sm"` to match Arrange.
-- Only render when `useCanvasSpatialLayoutEnabled()` is true.
-- **Primary action** "Cluster whole canvas" → opens a confirmation (whole-canvas
-  reflow is destructive-ish) → on confirm `runLayout({ scope: "all" })`.
-- **Dropdown** (`components/ui/dropdown-menu`): "Cluster whole canvas" + "Cluster
-  selected items" — the latter enabled only when ≥3 valid selected layout items;
-  `runLayout({ scope: "selected", selectedItemIds })`.
-- Disabled + tooltip (`components/ui/tooltip`) when: valid item count `< 3`
-  ("Add at least 3 insights to use cluster layout"), `state !== "idle"`, or
-  `canvasGraphRef.current?.getLayoutSavePending()`.
-- Spinner (`Loader2 animate-spin`) when `state !== "idle"`, else `Sparkles`.
-- Valid item count in shell:
-  `nodes.filter(n => n.type === "theme" || (n.type === "insight" && n.groupId == null)).length`.
-- Selected item ids = `selectedNodeIds` (state at ~line 95); dedupe handled inside the hook.
+| Commit | What |
+|---|---|
+| `ffd6cfb` | `canvas-shell.tsx` toolbar split button wired: `Network` icon, `Cluster layout` label, confirmation dialog, dropdown with rich two-line scope items, disabled/spinner states |
+| `4b3eb39` | Shell tests: 12/12 pass. Fixed pre-existing `useCanvasFrames` mock gap, added `TooltipProvider` wrapper, added 7 cluster layout test cases. Fixed `DropdownMenuLabel` missing import. |
 
-### 2. Real Web Worker wiring in `hooks/use-spatial-layout.ts`
-Hook currently calls `computeSpatialLayout` **synchronously on the main thread**
-(jsdom has no `Worker`). `workers/canvas-spatial-layout.worker.ts` exists but is
-**unused**. See `TODO(sprint-19)` in the hook. Wire the real `Worker` for prod with
-a `typeof Worker !== "undefined"` sync fallback for SSR/test, and add worker
-error/timeout tests (the timeout test currently uses the sync-compute-error path as
-a stand-in). Decide & document if sync is acceptable for v1 (≤200 nodes).
+Enable locally: `CANVAS_SPATIAL_LAYOUT_ENABLED=*` in `.env.local`.
 
-### 3. Shell tests
-flagged visibility, split dropdown, confirmation dialog, disabled tooltip, spinner,
-and no regression to existing Arrange controls.
+---
 
-### 4. Pre-existing test failures
-Full suite has pre-existing reds (≈5 canvas-shell + ≈10 other) from missing mock
-exports unrelated to this task. Confirm your shell changes don't add new ones.
+## NOT DONE — remaining work (optional / v2)
 
-### 5. Cleanup
-`docs-tmp-spatial-layout-contract.md` was the temp integration contract — already
-removed. This STATUS file can be deleted once task fully lands.
+### 1. Real Web Worker wiring in `hooks/use-spatial-layout.ts`
+Hook currently calls `computeSpatialLayout` **synchronously on the main thread**.
+`workers/canvas-spatial-layout.worker.ts` exists but is unused. Sync is acceptable
+for v1 (≤200 nodes). See `TODO(sprint-19)` comment in the hook.
+
+### 2. Cleanup
+This STATUS file can be deleted once task fully lands.
 
 ---
 

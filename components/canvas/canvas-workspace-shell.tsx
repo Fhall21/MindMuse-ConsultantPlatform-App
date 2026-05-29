@@ -213,8 +213,7 @@ export function CanvasWorkspaceShell({ roundId, roundLabel }: CanvasWorkspaceShe
             inset: 0,
           }}
           aria-hidden={activeTab !== "canvas"}
-          // @ts-expect-error — inert is a valid HTML attribute not yet in React types
-          inert={activeTab !== "canvas" ? "" : undefined}
+          inert={activeTab !== "canvas"}
         >
           <CanvasShell ref={canvasRef} roundId={roundId} roundLabel={roundLabel} />
         </div>

@@ -3,7 +3,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { ChevronLeft, Rows3, Sparkles } from "lucide-react";
+import { ChevronLeft, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import posthog from "posthog-js";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +29,7 @@ import {
   useUpdateFrame,
 } from "@/hooks/use-canvas";
 import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
-import type { CardDensity } from "@/lib/canvas-card-density";
+
 import type { CanvasLayoutDirection, FrameBoundsRect } from "@/lib/canvas-layout";
 import { createTheme, moveThemeToGroup, updateTheme } from "@/lib/actions/consultation-workflow";
 import { suggestGroupLabel } from "@/lib/actions/canvas-ai";
@@ -115,7 +115,6 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
   } | null>(null);
   const nextViewportRequestIdRef = useRef(1);
   const [clutterDismissed, setClutterDismissed] = useState(false);
-  const [cardDensity, setCardDensity] = useState<CardDensity>("compact");
 
   const nodes = useMemo(() => canvasQuery.data?.nodes ?? [], [canvasQuery.data?.nodes]);
   const edges = useMemo(() => canvasQuery.data?.edges ?? [], [canvasQuery.data?.edges]);
@@ -779,18 +778,6 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
             }
           />
           <Separator orientation="vertical" className="h-4" />
-          <div className="flex items-center gap-1 rounded-md border bg-background p-0.5">
-            <ToolbarDensityButton
-              label="Compact"
-              active={cardDensity === "compact"}
-              onClick={() => setCardDensity("compact")}
-            />
-            <ToolbarDensityButton
-              label="Expanded"
-              active={cardDensity === "expanded"}
-              onClick={() => setCardDensity("expanded")}
-            />
-          </div>
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -858,7 +845,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
             frames={frames}
             frameDrawingMode={frameDrawingMode}
             dropTargetFrameId={dropTargetFrameId}
-            cardDensity={cardDensity}
+            cardDensity="compact"
             onFrameDraw={handleFrameDraw}
             onFramePersist={handleFramePersist}
             onNodeFrameAssign={handleNodeFrameAssign}
@@ -973,29 +960,3 @@ function ToolbarFilterBadge({
   );
 }
 
-function ToolbarDensityButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={cn(
-        "inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors motion-reduce:transition-none",
-        active
-          ? "bg-secondary text-secondary-foreground"
-          : "text-muted-foreground hover:text-foreground"
-      )}
-      aria-pressed={active}
-      onClick={onClick}
-    >
-      {label === "Compact" ? <Rows3 className="h-3 w-3" aria-hidden /> : null}
-      {label}
-    </button>
-  );
-}

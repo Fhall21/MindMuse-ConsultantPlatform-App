@@ -3,12 +3,36 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { ChevronLeft, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronLeft, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import posthog from "posthog-js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useSpatialLayout } from "@/hooks/use-spatial-layout";
+import { useCanvasSpatialLayoutEnabled } from "@/hooks/use-feature-flags";
 import { cn } from "@/lib/utils";
 import { CanvasGraph, type CanvasGraphHandle } from "@/components/canvas/canvas-graph";
 import { CanvasOrganiseMenu } from "@/components/canvas/canvas-organise-menu";
@@ -127,6 +151,11 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
   const nextViewportRequestIdRef = useRef(1);
   const [clutterDismissed, setClutterDismissed] = useState(false);
 
+  // Cluster layout — behind canvas_spatial_layout flag
+  const canvasSpatialLayoutEnabled = useCanvasSpatialLayoutEnabled();
+  const { state: layoutState, runLayout } = useSpatialLayout({ roundId, graphRef: canvasGraphRef });
+  const [showLayoutConfirm, setShowLayoutConfirm] = useState(false);
+
   const nodes = useMemo(() => canvasQuery.data?.nodes ?? [], [canvasQuery.data?.nodes]);
   const edges = useMemo(() => canvasQuery.data?.edges ?? [], [canvasQuery.data?.edges]);
 
@@ -208,6 +237,27 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
     if (ar <= 0.83) return ["TB", "BT", "LR", "RL"];
     return undefined;
   }, [isFrameScoped, activeFrame]);
+
+  // Top-level layout items: theme groups + ungrouped insights (no grouped children).
+  const validLayoutItemCount = useMemo(
+    () =>
+      nodes.filter(
+        (n) => n.type === "theme" || (n.type === "insight" && n.groupId == null)
+      ).length,
+    [nodes]
+  );
+  const selectedValidItemIds = useMemo(
+    () =>
+      selectedNodeIds.filter((id) => {
+        const node = nodes.find((n) => n.id === id);
+        return node && (node.type === "theme" || (node.type === "insight" && node.groupId == null));
+      }),
+    [selectedNodeIds, nodes]
+  );
+  const canClusterSelected = selectedValidItemIds.length >= 3;
+  const layoutDisabled = validLayoutItemCount < 3 || layoutState !== "idle";
+  const layoutDisabledReason =
+    validLayoutItemCount < 3 ? "Add at least 3 insights to use cluster layout" : undefined;
 
   const invalidateCanvas = () =>
     queryClient.invalidateQueries({ queryKey: ["canvas", roundId] });
@@ -377,6 +427,67 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
       onSelect={requestReorganise}
     />
   );
+
+  const toolbarClusterLayoutControl = canvasSpatialLayoutEnabled ? (
+    <TooltipProvider delayDuration={0}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* span wrapper: disabled buttons don't fire pointer events for tooltip */}
+          <span className="inline-flex rounded-md">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-r-none border-r-0"
+              disabled={layoutDisabled}
+              onClick={() => setShowLayoutConfirm(true)}
+            >
+              {layoutState !== "idle" ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              Cluster Layout
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-l-none px-2"
+                  disabled={layoutDisabled}
+                  aria-label="More cluster layout options"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setShowLayoutConfirm(true)}>
+                  Cluster whole canvas
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={!canClusterSelected}
+                  onClick={() => {
+                    if (canClusterSelected) {
+                      runLayout({ scope: "selected", selectedItemIds: selectedValidItemIds });
+                    }
+                  }}
+                >
+                  Cluster selected items
+                  {selectedNodeIds.length > 0 && !canClusterSelected && (
+                    <span className="ml-1.5 text-xs text-muted-foreground">(select ≥3)</span>
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </span>
+        </TooltipTrigger>
+        {layoutDisabledReason && (
+          <TooltipContent>{layoutDisabledReason}</TooltipContent>
+        )}
+      </Tooltip>
+    </TooltipProvider>
+  ) : null;
 
   const panelOrganiseControl = (
     <CanvasOrganiseMenu
@@ -830,6 +941,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
 
         <div className="ml-auto flex items-center gap-2">
           {toolbarOrganiseControl}
+          {toolbarClusterLayoutControl}
           <Button
             variant="outline"
             size="sm"
@@ -984,6 +1096,34 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
           </div>
         ) : null}
       </div>
+
+      {/* Cluster layout confirmation dialog — whole-canvas reflow is
+          destructive-ish so we confirm before firing. */}
+      {canvasSpatialLayoutEnabled && (
+        <Dialog open={showLayoutConfirm} onOpenChange={setShowLayoutConfirm}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Cluster whole canvas?</DialogTitle>
+              <DialogDescription>
+                All nodes will be repositioned by semantic similarity. You can undo immediately after.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button
+                onClick={() => {
+                  setShowLayoutConfirm(false);
+                  runLayout({ scope: "all" });
+                }}
+              >
+                Cluster
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Native rename dialog (replaces window.prompt). Mounted at the
           top level so it sits above the canvas in z-order. */}

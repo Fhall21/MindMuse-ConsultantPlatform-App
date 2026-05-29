@@ -440,7 +440,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
               onClick={() => setShowLayoutConfirm(true)}
             >
               <Network className="mr-1.5 h-3.5 w-3.5" />
-              Cluster layout
+              Cluster layout (beta)
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -905,10 +905,17 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
-      <div className="flex items-center gap-3 border-b px-4 py-3">
-        <div className="ml-auto flex items-center gap-2">
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <span className="text-xs text-muted-foreground">
+          Drag to box-select · Shift+click to multi-select
+        </span>
+        <div className="flex items-center gap-2">
+          {/* Layout tools */}
           {toolbarOrganiseControl}
           {toolbarClusterLayoutControl}
+          {/* Separator between layout tools and view toggles */}
+          <div className="mx-1 h-4 w-px bg-border" />
+          {/* View toggles */}
           <Button
             variant={showFilterView ? "secondary" : "outline"}
             size="sm"
@@ -917,22 +924,22 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
             <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
             Filter view
           </Button>
-          <Button
-            variant={showSuggestions ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => {
-              setShowSuggestions((value) => !value);
-              setShowFilterView(false);
-              setFocusedNodeId(null);
-              setSelectedEdgeId(null);
-            }}
-          >
-            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-            AI suggestions
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            Drag to box-select or Shift+click to multi-select
-          </span>
+          {/* AI suggestions — hidden temporarily, not removed */}
+          {false && (
+            <Button
+              variant={showSuggestions ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setShowSuggestions((value) => !value);
+                setShowFilterView(false);
+                setFocusedNodeId(null);
+                setSelectedEdgeId(null);
+              }}
+            >
+              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              AI suggestions
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1102,7 +1109,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
             <DialogHeader>
               <DialogTitle>Cluster whole canvas?</DialogTitle>
               <DialogDescription>
-                All nodes will be repositioned by semantic similarity. You can undo immediately after.
+                All nodes will be repositioned by semantic similarity. You can undo immediately after. Note that this feature is still in beta.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

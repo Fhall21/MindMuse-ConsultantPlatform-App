@@ -326,10 +326,10 @@ export function RoundsManager() {
                               href={
                                 linkedCount === 0
                                   ? `/meetings/new?consultationId=${round.id}`
-                                  : `/consultations/rounds/${round.id}`
+                                  : `/canvas/round/${round.id}?tab=canvas`
                               }
                             >
-                              {linkedCount === 0 ? "Create first meeting" : "View themes and analysis"}
+                              {linkedCount === 0 ? "Create first meeting" : "Open Canvas"}
                               <ArrowRight className="h-4 w-4" />
                             </Link>
                           </Button>

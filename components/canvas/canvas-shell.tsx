@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { ChevronLeft, Rows3, Sparkles } from "lucide-react";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { CanvasGraph } from "@/components/canvas/canvas-graph";
+import { CanvasGraph, type CanvasGraphHandle } from "@/components/canvas/canvas-graph";
 import { CanvasOrganiseMenu } from "@/components/canvas/canvas-organise-menu";
 import { CanvasFrameBar } from "@/components/canvas/canvas-frame-bar";
 import { CanvasClutterBanner } from "@/components/canvas/canvas-clutter-banner";
@@ -47,6 +47,10 @@ import {
   reconcileNodeFrameMembership,
 } from "@/lib/canvas-frame-spatial";
 
+export interface CanvasShellHandle {
+  fitView: CanvasGraphHandle['fitView'];
+}
+
 interface CanvasShellProps {
   roundId: string;
   roundLabel: string;
@@ -67,7 +71,12 @@ function equalStringSets(a: string[], b: string[]) {
   return a.every((item) => bSet.has(item));
 }
 
-export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
+export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(function CanvasShell({ roundId, roundLabel }, ref) {
+  const canvasGraphRef = useRef<CanvasGraphHandle>(null);
+  useImperativeHandle(ref, () => ({
+    fitView: (opts) => canvasGraphRef.current?.fitView(opts),
+  }));
+
   const queryClient = useQueryClient();
   const canvasQuery = useCanvas(roundId);
   const createEdge = useCreateEdge(roundId);
@@ -837,6 +846,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
           {/* Edge editing via onEdgeSelect → NodeDetailPanel (panel-based flow).
               Removed onQuickEditEdge prop for performance. */}
           <CanvasGraph
+            ref={canvasGraphRef}
             roundId={roundId}
             filters={filters}
             selectedNodeIds={selectedNodeIds}
@@ -941,7 +951,7 @@ export function CanvasShell({ roundId, roundLabel }: CanvasShellProps) {
       />
     </div>
   );
-}
+});
 
 function ToolbarFilterBadge({
   label,

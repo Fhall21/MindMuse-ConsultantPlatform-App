@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   applyNodeChanges,
   Background,
@@ -17,6 +17,7 @@ import {
   type NodeChange,
   type OnNodeDrag,
   type OnSelectionChangeFunc,
+  type FitViewOptions,
   useEdgesState,
   useNodesState,
   useReactFlow,
@@ -673,7 +674,11 @@ function applyThemeDragTranslations(changes: NodeChange[], currentNodes: Node[])
   return nextNodes;
 }
 
-function CanvasGraphInner({
+export interface CanvasGraphHandle {
+  fitView: (opts?: FitViewOptions) => void;
+}
+
+const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(function CanvasGraphInner({
   roundId,
   filters,
   selectedNodeIds,
@@ -698,12 +703,13 @@ function CanvasGraphInner({
   onCreateEdge,
   onGroupDrop,
   cardDensity = "compact",
-}: CanvasGraphProps) {
+}: CanvasGraphProps, ref) {
   const { data, isLoading } = useCanvas(roundId);
   const saveLayout = useSaveLayout(roundId);
-  const { getViewport, getIntersectingNodes, setViewport, screenToFlowPosition, updateNodeData } =
+  const { getViewport, getIntersectingNodes, setViewport, screenToFlowPosition, updateNodeData, fitView } =
     useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
+  useImperativeHandle(ref, () => ({ fitView }), [fitView]);
   const dragRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const layoutResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1538,12 +1544,12 @@ function CanvasGraphInner({
     </div>
     </DropTargetFrameContext.Provider>
   );
-}
+});
 
-export function CanvasGraph(props: CanvasGraphProps) {
+export const CanvasGraph = forwardRef<CanvasGraphHandle, CanvasGraphProps>(function CanvasGraph(props, ref) {
   return (
     <ReactFlowProvider>
-      <CanvasGraphInner {...props} />
+      <CanvasGraphInner {...props} ref={ref} />
     </ReactFlowProvider>
   );
-}
+});

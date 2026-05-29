@@ -8,14 +8,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { CanvasShell } from "@/components/canvas/canvas-shell";
 import type { CanvasData } from "@/hooks/use-canvas";
 import type { CanvasLayoutDirection } from "@/lib/canvas-layout";
+import type { CanvasFilterState } from "@/types/canvas";
 
 const createEdgeMock = vi.fn();
 const updateEdgeMock = vi.fn();
-let lastLayoutRequest: {
-  id: number;
-  nodeIds: string[];
-  direction: CanvasLayoutDirection;
-} | null = null;
 let lastSubmittedLayoutRequest: {
   id: number;
   nodeIds: string[];
@@ -30,13 +26,20 @@ const posthogCaptureMock = vi.hoisted(() => vi.fn());
 const useCanvasSpatialLayoutEnabledMock = vi.hoisted(() =>
   vi.fn().mockReturnValue(false)
 );
-const { runLayoutMock, useSpatialLayoutMock } = vi.hoisted(() => {
+const { runLayoutMock, cancelLayoutMock, useSpatialLayoutMock } = vi.hoisted(() => {
   const runLayout = vi.fn();
+  const cancelLayout = vi.fn();
   const useSpatialLayout = vi.fn().mockReturnValue({
     state: "idle" as "idle" | "fetching" | "applying",
     runLayout,
+    cancelLayout,
   });
-  return { runLayoutMock: runLayout, useSpatialLayoutMock: useSpatialLayout };
+  return { runLayoutMock: runLayout, cancelLayoutMock: cancelLayout, useSpatialLayoutMock: useSpatialLayout };
+});
+
+Object.defineProperty(Element.prototype, "scrollIntoView", {
+  configurable: true,
+  value: vi.fn(),
 });
 
 vi.mock("posthog-js", () => ({
@@ -165,6 +168,7 @@ vi.mock("@/components/canvas/canvas-graph", () => ({
     onSelectionChange,
     layoutRequest,
     onLayoutComplete,
+    filters,
   }: {
     onCreateEdge: (payload: Record<string, unknown>) => Promise<unknown>;
     onGroupDrop: (payload: { activeNodeId: string; targetNodeId: string | null }) => Promise<void>;
@@ -176,6 +180,7 @@ vi.mock("@/components/canvas/canvas-graph", () => ({
       scope: "selected" | "all";
       direction: CanvasLayoutDirection;
     }) => void;
+    filters: CanvasFilterState;
   }) => (
     <CanvasGraphMock
       onCreateEdge={onCreateEdge}
@@ -183,6 +188,7 @@ vi.mock("@/components/canvas/canvas-graph", () => ({
       onSelectionChange={onSelectionChange}
       layoutRequest={layoutRequest}
       onLayoutComplete={onLayoutComplete}
+      filters={filters}
     />
   ),
 }));
@@ -193,20 +199,30 @@ function CanvasGraphMock({
   onSelectionChange,
   layoutRequest,
   onLayoutComplete,
+  filters,
 }: {
   onCreateEdge: (payload: Record<string, unknown>) => Promise<unknown>;
   onGroupDrop: (payload: { activeNodeId: string; targetNodeId: string | null }) => Promise<void>;
   onSelectionChange: (nodeIds: string[]) => void;
   layoutRequest?: { id: number; nodeIds: string[]; direction: CanvasLayoutDirection } | null;
   onLayoutComplete?: (result: {
-    applied: boolean;
-    movedNodeIds: string[];
-    scope: "selected" | "all";
-    direction: CanvasLayoutDirection;
-  }) => void;
+      applied: boolean;
+      movedNodeIds: string[];
+      scope: "selected" | "all";
+      direction: CanvasLayoutDirection;
+    }) => void;
+  filters: CanvasFilterState;
 }) {
+  const filterSummary =
+    filters.acceptedOnly
+      ? "Accepted only"
+      : filters.nodeTypes.length === 1 && filters.nodeTypes[0] === "theme"
+        ? "Themes only"
+        : filters.nodeTypes.length === 1 && filters.nodeTypes[0] === "insight"
+          ? "Insights only"
+          : "All nodes";
+
   useEffect(() => {
-    lastLayoutRequest = layoutRequest ?? null;
     if (layoutRequest) {
       lastSubmittedLayoutRequest = layoutRequest;
     }
@@ -228,6 +244,7 @@ function CanvasGraphMock({
 
   return (
     <div>
+      <div>Canvas filters: {filterSummary}</div>
       <button
         type="button"
         onClick={() =>
@@ -288,14 +305,15 @@ afterEach(() => {
   createThemeMock.mockReset();
   moveThemeToGroupMock.mockReset();
   runLayoutMock.mockReset();
+  cancelLayoutMock.mockReset();
   posthogCaptureMock.mockReset();
   useCanvasSpatialLayoutEnabledMock.mockReturnValue(false);
   useSpatialLayoutMock.mockReturnValue({
     state: "idle" as "idle" | "fetching" | "applying",
     runLayout: runLayoutMock,
+    cancelLayout: cancelLayoutMock,
   });
   currentCanvasData = canvasData;
-  lastLayoutRequest = null;
   lastSubmittedLayoutRequest = null;
 });
 
@@ -306,7 +324,6 @@ function renderShell() {
       <QueryClientProvider client={queryClient}>
         <CanvasShell
           roundId="round-1"
-          roundLabel="North depot meeting"
         />
       </QueryClientProvider>
     </TooltipProvider>
@@ -359,6 +376,28 @@ describe("CanvasShell", () => {
     });
 
     expect(moveThemeToGroupMock).toHaveBeenCalledWith("insight-1", null);
+  });
+
+  it("opens filter view and applies a preset", async () => {
+    renderShell();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Filter view" }));
+    });
+
+    expect(
+      await screen.findByText("Pick a preset for what stays on the canvas.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Canvas filters: All nodes")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("combobox"));
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByText("Accepted only"));
+    });
+
+    expect(screen.getByText("Canvas filters: Accepted only")).toBeInTheDocument();
   });
 
   it("requests a selected-node organise action with the chosen direction", async () => {
@@ -493,5 +532,72 @@ describe("CanvasShell — cluster layout", () => {
     renderShell();
     expect(screen.getByText("Cluster layout")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Arrange canvas" })).toBeInTheDocument();
+  });
+
+  // ── Overlay tests ─────────────────────────────────────────────────────────
+
+  it("shows canvas overlay when layoutState is fetching", () => {
+    currentCanvasData = layoutCanvasData;
+    useCanvasSpatialLayoutEnabledMock.mockReturnValue(true);
+    useSpatialLayoutMock.mockReturnValue({
+      state: "fetching",
+      runLayout: runLayoutMock,
+      cancelLayout: cancelLayoutMock,
+    });
+    renderShell();
+    expect(screen.getByText("Clustering…")).toBeInTheDocument();
+  });
+
+  it("hides canvas overlay when layoutState is idle", () => {
+    currentCanvasData = layoutCanvasData;
+    useCanvasSpatialLayoutEnabledMock.mockReturnValue(true);
+    useSpatialLayoutMock.mockReturnValue({
+      state: "idle",
+      runLayout: runLayoutMock,
+      cancelLayout: cancelLayoutMock,
+    });
+    renderShell();
+    expect(screen.queryByText("Clustering…")).not.toBeInTheDocument();
+  });
+
+  it("shows Cancel button in overlay when layout is in progress", () => {
+    currentCanvasData = layoutCanvasData;
+    useCanvasSpatialLayoutEnabledMock.mockReturnValue(true);
+    useSpatialLayoutMock.mockReturnValue({
+      state: "fetching",
+      runLayout: runLayoutMock,
+      cancelLayout: cancelLayoutMock,
+    });
+    renderShell();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+  });
+
+  it("clicking Cancel in overlay calls cancelLayout", async () => {
+    currentCanvasData = layoutCanvasData;
+    useCanvasSpatialLayoutEnabledMock.mockReturnValue(true);
+    useSpatialLayoutMock.mockReturnValue({
+      state: "fetching",
+      runLayout: runLayoutMock,
+      cancelLayout: cancelLayoutMock,
+    });
+    renderShell();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    });
+    expect(cancelLayoutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("toolbar Cluster Layout button has no Loader2 spinner while layout is in progress", () => {
+    currentCanvasData = layoutCanvasData;
+    useCanvasSpatialLayoutEnabledMock.mockReturnValue(true);
+    useSpatialLayoutMock.mockReturnValue({
+      state: "fetching",
+      runLayout: runLayoutMock,
+      cancelLayout: cancelLayoutMock,
+    });
+    renderShell();
+    const btn = screen.getByRole("button", { name: "Cluster layout" });
+    // The button should not contain an animate-spin element (spinner moved to overlay)
+    expect(btn.querySelector(".animate-spin")).toBeNull();
   });
 });

@@ -207,7 +207,7 @@ export function CanvasWorkspaceShell({ roundId, roundLabel }: CanvasWorkspaceShe
         {/* Canvas tab — always mounted, hidden via CSS visibility to preserve React Flow state */}
         <div
           style={{
-            visibility: activeTab === "canvas" ? "visible" : "hidden",
+            opacity: activeTab === "canvas" ? 1 : 0,
             pointerEvents: activeTab === "canvas" ? "auto" : "none",
             position: "absolute",
             inset: 0,

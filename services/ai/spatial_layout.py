@@ -19,12 +19,15 @@ from sqlalchemy.dialects.postgresql import ARRAY, insert as pg_insert
 
 logger = logging.getLogger(__name__)
 
-VIEWPORT_W = 1200.0
-VIEWPORT_H = 800.0
+VIEWPORT_W = 5000.0
+VIEWPORT_H = 4000.0
 PADDING = 80.0
 MIN_NODES = 3
 MAX_NODES = 200
 MAX_TEXT_CHARS = 8000
+UMAP_COMPONENTS = 2
+UMAP_RANDOM_STATE = 42
+UMAP_METRIC = "cosine"
 
 _metadata = MetaData()
 canvas_node_embeddings = Table(
@@ -234,11 +237,18 @@ def _reduce_embeddings(
 
             reducer_factory = UMAP
         reducer = reducer_factory(
-            n_components=2,
-            random_state=42,
+            n_components=UMAP_COMPONENTS,
+            random_state=UMAP_RANDOM_STATE,
             n_neighbors=min(15, node_count - 1),
+            metric=UMAP_METRIC,
+            init="random",
         )
-        return np.asarray(reducer.fit_transform(matrix), dtype=np.float32)
+        coords = np.asarray(reducer.fit_transform(matrix), dtype=np.float32)
+        if coords.shape != (node_count, UMAP_COMPONENTS):
+            raise ValueError(f"UMAP returned shape {coords.shape}, expected {(node_count, UMAP_COMPONENTS)}")
+        if not np.isfinite(coords).all():
+            raise ValueError("UMAP returned non-finite coordinates")
+        return coords
     except Exception as exc:
         logger.error(
             "spatial_layout.umap_failed",

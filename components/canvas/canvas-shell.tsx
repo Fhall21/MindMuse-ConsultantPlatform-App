@@ -2,8 +2,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
-import { ChevronDown, ChevronLeft, Loader2, Sparkles } from "lucide-react";
+import { ChevronDown, Loader2, Network, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import posthog from "posthog-js";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +21,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -444,9 +444,9 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
               {layoutState !== "idle" ? (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                <Network className="mr-1.5 h-3.5 w-3.5" />
               )}
-              Cluster Layout
+              Cluster layout
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -460,9 +460,16 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
                   <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="min-w-52">
+                <DropdownMenuLabel className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  Scope
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setShowLayoutConfirm(true)}>
-                  Cluster whole canvas
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium">Whole canvas</span>
+                    <span className="text-xs text-muted-foreground">Reposition all nodes by similarity</span>
+                  </span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -473,10 +480,14 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
                     }
                   }}
                 >
-                  Cluster selected items
-                  {selectedNodeIds.length > 0 && !canClusterSelected && (
-                    <span className="ml-1.5 text-xs text-muted-foreground">(select ≥3)</span>
-                  )}
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium">Selected items</span>
+                    <span className="text-xs text-muted-foreground">
+                      {selectedNodeIds.length > 0 && !canClusterSelected
+                        ? "Select ≥ 3 top-level nodes"
+                        : "Cluster only the selected nodes"}
+                    </span>
+                  </span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -894,13 +905,6 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
     <div className="flex h-full flex-col">
       {/* Toolbar */}
       <div className="flex items-center gap-3 border-b px-4 py-3">
-        <Button variant="ghost" size="sm" asChild className="-ml-1 gap-1 text-muted-foreground hover:text-foreground">
-          <Link href={`/consultations/rounds/${roundId}`} aria-label="Back to Consultation">
-            <ChevronLeft className="h-4 w-4" />
-            <span>Back to Consultation</span>
-          </Link>
-        </Button>
-        <Separator orientation="vertical" className="h-4" />
         <span className="text-sm font-medium text-muted-foreground">{roundLabel}</span>
         <Separator orientation="vertical" className="h-4" />
 
@@ -1160,4 +1164,3 @@ function ToolbarFilterBadge({
     </Badge>
   );
 }
-

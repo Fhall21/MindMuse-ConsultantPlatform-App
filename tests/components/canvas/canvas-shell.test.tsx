@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { CanvasShell } from "@/components/canvas/canvas-shell";
 import type { CanvasData } from "@/hooks/use-canvas";
 import type { CanvasLayoutDirection } from "@/lib/canvas-layout";
@@ -24,6 +25,35 @@ const { createThemeMock, moveThemeToGroupMock } = vi.hoisted(() => ({
   createThemeMock: vi.fn(),
   moveThemeToGroupMock: vi.fn(),
 }));
+
+const posthogCaptureMock = vi.hoisted(() => vi.fn());
+const useCanvasSpatialLayoutEnabledMock = vi.hoisted(() =>
+  vi.fn().mockReturnValue(false)
+);
+const { runLayoutMock, useSpatialLayoutMock } = vi.hoisted(() => {
+  const runLayout = vi.fn();
+  const useSpatialLayout = vi.fn().mockReturnValue({
+    state: "idle" as "idle" | "fetching" | "applying",
+    runLayout,
+  });
+  return { runLayoutMock: runLayout, useSpatialLayoutMock: useSpatialLayout };
+});
+
+vi.mock("posthog-js", () => ({
+  default: { capture: posthogCaptureMock },
+}));
+
+vi.mock("@/hooks/use-feature-flags", () => ({
+  useFeatureFlags: () => ({ data: null }),
+  useCanvasSpatialLayoutEnabled: useCanvasSpatialLayoutEnabledMock,
+}));
+
+vi.mock("@/hooks/use-spatial-layout", () => ({
+  useSpatialLayout: useSpatialLayoutMock,
+}));
+
+// currentCanvasData is swapped per-test to control what useCanvas returns.
+let currentCanvasData: CanvasData;
 
 const canvasData: CanvasData = {
   consultation_id: "consultation-1",
@@ -73,6 +103,60 @@ const canvasData: CanvasData = {
     },
   ],
 };
+
+// layoutCanvasData: 3 ungrouped items → cluster layout button is enabled.
+const layoutCanvasData: CanvasData = {
+  ...canvasData,
+  nodes: [
+    {
+      id: "insight-2",
+      type: "insight",
+      label: "Supervision gaps",
+      description: null,
+      accepted: true,
+      subgroup: null,
+      sourceConsultationId: "consultation-2",
+      sourceConsultationTitle: "Yard follow-up",
+      groupId: null,
+      memberIds: [],
+      isUserAdded: false,
+      lockedFromSource: false,
+      position: { x: 0, y: 0 },
+    },
+    {
+      id: "insight-3",
+      type: "insight",
+      label: "Fatigue risk",
+      description: null,
+      accepted: true,
+      subgroup: null,
+      sourceConsultationId: "consultation-1",
+      sourceConsultationTitle: "North depot meeting",
+      groupId: null,
+      memberIds: [],
+      isUserAdded: false,
+      lockedFromSource: false,
+      position: { x: 80, y: 0 },
+    },
+    {
+      id: "insight-4",
+      type: "insight",
+      label: "No reporting channel",
+      description: null,
+      accepted: true,
+      subgroup: null,
+      sourceConsultationId: "consultation-1",
+      sourceConsultationTitle: "North depot meeting",
+      groupId: null,
+      memberIds: [],
+      isUserAdded: false,
+      lockedFromSource: false,
+      position: { x: 160, y: 0 },
+    },
+  ],
+};
+
+currentCanvasData = canvasData;
 
 vi.mock("@/components/canvas/canvas-graph", () => ({
   CanvasGraph: ({
@@ -180,13 +264,17 @@ vi.mock("@/components/canvas/ai-suggestions-panel", () => ({
 }));
 
 vi.mock("@/hooks/use-canvas", () => ({
-  useCanvas: () => ({ data: canvasData }),
+  useCanvas: () => ({ data: currentCanvasData }),
   useCreateEdge: () => ({
     mutateAsync: createEdgeMock,
   }),
   useUpdateEdge: () => ({
     mutateAsync: updateEdgeMock,
   }),
+  useCanvasFrames: () => ({ data: [] }),
+  useCreateFrame: () => ({ mutateAsync: vi.fn() }),
+  useUpdateFrame: () => ({ mutateAsync: vi.fn() }),
+  useDeleteFrame: () => ({ mutateAsync: vi.fn() }),
 }));
 
 vi.mock("@/lib/actions/consultation-workflow", () => ({
@@ -199,6 +287,14 @@ afterEach(() => {
   updateEdgeMock.mockReset();
   createThemeMock.mockReset();
   moveThemeToGroupMock.mockReset();
+  runLayoutMock.mockReset();
+  posthogCaptureMock.mockReset();
+  useCanvasSpatialLayoutEnabledMock.mockReturnValue(false);
+  useSpatialLayoutMock.mockReturnValue({
+    state: "idle" as "idle" | "fetching" | "applying",
+    runLayout: runLayoutMock,
+  });
+  currentCanvasData = canvasData;
   lastLayoutRequest = null;
   lastSubmittedLayoutRequest = null;
 });
@@ -206,12 +302,14 @@ afterEach(() => {
 function renderShell() {
   const queryClient = new QueryClient();
   return render(
-    <QueryClientProvider client={queryClient}>
-      <CanvasShell
-        roundId="round-1"
-        roundLabel="North depot meeting"
-      />
-    </QueryClientProvider>
+    <TooltipProvider>
+      <QueryClientProvider client={queryClient}>
+        <CanvasShell
+          roundId="round-1"
+          roundLabel="North depot meeting"
+        />
+      </QueryClientProvider>
+    </TooltipProvider>
   );
 }
 
@@ -333,5 +431,67 @@ describe("CanvasShell", () => {
       nodeIds: ["insight-1", "insight-2"],
       direction: "LR",
     });
+  });
+});
+
+describe("CanvasShell — cluster layout", () => {
+  it("does not render Cluster Layout button when flag is disabled", () => {
+    renderShell();
+    expect(screen.queryByText("Cluster layout")).not.toBeInTheDocument();
+  });
+
+  it("renders Cluster Layout button when flag is enabled", () => {
+    useCanvasSpatialLayoutEnabledMock.mockReturnValue(true);
+    renderShell();
+    expect(screen.getByText("Cluster layout")).toBeInTheDocument();
+  });
+
+  it("disables Cluster Layout button when fewer than 3 valid items exist", () => {
+    // canvasData has 1 valid item (insight-2 ungrouped; insight-1 has groupId)
+    useCanvasSpatialLayoutEnabledMock.mockReturnValue(true);
+    renderShell();
+    const btn = screen.getByRole("button", { name: "Cluster layout" });
+    expect(btn).toBeDisabled();
+  });
+
+  it("disables Cluster Layout button while layout is in progress", () => {
+    currentCanvasData = layoutCanvasData;
+    useCanvasSpatialLayoutEnabledMock.mockReturnValue(true);
+    useSpatialLayoutMock.mockReturnValue({ state: "fetching", runLayout: runLayoutMock });
+    renderShell();
+    const btn = screen.getByRole("button", { name: "Cluster layout" });
+    expect(btn).toBeDisabled();
+  });
+
+  it("clicking Cluster Layout button opens confirmation dialog", async () => {
+    currentCanvasData = layoutCanvasData;
+    useCanvasSpatialLayoutEnabledMock.mockReturnValue(true);
+    renderShell();
+    await act(async () => {
+      fireEvent.click(screen.getByText("Cluster layout"));
+    });
+    expect(await screen.findByText("Cluster whole canvas?")).toBeInTheDocument();
+  });
+
+  it("confirming the dialog calls runLayout with scope all", async () => {
+    currentCanvasData = layoutCanvasData;
+    useCanvasSpatialLayoutEnabledMock.mockReturnValue(true);
+    renderShell();
+    await act(async () => {
+      fireEvent.click(screen.getByText("Cluster layout"));
+    });
+    await screen.findByText("Cluster whole canvas?");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cluster" }));
+    });
+    expect(runLayoutMock).toHaveBeenCalledWith({ scope: "all" });
+  });
+
+  it("Arrange controls still render alongside Cluster Layout (no regression)", () => {
+    currentCanvasData = layoutCanvasData;
+    useCanvasSpatialLayoutEnabledMock.mockReturnValue(true);
+    renderShell();
+    expect(screen.getByText("Cluster layout")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Arrange canvas" })).toBeInTheDocument();
   });
 });

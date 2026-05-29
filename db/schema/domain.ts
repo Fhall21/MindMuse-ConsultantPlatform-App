@@ -1598,3 +1598,36 @@ export const quoteInsightLinks = pgTable(
     ),
   })
 );
+
+export const canvasSpatialLayoutJobs = pgTable(
+  "canvas_spatial_layout_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    consultationId: uuid("consultation_id")
+      .notNull()
+      .references(() => consultations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: text("status")
+      .notNull()
+      .default("pending")
+      .$type<"pending" | "running" | "completed" | "failed" | "cancelled">(),
+    resultPositions: jsonb("result_positions")
+      .$type<Record<string, { x: number; y: number }>>(),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => ({
+    statusCheck: check(
+      "canvas_spatial_layout_jobs_status_check",
+      sql`${table.status} in ('pending','running','completed','failed','cancelled')`
+    ),
+    consultationUserIdx: index("idx_csljobs_consultation_user").on(
+      table.consultationId,
+      table.userId
+    ),
+  })
+);

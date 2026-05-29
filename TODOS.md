@@ -60,3 +60,21 @@ Items explicitly deferred during engineering review. Each entry includes the mot
 
 **Blocked by:** Nothing technical. Medium complexity rework of the two-pass TOC renderer.
 
+
+---
+
+## Canvas Spatial Layout: Pause Polling When Tab Hidden
+
+**What:** The `use-spatial-layout` hook polls every 2s while a layout job is running. When the browser tab is hidden (user switches away), polling continues  wasting requests and battery.unnecessarily 
+
+**Why:** `document.visibilityState === "hidden"` means the polling interval fires but the results are immediately ignored by the user. On mobile or slow connections this adds up. Pausing on `visibilitychange` and resuming on `visible` is a standard pattern.
+
+**How to start:**
+- In `use-spatial-layout.ts`, in the polling `useEffect`, add a `visibilitychange` listener
+- On hidden: call `clearInterval(intervalId)` and set `intervalRef.current = null`
+- On visible: restart the interval if `state !== "idle"` (re-create and assign)
+- Clean up the event listener in the same effect's return
+
+**Depends on:** Sprint 19 Task 03 DB-backed overlay spinner (the polling loop must exist first).
+
+**Blocked by:** Sprint 19 Task 03 completion.

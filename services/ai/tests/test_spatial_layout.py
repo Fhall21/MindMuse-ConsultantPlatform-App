@@ -16,6 +16,9 @@ from embeddings import EMBEDDING_DIMENSION  # noqa: E402
 from routers import canvas  # noqa: E402
 from spatial_layout import (  # noqa: E402
     PADDING,
+    UMAP_COMPONENTS,
+    UMAP_METRIC,
+    UMAP_RANDOM_STATE,
     VIEWPORT_H,
     VIEWPORT_W,
     compute_spatial_layout,
@@ -44,8 +47,10 @@ class FakeProvider:
 
 
 class FakeReducer:
-    def __init__(self, **_kwargs) -> None:
-        pass
+    last_kwargs: dict[str, object] | None = None
+
+    def __init__(self, **kwargs) -> None:
+        FakeReducer.last_kwargs = kwargs
 
     def fit_transform(self, matrix):
         return np.asarray([[row[0], row[1]] for row in matrix], dtype=np.float32)
@@ -142,6 +147,13 @@ def test_returns_positions_for_valid_input() -> None:
     assert all(frame.node_ids for frame in result.suggested_frames)
     assert all(frame.width >= 320 for frame in result.suggested_frames)
     assert all(frame.height >= 240 for frame in result.suggested_frames)
+    assert FakeReducer.last_kwargs == {
+        "n_components": UMAP_COMPONENTS,
+        "random_state": UMAP_RANDOM_STATE,
+        "n_neighbors": 9,
+        "metric": UMAP_METRIC,
+        "init": "random",
+    }
 
 
 def test_cache_hit_skips_openai_on_second_call() -> None:

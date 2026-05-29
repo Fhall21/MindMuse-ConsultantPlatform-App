@@ -215,7 +215,7 @@ export function CanvasWorkspaceShell({ roundId, roundLabel }: CanvasWorkspaceShe
           aria-hidden={activeTab !== "canvas"}
           inert={activeTab !== "canvas"}
         >
-          <CanvasShell ref={canvasRef} roundId={roundId} roundLabel={roundLabel} />
+          <CanvasShell ref={canvasRef} roundId={roundId} />
         </div>
 
         {everActivated.meetings && (

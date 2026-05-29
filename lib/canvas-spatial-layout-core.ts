@@ -40,14 +40,14 @@ export function computeSpatialLayout(
 
     // Run d3-force simulation synchronously
     const sim = forceSimulation(clonedNodes)
-      .force("charge", forceManyBody().strength(-300))
+      .force("charge", forceManyBody().strength(-2000))
       .force(
         "link",
         forceLink(clonedEdges)
           .id((d) => (d as { id: string }).id)
-          .distance(150)
+          .distance(350)
       )
-      .force("collision", forceCollide(80))
+      .force("collision", forceCollide(180))
       .stop();
 
     // Tick for the full alpha decay cycle

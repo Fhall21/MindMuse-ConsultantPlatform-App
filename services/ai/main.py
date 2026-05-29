@@ -30,6 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
 from routers import (
+    canvas,
     clarification,
     draft,
     infer,
@@ -156,6 +157,7 @@ app.include_router(tasks.router)
 app.include_router(interview.router)
 app.include_router(research.router)
 app.include_router(research_enhance.router)
+app.include_router(canvas.router)
 
 
 @app.get("/health")
@@ -185,5 +187,6 @@ async def health():
             "/research/literature",
             "/research/analysis",
             "/research/enhance-question",
+            "/canvas/spatial-layout",
         ],
     }

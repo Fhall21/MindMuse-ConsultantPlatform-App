@@ -24,12 +24,18 @@ export function isResearchExtractionEnabledForUser(userId: string): boolean {
   return isUserInAllowlist(userId, process.env.RESEARCH_EXTRACTION_ENABLED);
 }
 
+export function isCanvasSpatialLayoutEnabledForUser(userId: string): boolean {
+  return isUserInAllowlist(userId, process.env.CANVAS_SPATIAL_LAYOUT_ENABLED);
+}
+
 export interface ClientFeatureFlags {
   researchExtractionEnabled: boolean;
+  canvasSpatialLayout: boolean;
 }
 
 export function getClientFeatureFlagsForUser(userId: string): ClientFeatureFlags {
   return {
     researchExtractionEnabled: isResearchExtractionEnabledForUser(userId),
+    canvasSpatialLayout: isCanvasSpatialLayoutEnabledForUser(userId),
   };
 }

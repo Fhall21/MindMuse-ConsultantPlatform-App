@@ -4,6 +4,7 @@ import type { ClientFeatureFlags } from "@/lib/feature-flags";
 
 const DEFAULTS: ClientFeatureFlags = {
   researchExtractionEnabled: false,
+  canvasSpatialLayout: false,
 };
 
 export function useFeatureFlags() {
@@ -18,4 +19,9 @@ export function useFeatureFlags() {
 export function useResearchExtractionEnabled(): boolean {
   const { data } = useFeatureFlags();
   return data?.researchExtractionEnabled ?? false;
+}
+
+export function useCanvasSpatialLayoutEnabled(): boolean {
+  const { data } = useFeatureFlags();
+  return data?.canvasSpatialLayout ?? false;
 }

@@ -360,16 +360,21 @@ export function useSpatialLayout({
         durationMs,
       });
 
-      // Undo toast — snapshot is captured in closure, always restores pre-layout state.
+      // Undo toast — stays until user dismisses or interacts with the canvas.
       toast("Layout applied", {
+        id: "layout-undo",
         action: {
           label: "Undo layout",
           onClick: () => {
-            graphRef.current?.applyPositions(snapshot, { animate: true });
+            const g = graphRef.current;
+            if (!g) return;
+            const snapKeys = Object.keys(snapshot);
+            if (snapKeys.length === 0) return;
+            g.applyPositions(snapshot, { animate: true });
             posthog.capture("canvas_cluster_layout_undone", { roundId });
           },
         },
-        duration: 5000,
+        duration: Infinity,
       });
 
       setState("idle");

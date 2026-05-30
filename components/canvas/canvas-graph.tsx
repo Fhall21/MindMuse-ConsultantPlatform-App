@@ -1245,6 +1245,9 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
         return;
       }
 
+      // User made a connection — dismiss any open undo-layout toast.
+      toast.dismiss("layout-undo");
+
       try {
         const edge = await onCreateEdge({
           source_node_type: sourceNode.type,
@@ -1409,6 +1412,9 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
 
   const handleNodeDragStop: OnNodeDrag = useCallback(
     async (_event, node, allNodes) => {
+      // User moved a node — dismiss any open undo-layout toast.
+      toast.dismiss("layout-undo");
+
       // Frame node drag end is handled in handleNodesChange via the
       // onFramePersist callback — exit early so we don't run the
       // theme/insight grouping pipeline on frame nodes.

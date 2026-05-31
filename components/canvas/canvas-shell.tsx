@@ -39,7 +39,6 @@ import { CanvasFilterViewPanel } from "@/components/canvas/canvas-filter-view-pa
 import { FrameRenameDialog } from "@/components/canvas/frame-rename-dialog";
 import { ConnectionTypePrompt } from "@/components/canvas/connection-type-prompt";
 import { GroupConfirmPanel } from "@/components/canvas/group-confirm-panel";
-import { GroupFromSelectionFab } from "@/components/canvas/group-from-selection-fab";
 import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
 import { MultiSelectionPanel } from "@/components/canvas/multi-selection-panel";
@@ -194,15 +193,6 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
   const canGroupSelected = useMemo(
     () =>
       selectedInsightNodes.length >= 2 &&
-      !selectedNodeIds.some(
-        (id) => id.startsWith("frame:") || nodes.find((n) => n.id === id)?.type === "theme"
-      ),
-    [selectedInsightNodes.length, selectedNodeIds, nodes]
-  );
-  // T05 — FAB shown when ≥3 pure-insight nodes are selected (no frames, no themes)
-  const showGroupFab = useMemo(
-    () =>
-      selectedInsightNodes.length >= 3 &&
       !selectedNodeIds.some(
         (id) => id.startsWith("frame:") || nodes.find((n) => n.id === id)?.type === "theme"
       ),
@@ -1069,19 +1059,6 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
             onGroupDrop={handleGroupDrop}
             onRenameGroup={handleRenameGroup}
           />
-
-          {showGroupFab && !groupPopover ? (
-            <GroupFromSelectionFab
-              nodeCount={selectedInsightNodes.length}
-              onCreateGroup={() => {
-                posthog.capture("canvas_group_from_cluster", {
-                  roundId,
-                  nodeCount: selectedInsightNodes.length,
-                });
-                void handleGroupSelected(selectedInsightNodes.map((n) => n.id));
-              }}
-            />
-          ) : null}
 
           {connectionPrompt ? (
             <ConnectionTypePrompt

@@ -120,10 +120,6 @@ interface CanvasGraphProps {
     targetGroupId?: string | null;
     insertionIndex?: number;
   }) => Promise<void>;
-  /** When true, show the floating "Create group" panel inside the canvas. */
-  canGroupSelected?: boolean;
-  /** Called when user clicks the floating "Create group" panel. */
-  onGroupSelected?: () => void;
   /** Called when user inline-edits a group card's name or description. */
   onRenameGroup?: (id: string, name: string, description: string) => void;
   /** Session-local card density — compact (default) or expanded. */
@@ -433,11 +429,19 @@ function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds:
   return orderNodesParentFirst(
     nextNodes.map((nextNode) => {
       const currentNode = currentById.get(nextNode.id);
-      const shouldPreservePosition = currentNode && currentNode.type === nextNode.type;
+      const currentData = currentNode?.data as unknown as CanvasNodeCardData | undefined;
+      const nextData = nextNode.data as unknown as CanvasNodeCardData;
+
+      // Don't preserve position when an insight has just been added to a group —
+      // it needs to animate to its slot inside the group card.
+      const currentGroupId = currentData?.node?.groupId ?? null;
+      const nextGroupId = nextData?.node?.groupId ?? null;
+      const groupIdChanged = currentGroupId !== nextGroupId;
+
+      const shouldPreservePosition =
+        currentNode && currentNode.type === nextNode.type && !groupIdChanged;
 
       if (shouldPreservePosition) {
-        const currentData = currentNode.data as unknown as CanvasNodeCardData | undefined;
-        const nextData = nextNode.data as unknown as CanvasNodeCardData;
         return {
           ...nextNode,
           position: currentNode.position,
@@ -449,11 +453,15 @@ function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds:
         } satisfies Node;
       }
 
+      // Carry expanded state even when not preserving position.
+      const dataWithExpanded = currentData?.expanded !== undefined
+        ? { ...nextData, expanded: currentData.expanded }
+        : nextData;
+
       // For grouped insights re-entering after their parent group was dragged,
       // shift by the delta between the group's runtime position and its DB-based position.
-      const canvasNode = nextNode.data as unknown as CanvasNodeCardData | undefined;
-      const groupId = canvasNode?.node?.groupId;
-      if (groupId) {
+      const groupId = nextGroupId;
+      if (groupId && !groupIdChanged) {
         const currentGroupNode = currentById.get(groupId);
         const nextGroupNode = nextById.get(groupId);
         if (currentGroupNode && nextGroupNode) {
@@ -467,6 +475,7 @@ function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds:
                 y: nextNode.position.y + deltaY,
               },
               selected: selectedSet.has(nextNode.id),
+              data: dataWithExpanded,
             } satisfies Node;
           }
         }
@@ -475,6 +484,7 @@ function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds:
       return {
         ...nextNode,
         selected: selectedSet.has(nextNode.id),
+        data: dataWithExpanded,
       } satisfies Node;
     })
   );
@@ -712,8 +722,6 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
   onLayoutComplete,
   onCreateEdge,
   onGroupDrop,
-  canGroupSelected = false,
-  onGroupSelected,
   onRenameGroup,
   cardDensity = "compact",
 }: CanvasGraphProps, ref) {
@@ -1674,18 +1682,7 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
             </div>
           </Panel>
         ) : null}
-        {canGroupSelected && onGroupSelected ? (
-          <Panel position="top-center">
-            <button
-              type="button"
-              onClick={onGroupSelected}
-              className="flex items-center gap-2 rounded-full border bg-background/95 px-3.5 py-1.5 text-xs font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent/60"
-            >
-              <Layers3 className="h-3.5 w-3.5 text-emerald-600" />
-              Create group
-            </button>
-          </Panel>
-        ) : null}
+        {null}
         <Controls />
         <MiniMap nodeStrokeWidth={3} zoomable pannable />
       </ReactFlow>

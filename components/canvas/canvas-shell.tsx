@@ -55,7 +55,12 @@ import {
 import { getDraggedInsightIds, resolveCanvasGroupingPlan } from "@/lib/canvas-interactions";
 
 import type { CanvasLayoutDirection, FrameBoundsRect } from "@/lib/canvas-layout";
-import { createTheme, moveThemeToGroup, updateTheme } from "@/lib/actions/consultation-workflow";
+import {
+  createTheme,
+  deleteTheme,
+  moveThemeToGroup,
+  updateTheme,
+} from "@/lib/actions/consultation-workflow";
 import { suggestGroupMeta } from "@/lib/actions/canvas-ai";
 import {
   CANVAS_CLUTTER_THRESHOLD,
@@ -298,6 +303,16 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
         return;
       }
 
+      // Delete focused theme/group node
+      if (focusedNodeId) {
+        const focusedNode = nodes.find((n) => n.id === focusedNodeId);
+        if (focusedNode?.type === "theme") {
+          event.preventDefault();
+          void handleDeleteGroup(focusedNodeId);
+          return;
+        }
+      }
+
       let selectedFrameId = activeFrameId;
       if (
         !selectedFrameId &&
@@ -317,7 +332,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
 
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [activeFrameId, selectedNodeIds]);
+  }, [activeFrameId, focusedNodeId, nodes, selectedNodeIds]);
 
   // Stable — prevents ReactFlow from rebuilding its selection handler on every render
   const handleCanvasSelectionChange = useCallback((nextIds: string[]) => {
@@ -665,8 +680,24 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
     try {
       await updateTheme(id, { label: name, description: description || null });
       void invalidateCanvas();
-    } catch {
+    } catch (error) {
+      console.error("[canvas-shell] could not rename group", error);
       toast.error("Could not rename group");
+    }
+  }
+
+  async function handleDeleteGroup(id: string) {
+    try {
+      await deleteTheme(id);
+      void invalidateCanvas();
+      setSelectedNodeIds([]);
+      setFocusedNodeId(null);
+      setSelectedEdgeId(null);
+      return true;
+    } catch (error) {
+      console.error("[canvas-shell] could not delete group", error);
+      toast.error("Could not delete group");
+      return false;
     }
   }
 
@@ -1128,6 +1159,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
               )
             ) : (
               <NodeDetailPanel
+                key={selectedNode?.id ?? selectedEdgeId ?? "empty"}
                 selectedNodeId={selectedNode?.id ?? null}
                 selectedEdgeId={selectedEdgeId}
                 nodes={nodes}
@@ -1148,6 +1180,18 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
                   await invalidateCanvas();
                   setFocusedNodeId(nodeId);
                 }}
+                onSaveThemeGroup={async (groupId, patch) => {
+                  try {
+                    await updateTheme(groupId, patch);
+                    void invalidateCanvas();
+                    return true;
+                  } catch (error) {
+                    console.error("[canvas-shell] could not update group", error);
+                    toast.error("Could not update group");
+                    return false;
+                  }
+                }}
+                onDeleteThemeGroup={handleDeleteGroup}
                 onClose={handleClose}
               />
             )}

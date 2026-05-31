@@ -1365,7 +1365,7 @@ export async function createTheme(
         and(
           eq(themeMembers.consultationId, roundId),
           inArray(
-            themeMembers.themeId,
+            themeMembers.insightId,
             seedThemes.map((theme) => theme.id)
           )
         )
@@ -1434,7 +1434,25 @@ export async function moveThemeToGroup(
   position?: number
 ) {
   const { userId } = await requireAuthenticatedContext();
-  const theme = await loadThemeWithRoundContext({ userId, themeId });
+
+  // Try the standard meeting-join path first.
+  // Research/flow insights (meetingId = null) will fail here; detect them and
+  // raise a user-friendly error instead of the opaque "Theme not found".
+  let theme: Awaited<ReturnType<typeof loadThemeWithRoundContext>>;
+  try {
+    theme = await loadThemeWithRoundContext({ userId, themeId });
+  } catch (err) {
+    const [insightRow] = await db
+      .select({ meetingId: insights.meetingId })
+      .from(insights)
+      .where(eq(insights.id, themeId))
+      .limit(1);
+    if (insightRow && !insightRow.meetingId) {
+      throw new Error("Research insights cannot yet be added to theme groups.");
+    }
+    throw err;
+  }
+
   const roundId = theme.consultation.consultation_id;
 
   if (!roundId) {
@@ -1759,6 +1777,27 @@ export async function updateTheme(
       label: nextLabel,
       description: nextDescription,
       edit_type: "manual_text_edit",
+    },
+  });
+
+  return { groupId };
+}
+
+export async function deleteTheme(groupId: string) {
+  const { userId } = await requireAuthenticatedContext();
+  const context = await loadGroupWithRoundContext({ userId, groupId });
+  const members = await loadGroupMembers({ groupId });
+
+  await db.delete(themes).where(eq(themes.id, groupId));
+
+  await emitAuditEvent({
+    action: AUDIT_ACTIONS.ROUND_THEME_GROUP_DELETED,
+    entityType: "round_theme_group",
+    entityId: groupId,
+    metadata: {
+      round_id: context.round.id,
+      label: context.group.label,
+      member_count: members.length,
     },
   });
 

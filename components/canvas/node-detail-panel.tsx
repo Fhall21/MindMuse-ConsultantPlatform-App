@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, Pencil, Save, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { useDeleteEdge, useUpdateEdge } from "@/hooks/use-canvas";
 import type { CanvasEdge, CanvasNode } from "@/types/canvas";
 
@@ -17,6 +19,11 @@ interface NodeDetailPanelProps {
   roundId: string;
   onQuickTypeSelect: (edge: CanvasEdge) => void;
   onUngroupInsight: (nodeId: string) => Promise<void>;
+  onSaveThemeGroup: (
+    groupId: string,
+    patch: { label: string; description: string | null }
+  ) => Promise<boolean>;
+  onDeleteThemeGroup: (groupId: string) => Promise<boolean>;
   onClose: () => void;
 }
 
@@ -28,6 +35,8 @@ export function NodeDetailPanel({
   roundId,
   onQuickTypeSelect,
   onUngroupInsight,
+  onSaveThemeGroup,
+  onDeleteThemeGroup,
   onClose,
 }: NodeDetailPanelProps) {
   const selectedNode = selectedNodeId
@@ -36,12 +45,95 @@ export function NodeDetailPanel({
   const selectedEdge = selectedEdgeId
     ? edges.find((edge) => edge.id === selectedEdgeId) ?? null
     : null;
+  const isThemeNode = selectedNode?.type === "theme";
+
+  const [draftLabel, setDraftLabel] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
+  const [editingField, setEditingField] = useState<"label" | "description" | null>(null);
+  const [isSavingTheme, setIsSavingTheme] = useState(false);
+  const [isDeletingTheme, setIsDeletingTheme] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    if (isThemeNode && selectedNode) {
+      setDraftLabel(selectedNode.label);
+      setDraftDescription(selectedNode.description ?? "");
+    } else {
+      setDraftLabel("");
+      setDraftDescription("");
+    }
+    setEditingField(null);
+    setConfirmDelete(false);
+  }, [isThemeNode, selectedNode?.description, selectedNode?.id, selectedNode?.label]);
+
+  const themeChildren = useMemo(() => {
+    if (!isThemeNode || !selectedNode) {
+      return [];
+    }
+
+    const nodeById = new Map(nodes.map((node) => [node.id, node] as const));
+
+    return selectedNode.memberIds
+      .map((memberId) => nodeById.get(memberId))
+      .filter((node): node is CanvasNode => Boolean(node) && node.type === "insight");
+  }, [isThemeNode, nodes, selectedNode]);
+
+  const hasThemeChanges =
+    isThemeNode &&
+    selectedNode
+      ? draftLabel.trim() !== selectedNode.label ||
+        draftDescription.trim() !== (selectedNode.description ?? "")
+      : false;
+
+  async function handleSaveThemeGroup() {
+    if (!selectedNode || selectedNode.type !== "theme") {
+      return false;
+    }
+
+    const nextLabel = draftLabel.trim();
+    if (!nextLabel) {
+      return false;
+    }
+
+    setIsSavingTheme(true);
+    try {
+      const saved = await onSaveThemeGroup(selectedNode.id, {
+        label: nextLabel,
+        description: draftDescription.trim() || null,
+      });
+      if (saved) {
+        setEditingField(null);
+        setConfirmDelete(false);
+      }
+      return saved;
+    } finally {
+      setIsSavingTheme(false);
+    }
+  }
+
+  async function handleDeleteThemeGroup() {
+    if (!selectedNode || selectedNode.type !== "theme") {
+      return false;
+    }
+
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return false;
+    }
+
+    setIsDeletingTheme(true);
+    try {
+      return await onDeleteThemeGroup(selectedNode.id);
+    } finally {
+      setIsDeletingTheme(false);
+    }
+  }
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between px-4 py-3">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {selectedNode ? "Card details" : selectedEdge ? "Connection" : "Details"}
+          {isThemeNode ? "Theme group" : selectedNode ? "Card details" : selectedEdge ? "Connection" : "Details"}
         </span>
         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
           <X className="h-3.5 w-3.5" />
@@ -52,7 +144,24 @@ export function NodeDetailPanel({
       <Separator />
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        {selectedNode ? (
+        {isThemeNode && selectedNode ? (
+          <ThemeGroupEditor
+            node={selectedNode}
+            draftLabel={draftLabel}
+            draftDescription={draftDescription}
+            editingField={editingField}
+            themeChildren={themeChildren}
+            hasThemeChanges={hasThemeChanges}
+            isSavingTheme={isSavingTheme}
+            isDeletingTheme={isDeletingTheme}
+            confirmDelete={confirmDelete}
+            onChangeLabel={setDraftLabel}
+            onChangeDescription={setDraftDescription}
+            onEditField={setEditingField}
+            onSave={handleSaveThemeGroup}
+            onDelete={handleDeleteThemeGroup}
+          />
+        ) : selectedNode ? (
           <NodeInfoCard node={selectedNode} onUngroupInsight={onUngroupInsight} />
         ) : null}
         {selectedEdge ? (
@@ -66,6 +175,239 @@ export function NodeDetailPanel({
           />
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function ThemeGroupEditor({
+  node,
+  draftLabel,
+  draftDescription,
+  editingField,
+  themeChildren,
+  hasThemeChanges,
+  isSavingTheme,
+  isDeletingTheme,
+  confirmDelete,
+  onChangeLabel,
+  onChangeDescription,
+  onEditField,
+  onSave,
+  onDelete,
+}: {
+  node: CanvasNode;
+  draftLabel: string;
+  draftDescription: string;
+  editingField: "label" | "description" | null;
+  themeChildren: CanvasNode[];
+  hasThemeChanges: boolean;
+  isSavingTheme: boolean;
+  isDeletingTheme: boolean;
+  confirmDelete: boolean;
+  onChangeLabel: (value: string) => void;
+  onChangeDescription: (value: string) => void;
+  onEditField: (field: "label" | "description" | null) => void;
+  onSave: () => Promise<boolean>;
+  onDelete: () => Promise<boolean>;
+}) {
+  const childCount = node.memberIds.length;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Title */}
+      <EditableThemeField
+        label="Title"
+        value={draftLabel}
+        editing={editingField === "label"}
+        onEdit={() => onEditField("label")}
+        onChange={onChangeLabel}
+        placeholder="Add a theme title"
+        minHeightClassName="min-h-[2.75rem]"
+      />
+
+      {/* Description */}
+      <EditableThemeField
+        label="Description"
+        value={draftDescription}
+        editing={editingField === "description"}
+        multiline
+        onEdit={() => onEditField("description")}
+        onChange={onChangeDescription}
+        placeholder="Add a short description"
+        minHeightClassName="min-h-[6.5rem]"
+      />
+
+      <Separator />
+
+      {/* Insights list */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Insights
+          </p>
+          <span className="text-[10px] text-muted-foreground">
+            {childCount} total
+          </span>
+        </div>
+
+        {themeChildren.length > 0 ? (
+          <div className="space-y-1">
+            {themeChildren.map((child) => (
+              <div
+                key={child.id}
+                className="flex items-start gap-2 rounded-md px-2 py-1.5 bg-muted/40"
+              >
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary/60" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm leading-snug text-foreground">{child.label}</p>
+                  {(child.description ?? child.sourceConsultationTitle) ? (
+                    <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                      {child.description ?? child.sourceConsultationTitle}
+                    </p>
+                  ) : null}
+                </div>
+                {child.accepted ? (
+                  <Badge variant="secondary" className="shrink-0 text-[10px]">
+                    Accepted
+                  </Badge>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            No insights linked to this group yet.
+          </p>
+        )}
+      </div>
+
+      <Separator />
+
+      {/* Actions */}
+      <div className="space-y-2">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          Actions
+        </p>
+
+        <Button
+          variant="default"
+          size="sm"
+          className="w-full justify-start gap-2"
+          onClick={() => void onSave()}
+          disabled={!hasThemeChanges || isSavingTheme || isDeletingTheme || draftLabel.trim().length === 0}
+        >
+          {isSavingTheme ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Save className="h-3.5 w-3.5" />
+          )}
+          {isSavingTheme ? "Saving…" : "Save changes"}
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(
+            "w-full justify-start gap-2",
+            confirmDelete && "border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          )}
+          onClick={() => void onDelete()}
+          disabled={isSavingTheme || isDeletingTheme}
+        >
+          {isDeletingTheme ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="h-3.5 w-3.5" />
+          )}
+          {isDeletingTheme ? "Deleting…" : confirmDelete ? "Confirm delete" : "Delete group"}
+        </Button>
+
+        {confirmDelete && (
+          <p className="text-[10px] leading-relaxed text-muted-foreground">
+            Group shell removed. Insight cards stay on canvas.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EditableThemeField({
+  label,
+  value,
+  editing,
+  multiline = false,
+  onEdit,
+  onChange,
+  placeholder,
+  minHeightClassName,
+}: {
+  label: string;
+  value: string;
+  editing: boolean;
+  multiline?: boolean;
+  onEdit: () => void;
+  onChange: (value: string) => void;
+  placeholder: string;
+  minHeightClassName: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          {label}
+        </p>
+        {!editing && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="rounded p-0.5 text-muted-foreground/60 transition hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+            aria-label={`Edit ${label}`}
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        multiline ? (
+          <Textarea
+            autoFocus
+            value={value}
+            onChange={(event) => onChange(event.target.value.slice(0, 1200))}
+            placeholder={placeholder}
+            className={`${minHeightClassName} resize-none text-sm leading-relaxed`}
+          />
+        ) : (
+          <Input
+            autoFocus
+            value={value}
+            onChange={(event) => onChange(event.target.value.slice(0, 120))}
+            placeholder={placeholder}
+            className="h-11 text-sm"
+          />
+        )
+      ) : (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="block w-full rounded-sm text-left outline-none transition hover:opacity-75 focus-visible:ring-2 focus-visible:ring-ring/40"
+        >
+          {value ? (
+            multiline ? (
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                {value}
+              </p>
+            ) : (
+              <p className="text-xl font-medium leading-tight tracking-[-0.02em] text-foreground">
+                {value}
+              </p>
+            )
+          ) : (
+            <p className="text-sm italic text-muted-foreground">{placeholder}</p>
+          )}
+        </button>
+      )}
     </div>
   );
 }
@@ -122,7 +464,7 @@ function NodeInfoCard({
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Source quote
             </p>
-            <blockquote className="border-l-2 border-stone-300 pl-3 text-xs leading-relaxed text-muted-foreground dark:border-stone-600">
+            <blockquote className="rounded-sm border border-border/70 bg-muted/20 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
               {node.researchQuotePreview}
             </blockquote>
           </div>

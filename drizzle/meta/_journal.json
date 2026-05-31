@@ -288,6 +288,13 @@
       "when": 1780264295186,
       "tag": "0040_dry_karen_page",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1780270897162,
+      "tag": "0041_slimy_starjammers",
+      "breakpoints": true
     }
   ]
 }

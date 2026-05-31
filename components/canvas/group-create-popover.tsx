@@ -62,104 +62,103 @@ export function GroupCreatePopover({
   }
 
   return (
-    <div
-      data-testid="group-create-popover"
-      className="absolute bottom-4 right-4 z-20 w-[360px] overflow-hidden rounded-xl border bg-background shadow-xl"
-    >
-      <div className="flex items-center justify-between border-b px-5 py-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40">
-            <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+    <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+      <div
+        data-testid="group-create-popover"
+        className="pointer-events-auto w-[340px] border border-border bg-background shadow-md"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-muted-foreground/60" />
+            <span className="text-sm font-medium tracking-tight">Name this group</span>
           </div>
-          <div>
-            <p className="text-sm font-semibold">Name this group</p>
-            <p className="text-xs text-muted-foreground">
-              AI suggestion — edit before creating
-            </p>
-          </div>
+          <button
+            onClick={onCancel}
+            disabled={isConfirming}
+            className="text-muted-foreground/50 hover:text-foreground transition-colors disabled:opacity-40"
+            aria-label="Cancel"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0"
-          onClick={onCancel}
-          disabled={isConfirming}
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
-      </div>
 
-      {isLoading ? (
-        <div className="space-y-3 px-5 py-5">
-          <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-          <div className="h-4 w-full animate-pulse rounded bg-muted" />
-          <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-        </div>
-      ) : (
-        <div className="px-5 py-4 space-y-3">
-          <div className="space-y-1.5">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Group name
-            </p>
-            <Input
-              ref={nameInputRef}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  tryConfirm();
-                }
-              }}
-              placeholder="Group name…"
-              maxLength={80}
-              disabled={isConfirming}
-              className={cn(
-                "text-sm font-medium transition-colors",
-                nameError && "border-destructive focus-visible:ring-destructive"
-              )}
-            />
+        {/* Body */}
+        {isLoading ? (
+          <div className="space-y-3 px-5 py-5">
+            <div className="h-3.5 w-3/5 animate-pulse rounded-sm bg-muted" />
+            <div className="h-3 w-full animate-pulse rounded-sm bg-muted" />
+            <div className="h-3 w-4/5 animate-pulse rounded-sm bg-muted" />
           </div>
-          <div className="space-y-1.5">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Description
-            </p>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What unites these insights…"
-              maxLength={300}
-              rows={3}
-              disabled={isConfirming}
-              className="resize-none text-sm"
-            />
+        ) : (
+          <div className="px-5 py-4 space-y-4">
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Group name
+              </p>
+              <Input
+                ref={nameInputRef}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    tryConfirm();
+                  }
+                }}
+                placeholder="Group name…"
+                maxLength={80}
+                disabled={isConfirming}
+                className={cn(
+                  "rounded-none text-sm font-medium transition-colors",
+                  nameError && "border-destructive focus-visible:ring-destructive"
+                )}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Description
+              </p>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What connects these insights…"
+                maxLength={300}
+                rows={3}
+                disabled={isConfirming}
+                className="resize-none rounded-none text-sm"
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="flex items-center justify-end gap-2 border-t px-5 py-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onCancel}
-          disabled={isConfirming}
-        >
-          Cancel
-        </Button>
-        <Button
-          size="sm"
-          disabled={isLoading || isConfirming}
-          onClick={tryConfirm}
-        >
-          {isConfirming ? (
-            <>
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              Creating…
-            </>
-          ) : (
-            "Create group"
-          )}
-        </Button>
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onCancel}
+            disabled={isConfirming}
+            className="rounded-none text-xs"
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            disabled={isLoading || isConfirming}
+            onClick={tryConfirm}
+            className="rounded-none text-xs"
+          >
+            {isConfirming ? (
+              <>
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                Creating…
+              </>
+            ) : (
+              "Create group"
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );

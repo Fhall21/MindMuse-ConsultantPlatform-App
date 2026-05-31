@@ -78,15 +78,15 @@ export async function suggestGroupMeta(
         {
           role: "system",
           content:
-            'You are an expert psychosocial consultant. Given a set of consultation insights, return a JSON object with two fields: "name" (2–6 word group title, title case, no punctuation) and "description" (1–2 sentences of plain prose describing what unites these insights). Return ONLY valid JSON, no markdown.',
+            'You are a psychosocial consultation analyst. Respond with ONLY a JSON object: {"name": "...", "description": "..."}. Rules: name = 2–4 words, title case, be specific (e.g. "Workplace Isolation", "Boundary Difficulties", not "Shared Themes"); description = exactly 1 sentence under 18 words identifying the shared pattern. Be precise, not generic.',
         },
         {
           role: "user",
           content: `Suggest a theme group name and description for these consultation insights:\n${lines}`,
         },
       ],
-      max_tokens: 120,
-      temperature: 0.6,
+      max_tokens: 80,
+      temperature: 0.3,
       response_format: { type: "json_object" },
     });
 

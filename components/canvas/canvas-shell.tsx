@@ -49,6 +49,7 @@ import {
   useCreateEdge,
   useCreateFrame,
   useDeleteFrame,
+  useSaveLayout,
   useUpdateEdge,
   useUpdateFrame,
 } from "@/hooks/use-canvas";
@@ -62,6 +63,7 @@ import {
   DEFAULT_FRAME_COLOR,
   defaultFilterState,
   type CanvasFilterState,
+  type CanvasLayoutPosition,
   type ConnectionType,
   type FrameColor,
 } from "@/types/canvas";
@@ -107,6 +109,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
   const canvasQuery = useCanvas(roundId);
   const createEdge = useCreateEdge(roundId);
   const updateEdge = useUpdateEdge(roundId);
+  const saveLayout = useSaveLayout(roundId);
 
   const framesQuery = useCanvasFrames(roundId);
   const createFrame = useCreateFrame(roundId);
@@ -597,16 +600,67 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
   // Update startGroupCreationRef so the imperative handle always has the latest closure
   startGroupCreationRef.current = (nodeIds: string[]) => { void handleGroupSelected(nodeIds); };
 
+  // Group layout constants — mirrors values in canvas-graph.tsx / canvas-state.ts
+  const GROUP_COLUMNS = 2;
+  const GROUP_WIDTH = 596;
+  const GROUP_HEADER_HEIGHT = 118;
+  const GROUP_PADDING_X = 28;
+  const GROUP_PADDING_TOP = 24;
+  const GROUP_GAP_X = 24;
+  const GROUP_GAP_Y = 22;
+  const INSIGHT_WIDTH = 258;
+  const INSIGHT_HEIGHT = 110;
+
   async function handleGroupConfirm(name: string, description: string) {
     if (!groupPopover) return;
     const { insightIds, suggestion } = groupPopover;
+
+    // Capture live canvas positions BEFORE any async operations
+    const livePositions = canvasGraphRef.current?.getTopLevelPositions() ?? {};
+
     setGroupPopover((prev) => (prev ? { ...prev, confirming: true } : null));
     try {
-      const { groupId } = await createTheme(roundId, insightIds);
+      // skipDraft=true: user provides their own name/description, skip AI draft write
+      const { groupId } = await createTheme(roundId, insightIds, true);
       await updateTheme(groupId, { label: name, description: description || null });
       if (suggestion?.name === name) {
         setAiGeneratedGroupIds((prev) => new Set([...prev, groupId]));
       }
+
+      // Save layout placing the group at the centroid of the selected insights
+      // so composeCanvasState skips seedThemeGroupGrid for this group.
+      const selectedPositions = insightIds
+        .map((id) => livePositions[id])
+        .filter((p): p is NonNullable<typeof p> => Boolean(p));
+
+      if (selectedPositions.length > 0) {
+        const centX =
+          selectedPositions.reduce((s, p) => s + p.x, 0) / selectedPositions.length;
+        const centY =
+          selectedPositions.reduce((s, p) => s + p.y, 0) / selectedPositions.length;
+        const groupX = centX - GROUP_WIDTH / 2;
+        const groupY = centY - GROUP_HEADER_HEIGHT;
+
+        const positions: Record<string, CanvasLayoutPosition> = {
+          [groupId]: { x: groupX, y: groupY, nodeType: "theme" },
+        };
+        insightIds.forEach((id, i) => {
+          const row = Math.floor(i / GROUP_COLUMNS);
+          const col = i % GROUP_COLUMNS;
+          positions[id] = {
+            x: groupX + GROUP_PADDING_X + col * (INSIGHT_WIDTH + GROUP_GAP_X),
+            y: groupY + GROUP_HEADER_HEIGHT + GROUP_PADDING_TOP + row * (INSIGHT_HEIGHT + GROUP_GAP_Y),
+            nodeType: "insight",
+          };
+        });
+        const viewport = canvasQuery.data?.viewport ?? { x: 0, y: 0, zoom: 1 };
+        try {
+          await saveLayout.mutateAsync({ positions, viewport });
+        } catch {
+          // Non-fatal: group still renders, just at the default seeded position
+        }
+      }
+
       void invalidateCanvas();
       setGroupPopover(null);
       setSelectedNodeIds([]);

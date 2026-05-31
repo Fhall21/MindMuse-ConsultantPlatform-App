@@ -1384,14 +1384,15 @@ export async function createTheme(
       }))
     );
 
-    await writeGroupDraftSuggestion({
-      group,
-      round,
-      memberThemes: seedThemes,
-      userId,
-      structuralChange: "create_group",
-      applyDirectly: skipDraft,
-    });
+    if (!skipDraft) {
+      await writeGroupDraftSuggestion({
+        group,
+        round,
+        memberThemes: seedThemes,
+        userId,
+        structuralChange: "create_group",
+      });
+    }
 
     for (const previousGroupId of previousGroupIds) {
       const previousGroup = await loadGroupForRound({

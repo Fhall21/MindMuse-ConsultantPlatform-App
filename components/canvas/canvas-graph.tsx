@@ -732,6 +732,9 @@ export interface CanvasGraphHandle {
   getTopLevelPositions(): Record<string, { x: number; y: number }>;
   applyPositions(positions: Record<string, { x: number; y: number }>, opts?: { animate?: boolean }): void;
   getLayoutSavePending(): boolean;
+  /** Force-revert local flow state to current server-computed nodes. Use after
+   *  a failed mutation to undo any optimistic updates that were applied. */
+  revertNodes(): void;
 }
 
 const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(function CanvasGraphInner({
@@ -879,6 +882,9 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
     () => buildFlowNodes(filteredNodes, aiGeneratedGroupIds),
     [filteredNodes, aiGeneratedGroupIds]
   );
+  const nextFlowNodesRef = useRef(nextFlowNodes);
+  nextFlowNodesRef.current = nextFlowNodes;
+
   const nextFlowEdges = useMemo(() => buildFlowEdges(filteredEdges), [filteredEdges]);
 
   const [flowNodes, setFlowNodes] = useNodesState(nextFlowNodes);
@@ -1195,6 +1201,13 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
 
       getLayoutSavePending() {
         return savePendingRef.current;
+      },
+
+      revertNodes() {
+        // Bypass syncFlowNodes (and its optimistic guards like justDetached) and
+        // reset local state to the current server-computed nodes. Call this after
+        // a failed mutation to undo optimistic updates.
+        setFlowNodes(nextFlowNodesRef.current);
       },
     }),
     // fitView is the only external dep; everything else is read via stable refs.

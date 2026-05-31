@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Save, Trash2, X } from "lucide-react";
+import { Loader2, Pencil, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -420,74 +420,83 @@ function NodeInfoCard({
   onUngroupInsight: (nodeId: string) => Promise<void>;
 }) {
   const isInsight = node.type === "insight";
+  const typeLabel =
+    node.sourceType === "research" ? "Research" : isInsight ? "Insight" : "Theme group";
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1.5">
-        <h3 className="text-sm font-medium leading-snug">{node.label}</h3>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant="outline" className="text-xs">
-            {isInsight ? "Insight" : "Theme group"}
-          </Badge>
-          {node.sourceConsultationTitle ? (
-            <Badge variant="secondary" className="text-xs">
-              {node.sourceConsultationTitle}
-            </Badge>
-          ) : null}
-          {node.accepted ? (
-            <Badge variant="secondary" className="text-xs">
-              Accepted
-            </Badge>
-          ) : null}
-          {!isInsight ? (
-            <Badge variant="outline" className="text-xs">
-              {node.memberIds.length} insight{node.memberIds.length === 1 ? "" : "s"}
-            </Badge>
-          ) : null}
-        </div>
+    <div className="flex flex-col gap-4">
+      {/* Header: type label + title + badges */}
+      <div className="space-y-1.5">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          {typeLabel}
+        </p>
+        <p className="text-xl font-medium leading-tight tracking-[-0.02em] text-foreground">
+          {node.label}
+        </p>
+        {(node.sourceConsultationTitle || node.accepted) ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {node.sourceConsultationTitle ? (
+              <Badge variant="secondary" className="text-[10px]">
+                {node.sourceConsultationTitle}
+              </Badge>
+            ) : null}
+            {node.accepted ? (
+              <Badge variant="secondary" className="text-[10px]">
+                Accepted
+              </Badge>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
+      {/* Description */}
       {node.description ? (
         <>
           <Separator />
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {node.description}
-          </p>
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Description
+            </p>
+            <p className="text-sm leading-relaxed text-foreground">{node.description}</p>
+          </div>
         </>
       ) : null}
 
+      {/* Research quote */}
       {node.sourceType === "research" && node.researchQuotePreview ? (
         <>
           <Separator />
-          <div className="space-y-1">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Source quote
             </p>
-            <blockquote className="rounded-sm border border-border/70 bg-muted/20 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            <blockquote className="rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
               {node.researchQuotePreview}
             </blockquote>
           </div>
         </>
       ) : null}
 
-      <Separator />
-
-      <div className="space-y-2">
-        <p className="text-xs text-muted-foreground">
-          Drag from a card&apos;s connection dot on the left or right edge to link
-          evidence. Dropping an insight card onto another insight creates a new group.
-        </p>
-        {isInsight && node.groupId ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void onUngroupInsight(node.id)}
-          >
-            Ungroup insight
-          </Button>
-        ) : null}
-      </div>
+      {/* Actions */}
+      {isInsight && node.groupId ? (
+        <>
+          <Separator />
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Actions
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full justify-start gap-2"
+              onClick={() => void onUngroupInsight(node.id)}
+            >
+              <Unlink className="h-3.5 w-3.5" />
+              Ungroup insight
+            </Button>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

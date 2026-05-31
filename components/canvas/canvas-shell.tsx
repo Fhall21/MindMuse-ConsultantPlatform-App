@@ -810,8 +810,10 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
     } catch (error) {
       console.error("[canvas-shell] failed to update grouping", error);
       toast.error("Failed to update grouping.");
-      // Revert optimistic local state back to server truth, then refetch so
-      // the canvas shows the correct group membership.
+      // Cancel the pending debounced layout save so the optimistic drop
+      // position is not written to the DB, then revert local state and
+      // refetch so the canvas shows correct server group membership.
+      canvasGraphRef.current?.cancelPendingLayout();
       canvasGraphRef.current?.revertNodes();
       void invalidateCanvas();
     }

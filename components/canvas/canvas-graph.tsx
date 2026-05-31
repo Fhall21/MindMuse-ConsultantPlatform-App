@@ -735,6 +735,9 @@ export interface CanvasGraphHandle {
   /** Force-revert local flow state to current server-computed nodes. Use after
    *  a failed mutation to undo any optimistic updates that were applied. */
   revertNodes(): void;
+  /** Cancel any pending debounced layout save. Call before reverting nodes so
+   *  the optimistic drop position is not persisted to the layout DB. */
+  cancelPendingLayout(): void;
 }
 
 const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(function CanvasGraphInner({
@@ -1208,6 +1211,14 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
         // reset local state to the current server-computed nodes. Call this after
         // a failed mutation to undo optimistic updates.
         setFlowNodes(nextFlowNodesRef.current);
+      },
+
+      cancelPendingLayout() {
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+          setHasQueuedSave(false);
+        }
       },
     }),
     // fitView is the only external dep; everything else is read via stable refs.

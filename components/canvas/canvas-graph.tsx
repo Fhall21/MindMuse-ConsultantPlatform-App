@@ -440,6 +440,21 @@ function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds:
       const nextGroupId = nextData?.node?.groupId ?? null;
       const groupIdChanged = currentGroupId !== nextGroupId;
       const leftGroup = currentGroupId !== null && nextGroupId === null;
+      // Stale-server case: local state already detached (groupId=null) but server
+      // data hasn't caught up yet (still shows groupId set). Preserve local
+      // position AND data so the node doesn't snap back mid-flight.
+      const justDetached = currentNode && currentGroupId === null && nextGroupId !== null;
+      if (justDetached) {
+        return {
+          ...nextNode,
+          position: currentNode.position,
+          selected: selectedSet.has(nextNode.id),
+          data: {
+            ...currentData,
+            expanded: currentData?.expanded,
+          },
+        } satisfies Node;
+      }
 
       const shouldPreservePosition =
         currentNode && currentNode.type === nextNode.type && (!groupIdChanged || leftGroup);

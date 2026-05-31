@@ -21,7 +21,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useDigitalInterviewUnreadCount } from "@/hooks/use-digital-interviews";
 
-const consultationsSubItems = [
+const mainNavItems = [
   { title: "All Meetings", href: "/meetings" },
   { title: "Consultations", href: "/consultations" },
 ];
@@ -38,10 +38,8 @@ export function AppSidebar() {
   const pathname = usePathname();
   const unreadCountQuery = useDigitalInterviewUnreadCount();
   const unreadCount = unreadCountQuery.data ?? 0;
-  const isInConsultations =
-    pathname.startsWith("/meetings") ||
-    pathname.startsWith("/digital-interviews") ||
-    pathname.startsWith("/consultations");
+  const isInMeetings = pathname.startsWith("/meetings");
+  const isInConsultations = pathname.startsWith("/consultations");
   const isInSettings = pathname.startsWith("/settings");
 
   return (
@@ -62,58 +60,15 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              <Collapsible.Root defaultOpen={isInConsultations} asChild>
-                <SidebarMenuItem>
-                  <Collapsible.Trigger asChild>
-                    <SidebarMenuButton isActive={isInConsultations}>
-                      <span className="flex w-full items-center justify-between">
-                        <span>Meetings</span>
-                        <span className="text-xs text-muted-foreground" aria-hidden>▾</span>
-                      </span>
-                    </SidebarMenuButton>
-                  </Collapsible.Trigger>
-                  <Collapsible.Content>
-                    <SidebarMenuSub>
-                      {consultationsSubItems.map((item) => (
-                        <SidebarMenuSubItem key={item.href}>
-                          <SidebarMenuSubButton
-                            asChild
-                            isActive={
-                              item.href === "/meetings" || item.href === "/digital-interviews"
-                                ? pathname === item.href || pathname.startsWith(`${item.href}/`)
-                                : pathname.startsWith(item.href)
-                            }
-                          >
-                            <Link href={item.href}>
-                              <span className="flex w-full items-center justify-between gap-2">
-                                <span>{item.title}</span>
-                                {item.href === "/digital-interviews" && unreadCount > 0 ? (
-                                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted-foreground px-1.5 text-[10px] font-medium text-background">
-                                    {unreadCount > 9 ? "9+" : unreadCount}
-                                  </span>
-                                ) : null}
-                              </span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </Collapsible.Content>
-                </SidebarMenuItem>
-              </Collapsible.Root>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isInConsultations}>
+                  <Link href="/consultations">Consultations</Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname.startsWith("/digital-interviews")}>
-                  <Link href="/digital-interviews">
-                    <span className="flex w-full items-center justify-between gap-2">
-                      <span>Digital Interviews</span>
-                      {unreadCount > 0 ? (
-                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted-foreground px-1.5 text-[10px] font-medium text-background">
-                          {unreadCount > 9 ? "9+" : unreadCount}
-                        </span>
-                      ) : null}
-                    </span>
-                  </Link>
+                <SidebarMenuButton asChild isActive={isInMeetings}>
+                  <Link href="/meetings">All Meetings</Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -171,6 +126,26 @@ export function AppSidebar() {
                   </Collapsible.Content>
                 </SidebarMenuItem>
               </Collapsible.Root>
+
+              <div className="border-t border-border/50 my-2 pt-2">
+                <p className="text-xs text-muted-foreground/70 px-4 py-2 font-medium">Experimental</p>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={pathname.startsWith("/digital-interviews")}>
+                      <Link href="/digital-interviews">
+                        <span className="flex w-full items-center justify-between gap-2">
+                          <span>Digital Interviews</span>
+                          {unreadCount > 0 ? (
+                            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted-foreground px-1.5 text-[10px] font-medium text-background">
+                              {unreadCount > 9 ? "9+" : unreadCount}
+                            </span>
+                          ) : null}
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </div>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

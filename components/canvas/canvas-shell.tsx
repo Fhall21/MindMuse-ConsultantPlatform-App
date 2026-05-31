@@ -38,7 +38,7 @@ import { CanvasClutterBanner } from "@/components/canvas/canvas-clutter-banner";
 import { CanvasFilterViewPanel } from "@/components/canvas/canvas-filter-view-panel";
 import { FrameRenameDialog } from "@/components/canvas/frame-rename-dialog";
 import { ConnectionTypePrompt } from "@/components/canvas/connection-type-prompt";
-import { GroupCreatePopover } from "@/components/canvas/group-create-popover";
+import { GroupConfirmPanel } from "@/components/canvas/group-confirm-panel";
 import { GroupFromSelectionFab } from "@/components/canvas/group-from-selection-fab";
 import { NodeDetailPanel } from "@/components/canvas/node-detail-panel";
 import { AiSuggestionsPanel } from "@/components/canvas/ai-suggestions-panel";
@@ -210,7 +210,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
   );
   const showMultiSelect = selectedNodeIds.length >= 2 && !showSuggestions && !showFilterView;
   const hasSidePanel = Boolean(
-    showSuggestions || showFilterView || showMultiSelect || selectedNode || selectedEdge
+    showSuggestions || showFilterView || showMultiSelect || selectedNode || selectedEdge || groupPopover
   );
 
   const nodeLabelsById = useMemo(
@@ -1067,20 +1067,10 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
             onLayoutComplete={handleLayoutComplete}
             onCreateEdge={handleCreateEdge}
             onGroupDrop={handleGroupDrop}
-            canGroupSelected={canGroupSelected}
-            onGroupSelected={() => void handleGroupSelected()}
             onRenameGroup={handleRenameGroup}
           />
 
-          {groupPopover ? (
-            <GroupCreatePopover
-              isLoading={isGrouping}
-              isConfirming={groupPopover.confirming}
-              suggestion={groupPopover.suggestion}
-              onConfirm={handleGroupConfirm}
-              onCancel={() => setGroupPopover(null)}
-            />
-          ) : showGroupFab && !groupPopover ? (
+          {showGroupFab && !groupPopover ? (
             <GroupFromSelectionFab
               nodeCount={selectedInsightNodes.length}
               onCreateGroup={() => {
@@ -1135,7 +1125,16 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
                 onChangeFilters={setFilters}
                 onClose={() => setShowFilterView(false)}
               />
-            ) : showMultiSelect ? (
+            ) : showMultiSelect || groupPopover ? (
+              groupPopover ? (
+                <GroupConfirmPanel
+                  isLoading={isGrouping}
+                  isConfirming={groupPopover.confirming}
+                  suggestion={groupPopover.suggestion}
+                  onConfirm={handleGroupConfirm}
+                  onCancel={() => setGroupPopover(null)}
+                />
+              ) : (
               <MultiSelectionPanel
                 selectedNodeIds={selectedNodeIds}
                 nodes={nodes}
@@ -1149,6 +1148,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
                   setFocusedNodeId(null);
                 }}
               />
+              )
             ) : (
               <NodeDetailPanel
                 selectedNodeId={selectedNode?.id ?? null}

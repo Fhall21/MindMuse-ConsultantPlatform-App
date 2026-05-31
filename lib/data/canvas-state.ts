@@ -284,10 +284,10 @@ export async function composeCanvasState(
       researchSessionId: researchSession.id,
       researchReferenceLabel: researchSessionShortCite(researchSession),
       researchQuotePreview: quotePreviewByInsightId.get(insight.id) ?? null,
-      groupId: null,
+      groupId: groupIdByInsight.get(insight.id) ?? null,
       memberIds: [],
       isUserAdded: true,
-      lockedFromSource: false,
+      lockedFromSource: Boolean(groupIdByInsight.get(insight.id)),
       position: { x: placementX ?? 0, y: placementY ?? 0 },
     })
   );

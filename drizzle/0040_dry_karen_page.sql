@@ -1,0 +1,1 @@
+ALTER TABLE "theme_members" ALTER COLUMN "source_meeting_id" DROP NOT NULL;

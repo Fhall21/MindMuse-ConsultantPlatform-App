@@ -594,7 +594,6 @@ export const themeMembers = pgTable(
       .notNull()
       .references(() => insights.id, { onDelete: "cascade" }),
     sourceMeetingId: uuid("source_meeting_id")
-      .notNull()
       .references(() => meetings.id, { onDelete: "cascade" }),
     sourceMeetingIds: jsonb("source_meeting_ids")
       .$type<string[]>()

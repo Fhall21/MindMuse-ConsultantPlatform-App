@@ -65,18 +65,18 @@ export function GroupCreatePopover({
     <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
       <div
         data-testid="group-create-popover"
-        className="pointer-events-auto w-[340px] border border-border bg-background shadow-md"
+        className="pointer-events-auto w-[360px] overflow-hidden rounded-lg border border-border/70 bg-background shadow-lg"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+        <div className="flex items-center justify-between border-b border-border/60 px-5 py-3.5">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-muted-foreground/60" />
-            <span className="text-sm font-medium tracking-tight">Name this group</span>
+            <Sparkles className="h-3.5 w-3.5 text-muted-foreground/50" />
+            <span className="text-sm font-medium text-foreground/90">Name this group</span>
           </div>
           <button
             onClick={onCancel}
             disabled={isConfirming}
-            className="text-muted-foreground/50 hover:text-foreground transition-colors disabled:opacity-40"
+            className="rounded-sm p-0.5 text-muted-foreground/50 transition-colors hover:text-foreground disabled:opacity-40"
             aria-label="Cancel"
           >
             <X className="h-3.5 w-3.5" />
@@ -85,15 +85,15 @@ export function GroupCreatePopover({
 
         {/* Body */}
         {isLoading ? (
-          <div className="space-y-3 px-5 py-5">
-            <div className="h-3.5 w-3/5 animate-pulse rounded-sm bg-muted" />
-            <div className="h-3 w-full animate-pulse rounded-sm bg-muted" />
-            <div className="h-3 w-4/5 animate-pulse rounded-sm bg-muted" />
+          <div className="space-y-3 px-5 py-6">
+            <div className="h-3.5 w-3/5 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-full animate-pulse rounded bg-muted" />
+            <div className="h-3 w-4/5 animate-pulse rounded bg-muted" />
           </div>
         ) : (
-          <div className="px-5 py-4 space-y-4">
+          <div className="px-5 py-5 space-y-4">
             <div className="space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
                 Group name
               </p>
               <Input
@@ -110,13 +110,13 @@ export function GroupCreatePopover({
                 maxLength={80}
                 disabled={isConfirming}
                 className={cn(
-                  "rounded-none text-sm font-medium transition-colors",
+                  "text-sm font-medium transition-colors",
                   nameError && "border-destructive focus-visible:ring-destructive"
                 )}
               />
             </div>
             <div className="space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
                 Description
               </p>
               <Textarea
@@ -126,20 +126,20 @@ export function GroupCreatePopover({
                 maxLength={300}
                 rows={3}
                 disabled={isConfirming}
-                className="resize-none rounded-none text-sm"
+                className="resize-none text-sm"
               />
             </div>
           </div>
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+        <div className="flex items-center justify-end gap-2 border-t border-border/60 bg-muted/20 px-5 py-3">
           <Button
             variant="ghost"
             size="sm"
             onClick={onCancel}
             disabled={isConfirming}
-            className="rounded-none text-xs"
+            className="text-xs text-muted-foreground"
           >
             Cancel
           </Button>
@@ -147,7 +147,7 @@ export function GroupCreatePopover({
             size="sm"
             disabled={isLoading || isConfirming}
             onClick={tryConfirm}
-            className="rounded-none text-xs"
+            className="text-xs"
           >
             {isConfirming ? (
               <>

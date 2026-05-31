@@ -18,6 +18,7 @@ export const AUDIT_ACTIONS = {
   ROUND_DELETED: "round.deleted",
   ROUND_THEME_GROUP_CREATED: "round.theme_group_created",
   ROUND_THEME_GROUP_UPDATED: "round.theme_group_updated",
+  ROUND_THEME_GROUP_DELETED: "round.theme_group_deleted",
   ROUND_THEME_GROUP_MERGED: "round.theme_group_merged",
   ROUND_THEME_GROUP_SPLIT: "round.theme_group_split",
   ROUND_THEME_GROUP_MEMBER_MOVED: "round.theme_group_member_moved",

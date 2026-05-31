@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   auditLog,
+  canvasResearchInsights,
   consultationGroupMembers,
   meetingGroups as consultationGroups,
   consultations as consultationRounds,
@@ -12,6 +13,7 @@ import {
   insights,
   consultationDecisions as roundDecisions,
   consultationOutputArtifacts as roundOutputArtifacts,
+  researchSessions,
   themeMembers,
   themes,
 } from "@/db/schema";
@@ -1326,21 +1328,48 @@ export async function createTheme(
 ) {
   const { userId } = await requireAuthenticatedContext();
   const round = await loadOwnedRound({ userId, roundId });
+
+  // --- Meeting-backed insights (have meetingId) ---
   const seedThemes = await loadInsightsForRound({
     userId,
     roundId,
     themeIds: seedThemeIds,
   });
+
+  // --- Research insights (no meetingId — dropped by the inner join above) ---
+  const foundMeetingIds = new Set(seedThemes.map((t) => t.id));
+  const researchCandidateIds = seedThemeIds.filter((id) => !foundMeetingIds.has(id));
+  const researchInsightRows =
+    researchCandidateIds.length > 0
+      ? await db
+          .select({ insight: insights })
+          .from(canvasResearchInsights)
+          .innerJoin(insights, eq(canvasResearchInsights.insightId, insights.id))
+          .innerJoin(researchSessions, eq(insights.researchSessionId, researchSessions.id))
+          .where(
+            and(
+              inArray(canvasResearchInsights.insightId, researchCandidateIds),
+              eq(canvasResearchInsights.consultationId, roundId),
+              eq(researchSessions.userId, userId)
+            )
+          )
+      : [];
+
+  const allInsightIds = [
+    ...seedThemes.map((t) => t.id),
+    ...researchInsightRows.map((r) => r.insight.id),
+  ];
+
   const existingMemberships = await loadThemeMembershipsForRound({
     roundId,
-    themeIds: seedThemes.map((theme) => theme.id),
+    themeIds: allInsightIds,
   });
   const previousGroupIds = Array.from(
     new Set(existingMemberships.map((membership) => membership.theme_id))
   );
 
-  const defaultLabel =
-    seedThemes.length === 1 ? seedThemes[0].label : "Round theme group";
+  const firstLabel = seedThemes[0]?.label ?? researchInsightRows[0]?.insight.label;
+  const defaultLabel = allInsightIds.length === 1 && firstLabel ? firstLabel : "Round theme group";
   const [created] = await db
     .insert(themes)
     .values({
@@ -1348,7 +1377,9 @@ export async function createTheme(
       userId,
       label: defaultLabel,
       description:
-        seedThemes.length === 1 ? seedThemes[0].description ?? null : null,
+        allInsightIds.length === 1 && seedThemes.length === 1
+          ? seedThemes[0].description ?? null
+          : null,
       status: "draft",
       origin: "manual",
       createdBy: userId,
@@ -1358,33 +1389,47 @@ export async function createTheme(
 
   const group = mapThemeRecord(created);
 
-  if (seedThemes.length > 0) {
+  if (allInsightIds.length > 0) {
     await db
       .delete(themeMembers)
       .where(
         and(
           eq(themeMembers.consultationId, roundId),
-          inArray(
-            themeMembers.insightId,
-            seedThemes.map((theme) => theme.id)
-          )
+          inArray(themeMembers.insightId, allInsightIds)
         )
       );
 
-    await db.insert(themeMembers).values(
-      seedThemes.map((theme, index) => ({
-        themeId: group.id,
-        consultationId: roundId,
-        insightId: theme.id,
-        sourceMeetingId: theme.consultation.id,
-        sourceMeetingIds: [theme.consultation.id],
-        userId,
-        position: index,
-        createdBy: userId,
-      }))
-    );
+    if (seedThemes.length > 0) {
+      await db.insert(themeMembers).values(
+        seedThemes.map((theme, index) => ({
+          themeId: group.id,
+          consultationId: roundId,
+          insightId: theme.id,
+          sourceMeetingId: theme.consultation.id,
+          sourceMeetingIds: [theme.consultation.id],
+          userId,
+          position: index,
+          createdBy: userId,
+        }))
+      );
+    }
 
-    if (!skipDraft) {
+    if (researchInsightRows.length > 0) {
+      await db.insert(themeMembers).values(
+        researchInsightRows.map(({ insight }, index) => ({
+          themeId: group.id,
+          consultationId: roundId,
+          insightId: insight.id,
+          sourceMeetingId: null,
+          sourceMeetingIds: [] as string[],
+          userId,
+          position: seedThemes.length + index,
+          createdBy: userId,
+        }))
+      );
+    }
+
+    if (!skipDraft && seedThemes.length > 0) {
       await writeGroupDraftSuggestion({
         group,
         round,
@@ -1428,6 +1473,91 @@ export async function createTheme(
   return { groupId: group.id };
 }
 
+async function moveResearchInsightToGroup(
+  insightId: string,
+  roundId: string,
+  targetGroupId: string | null,
+  userId: string,
+  position?: number
+) {
+  const round = await loadOwnedRound({ userId, roundId });
+  const currentMembership = await loadThemeMembershipForRound({ roundId, themeId: insightId });
+
+  let targetGroup: Theme | null = null;
+  if (targetGroupId) {
+    targetGroup = await loadGroupForRound({ userId, roundId, groupId: targetGroupId });
+  }
+
+  const previousGroupId = currentMembership?.theme_id ?? null;
+
+  if (currentMembership && currentMembership.theme_id === targetGroupId) {
+    if (typeof position === "number" && targetGroupId) {
+      const currentMembers = await loadGroupMembers({ groupId: targetGroupId });
+      const reorderedIds = currentMembers
+        .map((m) => m.insight_id)
+        .filter((id) => id !== insightId);
+      reorderedIds.splice(clampInsertionIndex(position, reorderedIds.length), 0, insightId);
+      await rewriteGroupMemberPositions({ groupId: targetGroupId, orderedInsightIds: reorderedIds });
+    }
+    return { groupId: targetGroupId };
+  }
+
+  if (currentMembership) {
+    await db.delete(themeMembers).where(eq(themeMembers.id, currentMembership.id));
+    if (previousGroupId) {
+      const previousMembers = await loadGroupMembers({ groupId: previousGroupId });
+      await rewriteGroupMemberPositions({
+        groupId: previousGroupId,
+        orderedInsightIds: previousMembers.map((m) => m.insight_id),
+      });
+    }
+  }
+
+  if (targetGroup) {
+    const targetMembers = await loadGroupMembers({ groupId: targetGroup.id });
+    const orderedIds = targetMembers.map((m) => m.insight_id);
+    const nextPosition = clampInsertionIndex(position, orderedIds.length);
+    orderedIds.splice(nextPosition, 0, insightId);
+
+    await db.insert(themeMembers).values({
+      themeId: targetGroup.id,
+      consultationId: roundId,
+      insightId,
+      sourceMeetingId: null,
+      sourceMeetingIds: [] as string[],
+      userId,
+      position: nextPosition,
+      createdBy: userId,
+    });
+
+    await rewriteGroupMemberPositions({ groupId: targetGroup.id, orderedInsightIds: orderedIds });
+  }
+
+  if (previousGroupId) {
+    const previousGroup = await loadGroupForRound({ userId, roundId, groupId: previousGroupId });
+    const discarded = await maybeDiscardEmptyGroup({ group: previousGroup });
+    if (!discarded) {
+      await refreshGroupDraftForCurrentMembers({
+        userId,
+        round,
+        groupId: previousGroupId,
+        structuralChange: "move_theme_out_of_group",
+      });
+    }
+  }
+
+  if (targetGroup) {
+    await refreshGroupDraftForCurrentMembers({
+      userId,
+      round,
+      groupId: targetGroup.id,
+      structuralChange: previousGroupId ? "move_theme_into_group" : "group_existing_theme",
+    });
+  }
+
+  return { groupId: targetGroupId };
+}
+
 export async function moveThemeToGroup(
   themeId: string,
   targetGroupId: string | null,
@@ -1442,15 +1572,25 @@ export async function moveThemeToGroup(
   try {
     theme = await loadThemeWithRoundContext({ userId, themeId });
   } catch (err) {
-    const [insightRow] = await db
-      .select({ meetingId: insights.meetingId })
-      .from(insights)
-      .where(eq(insights.id, themeId))
+    // Research insights have no meetingId, so loadThemeWithRoundContext fails.
+    // Find the insight's round via its canvas placement record and handle it separately.
+    const [researchRow] = await db
+      .select({ consultationId: canvasResearchInsights.consultationId })
+      .from(canvasResearchInsights)
+      .innerJoin(insights, eq(canvasResearchInsights.insightId, insights.id))
+      .innerJoin(researchSessions, eq(insights.researchSessionId, researchSessions.id))
+      .where(and(eq(canvasResearchInsights.insightId, themeId), eq(researchSessions.userId, userId)))
       .limit(1);
-    if (insightRow && !insightRow.meetingId) {
-      throw new Error("Research insights cannot yet be added to theme groups.");
-    }
-    throw err;
+
+    if (!researchRow) throw err;
+
+    return await moveResearchInsightToGroup(
+      themeId,
+      researchRow.consultationId,
+      targetGroupId,
+      userId,
+      position
+    );
   }
 
   const roundId = theme.consultation.consultation_id;

@@ -434,12 +434,15 @@ function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds:
 
       // Don't preserve position when an insight has just been added to a group —
       // it needs to animate to its slot inside the group card.
+      // Do preserve position when an insight just left a group — the user dragged
+      // it out, so we honour the drop position even before persistLayout flushes.
       const currentGroupId = currentData?.node?.groupId ?? null;
       const nextGroupId = nextData?.node?.groupId ?? null;
       const groupIdChanged = currentGroupId !== nextGroupId;
+      const leftGroup = currentGroupId !== null && nextGroupId === null;
 
       const shouldPreservePosition =
-        currentNode && currentNode.type === nextNode.type && !groupIdChanged;
+        currentNode && currentNode.type === nextNode.type && (!groupIdChanged || leftGroup);
 
       if (shouldPreservePosition) {
         return {
@@ -540,6 +543,24 @@ function resolveDropTargetNode(intersectingNodeIds: string[], nodes: Node[], dra
     candidates.find((candidate) => getFlowCanvasNode(candidate)?.type === "theme") ??
     null
   );
+}
+
+function detachInsightsFromGroup(nodes: Node[], insightIds: string[], oldGroupId: string) {
+  const detachSet = new Set(insightIds);
+  const withDetached = nodes.map((candidate) => {
+    if (!detachSet.has(candidate.id)) return candidate;
+    const canvasNode = getFlowCanvasNode(candidate);
+    if (!canvasNode || canvasNode.type !== "insight") return candidate;
+    return {
+      ...candidate,
+      data: {
+        ...candidate.data,
+        node: { ...canvasNode, groupId: null },
+        isNestedInGroup: false,
+      },
+    } satisfies Node;
+  });
+  return snapGroupChildren(withDetached, oldGroupId);
 }
 
 function snapGroupChildren(nodes: Node[], groupId: string) {
@@ -1492,9 +1513,11 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
             })
           : draggedNodeBeforeDrag?.type === "theme" && themeDelta
             ? runtimeNodes
-            : plan.type === "noop" && draggedNodeBeforeDrag?.type === "insight" && draggedNodeBeforeDrag.groupId
-              ? snapGroupChildren(runtimeNodes, draggedNodeBeforeDrag.groupId)
-            : runtimeNodes;
+            : draggedNodeBeforeDrag?.type === "insight" && draggedNodeBeforeDrag.groupId && !targetNodeId
+              ? detachInsightsFromGroup(runtimeNodes, draggedInsightIds, draggedNodeBeforeDrag.groupId)
+              : plan.type === "noop" && draggedNodeBeforeDrag?.type === "insight" && draggedNodeBeforeDrag.groupId
+                ? snapGroupChildren(runtimeNodes, draggedNodeBeforeDrag.groupId)
+              : runtimeNodes;
 
       const settledFlowNodes = orderNodesParentFirst(settledNodes);
       setFlowNodes(settledFlowNodes);

@@ -2,8 +2,10 @@
 
 import type { UIMessage } from "ai";
 import { ChatInput } from "@/components/chat/ChatInput";
+import { ChatSessionList } from "@/components/chat/chat-session-list";
 import { ChatThread } from "@/components/chat/ChatThread";
 import { WelcomeState, type WelcomeQuickAction } from "@/components/chat/WelcomeState";
+import type { ChatSessionSummary } from "@/hooks/use-chat-sessions";
 import type { WelcomeVariant } from "@/lib/chat/onboarding-copy";
 import type { OnboardingPhase } from "@/lib/chat/onboarding-state";
 import type { Consultation } from "@/types/db";
@@ -30,6 +32,11 @@ interface ChatShellProps {
   onRetry?: () => void;
   onConsultationSelected?: (consultationId: string) => void;
   onProjectCreated?: (consultationId: string) => void;
+  showSessionList?: boolean;
+  priorSessions?: ChatSessionSummary[];
+  sessionsLoading?: boolean;
+  sessionsError?: boolean;
+  onSelectSession?: (sessionId: string) => void;
 }
 
 export function ChatShell({
@@ -54,12 +61,17 @@ export function ChatShell({
   onRetry,
   onConsultationSelected,
   onProjectCreated,
+  showSessionList = false,
+  priorSessions = [],
+  sessionsLoading = false,
+  sessionsError = false,
+  onSelectSession,
 }: ChatShellProps) {
   const showWelcome = messages.length === 0 && !isThinking;
 
   if (isUnavailable) {
     return (
-      <div className="flex h-[calc(100dvh-3rem)] max-h-[calc(100dvh-3rem)] flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="flex flex-1 items-center justify-center px-6 text-center">
           <p className="max-w-md text-sm text-muted-foreground">
             The assistant is temporarily unavailable. Use the sidebar to navigate.
@@ -70,30 +82,54 @@ export function ChatShell({
   }
 
   return (
-    <div className="-mx-4 -my-5 flex h-[calc(100dvh-3rem)] max-h-[calc(100dvh-3rem)] flex-col overflow-hidden sm:-mx-6">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {showWelcome ? (
-          <WelcomeState
-            displayName={displayName}
-            welcomeVariant={welcomeVariant}
-            onboardingPhase={onboardingPhase}
-            activeProject={activeProject}
-            showCreateProject={showCreateProjectInWelcome}
-            onQuickAction={onQuickAction}
-            onAttachFile={onAttachFile}
-            onProjectCreated={onProjectCreated}
-          />
+          <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 pb-6 sm:px-0">
+            <WelcomeState
+              displayName={displayName}
+              welcomeVariant={welcomeVariant}
+              onboardingPhase={onboardingPhase}
+              activeProject={activeProject}
+              showCreateProject={showCreateProjectInWelcome}
+              onQuickAction={onQuickAction}
+              onAttachFile={onAttachFile}
+              onProjectCreated={onProjectCreated}
+            />
+            {showSessionList && onSelectSession ? (
+              <ChatSessionList
+                sessions={priorSessions}
+                activeSessionId={sessionId}
+                isLoading={sessionsLoading}
+                error={sessionsError}
+                onSelectSession={onSelectSession}
+              />
+            ) : null}
+          </div>
         ) : (
-          <ChatThread
-            messages={messages}
-            isThinking={isThinking}
-            sessionId={sessionId}
-            needsConsultationSelection={needsConsultationSelection}
-            showCreateProject={showCreateProject}
-            onRetry={showRetry ? onRetry : undefined}
-            onConsultationSelected={onConsultationSelected}
-            onProjectCreated={onProjectCreated}
-          />
+          <div className="mx-auto flex w-full max-w-2xl flex-col">
+            {showSessionList && onSelectSession ? (
+              <div className="px-4 sm:px-0">
+                <ChatSessionList
+                  sessions={priorSessions}
+                  activeSessionId={sessionId}
+                  isLoading={sessionsLoading}
+                  error={sessionsError}
+                  onSelectSession={onSelectSession}
+                />
+              </div>
+            ) : null}
+            <ChatThread
+              messages={messages}
+              isThinking={isThinking}
+              sessionId={sessionId}
+              needsConsultationSelection={needsConsultationSelection}
+              showCreateProject={showCreateProject}
+              onRetry={showRetry ? onRetry : undefined}
+              onConsultationSelected={onConsultationSelected}
+              onProjectCreated={onProjectCreated}
+            />
+          </div>
         )}
       </div>
       <ChatInput

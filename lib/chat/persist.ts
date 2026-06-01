@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import type { ModelMessage } from "ai";
 import { CHAT_MESSAGE_HISTORY_LIMIT } from "./constants";
+import { getChatModel } from "./model";
 
 const SUMMARY_MARKER = "[CHAT_HISTORY_SUMMARY]";
 
@@ -126,7 +127,7 @@ export async function summarizeOverflowMessages(sessionId: string): Promise<void
     .join("\n");
 
   const { text: summary } = await generateText({
-    model: openai("gpt-4o-mini"),
+    model: openai(getChatModel()),
     system:
       "Summarize this chat history for context compression. Preserve decisions, tool outcomes, and consultation facts. Never include raw transcript text.",
     prompt: transcript,

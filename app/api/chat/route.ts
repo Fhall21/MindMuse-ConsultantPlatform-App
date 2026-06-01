@@ -28,8 +28,7 @@ import { createChatTools } from "@/lib/chat/tools";
 
 export const maxDuration = 60;
 
-const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL ?? "gpt-4o-mini";
-
+import { getChatModel } from "@/lib/chat/model";
 const chatRequestSchema = z.object({
   id: z.string().optional(),
   messages: z.array(z.custom<UIMessage>()),
@@ -129,7 +128,7 @@ export async function POST(request: NextRequest) {
     const tools = createChatTools({ userId: auth.id, sessionId: session.id });
 
     const result = streamText({
-      model: openai(CHAT_MODEL),
+      model: openai(getChatModel()),
       system: systemPrompt,
       messages: toModelMessages(storedMessages),
       tools,

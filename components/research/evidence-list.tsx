@@ -134,7 +134,11 @@ function EvidenceItem({
         <span className="tabular-nums">
           Relevance{" "}
           <span className="font-medium text-foreground/80">
-            {Math.round(item.score * 100)}%
+            {Number.isFinite(item.score) && item.score > 1
+              ? `${item.score.toFixed(0)}/10`
+              : Number.isFinite(item.score)
+              ? `${(item.score * 100).toFixed(0)}%`
+              : "—"}
           </span>
         </span>
         {hasSource && onJumpToReference && (

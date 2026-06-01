@@ -1,51 +1,49 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import React from "react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Consultation } from "@/types/db";
 
 interface ChatPageHeaderProps {
-  activeProject: Consultation | null;
-  showNewChat: boolean;
-  onNewChat: () => void;
-  isCreatingSession?: boolean;
+  view: "home" | "chat";
+  sessionPreview?: string | null;
+  onBackToHome?: () => void;
+  rightSlot?: React.ReactNode;
 }
 
 export function ChatPageHeader({
-  activeProject,
-  showNewChat,
-  onNewChat,
-  isCreatingSession = false,
+  view,
+  sessionPreview,
+  onBackToHome,
+  rightSlot,
 }: ChatPageHeaderProps) {
-  return (
-    <div className="space-y-1 pb-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Upload material, review outputs, and confirm records in one place.
-          </p>
-        </div>
-        {showNewChat ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            disabled={isCreatingSession}
-            onClick={onNewChat}
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            New chat
-          </Button>
-        ) : null}
+  if (view === "home") {
+    if (!rightSlot) return null;
+    return (
+      <div className="flex items-center justify-end pb-4">
+        {rightSlot}
       </div>
-      {activeProject ? (
-        <p className="text-xs text-muted-foreground">
-          Consultation{" "}
-          <span className="font-medium text-foreground">{activeProject.label}</span>
-        </p>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 pb-4">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="-ml-2 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        onClick={onBackToHome}
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Conversations
+      </Button>
+      {sessionPreview ? (
+        <span className="min-w-0 truncate text-sm text-muted-foreground/60">
+          {sessionPreview}
+        </span>
       ) : null}
+      {rightSlot ? <div className="ml-auto">{rightSlot}</div> : null}
     </div>
   );
 }

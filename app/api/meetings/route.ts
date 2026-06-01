@@ -4,6 +4,7 @@ import { getUnarchivedSessionForUser } from "@/lib/chat/context";
 import { confirmMeetingFromDraft, linkPeopleByIdsToMeeting, linkPeopleToMeeting } from "@/lib/chat/intake-db";
 import { MEETING_SAVED_FOLLOW_UP } from "@/lib/chat/onboarding-copy";
 import { getToolResultForSession, insertChatMessage, updateToolResult } from "@/lib/chat/persist";
+import { bindChatSessionConsultation } from "@/lib/chat/theme-extract-flow";
 import { confirmMeetingSchema } from "@/lib/chat/tools/intake";
 
 export async function POST(request: NextRequest) {
@@ -69,6 +70,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (parsed.data.tool_result_id && sessionId) {
+      await bindChatSessionConsultation({
+        userId: auth.id,
+        sessionId,
+        consultationId: parsed.data.project_id,
+      });
+
       await updateToolResult({
         toolResultId: parsed.data.tool_result_id,
         sessionId,

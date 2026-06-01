@@ -10,6 +10,11 @@ import {
   updateChatMessageContent,
 } from "./persist";
 import { buildMeetingDraftFromExtractedText } from "./intake-draft";
+import {
+  executeExtractThemesTool,
+  executeSelectMeetingForThemesTool,
+} from "./theme-extract-flow";
+import { formatSelectMeetingForThemesToolReturn } from "./theme-tool-returns";
 import { dispatchToolToFastApi } from "./tool-dispatch";
 import { CHAT_TOOL_ENDPOINTS } from "./tool-allowlist";
 import {
@@ -24,6 +29,7 @@ import {
   confirmThemesSchema,
   extractThemesSchema,
 } from "./tools/themes";
+import { selectMeetingForThemesSchema } from "./tools/meetings-picker";
 import { identifyQuotesSchema } from "./tools/quotes";
 import { extractAndPersistThemes, finalizeThemeReview } from "./themes-db";
 import { identifyAndPersistQuotes } from "./quotes-db";
@@ -338,42 +344,25 @@ export function createChatTools(context: ChatToolRuntimeContext) {
       }
     ),
     extract_themes: tool({
-      description: "Extract themes from a confirmed meeting transcript.",
+      description:
+        "Extract themes from a confirmed meeting transcript. Omit meeting_id to use the active consultation's last saved meeting or show a picker card.",
       inputSchema: extractThemesSchema,
       execute: async (input) => {
         const parsed = extractThemesSchema.parse(input);
-        const payload = parsed as unknown as Record<string, unknown>;
-
-        const result = await extractAndPersistThemes({
-          userId: context.userId,
-          sessionId: context.sessionId,
+        return executeExtractThemesTool({
+          context,
           meetingId: parsed.meeting_id,
         });
-
-        if (!result.ok) {
-          await persistToolExecution({
-            context,
-            toolName: "extract_themes",
-            input: payload,
-            output: { error: result.error },
-            status: "error",
-          });
-          return { error: result.error };
-        }
-
-        const toolResult = await persistToolExecution({
-          context,
-          toolName: "extract_themes",
-          input: payload,
-          output: result.output,
-          status: "pending",
-        });
-
-        return {
-          ...result.output,
-          tool_result_id: toolResult.id,
-        };
       },
+    }),
+    select_meeting_for_themes: tool({
+      description:
+        "Show a consultation-scoped meeting picker when theme extraction needs a meeting choice.",
+      inputSchema: selectMeetingForThemesSchema,
+      execute: async () =>
+        formatSelectMeetingForThemesToolReturn(
+          await executeSelectMeetingForThemesTool({ context })
+        ),
     }),
     confirm_themes: tool({
       description: "Finalize theme review and return accepted themes.",

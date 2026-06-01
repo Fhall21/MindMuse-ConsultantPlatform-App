@@ -5,6 +5,7 @@ import { parseToolMessageContent } from "./ui-messages";
 export const CHAT_CARD_TOOL_NAMES = new Set<string>([
   ...INTAKE_CARD_TOOL_NAMES,
   "extract_themes",
+  "select_meeting_for_themes",
   "identify_quotes",
   "generate_clarification",
 ]);

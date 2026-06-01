@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { ClarificationQuestionCard } from "./ClarificationQuestionCard";
 import { CreateProjectCard } from "./CreateProjectCard";
 import { MeetingConfirmationCard } from "./MeetingConfirmationCard";
+import { MeetingPickerCard } from "./MeetingPickerCard";
 import { QuoteCard } from "./QuoteCard";
 import { ThemeReviewCard } from "./ThemeReviewCard";
 import { ToolResultFallbackCard } from "./ToolResultFallbackCard";
@@ -15,6 +16,7 @@ export const CHAT_CARD_MAP: Record<string, ChatCardComponent> = {
   intake_notes: MeetingConfirmationCard,
   generate_clarification: ClarificationQuestionCard,
   extract_themes: ThemeReviewCard,
+  select_meeting_for_themes: MeetingPickerCard,
   identify_quotes: QuoteCard,
   create_project: CreateProjectCard,
 };
@@ -27,6 +29,7 @@ export {
   ClarificationQuestionCard,
   CreateProjectCard,
   MeetingConfirmationCard,
+  MeetingPickerCard,
   QuoteCard,
   ThemeReviewCard,
   ToolResultFallbackCard,

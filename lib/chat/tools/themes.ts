@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const extractThemesSchema = z.object({
-  meeting_id: z.string().uuid(),
+  meeting_id: z.string().uuid().optional(),
 });
 
 export const confirmThemesSchema = z.object({

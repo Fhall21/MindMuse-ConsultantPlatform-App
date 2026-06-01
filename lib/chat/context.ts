@@ -10,6 +10,11 @@ import {
 } from "@/db/schema";
 import { listConsultationsForUser } from "@/lib/data/domain-read";
 
+export interface ProjectContextMeetingSummary {
+  id: string;
+  title: string;
+}
+
 export interface ProjectContextSummary {
   projectId: string;
   projectName: string;
@@ -18,6 +23,8 @@ export interface ProjectContextSummary {
   groupCount: number;
   lastActivityAt: string;
   activeEngagements: number;
+  recentMeetings: ProjectContextMeetingSummary[];
+  lastMeetingId: string | null;
 }
 
 export async function inferConsultationForSession(params: {
@@ -56,6 +63,8 @@ export async function buildProjectContextSummary(
       groupCount: 0,
       lastActivityAt: new Date(0).toISOString(),
       activeEngagements: activeConsultations.length,
+      recentMeetings: [],
+      lastMeetingId: null,
     };
   }
 
@@ -79,6 +88,7 @@ export async function buildProjectContextSummary(
     lastMeetingActivity,
     lastThemeActivity,
     activeEngagementsResult,
+    recentMeetingRows,
   ] = await Promise.all([
     db
       .select({ count: count() })
@@ -104,6 +114,18 @@ export async function buildProjectContextSummary(
       .select({ count: count() })
       .from(consultations)
       .where(eq(consultations.userId, userId)),
+    db
+      .select({ id: meetings.id, title: meetings.title })
+      .from(meetings)
+      .where(
+        and(
+          eq(meetings.userId, userId),
+          eq(meetings.consultationId, consultationId),
+          eq(meetings.isArchived, false)
+        )
+      )
+      .orderBy(desc(meetings.updatedAt))
+      .limit(8),
   ]);
 
   const meetingLast = lastMeetingActivity[0]?.lastAt ?? null;
@@ -123,6 +145,11 @@ export async function buildProjectContextSummary(
     groupCount: groupCountResult[0]?.count ?? 0,
     lastActivityAt: lastActivity.toISOString(),
     activeEngagements: activeEngagementsResult[0]?.count ?? 0,
+    recentMeetings: recentMeetingRows.map((row) => ({
+      id: row.id,
+      title: row.title,
+    })),
+    lastMeetingId: recentMeetingRows[0]?.id ?? null,
   };
 }
 

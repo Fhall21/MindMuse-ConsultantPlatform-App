@@ -11,6 +11,7 @@ describe("lib/chat/card-tools", () => {
   it("includes all mapped card tools", () => {
     expect(CHAT_CARD_TOOL_NAMES.has("intake_text_transcript")).toBe(true);
     expect(CHAT_CARD_TOOL_NAMES.has("extract_themes")).toBe(true);
+    expect(CHAT_CARD_TOOL_NAMES.has("select_meeting_for_themes")).toBe(true);
     expect(CHAT_CARD_TOOL_NAMES.has("identify_quotes")).toBe(true);
     expect(CHAT_CARD_TOOL_NAMES.has("generate_clarification")).toBe(true);
     expect(isChatCardToolName("confirm_meeting")).toBe(false);

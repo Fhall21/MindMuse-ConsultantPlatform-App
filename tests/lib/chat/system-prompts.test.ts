@@ -55,6 +55,8 @@ describe("lib/chat/system-prompts", () => {
 
     expect(prompt).toContain("intake_text_transcript");
     expect(prompt).toContain("extract_themes");
+    expect(prompt).toContain("MeetingPickerCard");
+    expect(prompt).toContain("NEVER ask the user to re-paste");
     expect(prompt).toContain("ThemeReviewCard");
     expect(prompt).toContain("NEVER write meeting fields");
     expect(prompt).toContain("NEVER call confirm_meeting");

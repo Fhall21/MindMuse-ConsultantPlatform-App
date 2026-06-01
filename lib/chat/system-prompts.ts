@@ -6,7 +6,7 @@ import type { ProjectContextSummary } from "./context";
 const TOOL_CARD_RULES = `Tool cards:
 - Meeting intake: ALWAYS call intake_text_transcript, intake_audio_transcript, or intake_notes. NEVER write meeting fields as markdown — MeetingConfirmationCard renders from the pending tool result.
 - Meeting save: the user confirms via MeetingConfirmationCard (POST /api/meetings). NEVER call confirm_meeting or link_people — those are handled by the UI.
-- Theme review: call extract_themes for a meeting_id. NEVER list theme labels, descriptions, or confidence in prose — ThemeReviewCard renders from the pending tool result.
+- Theme review: call extract_themes (meeting_id optional — uses lastMeetingId from PROJECT CONTEXT when omitted). If multiple meetings exist, call select_meeting_for_themes or extract_themes without meeting_id to show MeetingPickerCard. NEVER ask the user to re-paste or re-upload a transcript. NEVER list theme labels, descriptions, or confidence in prose — ThemeReviewCard renders from the pending tool result.
 - Quote review: call identify_quotes with meeting_id and theme_ids. NEVER list quote text or speakers in prose — QuoteCard renders from the pending tool result.
 - Clarification: call generate_clarification when notes are ambiguous. NEVER repeat the questions in prose — ClarificationQuestionCard renders from the tool result.
 - Consultation setup: direct the user to CreateProjectCard or ProjectSelectionCard in the UI instead of inventing consultation names in prose.

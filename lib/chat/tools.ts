@@ -66,7 +66,7 @@ import {
 } from "@/lib/data/domain-read";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { insights, consultationOutputArtifacts } from "@/db/schema";
+import { insights, consultationOutputArtifacts, meetings as meetingsTable } from "@/db/schema";
 import { getUnarchivedSessionForUser } from "./context";
 import {
   buildMeetingPickerOutput,
@@ -1003,7 +1003,11 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           const [insight] = await db
             .select({ id: insights.id, label: insights.label, description: insights.description })
             .from(insights)
-            .where(and(eq(insights.id, parsed.insight_id)))
+            .innerJoin(
+              meetingsTable,
+              and(eq(meetingsTable.id, insights.meetingId), eq(meetingsTable.userId, context.userId))
+            )
+            .where(eq(insights.id, parsed.insight_id))
             .limit(1);
 
           if (!insight) {

@@ -63,6 +63,28 @@ class ThemeExtractResponse(BaseModel):
     themes: List[ExtractedTheme]
 
 
+class ThemeRef(BaseModel):
+    id: str
+    label: str
+
+
+class QuoteIdentifyRequest(BaseModel):
+    transcript: str
+    themes: List[ThemeRef]
+
+
+class IdentifiedQuote(BaseModel):
+    text: str
+    speaker: Optional[str] = None
+    theme_id: str
+    span_start: Optional[int] = None
+    span_end: Optional[int] = None
+
+
+class QuoteIdentifyResponse(BaseModel):
+    quotes: List[IdentifiedQuote]
+
+
 # --- Stage 7 extraction pipeline ---
 
 

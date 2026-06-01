@@ -37,6 +37,7 @@ from routers import (
     infer,
     interview,
     ocr,
+    quotes,
     research,
     research_enhance,
     rounds,
@@ -144,6 +145,7 @@ app.add_middleware(ChatServiceTokenMiddleware)
 
 # Stage 2 endpoints
 app.include_router(themes.router)
+app.include_router(quotes.router)
 app.include_router(draft.router)
 app.include_router(clarification.router)
 app.include_router(rounds.router)
@@ -172,6 +174,7 @@ async def health():
         "audio_model": settings.openai_audio_model,
         "endpoints": [
             "/themes/extract",
+            "/quotes/identify",
             "/draft/email",
             "/rounds/refine-group-draft",
             "/rounds/generate-summary",

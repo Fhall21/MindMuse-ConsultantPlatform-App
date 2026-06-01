@@ -27,7 +27,9 @@ import {
   confirmThemesSchema,
   extractThemesSchema,
 } from "./tools/themes";
+import { identifyQuotesSchema } from "./tools/quotes";
 import { extractAndPersistThemes, finalizeThemeReview } from "./themes-db";
+import { identifyAndPersistQuotes } from "./quotes-db";
 
 export interface ChatToolRuntimeContext {
   userId: string;
@@ -478,15 +480,46 @@ export function createChatTools(context: ChatToolRuntimeContext) {
         }
       },
     }),
-    identify_quotes: createFastApiTool(
-      "identify_quotes",
-      "Identify key quotes linked to themes",
-      z.object({
-        meetingId: z.string().uuid(),
-        themeIds: z.array(z.string().uuid()).min(1),
-      }),
-      context
-    ),
+    identify_quotes: tool({
+      description:
+        "Identify key quotes from a meeting transcript linked to confirmed insights.",
+      inputSchema: identifyQuotesSchema,
+      execute: async (input) => {
+        const parsed = identifyQuotesSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+
+        const result = await identifyAndPersistQuotes({
+          userId: context.userId,
+          sessionId: context.sessionId,
+          meetingId: parsed.meeting_id,
+          themeIds: parsed.theme_ids,
+        });
+
+        if (!result.ok) {
+          await persistToolExecution({
+            context,
+            toolName: "identify_quotes",
+            input: payload,
+            output: { error: result.error },
+            status: "error",
+          });
+          return { error: result.error };
+        }
+
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "identify_quotes",
+          input: payload,
+          output: result.output,
+          status: "pending",
+        });
+
+        return {
+          ...result.output,
+          tool_result_id: toolResult.id,
+        };
+      },
+    }),
   };
 }
 

@@ -1,28 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Quote, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Loader2, Quote } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
-import { QUOTE_REVIEW_COMPLETE_COPY } from "@/lib/chat/onboarding-copy";
-import { cn } from "@/lib/utils";
+import { ChatQuoteReviewRow } from "@/components/quotes/chat-quote-review-row";
+import {
+  CARD_DISMISSED_COPY,
+  CARD_REOPEN_HELP,
+  QUOTE_REVIEW_COMPLETE_COPY,
+} from "@/lib/chat/onboarding-copy";
 import {
   formatTranscriptPosition,
   type QuoteDecision,
   type QuoteReviewItem,
 } from "@/lib/chat/tools/quotes";
+import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { readQuoteReviewOutput, type ChatCardProps } from "./types";
 
-function QuoteRow({
+function QuoteReviewRowContainer({
   quote,
   decision,
   meetingId,
@@ -41,8 +37,6 @@ function QuoteRow({
 }) {
   const [rowPending, setRowPending] = useState(false);
   const [rowError, setRowError] = useState<string | null>(null);
-  const isAccepted = decision === "accepted";
-  const isDismissed = decision === "dismissed";
 
   async function patchDecision(status: QuoteDecision) {
     setRowPending(true);
@@ -101,73 +95,18 @@ function QuoteRow({
     }
   }
 
-  const rowBusy = disabled || rowPending;
-
   return (
-    <div
-      className={cn(
-        "rounded-lg border p-4 transition-opacity",
-        isDismissed && "border-border/60 bg-muted/20 opacity-80",
-        isAccepted && "border-emerald-500/30 bg-emerald-500/5"
-      )}
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-2">
-          <blockquote className="border-l-2 border-muted-foreground/30 pl-3 text-sm leading-relaxed text-foreground">
-            {quote.text}
-          </blockquote>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {quote.speaker ? (
-              <span className="font-medium text-foreground/80">{quote.speaker}</span>
-            ) : null}
-            <span>{formatTranscriptPosition(quote.span_start, quote.span_end)}</span>
-          </div>
-        </div>
-        <div className="shrink-0 space-y-2 text-right">
-          <Badge variant="outline" className="max-w-[12rem] truncate">
-            {quote.theme_label}
-          </Badge>
-          {decision === "accepted" ? (
-            <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
-              Saved
-            </Badge>
-          ) : decision === "dismissed" ? (
-            <Badge variant="outline" className="text-muted-foreground">
-              Dismissed
-            </Badge>
-          ) : null}
-        </div>
-      </div>
-
-      {rowError ? (
-        <p role="alert" className="mt-2 text-sm text-destructive">
-          {rowError}
-        </p>
-      ) : null}
-
-      {!decision ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            disabled={rowBusy}
-            onClick={() => void patchDecision("accepted")}
-          >
-            {rowPending ? <Loader2 className="size-4 animate-spin" /> : null}
-            Accept
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={rowBusy}
-            onClick={() => void patchDecision("dismissed")}
-          >
-            Dismiss
-          </Button>
-        </div>
-      ) : null}
-    </div>
+    <ChatQuoteReviewRow
+      text={quote.text}
+      speaker={quote.speaker}
+      positionLabel={formatTranscriptPosition(quote.span_start, quote.span_end)}
+      themeLabel={quote.theme_label}
+      decision={decision}
+      isBusy={disabled || rowPending}
+      error={rowError}
+      onAccept={decision ? undefined : () => void patchDecision("accepted")}
+      onDismiss={decision ? undefined : () => void patchDecision("dismissed")}
+    />
   );
 }
 
@@ -227,24 +166,32 @@ export function QuoteCard({
     ).length;
 
     return (
-      <Card size="sm" className="border-emerald-500/30 bg-emerald-500/5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <ChatToolCardShell
+        success
+        title={
+          <span className="flex items-center gap-2">
             <Quote className="size-4" />
             Quote review complete
-          </CardTitle>
-          <CardDescription>
-            {acceptedCount > 0
-              ? QUOTE_REVIEW_COMPLETE_COPY(acceptedCount)
-              : "Review finished with no quotes saved."}
-          </CardDescription>
-        </CardHeader>
-      </Card>
+          </span>
+        }
+        description={
+          acceptedCount > 0
+            ? QUOTE_REVIEW_COMPLETE_COPY(acceptedCount)
+            : "Review finished with no quotes saved."
+        }
+        successHelp={CARD_REOPEN_HELP}
+      />
     );
   }
 
   if (status === "dismissed") {
-    return null;
+    return (
+      <ChatToolCardShell
+        dismissed
+        title="Quote review dismissed"
+        description={CARD_DISMISSED_COPY}
+      />
+    );
   }
 
   async function handleDone() {
@@ -263,6 +210,7 @@ export function QuoteCard({
     try {
       await persistReviewState(review, "success");
       setCompleted(true);
+      setPending(confirmKey, false);
       onUpdated?.();
     } catch (doneError) {
       setError(
@@ -303,72 +251,49 @@ export function QuoteCard({
   }
 
   return (
-    <Card size="sm" className="max-w-2xl">
-      <CardHeader className="border-b">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <CardTitle>Review supporting quotes</CardTitle>
-            <CardDescription>
-              Accept quotes to link evidence to insights. Each decision saves immediately.
-            </CardDescription>
-          </div>
+    <ChatToolCardShell
+      maxWidth="2xl"
+      title="Review supporting quotes"
+      description="Accept quotes to link evidence to insights. Each decision saves immediately."
+      error={error}
+      onDismiss={() => void handleDismiss()}
+      dismissLabel="Dismiss quote review"
+      dismissDisabled={confirming}
+      footer={
+        <>
           <Button
             type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Dismiss quote review"
+            variant="outline"
             onClick={() => void handleDismiss()}
             disabled={confirming}
           >
-            <X className="size-4" />
+            Dismiss
           </Button>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-3 pt-4">
-        {error ? (
-          <div
-            role="alert"
-            className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {error}
-          </div>
-        ) : null}
-
-        {review.quotes.map((quote) => (
-          <QuoteRow
-            key={quote.id}
-            quote={quote}
-            decision={review.decisions[quote.id]}
-            meetingId={review.meeting_id}
-            sessionId={sessionId ?? ""}
-            toolResultId={toolResultId ?? ""}
-            disabled={confirming || !sessionId || !toolResultId}
-            onDecision={handleDecision}
-          />
-        ))}
-      </CardContent>
-
-      <CardFooter className="justify-end gap-2 border-t">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => void handleDismiss()}
-          disabled={confirming}
-        >
-          Dismiss
-        </Button>
-        <Button type="button" onClick={() => void handleDone()} disabled={confirming}>
-          {confirming ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Finishing…
-            </>
-          ) : (
-            "Done reviewing"
-          )}
-        </Button>
-      </CardFooter>
-    </Card>
+          <Button type="button" onClick={() => void handleDone()} disabled={confirming}>
+            {confirming ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Finishing…
+              </>
+            ) : (
+              "Done reviewing"
+            )}
+          </Button>
+        </>
+      }
+    >
+      {review.quotes.map((quote) => (
+        <QuoteReviewRowContainer
+          key={quote.id}
+          quote={quote}
+          decision={review.decisions[quote.id]}
+          meetingId={review.meeting_id}
+          sessionId={sessionId ?? ""}
+          toolResultId={toolResultId ?? ""}
+          disabled={confirming || !sessionId || !toolResultId}
+          onDecision={handleDecision}
+        />
+      ))}
+    </ChatToolCardShell>
   );
 }

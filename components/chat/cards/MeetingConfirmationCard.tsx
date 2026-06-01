@@ -5,6 +5,7 @@ import { Loader2, X } from "lucide-react";
 import { MeetingTypeSelect } from "@/components/meetings/meeting-type-select";
 import { PeopleField } from "@/components/meetings/people-field";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { ChatToolCardShell } from "@/components/chat/cards/chat-tool-card-shell";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,6 +29,11 @@ import { useMeetingTypes } from "@/hooks/use-meeting-types";
 import { usePeople } from "@/hooks/use-people";
 import type { MeetingDraft } from "@/lib/chat/tools/intake";
 import { buildMeetingTitle } from "@/lib/meeting-title";
+import {
+  CARD_DISMISSED_COPY,
+  CARD_REOPEN_HELP,
+  meetingSavedDescription,
+} from "@/lib/chat/onboarding-copy";
 import { toDateInputValue, toIsoDate } from "@/lib/meetings/meeting-date";
 import { splitParticipantSuggestions } from "@/lib/meetings/participant-suggestions";
 import type { Person } from "@/types/db";
@@ -191,30 +197,26 @@ export function MeetingConfirmationCard({
   }
 
   if (status === "success" || savedMeetingId) {
-    const meetingId =
-      savedMeetingId ??
-      (tool.output &&
-      typeof tool.output === "object" &&
-      "meeting_record" in tool.output &&
-      (tool.output as { meeting_record?: { id?: string } }).meeting_record?.id
-        ? (tool.output as { meeting_record: { id: string } }).meeting_record.id
-        : null);
+    const displayTitle = title || initialDraft.title;
 
     return (
-      <Card size="sm" className="border-emerald-500/30 bg-emerald-500/5">
-        <CardHeader>
-          <CardTitle>Meeting confirmed</CardTitle>
-          <CardDescription>
-            {title || initialDraft.title} saved
-            {meetingId ? ` (${meetingId.slice(0, 8)}…)` : ""}.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <ChatToolCardShell
+        success
+        title="Meeting saved"
+        description={meetingSavedDescription(displayTitle)}
+        successHelp={CARD_REOPEN_HELP}
+      />
     );
   }
 
   if (status === "dismissed") {
-    return null;
+    return (
+      <ChatToolCardShell
+        dismissed
+        title="Meeting review dismissed"
+        description={CARD_DISMISSED_COPY}
+      />
+    );
   }
 
   async function handleConfirm() {
@@ -274,6 +276,7 @@ export function MeetingConfirmationCard({
 
       const record = (await response.json()) as { id: string };
       setSavedMeetingId(record.id);
+      setPending(confirmKey, false);
       onUpdated?.();
     } catch (confirmError) {
       setError(

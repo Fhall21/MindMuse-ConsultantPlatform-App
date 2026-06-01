@@ -94,7 +94,7 @@ describe("ThemePanel", () => {
   it("still renders the core review actions for active themes", () => {
     render(<ThemePanel meetingId="meeting-1" />);
 
-    expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Reject" })).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Generate more insights" })).toBeInTheDocument();
   });

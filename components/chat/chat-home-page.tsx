@@ -55,6 +55,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   const [bootstrapReady, setBootstrapReady] = useState(false);
   const [isCapturingFile, setIsCapturingFile] = useState(false);
   const [isSwitchingSession, setIsSwitchingSession] = useState(false);
+  const [createProjectCardPinned, setCreateProjectCardPinned] = useState(false);
   const sessionIdRef = useRef<string | null>(null);
   const queryClient = useQueryClient();
   const consultationsQuery = useConsultations();
@@ -161,6 +162,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
       setIsSwitchingSession(true);
       clearError();
       setInput("");
+      setCreateProjectCardPinned(false);
       try {
         await loadBootstrap({ sessionId: nextSessionId });
       } catch (switchError) {
@@ -181,6 +183,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     setIsSwitchingSession(true);
     clearError();
     setInput("");
+    setCreateProjectCardPinned(false);
     try {
       const created = await createSessionMutation.mutateAsync(
         consultationId ? { consultationId } : undefined
@@ -231,8 +234,8 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   const showCreateProject =
     bootstrapReady &&
     !bootstrapError &&
-    onboardingState?.phase === "needs_consultation" &&
-    !consultationId;
+    (createProjectCardPinned ||
+      (onboardingState?.phase === "needs_consultation" && !consultationId));
 
   const activeProject = useMemo(() => {
     const consultations = consultationsQuery.data ?? [];
@@ -417,6 +420,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
           }}
           onConsultationSelected={handleConsultationSelected}
           onProjectCreated={(nextConsultationId) => {
+            setCreateProjectCardPinned(true);
             setConsultationId(nextConsultationId);
           }}
           onCardUpdated={handleCardUpdated}

@@ -1,28 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
-import { INSIGHT_ACCEPT_COPY, INSIGHT_REVIEW_DONE_COPY } from "@/lib/chat/onboarding-copy";
-import { cn } from "@/lib/utils";
+import { ThemeReviewRow } from "@/components/insights/theme-review-row";
 import {
-  getConfidenceLabel,
-  type ThemeDecision,
-  type ThemeReviewItem,
-} from "@/lib/chat/tools/themes";
+  CARD_DISMISSED_COPY,
+  CARD_REOPEN_HELP,
+  INSIGHT_ACCEPT_COPY,
+  INSIGHT_REVIEW_DONE_COPY,
+} from "@/lib/chat/onboarding-copy";
+import type { ThemeDecision, ThemeReviewItem } from "@/lib/chat/tools/themes";
+import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { readThemeReviewOutput, type ChatCardProps } from "./types";
 
-function ThemeRow({
+function ThemeReviewRowContainer({
   theme,
   decision,
   meetingId,
@@ -41,9 +34,6 @@ function ThemeRow({
 }) {
   const [rowPending, setRowPending] = useState(false);
   const [rowError, setRowError] = useState<string | null>(null);
-  const isAccepted = decision === "accepted";
-  const isRejected = decision === "rejected";
-  const confidence = getConfidenceLabel(theme.confidence);
 
   async function patchStatus(status: ThemeDecision) {
     setRowPending(true);
@@ -79,85 +69,18 @@ function ThemeRow({
     }
   }
 
-  const rowBusy = disabled || rowPending;
-
   return (
-    <div
-      className={cn(
-        "rounded-lg border p-4 transition-opacity",
-        isRejected && "border-border/60 bg-muted/20 opacity-90",
-        isAccepted && "border-emerald-500/30 bg-emerald-500/5"
-      )}
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-1">
-          <p
-            className={cn(
-              "font-medium leading-snug",
-              isRejected && "text-muted-foreground line-through"
-            )}
-          >
-            {theme.label}
-          </p>
-          {theme.description ? (
-            <p
-              className={cn(
-                "text-sm text-muted-foreground",
-                isRejected && "line-through"
-              )}
-            >
-              {theme.description}
-            </p>
-          ) : null}
-        </div>
-        <div className="shrink-0">
-          {decision === "accepted" ? (
-            <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
-              Accepted
-            </Badge>
-          ) : decision === "rejected" ? (
-            <Badge variant="outline" className="text-muted-foreground">
-              Rejected
-            </Badge>
-          ) : (
-            <Badge variant="outline" className={confidence.className}>
-              {confidence.label}
-            </Badge>
-          )}
-        </div>
-      </div>
-
-      {rowError ? (
-        <p role="alert" className="mt-2 text-sm text-destructive">
-          {rowError}
-        </p>
-      ) : null}
-
-      {!decision ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            disabled={rowBusy}
-            onClick={() => void patchStatus("accepted")}
-          >
-            {rowPending ? <Loader2 className="size-4 animate-spin" /> : null}
-            Accept
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={rowBusy}
-            onClick={() => void patchStatus("rejected")}
-          >
-            Reject
-          </Button>
-        </div>
-      ) : isAccepted ? (
-        <p className="mt-3 text-xs text-muted-foreground">{INSIGHT_ACCEPT_COPY}</p>
-      ) : null}
-    </div>
+    <ThemeReviewRow
+      label={theme.label}
+      description={theme.description}
+      confidence={theme.confidence}
+      decision={decision}
+      isBusy={disabled || rowPending}
+      error={rowError}
+      acceptHelperText={decision === "accepted" ? INSIGHT_ACCEPT_COPY : undefined}
+      onAccept={decision ? undefined : () => void patchStatus("accepted")}
+      onReject={decision ? undefined : () => void patchStatus("rejected")}
+    />
   );
 }
 
@@ -216,19 +139,23 @@ export function ThemeReviewCard({
     ).length;
 
     return (
-      <Card size="sm" className="border-emerald-500/30 bg-emerald-500/5">
-        <CardHeader>
-          <CardTitle>Theme review complete</CardTitle>
-          <CardDescription>
-            {INSIGHT_REVIEW_DONE_COPY(acceptedCount)}
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <ChatToolCardShell
+        success
+        title="Theme review complete"
+        description={INSIGHT_REVIEW_DONE_COPY(acceptedCount)}
+        successHelp={CARD_REOPEN_HELP}
+      />
     );
   }
 
   if (status === "dismissed") {
-    return null;
+    return (
+      <ChatToolCardShell
+        dismissed
+        title="Theme review dismissed"
+        description={CARD_DISMISSED_COPY}
+      />
+    );
   }
 
   async function handleDone() {
@@ -247,6 +174,7 @@ export function ThemeReviewCard({
     try {
       await persistReviewState(review, "success");
       setCompleted(true);
+      setPending(confirmKey, false);
       onUpdated?.();
     } catch (doneError) {
       setError(
@@ -287,72 +215,49 @@ export function ThemeReviewCard({
   }
 
   return (
-    <Card size="sm" className="max-w-2xl">
-      <CardHeader className="border-b">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <CardTitle>Review extracted themes</CardTitle>
-            <CardDescription>
-              Accept or reject each finding. Decisions save immediately.
-            </CardDescription>
-          </div>
+    <ChatToolCardShell
+      maxWidth="2xl"
+      title="Review extracted themes"
+      description="Accept or reject each finding. Decisions save immediately."
+      error={error}
+      onDismiss={() => void handleDismiss()}
+      dismissLabel="Dismiss theme review"
+      dismissDisabled={confirming}
+      footer={
+        <>
           <Button
             type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Dismiss theme review"
+            variant="outline"
             onClick={() => void handleDismiss()}
             disabled={confirming}
           >
-            <X className="size-4" />
+            Dismiss
           </Button>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-3 pt-4">
-        {error ? (
-          <div
-            role="alert"
-            className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {error}
-          </div>
-        ) : null}
-
-        {review.themes.map((theme) => (
-          <ThemeRow
-            key={theme.id}
-            theme={theme}
-            decision={review.decisions[theme.id]}
-            meetingId={review.meeting_id}
-            sessionId={sessionId ?? ""}
-            toolResultId={toolResultId ?? ""}
-            disabled={confirming || !sessionId || !toolResultId}
-            onDecision={handleDecision}
-          />
-        ))}
-      </CardContent>
-
-      <CardFooter className="justify-end gap-2 border-t">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => void handleDismiss()}
-          disabled={confirming}
-        >
-          Dismiss
-        </Button>
-        <Button type="button" onClick={() => void handleDone()} disabled={confirming}>
-          {confirming ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Finishing…
-            </>
-          ) : (
-            "Done reviewing"
-          )}
-        </Button>
-      </CardFooter>
-    </Card>
+          <Button type="button" onClick={() => void handleDone()} disabled={confirming}>
+            {confirming ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Finishing…
+              </>
+            ) : (
+              "Done reviewing"
+            )}
+          </Button>
+        </>
+      }
+    >
+      {review.themes.map((theme) => (
+        <ThemeReviewRowContainer
+          key={theme.id}
+          theme={theme}
+          decision={review.decisions[theme.id]}
+          meetingId={review.meeting_id}
+          sessionId={sessionId ?? ""}
+          toolResultId={toolResultId ?? ""}
+          disabled={confirming || !sessionId || !toolResultId}
+          onDecision={handleDecision}
+        />
+      ))}
+    </ChatToolCardShell>
   );
 }

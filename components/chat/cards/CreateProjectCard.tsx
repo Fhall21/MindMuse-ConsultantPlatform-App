@@ -6,11 +6,15 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CREATE_CONSULTATION_COPY } from "@/lib/chat/onboarding-copy";
+import {
+  CARD_REOPEN_HELP,
+  CREATE_CONSULTATION_COPY,
+} from "@/lib/chat/onboarding-copy";
 import { createRound } from "@/lib/actions/rounds";
 import { fetchJson } from "@/hooks/api";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
-import type { ChatCardProps } from "@/components/chat/cards/types";
+import { ChatToolCardShell } from "./chat-tool-card-shell";
+import type { ChatCardProps } from "./types";
 
 interface CreateProjectCardProps extends ChatCardProps {
   onProjectCreated?: (consultationId: string) => void;
@@ -25,6 +29,7 @@ export function CreateProjectCard({
   const { isPending, setPending } = useCardConfirm();
   const queryClient = useQueryClient();
   const [label, setLabel] = useState("");
+  const [createdLabel, setCreatedLabel] = useState<string | null>(null);
   const pending = isPending(confirmKey);
 
   async function handleCreate() {
@@ -48,8 +53,9 @@ export function CreateProjectCard({
       });
       queryClient.invalidateQueries({ queryKey: ["consultations"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
+      setCreatedLabel(trimmed);
+      setPending(confirmKey, false);
       onProjectCreated?.(consultationId);
-      toast.success(CREATE_CONSULTATION_COPY.success);
     } catch (error) {
       console.error(error);
       toast.error(CREATE_CONSULTATION_COPY.error);
@@ -57,13 +63,32 @@ export function CreateProjectCard({
     }
   }
 
+  if (createdLabel) {
+    return (
+      <ChatToolCardShell
+        success
+        title="Consultation created"
+        description={`${createdLabel} is ready.`}
+        successHelp={CARD_REOPEN_HELP}
+      />
+    );
+  }
+
   return (
-    <div className="rounded-lg border bg-card p-4 text-card-foreground">
-      <p className="text-sm font-medium">{CREATE_CONSULTATION_COPY.title}</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {CREATE_CONSULTATION_COPY.description}
-      </p>
-      <div className="mt-4 space-y-2">
+    <ChatToolCardShell
+      title={CREATE_CONSULTATION_COPY.title}
+      description={CREATE_CONSULTATION_COPY.description}
+      footer={
+        <Button
+          type="button"
+          onClick={() => void handleCreate()}
+          disabled={pending || !label.trim()}
+        >
+          {pending ? CREATE_CONSULTATION_COPY.pending : CREATE_CONSULTATION_COPY.submit}
+        </Button>
+      }
+    >
+      <div className="space-y-2">
         <Label htmlFor={`project-label-${messageId}`}>{CREATE_CONSULTATION_COPY.label}</Label>
         <Input
           id={`project-label-${messageId}`}
@@ -71,16 +96,9 @@ export function CreateProjectCard({
           onChange={(event) => setLabel(event.target.value)}
           placeholder={CREATE_CONSULTATION_COPY.placeholder}
           disabled={pending}
+          className="h-9 text-sm"
         />
       </div>
-      <Button
-        type="button"
-        className="mt-4"
-        onClick={() => void handleCreate()}
-        disabled={pending || !label.trim()}
-      >
-        {pending ? CREATE_CONSULTATION_COPY.pending : CREATE_CONSULTATION_COPY.submit}
-      </Button>
-    </div>
+    </ChatToolCardShell>
   );
 }

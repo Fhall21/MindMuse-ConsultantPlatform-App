@@ -5,7 +5,9 @@ import { fetchJson } from "@/hooks/api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
-import type { ChatCardProps } from "@/components/chat/cards/types";
+import { CHAT_QUICK_ACTION_BUTTON_CLASS } from "@/lib/chat/constants";
+import { ChatToolCardShell } from "./chat-tool-card-shell";
+import type { ChatCardProps } from "./types";
 
 interface ProjectSelectionCardProps extends ChatCardProps {
   sessionId: string;
@@ -43,11 +45,12 @@ export function ProjectSelectionCard({
 
   if (consultationsQuery.isLoading) {
     return (
-      <div className="space-y-2 rounded-lg border bg-card p-4">
-        <Skeleton className="h-4 w-40" />
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-8 w-full" />
-      </div>
+      <ChatToolCardShell title="Choose a consultation" description="Loading your consultations…">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+        </div>
+      </ChatToolCardShell>
     );
   }
 
@@ -55,21 +58,19 @@ export function ProjectSelectionCard({
 
   if (consultations.length === 0) {
     return (
-      <div className="rounded-lg border bg-card p-4 text-card-foreground">
-        <p className="text-sm text-muted-foreground">
-          No consultation projects yet. Create one above to continue.
-        </p>
-      </div>
+      <ChatToolCardShell
+        title="Choose a consultation"
+        description="No consultation projects yet. Create one above to continue."
+      />
     );
   }
 
   return (
-    <div className="rounded-lg border bg-card p-4 text-card-foreground">
-      <p className="text-sm font-medium">Which project should we work on?</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Select a consultation to scope this conversation.
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
+    <ChatToolCardShell
+      title="Which project should we work on?"
+      description="Select a consultation to scope this conversation."
+    >
+      <div className="flex flex-wrap gap-2">
         {consultations.map((consultation) => {
           const confirmKey = `select-project:${messageId}:${consultation.id}`;
           const pending = isPending(confirmKey);
@@ -77,8 +78,8 @@ export function ProjectSelectionCard({
             <Button
               key={consultation.id}
               type="button"
-              variant="secondary"
-              size="sm"
+              variant="outline"
+              className={CHAT_QUICK_ACTION_BUTTON_CLASS}
               disabled={pending}
               onClick={() => void selectProject(consultation.id)}
             >
@@ -87,6 +88,6 @@ export function ProjectSelectionCard({
           );
         })}
       </div>
-    </div>
+    </ChatToolCardShell>
   );
 }

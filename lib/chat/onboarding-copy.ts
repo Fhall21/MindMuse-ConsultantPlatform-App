@@ -52,8 +52,21 @@ export const CREATE_CONSULTATION_COPY = {
 export const FILE_ATTACH_STARTED_COPY =
   "File attached. Create a consultation first if you have not already — the assistant will guide you.";
 
+export const CARD_REOPEN_HELP =
+  "Ask in chat if you want to change any details and I'll bring the form back.";
+
+export const CARD_DISMISSED_COPY =
+  "Ask in chat to reopen this step if you change your mind.";
+
 export const MEETING_CONFIRM_SUCCESS_COPY =
   "Meeting saved. You can extract insights from it next.";
+
+export function meetingSavedDescription(title: string) {
+  const trimmed = title.trim();
+  return trimmed
+    ? `${trimmed} is saved to your consultation.`
+    : "Your meeting is saved to your consultation.";
+}
 
 export const INSIGHT_ACCEPT_COPY = "Insight saved.";
 

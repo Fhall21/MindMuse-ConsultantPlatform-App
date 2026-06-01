@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeRejectionDialog } from "@/components/consultations/theme-rejection-dialog";
+import { ThemeReviewRow } from "@/components/insights/theme-review-row";
 
 
 interface ThemePanelProps {
@@ -109,31 +110,6 @@ async function extractThemes(
   }
 
   return themes;
-}
-
-function getConfidenceLabel(confidence?: number) {
-  if (confidence === undefined || Number.isNaN(confidence)) {
-    return { label: "Pending review", className: "text-muted-foreground" };
-  }
-
-  if (confidence >= 0.7) {
-    return {
-      label: "High confidence",
-      className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300",
-    };
-  }
-
-  if (confidence >= 0.4) {
-    return {
-      label: "Medium confidence",
-      className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300",
-    };
-  }
-
-  return {
-    label: "Low confidence",
-    className: "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300",
-  };
 }
 
 export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
@@ -507,79 +483,26 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
                   <div className="space-y-3">
                     {activeThemes.map((theme) => {
                       const details = themeDetailsById[theme.id];
-                      const confidence = getConfidenceLabel(details?.confidence);
                       const isAccepted = theme.accepted;
                       const isBusy = activeThemeId === theme.id;
                       const isCollapsing = collapsingIds.has(theme.id);
 
                       return (
-                        <div
+                        <ThemeReviewRow
                           key={theme.id}
+                          label={theme.label}
+                          description={details?.description ?? theme.description}
+                          confidence={details?.confidence}
+                          decision={isAccepted ? "accepted" : undefined}
+                          source={theme.is_user_added ? "user" : "ai"}
+                          isBusy={isBusy}
+                          actionsMode="always"
+                          onAccept={() => void handleAccept(theme.id)}
+                          onReject={() => openRejectionDialog(theme)}
                           className={cn(
-                            "overflow-hidden rounded-lg border p-4 transition-all duration-250",
-                            isAccepted && "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20",
-                            !isAccepted && "border-border/70",
                             isCollapsing && "max-h-0 p-0 opacity-0 border-0"
                           )}
-                          style={isCollapsing ? { maxHeight: 0, padding: 0, opacity: 0, borderWidth: 0 } : undefined}
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <p className="font-medium">{theme.label}</p>
-                              {(details?.description ?? theme.description) ? (
-                                <p className="text-sm text-muted-foreground">{details?.description ?? theme.description}</p>
-                              ) : null}
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                              {theme.is_user_added ? (
-                                <Badge
-                                  variant="outline"
-                                  className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300"
-                                >
-                                  User added
-                                </Badge>
-                              ) : (!isAccepted) ? (
-                                <Badge
-                                  variant="outline"
-                                  className="border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-300"
-                                >
-                                  AI suggested
-                                </Badge>
-                              ) : null}
-
-                              {isAccepted ? (
-                                <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
-                                  Accepted
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className={confidence.className}>
-                                  {confidence.label}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => void handleAccept(theme.id)}
-                              disabled={isAccepted || isBusy}
-                              className={cn(isAccepted && "bg-emerald-600 text-white hover:bg-emerald-600/90")}
-                            >
-                              {isBusy && !isAccepted ? <LoadingSpinner /> : null}
-                              Accept
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={isBusy}
-                              onClick={() => openRejectionDialog(theme)}
-                            >
-                              Reject
-                            </Button>
-                          </div>
-                        </div>
+                        />
                       );
                     })}
                   </div>

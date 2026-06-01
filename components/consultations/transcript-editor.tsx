@@ -72,17 +72,19 @@ export function TranscriptEditor({
 
   return (
     <div className="space-y-3">
-      <Textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        readOnly={readOnly}
-        placeholder={
-          readOnly
-            ? "No transcript recorded."
-            : "Paste or type the consultation transcript here…"
-        }
-        className="max-h-[60vh] min-h-[300px] resize-y font-mono text-sm leading-relaxed"
-      />
+      <div className="scroll-zone rounded-md">
+        <Textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          readOnly={readOnly}
+          placeholder={
+            readOnly
+              ? "No transcript recorded."
+              : "Paste or type the consultation transcript here…"
+          }
+          className="max-h-[60vh] min-h-[300px] resize-y font-mono text-sm leading-relaxed"
+        />
+      </div>
 
       {!readOnly && (
         <div className="flex items-center gap-4">

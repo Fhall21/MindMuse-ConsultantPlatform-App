@@ -1566,7 +1566,7 @@ interface CompactLayoutProps extends LayoutBaseProps {
 function CompactLayout(props: CompactLayoutProps) {
   const visibleQuotes = props.quotesByStatus[props.tab];
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 rounded-lg border border-border/60 bg-card">
+    <div className="scroll-zone mx-auto w-full max-w-3xl space-y-4 rounded-lg border border-border/60 bg-card hover:border-border/90">
       <div className="border-b border-border/60 px-4 pt-3">
         <nav
           className="flex items-end gap-5"
@@ -1640,7 +1640,7 @@ function TranscriptPane({
   return (
     <section
       aria-label="Transcript"
-      className="flex max-h-[70vh] min-h-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-card lg:max-h-none"
+      className="scroll-zone flex max-h-[70vh] min-h-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-card hover:border-border/90 lg:max-h-none"
     >
       <header className="shrink-0 border-b border-border/60 px-4 py-2.5">
         <div className="flex items-baseline gap-3">
@@ -1704,7 +1704,7 @@ function ListPane({
     <section
       aria-label={title}
       className={cn(
-        "flex max-h-[70vh] min-h-[160px] flex-col overflow-hidden rounded-lg border border-border/60 bg-card lg:max-h-none lg:min-h-0",
+        "scroll-zone flex max-h-[70vh] min-h-[160px] flex-col overflow-hidden rounded-lg border border-border/60 bg-card hover:border-border/90 lg:max-h-none lg:min-h-0",
         outerClassName
       )}
     >

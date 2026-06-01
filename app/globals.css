@@ -149,6 +149,17 @@
   }
 }
 
+/* Scroll-zone: subtle elevation + border solidification tells the user which
+   card is active for scrolling. Applied to the outer card/section, not the
+   inner scroll div. Elevation shadow feels more premium than a cheap ring. */
+.scroll-zone {
+  transition: box-shadow 200ms ease-out, border-color 200ms ease-out;
+}
+.scroll-zone:hover {
+  box-shadow: 0 2px 12px -3px color-mix(in oklab, var(--foreground) 8%, transparent),
+              0 1px 3px -1px color-mix(in oklab, var(--foreground) 4%, transparent);
+}
+
 html[data-accessibility-text-size="large"] {
   font-size: 18px;
 }

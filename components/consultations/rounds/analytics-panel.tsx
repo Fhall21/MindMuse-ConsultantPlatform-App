@@ -464,7 +464,7 @@ export function AnalyticsPanel({
 
       {/* Cluster list */}
       {analytics.clusterCount > 0 ? (
-        <Card>
+        <Card className="scroll-zone">
           <CardHeader>
             <CardTitle className="text-base">Suggested Insights</CardTitle>
             <CardDescription>

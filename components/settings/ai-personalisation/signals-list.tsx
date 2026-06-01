@@ -219,7 +219,7 @@ export function SignalsList() {
   const hasSignals = signals && signals.length > 0;
 
   return (
-    <Card className="flex max-h-[480px] flex-col">
+    <Card className="scroll-zone flex max-h-[480px] flex-col">
       <CardHeader className="shrink-0 pb-3">
         <CardTitle>Decision history</CardTitle>
         <CardDescription>

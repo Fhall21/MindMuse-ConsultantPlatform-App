@@ -603,7 +603,7 @@ export function ThemeGroupingWorkspace({
       <div className="h-[70vh] overflow-hidden rounded-lg border border-border">
         <div className="grid h-full gap-0 lg:grid-cols-2">
           {/* Left: Source themes pool (ungrouped) */}
-          <Card className="rounded-none border-r border-border lg:border-r flex flex-col">
+          <Card className="scroll-zone rounded-none border-r border-border lg:border-r flex flex-col">
             <CardHeader className="sticky top-0 z-10 bg-card border-b">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -690,7 +690,7 @@ export function ThemeGroupingWorkspace({
           </Card>
 
           {/* Right: Theme groups */}
-          <div className="flex flex-col overflow-hidden border-l border-border lg:border-l">
+          <div className="scroll-zone flex flex-col overflow-hidden border-l border-border lg:border-l">
             <div className="sticky top-0 z-10 bg-background border-b border-border px-6 py-4">
               <div className="flex items-center justify-between gap-2">
                 <div>

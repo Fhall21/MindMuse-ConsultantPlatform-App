@@ -51,7 +51,7 @@ export function ReportPreviewCard({
   }
 
   async function handleSave() {
-    if (!sessionId || !toolResultId) return;
+    if (!review || !sessionId || !toolResultId) return;
     setPending(confirmKey, true);
     setError(null);
     try {

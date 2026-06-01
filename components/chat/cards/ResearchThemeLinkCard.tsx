@@ -33,7 +33,7 @@ export function ResearchThemeLinkCard({ tool, sessionId, onUpdated }: ChatCardPr
   }
 
   async function handleConfirm() {
-    if (!sessionId) return;
+    if (!proposal || !sessionId) return;
     setPending(confirmKey, true);
     setError(null);
     try {

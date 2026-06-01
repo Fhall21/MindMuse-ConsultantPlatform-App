@@ -212,8 +212,8 @@ export async function executeDraftEvidenceEmail(params: {
   const quoteRows = await db
     .select({
       id: quotes.id,
-      text: quotes.text,
-      speaker: quotes.speaker,
+      text: quotes.exactText,
+      speaker: quotes.speakerLabel,
     })
     .from(quotes)
     .innerJoin(meetings, eq(quotes.meetingId, meetings.id))

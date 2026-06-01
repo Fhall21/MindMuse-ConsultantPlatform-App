@@ -5,6 +5,7 @@ import { confirmMeetingFromDraft, linkPeopleByIdsToMeeting, linkPeopleToMeeting 
 import { MEETING_SAVED_FOLLOW_UP } from "@/lib/chat/onboarding-copy";
 import { getToolResultForSession, insertChatMessage, updateToolResult } from "@/lib/chat/persist";
 import { bindChatSessionConsultation } from "@/lib/chat/theme-extract-flow";
+import { startCrossAnalysisJob } from "@/lib/chat/analysis-db";
 import { confirmMeetingSchema } from "@/lib/chat/tools/intake";
 
 export async function POST(request: NextRequest) {
@@ -90,6 +91,12 @@ export async function POST(request: NextRequest) {
         sessionId,
         role: "assistant",
         content: MEETING_SAVED_FOLLOW_UP,
+      });
+
+      void startCrossAnalysisJob({
+        userId: auth.id,
+        consultationId: parsed.data.project_id,
+        sessionId,
       });
     }
 

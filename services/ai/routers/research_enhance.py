@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, HTTPException
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from core.config import settings
 from core.openai_client import get_client
@@ -150,3 +150,62 @@ async def enhance_analysis_question(request: EnhanceQuestionRequest):
         )
 
     return response
+
+
+class ThemeInput(BaseModel):
+    id: str
+    label: str
+    description: str | None = None
+
+
+class ResearchGenerateRequest(BaseModel):
+    consultation_id: str = Field(min_length=1)
+    themes: list[ThemeInput] = Field(default_factory=list)
+
+
+class ResearchQuestionItem(BaseModel):
+    id: str
+    question: str
+    rationale: str
+    linked_theme_id: str | None = None
+
+
+class ResearchGenerateResponse(BaseModel):
+    questions: list[ResearchQuestionItem]
+
+
+@router.post("/generate", response_model=ResearchGenerateResponse)
+async def generate_research_questions(request: ResearchGenerateRequest):
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=503, detail="OpenAI API key not configured")
+
+    client = get_client()
+    theme_lines = "\n".join(
+        f"- {theme.label}: {theme.description or 'no description'}" for theme in request.themes
+    ) or "- none"
+
+    system_prompt = (
+        "Generate 3-5 focused research questions for a psychosocial consultant. "
+        "Return JSON: { \"questions\": [ { \"id\": str, \"question\": str, "
+        "\"rationale\": str, \"linked_theme_id\": str|null } ] }"
+    )
+    user_content = f"Accepted themes:\n{theme_lines}"
+
+    completion = client.chat.completions.create(
+        model=settings.openai_model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ],
+        response_format={"type": "json_object"},
+    )
+
+    content = completion.choices[0].message.content
+    if not content:
+        raise HTTPException(status_code=502, detail="Empty response from LLM")
+
+    try:
+        parsed = json.loads(content)
+        return ResearchGenerateResponse(**parsed)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid model output: {exc}") from exc

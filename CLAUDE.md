@@ -81,6 +81,22 @@ Or run `docker compose up` for the whole stack.
 - See `TESTING.md` for current conventions and scope
 - When adding new logic, add or update a regression test in the same slice
 
+## Codex Browser QA
+
+- Prefer the Codex in-app Browser plugin for local interaction QA. Its Node REPL
+  client supports real pointer drags through `tab.cua.drag({ path: [...] })`.
+- Local canvas target:
+  `http://127.0.0.1:3000/canvas/round/4af43514-9d3f-4496-9add-3e4c4f2954c3?tab=canvas`
+- Development login: `felix.m@maildrop.cc` / `Admin1234`
+- After sign-in, wait for session hydration before opening the canvas. If the
+  first canvas navigation redirects to `/login?tab=canvas`, wait and retry once.
+- Bootstrap the in-app browser from the Browser plugin skill using
+  `scripts/browser-client.mjs`, then keep the tab in Node REPL state for the QA
+  sequence.
+- For canvas drag regressions, capture DOM positions before the drag, use a
+  multi-point CUA drag path, inspect DOM positions and computed `z-index`
+  immediately after release, and take a screenshot before clicking elsewhere.
+
 # context-mode — MANDATORY routing rules
 
 You have context-mode MCP tools available. These rules are NOT optional — they protect your context window from flooding. A single unrouted command can dump 56 KB into context and waste the entire session.

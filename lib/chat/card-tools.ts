@@ -18,12 +18,26 @@ export function messageContentIsCardTool(content: string): boolean {
   return meta ? isChatCardToolName(meta.toolName) : false;
 }
 
+export function currentTurnMessages(
+  messages: Array<{ role: string; content: string }>,
+  lookback = 12
+): Array<{ role: string; content: string }> {
+  const recent = messages.slice(-lookback);
+  let lastUserIndex = -1;
+  for (let index = recent.length - 1; index >= 0; index -= 1) {
+    if (recent[index]?.role === "user") {
+      lastUserIndex = index;
+      break;
+    }
+  }
+  return lastUserIndex >= 0 ? recent.slice(lastUserIndex + 1) : recent;
+}
+
 export async function sessionTurnIncludesCardTool(
   messages: Array<{ role: string; content: string }>,
   lookback = 12
 ): Promise<boolean> {
-  const recent = messages.slice(-lookback);
-  return recent.some(
+  return currentTurnMessages(messages, lookback).some(
     (message) => message.role === "tool" && messageContentIsCardTool(message.content)
   );
 }

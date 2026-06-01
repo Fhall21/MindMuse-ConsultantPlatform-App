@@ -18,6 +18,7 @@ import { fetchJson } from "@/hooks/api";
 import { useChatSessions, useCreateChatSession } from "@/hooks/use-chat-sessions";
 import { useConsultations } from "@/hooks/use-consultations";
 import { captureFileForChatIntake } from "@/lib/capture/chat-file-intake";
+import { mergeBootstrapWithStreamingAssistant } from "@/lib/chat/merge-bootstrap-messages";
 
 interface ChatBootstrap {
   sessionId: string;
@@ -105,14 +106,30 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   );
 
   const loadBootstrap = useCallback(
-    async (options?: { sessionId?: string | null; createNew?: boolean }) => {
+    async (options?: {
+      sessionId?: string | null;
+      createNew?: boolean;
+      mergeStreaming?: boolean;
+    }) => {
       const data = await fetchJson<ChatBootstrap>(
         buildBootstrapUrl(options?.sessionId, options?.createNew)
       );
-      applyBootstrap(data);
+      if (options?.mergeStreaming) {
+        setSessionId(data.sessionId);
+        setConsultationId(data.consultationId);
+        setNeedsConsultationSelection(data.needsConsultationSelection);
+        setOnboardingState(data.onboardingState);
+        setWelcomeVariant(data.welcomeVariant);
+        setMessages((current) =>
+          mergeBootstrapWithStreamingAssistant(current, data.messages)
+        );
+        setBootstrapError(false);
+      } else {
+        applyBootstrap(data);
+      }
       return data;
     },
-    [applyBootstrap]
+    [applyBootstrap, setMessages]
   );
 
   useEffect(() => {
@@ -226,9 +243,11 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
       return;
     }
 
-    void loadBootstrap({ sessionId: activeSessionId }).catch((reloadError) => {
-      console.error(reloadError);
-    });
+    void loadBootstrap({ sessionId: activeSessionId, mergeStreaming: true }).catch(
+      (reloadError) => {
+        console.error(reloadError);
+      }
+    );
   }, [loadBootstrap, status]);
 
   const showCreateProject =

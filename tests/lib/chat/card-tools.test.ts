@@ -33,4 +33,22 @@ describe("lib/chat/card-tools", () => {
       sessionTurnIncludesCardTool([{ role: "assistant", content: "Here are themes..." }])
     ).resolves.toBe(false);
   });
+
+  it("ignores card tools from prior turns when checking prose suppression", async () => {
+    const priorCard = JSON.stringify({
+      tool: "extract_themes",
+      input: { meeting_id: "11111111-1111-4111-8111-111111111111" },
+      status: "success",
+    });
+
+    await expect(
+      sessionTurnIncludesCardTool([
+        { role: "user", content: "Extract themes" },
+        { role: "tool", content: priorCard },
+        { role: "assistant", content: "Themes are ready for review." },
+        { role: "user", content: "What should I do next?" },
+        { role: "assistant", content: "Review the themes card above." },
+      ])
+    ).resolves.toBe(false);
+  });
 });

@@ -3,6 +3,11 @@
 import { useRef, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  CAPTURE_NOTES_ACCEPT_ATTR,
+  CAPTURE_TRANSCRIPT_ACCEPT_ATTR,
+} from "@/lib/capture/constants";
+import { CHAT_QUICK_ACTION_BUTTON_CLASS } from "@/lib/chat/constants";
 
 interface ChatInputProps {
   value: string;
@@ -51,7 +56,7 @@ export function ChatInput({
         ref={transcriptInputRef}
         type="file"
         className="hidden"
-        accept=".txt,.doc,.docx,.pdf"
+        accept={CAPTURE_TRANSCRIPT_ACCEPT_ATTR}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file && onAttachFile) {
@@ -64,7 +69,7 @@ export function ChatInput({
         ref={notesInputRef}
         type="file"
         className="hidden"
-        accept="image/*,.pdf"
+        accept={CAPTURE_NOTES_ACCEPT_ATTR}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file && onAttachFile) {
@@ -83,32 +88,36 @@ export function ChatInput({
           rows={2}
           className="min-h-[52px] resize-none"
         />
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2.5">
             {onAttachFile ? (
               <>
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="sm"
+                  variant="outline"
                   disabled={disabled}
+                  className={CHAT_QUICK_ACTION_BUTTON_CLASS}
                   onClick={() => transcriptInputRef.current?.click()}
                 >
-                  Attach transcript
+                  Attach consultation transcript
                 </Button>
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="sm"
+                  variant="outline"
                   disabled={disabled}
+                  className={CHAT_QUICK_ACTION_BUTTON_CLASS}
                   onClick={() => notesInputRef.current?.click()}
                 >
-                  Attach notes
+                  Attach consultation notes
                 </Button>
               </>
             ) : null}
           </div>
-          <Button type="submit" disabled={disabled || !value.trim()}>
+          <Button
+            type="submit"
+            className="min-h-11 shrink-0"
+            disabled={disabled || !value.trim()}
+          >
             Send
           </Button>
         </div>

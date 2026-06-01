@@ -21,6 +21,7 @@ import {
   CAPTURE_NOTES_ACCEPT_ATTR,
   CAPTURE_TRANSCRIPT_ACCEPT_ATTR,
 } from "@/lib/capture/constants";
+import { CHAT_QUICK_ACTION_BUTTON_CLASS } from "@/lib/chat/constants";
 
 export type WelcomeQuickAction =
   | { type: "prefill"; text: string }
@@ -173,14 +174,13 @@ export function WelcomeState({
             onProjectCreated={onProjectCreated}
           />
         ) : null}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2.5">
           {chips.map((chip) => (
             <Button
               key={chip.label}
               type="button"
-              variant="default"
-              size="sm"
-              className="rounded-full"
+              variant="outline"
+              className={CHAT_QUICK_ACTION_BUTTON_CLASS}
               onClick={() => handleChipClick(chip.action)}
             >
               {chip.label}

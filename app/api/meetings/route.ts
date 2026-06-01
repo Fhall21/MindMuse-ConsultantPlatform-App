@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
+import { getUnarchivedSessionForUser } from "@/lib/chat/context";
 import { confirmMeetingFromDraft, linkPeopleToMeeting } from "@/lib/chat/intake-db";
 import { confirmMeetingSchema } from "@/lib/chat/tools/intake";
-import { updateToolResult } from "@/lib/chat/persist";
+import { getToolResultForSession, updateToolResult } from "@/lib/chat/persist";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedApiUser();
@@ -25,6 +26,26 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const sessionId = request.headers.get("x-chat-session-id");
+  if (parsed.data.tool_result_id) {
+    if (!sessionId) {
+      return NextResponse.json({ detail: "Chat session is required" }, { status: 422 });
+    }
+
+    const session = await getUnarchivedSessionForUser(auth.id, sessionId);
+    if (!session) {
+      return NextResponse.json({ detail: "Chat session not found" }, { status: 404 });
+    }
+
+    const existingToolResult = await getToolResultForSession(
+      parsed.data.tool_result_id,
+      sessionId
+    );
+    if (!existingToolResult) {
+      return NextResponse.json({ detail: "Tool result not found" }, { status: 404 });
+    }
+  }
+
   try {
     const record = await confirmMeetingFromDraft({
       userId: auth.id,
@@ -40,19 +61,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (parsed.data.tool_result_id) {
-      const sessionId = request.headers.get("x-chat-session-id");
-      if (sessionId) {
-        await updateToolResult({
-          toolResultId: parsed.data.tool_result_id,
-          sessionId,
-          output: {
-            meeting_draft: parsed.data.meeting_draft,
-            meeting_record: record,
-          },
-          status: "success",
-        });
-      }
+    if (parsed.data.tool_result_id && sessionId) {
+      await updateToolResult({
+        toolResultId: parsed.data.tool_result_id,
+        sessionId,
+        output: {
+          meeting_draft: parsed.data.meeting_draft,
+          meeting_record: record,
+        },
+        status: "success",
+      });
     }
 
     return NextResponse.json(record, { status: 201 });

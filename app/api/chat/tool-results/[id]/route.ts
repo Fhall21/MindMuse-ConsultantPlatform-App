@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
+import { getUnarchivedSessionForUser } from "@/lib/chat/context";
 import {
   getToolResultForSession,
   updateToolResult,
@@ -37,6 +38,11 @@ export async function PATCH(
       { detail: parsed.error.issues[0]?.message ?? "Invalid tool result payload" },
       { status: 422 }
     );
+  }
+
+  const session = await getUnarchivedSessionForUser(auth.id, parsed.data.sessionId);
+  if (!session) {
+    return NextResponse.json({ detail: "Chat session not found" }, { status: 404 });
   }
 
   const existing = await getToolResultForSession(toolResultId, parsed.data.sessionId);

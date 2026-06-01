@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ThemeGroupProposalEditor } from "@/components/consultations/rounds/theme-group-proposal-editor";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import {
   CARD_DISMISSED_COPY,
@@ -12,6 +11,7 @@ import {
   GROUPING_LINKED_COPY,
 } from "@/lib/chat/onboarding-copy";
 import { readGroupingReviewOutput, type GroupingReviewOutput } from "@/lib/chat/tools/grouping";
+import { ChatThemeGroupingWorkspace } from "./chat-theme-grouping-workspace";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import type { ChatCardProps } from "./types";
 
@@ -174,23 +174,14 @@ export function ThemeGroupingCard({
     onUpdated?.();
   }
 
-  function toggleTheme(themeId: string, checked: boolean) {
-    if (!review) return;
-    const nextIds = checked
-      ? Array.from(new Set([...review.theme_ids, themeId]))
-      : review.theme_ids.filter((id) => id !== themeId);
-
-    void patchReview({ ...review, theme_ids: nextIds });
-  }
-
   return (
     <ChatToolCardShell
-      maxWidth="2xl"
+      maxWidth="5xl"
       title={isLinkMode ? "Link insights to group" : "Review theme group"}
       description={
         isLinkMode
-          ? "Choose insights to add to this group. Changes save immediately."
-          : "Edit the group and choose which themes belong. Changes save immediately."
+          ? "Select insights on the left, then link them to the group on the right."
+          : "Use the same grouping workspace as the consultation canvas — select themes, create or refine groups, then confirm."
       }
       error={error}
       onDismiss={() => void handleDismiss()}
@@ -221,29 +212,10 @@ export function ThemeGroupingCard({
         </>
       }
     >
-      <ThemeGroupProposalEditor
-        mode={review.mode}
-        groupName={review.group_name}
-        groupDescription={review.group_description}
-        rationale={review.rationale}
-        availableThemes={review.available_themes}
-        selectedThemeIds={review.theme_ids}
+      <ChatThemeGroupingWorkspace
+        review={review}
         disabled={confirming}
-        onGroupNameChange={
-          isLinkMode
-            ? undefined
-            : (value) => {
-                void patchReview({ ...review, group_name: value });
-              }
-        }
-        onGroupDescriptionChange={
-          isLinkMode
-            ? undefined
-            : (value) => {
-                void patchReview({ ...review, group_description: value });
-              }
-        }
-        onToggleTheme={toggleTheme}
+        onReviewChange={(next) => void patchReview(next)}
       />
     </ChatToolCardShell>
   );

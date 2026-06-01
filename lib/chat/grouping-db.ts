@@ -1,4 +1,4 @@
-import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   consultations,
@@ -14,6 +14,7 @@ import { dispatchToolToFastApi } from "./tool-dispatch";
 import { CHAT_TOOL_ENDPOINTS } from "./tool-allowlist";
 import {
   buildGroupingReviewOutput,
+  type GroupingExistingGroup,
   type GroupingThemeOption,
   type ThemeGroupRecord,
 } from "./tools/grouping";
@@ -147,6 +148,117 @@ async function loadGroupedInsightIds(params: {
   return grouped;
 }
 
+export async function loadGroupingExistingGroups(params: {
+  userId: string;
+  consultationId: string;
+  excludeGroupId?: string;
+}): Promise<GroupingExistingGroup[]> {
+  await requireOwnedConsultation(params.consultationId, params.userId);
+
+  const groupRows = await db
+    .select({
+      id: themes.id,
+      label: themes.label,
+      description: themes.description,
+      status: themes.status,
+      origin: themes.origin,
+      aiDraftLabel: themes.aiDraftLabel,
+      aiDraftDescription: themes.aiDraftDescription,
+      aiDraftExplanation: themes.aiDraftExplanation,
+      aiDraftCreatedAt: themes.aiDraftCreatedAt,
+      aiDraftCreatedBy: themes.aiDraftCreatedBy,
+      lastStructuralChangeAt: themes.lastStructuralChangeAt,
+      createdAt: themes.createdAt,
+      updatedAt: themes.updatedAt,
+      createdBy: themes.createdBy,
+    })
+    .from(themes)
+    .where(
+      and(
+        eq(themes.consultationId, params.consultationId),
+        eq(themes.userId, params.userId),
+        sql`${themes.status} not in ('discarded', 'management_rejected')`,
+        params.excludeGroupId ? ne(themes.id, params.excludeGroupId) : undefined
+      )
+    )
+    .orderBy(themes.createdAt);
+
+  if (groupRows.length === 0) {
+    return [];
+  }
+
+  const memberRows = await db
+    .select({
+      themeId: themeMembers.themeId,
+      insightId: themeMembers.insightId,
+      label: insights.label,
+      description: insights.description,
+      meetingId: insights.meetingId,
+      isUserAdded: insights.isUserAdded,
+    })
+    .from(themeMembers)
+    .innerJoin(insights, eq(themeMembers.insightId, insights.id))
+    .where(eq(themeMembers.consultationId, params.consultationId))
+    .orderBy(themeMembers.position);
+
+  const meetingRows = await db
+    .select({ id: meetings.id, title: meetings.title })
+    .from(meetings)
+    .where(
+      and(
+        eq(meetings.userId, params.userId),
+        eq(meetings.consultationId, params.consultationId),
+        eq(meetings.isArchived, false)
+      )
+    );
+
+  const meetingTitleById = new Map(meetingRows.map((row) => [row.id, row.title]));
+  const membersByGroupId = new Map<string, GroupingThemeOption[]>();
+
+  for (const row of memberRows) {
+    const members = membersByGroupId.get(row.themeId) ?? [];
+    members.push({
+      id: row.insightId,
+      label: row.label,
+      description: row.description ?? "",
+      source_meeting_id: row.meetingId,
+      source_meeting_title: meetingTitleById.get(row.meetingId) ?? "Meeting",
+      is_user_added: row.isUserAdded,
+    });
+    membersByGroupId.set(row.themeId, members);
+  }
+
+  return groupRows.map((group) => {
+    const members = membersByGroupId.get(group.id) ?? [];
+    const hasDraft =
+      Boolean(group.aiDraftLabel?.trim()) || Boolean(group.aiDraftDescription?.trim());
+
+    return {
+      id: group.id,
+      label: group.label,
+      description: group.description ?? "",
+      status: group.status,
+      origin: group.origin,
+      member_insight_ids: members.map((member) => member.id),
+      members,
+      pending_draft: hasDraft
+        ? {
+            draft_label: group.aiDraftLabel?.trim() || group.label,
+            draft_description:
+              group.aiDraftDescription?.trim() || group.description || "",
+            draft_explanation: group.aiDraftExplanation ?? null,
+            created_at: group.aiDraftCreatedAt?.toISOString() ?? null,
+            created_by: group.aiDraftCreatedBy ?? null,
+          }
+        : null,
+      last_structural_change_at: group.lastStructuralChangeAt?.toISOString(),
+      created_at: group.createdAt?.toISOString(),
+      updated_at: group.updatedAt?.toISOString(),
+      created_by: group.createdBy ?? undefined,
+    } satisfies GroupingExistingGroup;
+  });
+}
+
 async function findThemeGroup(params: {
   userId: string;
   consultationId: string;
@@ -226,6 +338,11 @@ export async function executeGroupThemesTool(params: {
     )
     .limit(1);
 
+  const existingGroups = await loadGroupingExistingGroups({
+    userId: params.userId,
+    consultationId: params.consultationId,
+  });
+
   const focusLabels = pickFocusLabels(params.hint, availableThemes);
   const result = await dispatchToolToFastApi({
     userId: params.userId,
@@ -288,6 +405,8 @@ export async function executeGroupThemesTool(params: {
       themeIds,
       rationale,
       availableThemes,
+      existingGroups,
+      consultationLabel: consultation?.label ?? undefined,
     }),
   };
 }
@@ -364,6 +483,22 @@ export async function executeLinkInsightsToGroupTool(params: {
     ? `Link insights matching "${params.hint}" to "${group.label}".`
     : `Select insights to add to "${group.label}".`;
 
+  const existingGroups = await loadGroupingExistingGroups({
+    userId: params.userId,
+    consultationId: params.consultationId,
+  });
+
+  const [consultation] = await db
+    .select({ label: consultations.label })
+    .from(consultations)
+    .where(
+      and(
+        eq(consultations.id, params.consultationId),
+        eq(consultations.userId, params.userId)
+      )
+    )
+    .limit(1);
+
   return {
     ok: true,
     output: buildGroupingReviewOutput({
@@ -374,7 +509,9 @@ export async function executeLinkInsightsToGroupTool(params: {
       themeIds,
       rationale,
       availableThemes,
+      existingGroups,
       targetGroupId: group.id,
+      consultationLabel: consultation?.label ?? undefined,
     }),
   };
 }

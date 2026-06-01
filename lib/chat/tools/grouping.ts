@@ -31,7 +31,33 @@ export const groupingThemeOptionSchema = z.object({
 });
 
 export type GroupingThemeOption = z.infer<typeof groupingThemeOptionSchema>;
-export type GroupingMode = "propose" | "link";
+export type GroupingMode = "propose" | "link" | "ai-suggest";
+
+export const groupingExistingGroupSchema = z.object({
+  id: z.string().uuid(),
+  label: z.string(),
+  description: z.string(),
+  status: z.enum(["draft", "accepted", "discarded", "management_rejected"]),
+  origin: z.enum(["manual", "ai_refined"]),
+  member_insight_ids: z.array(z.string().uuid()),
+  members: z.array(groupingThemeOptionSchema),
+  pending_draft: z
+    .object({
+      draft_label: z.string(),
+      draft_description: z.string(),
+      draft_explanation: z.string().nullable().optional(),
+      created_at: z.string().nullable().optional(),
+      created_by: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+  last_structural_change_at: z.string().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+  created_by: z.string().optional(),
+});
+
+export type GroupingExistingGroup = z.infer<typeof groupingExistingGroupSchema>;
 
 export interface GroupingReviewOutput {
   consultation_id: string;
@@ -41,7 +67,9 @@ export interface GroupingReviewOutput {
   theme_ids: string[];
   rationale: string;
   available_themes: GroupingThemeOption[];
+  existing_groups?: GroupingExistingGroup[];
   target_group_id?: string;
+  consultation_label?: string;
 }
 
 export interface ThemeGroupRecord {
@@ -59,7 +87,9 @@ export function buildGroupingReviewOutput(params: {
   themeIds: string[];
   rationale: string;
   availableThemes: GroupingThemeOption[];
+  existingGroups?: GroupingExistingGroup[];
   targetGroupId?: string;
+  consultationLabel?: string;
 }): GroupingReviewOutput {
   return {
     consultation_id: params.consultationId,
@@ -69,7 +99,9 @@ export function buildGroupingReviewOutput(params: {
     theme_ids: params.themeIds,
     rationale: params.rationale,
     available_themes: params.availableThemes,
+    ...(params.existingGroups ? { existing_groups: params.existingGroups } : {}),
     ...(params.targetGroupId ? { target_group_id: params.targetGroupId } : {}),
+    ...(params.consultationLabel ? { consultation_label: params.consultationLabel } : {}),
   };
 }
 
@@ -107,7 +139,23 @@ export function readGroupingReviewOutput(output: unknown): GroupingReviewOutput 
     return null;
   }
 
-  const mode: GroupingMode = record.mode === "link" ? "link" : "propose";
+  const mode: GroupingMode =
+    record.mode === "link"
+      ? "link"
+      : record.mode === "ai-suggest"
+        ? "ai-suggest"
+        : "propose";
+
+  const existingRaw = record.existing_groups;
+  const existingGroups: GroupingExistingGroup[] = [];
+  if (Array.isArray(existingRaw)) {
+    for (const item of existingRaw) {
+      const parsed = groupingExistingGroupSchema.safeParse(item);
+      if (parsed.success) {
+        existingGroups.push(parsed.data);
+      }
+    }
+  }
 
   return {
     consultation_id: record.consultation_id,
@@ -117,8 +165,12 @@ export function readGroupingReviewOutput(output: unknown): GroupingReviewOutput 
     theme_ids: themeIds,
     rationale: record.rationale,
     available_themes: availableThemes,
+    ...(existingGroups.length > 0 ? { existing_groups: existingGroups } : {}),
     ...(typeof record.target_group_id === "string"
       ? { target_group_id: record.target_group_id }
+      : {}),
+    ...(typeof record.consultation_label === "string"
+      ? { consultation_label: record.consultation_label }
       : {}),
   };
 }

@@ -56,6 +56,36 @@ describe("grouping tools", () => {
     expect(parsed?.target_group_id).toBe("44444444-4444-4444-8444-444444444444");
   });
 
+  it("reads existing_groups on review output", () => {
+    const output = buildGroupingReviewOutput({
+      consultationId: "11111111-1111-4111-8111-111111111111",
+      groupName: "Leadership",
+      groupDescription: "",
+      themeIds: [],
+      rationale: "Review clusters.",
+      availableThemes: [],
+      existingGroups: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          label: "Leadership",
+          description: "Existing",
+          status: "accepted",
+          origin: "manual",
+          member_insight_ids: ["22222222-2222-4222-8222-222222222222"],
+          members: [
+            {
+              id: "22222222-2222-4222-8222-222222222222",
+              label: "Load",
+              description: "",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(readGroupingReviewOutput(output)?.existing_groups).toHaveLength(1);
+  });
+
   it("defaults legacy output without mode to propose", () => {
     const parsed = readGroupingReviewOutput({
       consultation_id: "11111111-1111-4111-8111-111111111111",
@@ -71,7 +101,63 @@ describe("grouping tools", () => {
 });
 
 describe("canvas preview helpers", () => {
-  it("reads canvas layout preview output", () => {
+  it("reads full canvas layout preview output", () => {
+    const preview = readCanvasLayoutPreview({
+      consultation_id: "11111111-1111-4111-8111-111111111111",
+      canvas_nodes: [
+        {
+          id: "a",
+          type: "theme",
+          label: "Group A",
+          description: null,
+          accepted: true,
+          subgroup: null,
+          sourceConsultationId: null,
+          sourceConsultationTitle: null,
+          groupId: null,
+          memberIds: ["b"],
+          isUserAdded: false,
+          lockedFromSource: false,
+          position: { x: 10, y: 20 },
+        },
+        {
+          id: "b",
+          type: "insight",
+          label: "Insight B",
+          description: null,
+          accepted: true,
+          subgroup: null,
+          sourceConsultationId: null,
+          sourceConsultationTitle: null,
+          groupId: "a",
+          memberIds: [],
+          isUserAdded: false,
+          lockedFromSource: false,
+          position: { x: 40, y: 160 },
+        },
+      ],
+      canvas_edges: [
+        {
+          id: "edge-1",
+          source_node_id: "a",
+          target_node_id: "c",
+          connection_type: "supports",
+          note: null,
+          created_by: "test",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      node_count: 2,
+      group_count: 1,
+    });
+
+    expect(preview?.group_count).toBe(1);
+    expect(preview?.canvas_nodes).toHaveLength(2);
+    expect(preview?.canvas_edges[0]?.connection_type).toBe("supports");
+  });
+
+  it("reads legacy simplified canvas preview nodes", () => {
     const preview = readCanvasLayoutPreview({
       consultation_id: "11111111-1111-4111-8111-111111111111",
       nodes: [{ id: "a", label: "Group A", x: 10, y: 20, type: "theme" }],
@@ -80,7 +166,8 @@ describe("canvas preview helpers", () => {
       group_count: 1,
     });
 
-    expect(preview?.group_count).toBe(1);
+    expect(preview?.canvas_nodes[0]?.position).toEqual({ x: 10, y: 20 });
+    expect(preview?.canvas_edges[0]?.target_node_id).toBe("b");
   });
 });
 

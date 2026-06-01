@@ -25,6 +25,13 @@ export const AGENT_VOICE = {
   PROACTIVE_CANVAS_PENDING:
     "There's an unsaved canvas operation. Confirm or dismiss?",
 
+  // Canvas NL (Task 04)
+  CANVAS_UNSAVED_CHANGES:
+    "The canvas has unsaved changes. Save them first, then I can make changes via chat.",
+  CANVAS_AMBIGUOUS_NODE: (a: string, b: string) => `Did you mean "${a}" or "${b}"?`,
+  CANVAS_UNSUPPORTED_OP: (op: string) =>
+    `I can only connect and rename in chat. For ${op}, open the canvas editor from the sidebar.`,
+
   // Analytics (Task 05) — system prompt instruction
   ANALYTICS_FORMAT_INSTRUCTION:
     "Format data responses concisely. Use numbered lists for rankings and multi-item results (max 5 items). Use plain sentences for counts. Never return raw database values — summarise.",

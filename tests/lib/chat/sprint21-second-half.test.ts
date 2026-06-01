@@ -8,9 +8,10 @@ import { readResearchQuestionReviewOutput } from "@/lib/chat/tools/async-actions
 import { isChatCardToolName } from "@/lib/chat/card-tools";
 
 describe("grouping tools", () => {
-  it("round-trips grouping review output", () => {
+  it("round-trips propose grouping review output", () => {
     const output = buildGroupingReviewOutput({
       consultationId: "11111111-1111-4111-8111-111111111111",
+      mode: "propose",
       groupName: "Leadership",
       groupDescription: "Themes about leadership pressure.",
       themeIds: ["22222222-2222-4222-8222-222222222222"],
@@ -20,11 +21,52 @@ describe("grouping tools", () => {
           id: "22222222-2222-4222-8222-222222222222",
           label: "Leadership load",
           description: "Pressure from senior stakeholders.",
+          source_meeting_id: "33333333-3333-4333-8333-333333333333",
+          source_meeting_title: "Exec interview",
         },
       ],
     });
 
-    expect(readGroupingReviewOutput(output)?.group_name).toBe("Leadership");
+    const parsed = readGroupingReviewOutput(output);
+    expect(parsed?.group_name).toBe("Leadership");
+    expect(parsed?.mode).toBe("propose");
+    expect(parsed?.available_themes[0]?.source_meeting_title).toBe("Exec interview");
+  });
+
+  it("round-trips link grouping review output", () => {
+    const output = buildGroupingReviewOutput({
+      consultationId: "11111111-1111-4111-8111-111111111111",
+      mode: "link",
+      groupName: "Leadership",
+      groupDescription: "Existing leadership cluster.",
+      themeIds: ["22222222-2222-4222-8222-222222222222"],
+      rationale: "Link matching insights.",
+      availableThemes: [
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          label: "Stakeholder pressure",
+          description: "Board expectations.",
+        },
+      ],
+      targetGroupId: "44444444-4444-4444-8444-444444444444",
+    });
+
+    const parsed = readGroupingReviewOutput(output);
+    expect(parsed?.mode).toBe("link");
+    expect(parsed?.target_group_id).toBe("44444444-4444-4444-8444-444444444444");
+  });
+
+  it("defaults legacy output without mode to propose", () => {
+    const parsed = readGroupingReviewOutput({
+      consultation_id: "11111111-1111-4111-8111-111111111111",
+      group_name: "Legacy",
+      group_description: "",
+      theme_ids: [],
+      rationale: "Old row",
+      available_themes: [],
+    });
+
+    expect(parsed?.mode).toBe("propose");
   });
 });
 
@@ -45,6 +87,7 @@ describe("canvas preview helpers", () => {
 describe("async card registry", () => {
   it("registers sprint 21 second-half card tools", () => {
     expect(isChatCardToolName("group_themes")).toBe(true);
+    expect(isChatCardToolName("link_insights_to_group")).toBe(true);
     expect(isChatCardToolName("preview_canvas")).toBe(true);
     expect(isChatCardToolName("draft_evidence_email")).toBe(true);
     expect(isChatCardToolName("generate_report")).toBe(true);

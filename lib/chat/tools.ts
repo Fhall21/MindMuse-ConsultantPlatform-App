@@ -34,14 +34,14 @@ import { identifyQuotesSchema } from "./tools/quotes";
 import { extractAndPersistThemes, finalizeThemeReview } from "./themes-db";
 import { identifyAndPersistQuotes } from "./quotes-db";
 import { buildCanvasLayoutPreview } from "./canvas-preview";
-import { executeGroupThemesTool } from "./grouping-db";
+import { executeGroupThemesTool, executeLinkInsightsToGroupTool } from "./grouping-db";
 import {
   executeDraftEvidenceEmail,
   executeGenerateReport,
   executeGenerateResearchQuestions,
   executeLinkResearchToThemes,
 } from "./async-actions-db";
-import { groupThemesSchema } from "./tools/grouping";
+import { groupThemesSchema, linkInsightsToGroupSchema } from "./tools/grouping";
 import { previewCanvasSchema } from "./tools/canvas";
 import {
   draftEvidenceEmailSchema,
@@ -459,7 +459,7 @@ export function createChatTools(context: ChatToolRuntimeContext) {
     }),
     group_themes: tool({
       description:
-        "Propose a theme group by finding relevant insights and suggesting a name, description, and theme membership.",
+        "Propose a new theme group by clustering relevant insights. Use when the user wants AI-suggested groupings or to create a new group from scratch.",
       inputSchema: groupThemesSchema,
       execute: async (input) => {
         const parsed = groupThemesSchema.parse(input);
@@ -486,6 +486,48 @@ export function createChatTools(context: ChatToolRuntimeContext) {
         const toolResult = await persistToolExecution({
           context,
           toolName: "group_themes",
+          input: payload,
+          output: result.output,
+          status: "pending",
+        });
+
+        return {
+          ...result.output,
+          tool_result_id: toolResult.id,
+        };
+      },
+    }),
+    link_insights_to_group: tool({
+      description:
+        "Link many insights to an existing theme group the user already named. Use when they refer to a specific group and want to connect insights to it.",
+      inputSchema: linkInsightsToGroupSchema,
+      execute: async (input) => {
+        const parsed = linkInsightsToGroupSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+
+        const result = await executeLinkInsightsToGroupTool({
+          userId: context.userId,
+          consultationId: parsed.project_id,
+          groupName: parsed.group_name,
+          groupId: parsed.group_id,
+          hint: parsed.hint,
+          insightIds: parsed.insight_ids,
+        });
+
+        if (!result.ok) {
+          await persistToolExecution({
+            context,
+            toolName: "link_insights_to_group",
+            input: payload,
+            output: { error: result.error },
+            status: "error",
+          });
+          return { error: result.error };
+        }
+
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "link_insights_to_group",
           input: payload,
           output: result.output,
           status: "pending",

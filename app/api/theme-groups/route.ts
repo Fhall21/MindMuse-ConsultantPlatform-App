@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
 import { getUnarchivedSessionForUser } from "@/lib/chat/context";
-import { confirmGroupingFromChat } from "@/lib/chat/grouping-db";
+import {
+  confirmGroupingFromChat,
+  linkInsightsToGroupFromChat,
+  ThemeGroupingValidationError,
+} from "@/lib/chat/grouping-db";
 import { getToolResultForSession, updateToolResult } from "@/lib/chat/persist";
 import { confirmGroupingSchema } from "@/lib/chat/tools/grouping";
 
@@ -35,13 +39,20 @@ export async function POST(request: NextRequest) {
   const sessionId = request.headers.get("x-chat-session-id");
 
   try {
-    const group = await confirmGroupingFromChat({
-      userId: auth.id,
-      consultationId: parsed.data.consultation_id,
-      groupName: parsed.data.group_name,
-      groupDescription: parsed.data.group_description,
-      themeIds: parsed.data.theme_ids,
-    });
+    const group = parsed.data.target_group_id
+      ? await linkInsightsToGroupFromChat({
+          userId: auth.id,
+          consultationId: parsed.data.consultation_id,
+          groupId: parsed.data.target_group_id,
+          themeIds: parsed.data.theme_ids,
+        })
+      : await confirmGroupingFromChat({
+          userId: auth.id,
+          consultationId: parsed.data.consultation_id,
+          groupName: parsed.data.group_name,
+          groupDescription: parsed.data.group_description,
+          themeIds: parsed.data.theme_ids,
+        });
 
     if (parsed.data.tool_result_id && sessionId) {
       const session = await getUnarchivedSessionForUser(auth.id, sessionId);
@@ -65,7 +76,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(group, { status: 201 });
   } catch (error) {
+    if (error instanceof ThemeGroupingValidationError) {
+      return NextResponse.json({ detail: error.message }, { status: 422 });
+    }
+
     const detail = error instanceof Error ? error.message : "Failed to save theme group";
-    return NextResponse.json({ detail }, { status: 500 });
+    const status =
+      detail === "Consultation not found" || detail === "Select at least one theme for the group."
+        ? 422
+        : 500;
+    return NextResponse.json({ detail }, { status });
   }
 }

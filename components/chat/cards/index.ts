@@ -25,6 +25,7 @@ export const CHAT_CARD_MAP: Record<string, ChatCardComponent> = {
   select_meeting_for_themes: MeetingPickerCard,
   identify_quotes: QuoteCard,
   group_themes: ThemeGroupingCard,
+  link_insights_to_group: ThemeGroupingCard,
   preview_canvas: CanvasPreviewCard,
   generate_research_questions: ResearchQuestionCard,
   draft_evidence_email: DraftPreviewCard,

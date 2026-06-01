@@ -3,14 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { ThemeGroupProposalEditor } from "@/components/consultations/rounds/theme-group-proposal-editor";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import {
   CARD_DISMISSED_COPY,
   CARD_REOPEN_HELP,
   GROUPING_CONFIRMED_COPY,
+  GROUPING_LINKED_COPY,
 } from "@/lib/chat/onboarding-copy";
 import { readGroupingReviewOutput, type GroupingReviewOutput } from "@/lib/chat/tools/grouping";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
@@ -33,6 +32,7 @@ export function ThemeGroupingCard({
   const status = tool.status ?? "pending";
   const toolResultId = tool.toolResultId;
   const confirming = isPending(confirmKey);
+  const isLinkMode = review?.mode === "link";
 
   useEffect(() => {
     if (initialReview) {
@@ -53,6 +53,8 @@ export function ThemeGroupingCard({
           sessionId,
           status: nextStatus ?? "pending",
           consultation_id: nextReview.consultation_id,
+          mode: nextReview.mode,
+          target_group_id: nextReview.target_group_id,
           group_name: nextReview.group_name,
           group_description: nextReview.group_description,
           theme_ids: nextReview.theme_ids,
@@ -72,8 +74,12 @@ export function ThemeGroupingCard({
     return (
       <ChatToolCardShell
         success
-        title="Theme group saved"
-        description={GROUPING_CONFIRMED_COPY(review.group_name)}
+        title={isLinkMode ? "Insights linked" : "Theme group saved"}
+        description={
+          isLinkMode
+            ? GROUPING_LINKED_COPY(review.group_name, review.theme_ids.length)
+            : GROUPING_CONFIRMED_COPY(review.group_name)
+        }
         successHelp={CARD_REOPEN_HELP}
       />
     );
@@ -105,7 +111,16 @@ export function ThemeGroupingCard({
     }
 
     if (review.theme_ids.length < 1) {
-      setError("Select at least one theme for this group.");
+      setError(
+        isLinkMode
+          ? "Select at least one insight to link."
+          : "Select at least one theme for this group."
+      );
+      return;
+    }
+
+    if (isLinkMode && !review.target_group_id) {
+      setError("Target group is missing. Ask the assistant to try again.");
       return;
     }
 
@@ -124,6 +139,7 @@ export function ThemeGroupingCard({
           group_name: review.group_name,
           group_description: review.group_description,
           theme_ids: review.theme_ids,
+          target_group_id: review.target_group_id,
           tool_result_id: toolResultId,
         }),
       });
@@ -170,8 +186,12 @@ export function ThemeGroupingCard({
   return (
     <ChatToolCardShell
       maxWidth="2xl"
-      title="Review theme group"
-      description="Edit the group and choose which themes belong. Changes save immediately."
+      title={isLinkMode ? "Link insights to group" : "Review theme group"}
+      description={
+        isLinkMode
+          ? "Choose insights to add to this group. Changes save immediately."
+          : "Edit the group and choose which themes belong. Changes save immediately."
+      }
       error={error}
       onDismiss={() => void handleDismiss()}
       dismissLabel="Dismiss grouping"
@@ -192,6 +212,8 @@ export function ThemeGroupingCard({
                 <Loader2 className="size-4 animate-spin" />
                 Saving…
               </>
+            ) : isLinkMode ? (
+              "Link insights"
             ) : (
               "Confirm group"
             )}
@@ -199,68 +221,30 @@ export function ThemeGroupingCard({
         </>
       }
     >
-      <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-        {review.rationale}
-      </p>
-
-      <div className="space-y-3">
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground" htmlFor={`group-name-${messageId}`}>
-            Group name
-          </label>
-          <Input
-            id={`group-name-${messageId}`}
-            value={review.group_name}
-            disabled={confirming}
-            onChange={(event) => {
-              void patchReview({ ...review, group_name: event.target.value });
-            }}
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label
-            className="text-xs font-medium text-muted-foreground"
-            htmlFor={`group-description-${messageId}`}
-          >
-            Description
-          </label>
-          <Textarea
-            id={`group-description-${messageId}`}
-            value={review.group_description}
-            disabled={confirming}
-            rows={3}
-            onChange={(event) => {
-              void patchReview({ ...review, group_description: event.target.value });
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-xs font-medium text-muted-foreground">Themes in this group</p>
-        {review.available_themes.map((theme) => {
-          const checked = review.theme_ids.includes(theme.id);
-          return (
-            <label
-              key={theme.id}
-              className="flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2"
-            >
-              <Checkbox
-                checked={checked}
-                disabled={confirming}
-                onCheckedChange={(value) => toggleTheme(theme.id, value === true)}
-              />
-              <span className="min-w-0 space-y-0.5">
-                <span className="block text-sm font-medium">{theme.label}</span>
-                {theme.description ? (
-                  <span className="block text-xs text-muted-foreground">{theme.description}</span>
-                ) : null}
-              </span>
-            </label>
-          );
-        })}
-      </div>
+      <ThemeGroupProposalEditor
+        mode={review.mode}
+        groupName={review.group_name}
+        groupDescription={review.group_description}
+        rationale={review.rationale}
+        availableThemes={review.available_themes}
+        selectedThemeIds={review.theme_ids}
+        disabled={confirming}
+        onGroupNameChange={
+          isLinkMode
+            ? undefined
+            : (value) => {
+                void patchReview({ ...review, group_name: value });
+              }
+        }
+        onGroupDescriptionChange={
+          isLinkMode
+            ? undefined
+            : (value) => {
+                void patchReview({ ...review, group_description: value });
+              }
+        }
+        onToggleTheme={toggleTheme}
+      />
     </ChatToolCardShell>
   );
 }

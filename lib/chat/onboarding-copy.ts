@@ -95,6 +95,11 @@ export const QUOTE_REVIEW_COMPLETE_COPY = (count: number) =>
 export const GROUPING_CONFIRMED_COPY = (groupName: string) =>
   `"${groupName}" is saved to your consultation canvas.`;
 
+export const GROUPING_LINKED_COPY = (groupName: string, count: number) =>
+  count === 1
+    ? `1 insight linked to "${groupName}".`
+    : `${count} insights linked to "${groupName}".`;
+
 export const EMAIL_DRAFT_SAVED_COPY =
   "Evidence email draft saved. Open it from the consultation when you are ready to send.";
 

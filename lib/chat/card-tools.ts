@@ -9,6 +9,7 @@ export const CHAT_CARD_TOOL_NAMES = new Set<string>([
   "identify_quotes",
   "generate_clarification",
   "group_themes",
+  "link_insights_to_group",
   "preview_canvas",
   "generate_research_questions",
   "draft_evidence_email",

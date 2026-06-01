@@ -1,8 +1,14 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { consultations, insights, meetings, themeMembers, themes } from "@/db/schema";
+import {
+  consultations,
+  insights,
+  meetings,
+  themeMembers,
+  themes,
+} from "@/db/schema";
 import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";
-import { emitAuditEvent } from "@/lib/actions/audit";
+import { insertAuditLogEntry } from "@/lib/data/audit-log";
 import { requireOwnedConsultation } from "@/lib/data/ownership";
 import { dispatchToolToFastApi } from "./tool-dispatch";
 import { CHAT_TOOL_ENDPOINTS } from "./tool-allowlist";
@@ -45,14 +51,36 @@ function pickFocusLabels(
   return focus.slice(0, Math.min(focus.length, 5)).map((item) => item.label);
 }
 
+function pickThemeIdsByHint(
+  hint: string | undefined,
+  options: GroupingThemeOption[]
+): string[] {
+  const tokens = normalizeHintTokens(hint);
+  if (tokens.length === 0) {
+    return [];
+  }
+
+  return options
+    .filter((item) => {
+      const haystack = `${item.label} ${item.description}`.toLowerCase();
+      return tokens.some((token) => haystack.includes(token));
+    })
+    .map((item) => item.id);
+}
+
+function normalizeGroupName(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export async function loadAcceptedInsightOptions(params: {
   userId: string;
   consultationId: string;
+  excludeInsightIds?: string[];
 }): Promise<GroupingThemeOption[]> {
   await requireOwnedConsultation(params.consultationId, params.userId);
 
   const meetingRows = await db
-    .select({ id: meetings.id })
+    .select({ id: meetings.id, title: meetings.title })
     .from(meetings)
     .where(
       and(
@@ -67,18 +95,25 @@ export async function loadAcceptedInsightOptions(params: {
     return [];
   }
 
+  const meetingTitleById = new Map(meetingRows.map((row) => [row.id, row.title]));
+
   const insightRows = await db
     .select({
       id: insights.id,
       label: insights.label,
       description: insights.description,
+      meetingId: insights.meetingId,
+      isUserAdded: insights.isUserAdded,
     })
     .from(insights)
     .where(
       and(
         inArray(insights.meetingId, meetingIds),
         eq(insights.accepted, true),
-        eq(insights.rejected, false)
+        eq(insights.rejected, false),
+        params.excludeInsightIds && params.excludeInsightIds.length > 0
+          ? notInArray(insights.id, params.excludeInsightIds)
+          : undefined
       )
     )
     .orderBy(insights.createdAt);
@@ -87,7 +122,76 @@ export async function loadAcceptedInsightOptions(params: {
     id: row.id,
     label: row.label,
     description: row.description ?? "",
+    source_meeting_id: row.meetingId,
+    source_meeting_title: meetingTitleById.get(row.meetingId) ?? "Meeting",
+    is_user_added: row.isUserAdded,
   }));
+}
+
+async function loadGroupedInsightIds(params: {
+  consultationId: string;
+  excludeGroupId?: string;
+}): Promise<Set<string>> {
+  const memberRows = await db
+    .select({ insightId: themeMembers.insightId, themeId: themeMembers.themeId })
+    .from(themeMembers)
+    .where(eq(themeMembers.consultationId, params.consultationId));
+
+  const grouped = new Set<string>();
+  for (const row of memberRows) {
+    if (params.excludeGroupId && row.themeId === params.excludeGroupId) {
+      continue;
+    }
+    grouped.add(row.insightId);
+  }
+  return grouped;
+}
+
+async function findThemeGroup(params: {
+  userId: string;
+  consultationId: string;
+  groupName: string;
+  groupId?: string;
+}) {
+  const conditions = [
+    eq(themes.consultationId, params.consultationId),
+    eq(themes.userId, params.userId),
+    sql`${themes.status} not in ('discarded', 'management_rejected')`,
+  ];
+
+  if (params.groupId) {
+    const [byId] = await db
+      .select({
+        id: themes.id,
+        label: themes.label,
+        description: themes.description,
+      })
+      .from(themes)
+      .where(and(...conditions, eq(themes.id, params.groupId)))
+      .limit(1);
+    return byId ?? null;
+  }
+
+  const rows = await db
+    .select({
+      id: themes.id,
+      label: themes.label,
+      description: themes.description,
+    })
+    .from(themes)
+    .where(and(...conditions));
+
+  const normalized = normalizeGroupName(params.groupName);
+  const exact = rows.find((row) => normalizeGroupName(row.label) === normalized);
+  if (exact) {
+    return exact;
+  }
+
+  return (
+    rows.find((row) => normalizeGroupName(row.label).includes(normalized)) ??
+    rows.find((row) => normalized.includes(normalizeGroupName(row.label))) ??
+    null
+  );
 }
 
 export async function executeGroupThemesTool(params: {
@@ -134,8 +238,8 @@ export async function executeGroupThemesTool(params: {
         theme_id: theme.id,
         label: theme.label,
         description: theme.description || null,
-        consultation_title: consultation?.label ?? null,
-        is_user_added: false,
+        consultation_title: theme.source_meeting_title ?? null,
+        is_user_added: theme.is_user_added ?? false,
       })),
     },
   });
@@ -178,6 +282,7 @@ export async function executeGroupThemesTool(params: {
     ok: true,
     output: buildGroupingReviewOutput({
       consultationId: params.consultationId,
+      mode: "propose",
       groupName: proposedName,
       groupDescription: proposedDescription,
       themeIds,
@@ -185,6 +290,100 @@ export async function executeGroupThemesTool(params: {
       availableThemes,
     }),
   };
+}
+
+export async function executeLinkInsightsToGroupTool(params: {
+  userId: string;
+  consultationId: string;
+  groupName: string;
+  groupId?: string;
+  hint?: string;
+  insightIds?: string[];
+}): Promise<
+  | { ok: true; output: ReturnType<typeof buildGroupingReviewOutput> }
+  | { ok: false; error: string }
+> {
+  await requireOwnedConsultation(params.consultationId, params.userId);
+
+  const group = await findThemeGroup({
+    userId: params.userId,
+    consultationId: params.consultationId,
+    groupName: params.groupName,
+    groupId: params.groupId,
+  });
+
+  if (!group) {
+    return {
+      ok: false,
+      error: `No theme group named "${params.groupName}" found in this consultation.`,
+    };
+  }
+
+  const alreadyInGroup = await db
+    .select({ insightId: themeMembers.insightId })
+    .from(themeMembers)
+    .where(
+      and(
+        eq(themeMembers.consultationId, params.consultationId),
+        eq(themeMembers.themeId, group.id)
+      )
+    );
+
+  const excludeIds = alreadyInGroup.map((row) => row.insightId);
+  const groupedElsewhere = await loadGroupedInsightIds({
+    consultationId: params.consultationId,
+    excludeGroupId: group.id,
+  });
+
+  const availableThemes = (
+    await loadAcceptedInsightOptions({
+      userId: params.userId,
+      consultationId: params.consultationId,
+      excludeInsightIds: excludeIds,
+    })
+  ).filter((theme) => !groupedElsewhere.has(theme.id));
+
+  if (availableThemes.length === 0) {
+    return {
+      ok: false,
+      error: "No ungrouped insights are available to link to this group.",
+    };
+  }
+
+  const validIds = new Set(availableThemes.map((theme) => theme.id));
+  const requestedIds = (params.insightIds ?? []).filter((id) => validIds.has(id));
+  const hintedIds = pickThemeIdsByHint(params.hint, availableThemes);
+  const themeIds =
+    requestedIds.length > 0
+      ? requestedIds
+      : hintedIds.length > 0
+        ? hintedIds
+        : availableThemes.slice(0, Math.min(availableThemes.length, 5)).map((theme) => theme.id);
+
+  const rationale = params.hint
+    ? `Link insights matching "${params.hint}" to "${group.label}".`
+    : `Select insights to add to "${group.label}".`;
+
+  return {
+    ok: true,
+    output: buildGroupingReviewOutput({
+      consultationId: params.consultationId,
+      mode: "link",
+      groupName: group.label,
+      groupDescription: group.description ?? "",
+      themeIds,
+      rationale,
+      availableThemes,
+      targetGroupId: group.id,
+    }),
+  };
+}
+
+export class ThemeGroupingValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ThemeGroupingValidationError";
+  }
 }
 
 export async function confirmGroupingFromChat(params: {
@@ -197,7 +396,7 @@ export async function confirmGroupingFromChat(params: {
   await requireOwnedConsultation(params.consultationId, params.userId);
 
   if (params.themeIds.length === 0) {
-    throw new Error("Select at least one theme for the group.");
+    throw new ThemeGroupingValidationError("Select at least one theme for the group.");
   }
 
   const insightRows = await db
@@ -212,42 +411,66 @@ export async function confirmGroupingFromChat(params: {
         inArray(insights.id, params.themeIds),
         eq(meetings.userId, params.userId),
         eq(meetings.consultationId, params.consultationId),
-        eq(insights.accepted, true)
+        eq(meetings.isArchived, false),
+        eq(insights.accepted, true),
+        eq(insights.rejected, false)
       )
     );
 
   if (insightRows.length !== params.themeIds.length) {
-    throw new Error("One or more themes are invalid for this consultation.");
+    throw new ThemeGroupingValidationError(
+      "One or more themes are invalid for this consultation."
+    );
   }
 
-  const [created] = await db
-    .insert(themes)
-    .values({
-      consultationId: params.consultationId,
-      userId: params.userId,
-      label: params.groupName.trim(),
-      description: params.groupDescription.trim() || null,
-      status: "accepted",
-      origin: "ai_refined",
-      createdBy: params.userId,
-      lastStructuralChangeBy: params.userId,
-    })
-    .returning({ id: themes.id });
+  const groupName = params.groupName.trim();
+  const groupDescription = params.groupDescription.trim();
 
-  await db.insert(themeMembers).values(
-    insightRows.map((row, index) => ({
-      themeId: created.id,
-      consultationId: params.consultationId,
-      insightId: row.id,
-      sourceMeetingId: row.meetingId,
-      sourceMeetingIds: row.meetingId ? [row.meetingId] : [],
-      userId: params.userId,
-      position: index,
-      createdBy: params.userId,
-    }))
-  );
+  const created = await db.transaction(async (tx) => {
+    await tx
+      .delete(themeMembers)
+      .where(
+        and(
+          eq(themeMembers.consultationId, params.consultationId),
+          inArray(themeMembers.insightId, params.themeIds)
+        )
+      );
 
-  await emitAuditEvent({
+    const [group] = await tx
+      .insert(themes)
+      .values({
+        consultationId: params.consultationId,
+        userId: params.userId,
+        label: groupName,
+        description: groupDescription || null,
+        status: "accepted",
+        origin: "ai_refined",
+        createdBy: params.userId,
+        lastStructuralChangeBy: params.userId,
+      })
+      .returning({ id: themes.id });
+
+    await tx.insert(themeMembers).values(
+      insightRows.map((row, index) => ({
+        themeId: group.id,
+        consultationId: params.consultationId,
+        insightId: row.id,
+        sourceMeetingId: row.meetingId,
+        sourceMeetingIds: row.meetingId ? [row.meetingId] : [],
+        userId: params.userId,
+        position: index,
+        createdBy: params.userId,
+      }))
+    );
+
+    return group;
+  });
+
+  const auditMeetingId = insightRows.find((row) => row.meetingId)?.meetingId ?? null;
+
+  await insertAuditLogEntry({
+    userId: params.userId,
+    consultationId: auditMeetingId,
     action: AUDIT_ACTIONS.ROUND_THEME_GROUP_CREATED,
     entityType: "round_theme_group",
     entityId: created.id,
@@ -260,8 +483,143 @@ export async function confirmGroupingFromChat(params: {
 
   return {
     id: created.id,
-    name: params.groupName.trim(),
-    description: params.groupDescription.trim(),
+    name: groupName,
+    description: groupDescription,
     themeIds: params.themeIds,
+  };
+}
+
+export async function linkInsightsToGroupFromChat(params: {
+  userId: string;
+  consultationId: string;
+  groupId: string;
+  themeIds: string[];
+}): Promise<ThemeGroupRecord> {
+  await requireOwnedConsultation(params.consultationId, params.userId);
+
+  if (params.themeIds.length === 0) {
+    throw new ThemeGroupingValidationError("Select at least one insight to link.");
+  }
+
+  const [group] = await db
+    .select({
+      id: themes.id,
+      label: themes.label,
+      description: themes.description,
+    })
+    .from(themes)
+    .where(
+      and(
+        eq(themes.id, params.groupId),
+        eq(themes.consultationId, params.consultationId),
+        eq(themes.userId, params.userId)
+      )
+    )
+    .limit(1);
+
+  if (!group) {
+    throw new ThemeGroupingValidationError("Theme group not found.");
+  }
+
+  const insightRows = await db
+    .select({
+      id: insights.id,
+      meetingId: insights.meetingId,
+    })
+    .from(insights)
+    .innerJoin(meetings, eq(insights.meetingId, meetings.id))
+    .where(
+      and(
+        inArray(insights.id, params.themeIds),
+        eq(meetings.userId, params.userId),
+        eq(meetings.consultationId, params.consultationId),
+        eq(meetings.isArchived, false),
+        eq(insights.accepted, true),
+        eq(insights.rejected, false)
+      )
+    );
+
+  if (insightRows.length !== params.themeIds.length) {
+    throw new ThemeGroupingValidationError(
+      "One or more insights are invalid for this consultation."
+    );
+  }
+
+  const existingMembers = await db
+    .select({ insightId: themeMembers.insightId, position: themeMembers.position })
+    .from(themeMembers)
+    .where(eq(themeMembers.themeId, params.groupId));
+
+  const existingInsightIds = new Set(existingMembers.map((row) => row.insightId));
+  const nextPosition =
+    existingMembers.reduce((max, row) => Math.max(max, row.position), -1) + 1;
+
+  const newRows = insightRows.filter((row) => !existingInsightIds.has(row.id));
+  if (newRows.length === 0) {
+    throw new ThemeGroupingValidationError(
+      "Selected insights are already linked to this group."
+    );
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(themeMembers)
+      .where(
+        and(
+          eq(themeMembers.consultationId, params.consultationId),
+          inArray(
+            themeMembers.insightId,
+            newRows.map((row) => row.id)
+          )
+        )
+      );
+
+    await tx.insert(themeMembers).values(
+      newRows.map((row, index) => ({
+        themeId: params.groupId,
+        consultationId: params.consultationId,
+        insightId: row.id,
+        sourceMeetingId: row.meetingId,
+        sourceMeetingIds: row.meetingId ? [row.meetingId] : [],
+        userId: params.userId,
+        position: nextPosition + index,
+        createdBy: params.userId,
+      }))
+    );
+
+    await tx
+      .update(themes)
+      .set({
+        lastStructuralChangeAt: new Date(),
+        lastStructuralChangeBy: params.userId,
+      })
+      .where(eq(themes.id, params.groupId));
+  });
+
+  const linkedIds = [
+    ...existingMembers.map((row) => row.insightId),
+    ...newRows.map((row) => row.id),
+  ];
+
+  const auditMeetingId = newRows.find((row) => row.meetingId)?.meetingId ?? null;
+
+  await insertAuditLogEntry({
+    userId: params.userId,
+    consultationId: auditMeetingId,
+    action: AUDIT_ACTIONS.ROUND_THEME_GROUP_MEMBER_MOVED,
+    entityType: "round_theme_group",
+    entityId: params.groupId,
+    metadata: {
+      round_id: params.consultationId,
+      linked_insight_ids: newRows.map((row) => row.id),
+      source: "chat_link_insights_to_group",
+    },
+  });
+
+  return {
+    id: group.id,
+    name: group.label,
+    description: group.description ?? "",
+    themeIds: linkedIds,
   };
 }

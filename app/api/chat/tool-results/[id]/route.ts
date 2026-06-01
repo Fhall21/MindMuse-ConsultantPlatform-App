@@ -50,6 +50,8 @@ const patchSchema = z.object({
   group_description: z.string().optional(),
   theme_ids: z.array(z.string().uuid()).optional(),
   rationale: z.string().optional(),
+  mode: z.enum(["propose", "link"]).optional(),
+  target_group_id: z.string().uuid().optional(),
   available_themes: z.array(groupingThemeOptionSchema).optional(),
   questions: z.array(researchQuestionSchema).optional(),
   dismissed_question_ids: z.array(z.string().uuid()).optional(),
@@ -206,6 +208,8 @@ export async function PATCH(
       nextOutput = {
         ...base,
         ...(parsed.data.consultation_id ? { consultation_id: parsed.data.consultation_id } : {}),
+        ...(parsed.data.mode ? { mode: parsed.data.mode } : {}),
+        ...(parsed.data.target_group_id ? { target_group_id: parsed.data.target_group_id } : {}),
         ...(parsed.data.group_name !== undefined ? { group_name: parsed.data.group_name } : {}),
         ...(parsed.data.group_description !== undefined
           ? { group_description: parsed.data.group_description }

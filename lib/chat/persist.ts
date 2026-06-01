@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { db } from "@/db/client";
@@ -245,4 +245,59 @@ export function toModelMessages(
       role: message.role,
       content: message.content,
     }));
+}
+
+export const REVERSIBLE_TOOLS = [
+  "confirm_meeting",
+  "confirm_themes",
+  "edit_meeting",
+  "edit_theme",
+  "create_insight",
+  "link_person_to_consultation",
+] as const;
+
+export async function getLastReversibleAction(sessionId: string) {
+  const [row] = await db
+    .select()
+    .from(chatToolResults)
+    .where(
+      and(
+        eq(chatToolResults.sessionId, sessionId),
+        eq(chatToolResults.status, "success"),
+        inArray(chatToolResults.toolName, [...REVERSIBLE_TOOLS])
+      )
+    )
+    .orderBy(desc(chatToolResults.createdAt))
+    .limit(1);
+
+  return row ?? null;
+}
+
+const SESSION_MEMORY_CUTOFF_DAYS = 14;
+
+export async function getPendingSessionItem(consultationId: string) {
+  const cutoff = new Date(Date.now() - SESSION_MEMORY_CUTOFF_DAYS * 24 * 60 * 60 * 1000);
+
+  const [row] = await db
+    .select({
+      id: chatToolResults.id,
+      toolName: chatToolResults.toolName,
+      input: chatToolResults.input,
+      output: chatToolResults.output,
+      createdAt: chatToolResults.createdAt,
+      sessionId: chatToolResults.sessionId,
+    })
+    .from(chatToolResults)
+    .innerJoin(chatSessions, eq(chatToolResults.sessionId, chatSessions.id))
+    .where(
+      and(
+        eq(chatSessions.consultationId, consultationId),
+        eq(chatToolResults.status, "pending"),
+        gt(chatToolResults.createdAt, cutoff)
+      )
+    )
+    .orderBy(desc(chatToolResults.createdAt))
+    .limit(1);
+
+  return row ?? null;
 }

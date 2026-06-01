@@ -58,6 +58,10 @@ import { editThemeSchema } from "./tools/theme-edit";
 import { showAuditTrailSchema } from "./tools/audit-trail";
 import { exportReportSchema } from "./tools/report-export";
 import {
+  manipulateCanvasSchema,
+  type CanvasOperationProposal,
+} from "./tools/canvas-manipulate";
+import {
   listMeetingsForConsultation,
   listPeopleForUser,
   getMeetingForUser,
@@ -1162,6 +1166,56 @@ export function createChatTools(context: ChatToolRuntimeContext) {
         });
 
         return { ...output, tool_result_id: toolResult.id };
+      },
+    }),
+
+    // ── Sprint 22 Task 04 — Canvas NL ─────────────────────────────────────
+
+    manipulate_canvas: tool({
+      description:
+        "Connect two canvas nodes or rename a canvas frame. Returns a proposal for user confirmation — no DB write until the user confirms on the card. Use node/frame IDs from the [CANVAS CONTEXT] block in the system prompt.",
+      inputSchema: manipulateCanvasSchema,
+      execute: async (input) => {
+        const parsed = manipulateCanvasSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+
+        const session = await getUnarchivedSessionForUser(context.userId, context.sessionId);
+        const consultationId = parsed.consultation_id ?? session?.consultationId ?? undefined;
+
+        if (!consultationId) {
+          return { error: "No consultation selected. Choose one first." };
+        }
+
+        const proposal: CanvasOperationProposal = {
+          operation: parsed.operation,
+          consultation_id: consultationId,
+          ...(parsed.operation === "connect"
+            ? {
+                source_node_id: parsed.source_node_id,
+                source_node_label: parsed.source_node_label,
+                source_node_type: parsed.source_node_type ?? "theme",
+                target_node_id: parsed.target_node_id,
+                target_node_label: parsed.target_node_label,
+                target_node_type: parsed.target_node_type ?? "theme",
+                connection_type: parsed.connection_type ?? "related_to",
+              }
+            : {
+                node_id: parsed.node_id,
+                node_label: parsed.node_label,
+                new_label: parsed.new_label,
+                is_frame: parsed.is_frame,
+              }),
+        };
+
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "manipulate_canvas",
+          input: payload,
+          output: proposal,
+          status: "pending",
+        });
+
+        return { ...proposal, tool_result_id: toolResult.id };
       },
     }),
   };

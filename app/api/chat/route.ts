@@ -18,13 +18,19 @@ import {
 import {
   checkAutoIntakeSuppressed,
   countConsecutiveToolErrors,
+  getLastReversibleAction,
+  getPendingSessionItem,
   insertChatMessage,
   loadRecentChatMessages,
   summarizeOverflowMessages,
   toModelMessages,
 } from "@/lib/chat/persist";
 import { acquireSessionLock, releaseSessionLock } from "@/lib/chat/session-lock";
-import { buildDynamicSystemPrompt, type ProactiveTriggerFlags } from "@/lib/chat/system-prompts";
+import {
+  buildDynamicSystemPrompt,
+  type ProactiveTriggerFlags,
+  type SessionRuntimeContext,
+} from "@/lib/chat/system-prompts";
 import { loadOnboardingAccountState } from "@/lib/chat/onboarding-state";
 import { sessionTurnIncludesCardTool } from "@/lib/chat/card-tools";
 import { createChatTools } from "@/lib/chat/tools";
@@ -121,14 +127,46 @@ export async function POST(request: NextRequest) {
     });
 
     const storedMessages = await loadRecentChatMessages(session.id);
-    const [contextSummary, consecutiveToolErrors, activeConsultations, onboardingState, autoIntakeSuppressed] =
-      await Promise.all([
-        buildProjectContextSummary(auth.id, session.consultationId),
-        countConsecutiveToolErrors(session.id),
-        countActiveConsultations(auth.id),
-        loadOnboardingAccountState(auth.id),
-        checkAutoIntakeSuppressed(session.id),
-      ]);
+    const isFirstTurn = storedMessages.length === 1;
+    const isFirstTurnReturning =
+      isFirstTurn && session.userMode === "returning" && !!session.consultationId;
+
+    const [
+      contextSummary,
+      consecutiveToolErrors,
+      activeConsultations,
+      onboardingState,
+      autoIntakeSuppressed,
+      lastAction,
+      pendingItem,
+    ] = await Promise.all([
+      buildProjectContextSummary(auth.id, session.consultationId),
+      countConsecutiveToolErrors(session.id),
+      countActiveConsultations(auth.id),
+      loadOnboardingAccountState(auth.id),
+      checkAutoIntakeSuppressed(session.id),
+      getLastReversibleAction(session.id),
+      isFirstTurnReturning && session.consultationId
+        ? getPendingSessionItem(session.consultationId)
+        : Promise.resolve(null),
+    ]);
+
+    const sessionContext: SessionRuntimeContext = {
+      lastAction: lastAction
+        ? {
+            toolName: lastAction.toolName,
+            createdAt: lastAction.createdAt,
+            input: lastAction.input as Record<string, unknown> | null,
+          }
+        : null,
+      pendingItem: pendingItem
+        ? {
+            toolName: pendingItem.toolName,
+            input: pendingItem.input as Record<string, unknown> | null,
+          }
+        : null,
+      isFirstTurnReturning,
+    };
 
     const proactiveTriggers: ProactiveTriggerFlags = {};
     if (contextSummary) {
@@ -146,6 +184,7 @@ export async function POST(request: NextRequest) {
     const systemPrompt = buildDynamicSystemPrompt(onboardingState, contextSummary, {
       proactiveTriggers,
       autoIntakeSuppressed,
+      sessionContext,
     });
     const tools = createChatTools({ userId: auth.id, sessionId: session.id });
 

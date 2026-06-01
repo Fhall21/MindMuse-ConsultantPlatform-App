@@ -38,6 +38,22 @@ describe("lib/chat/system-prompts", () => {
   it("uses minimal returning base without sub-prompt blocks", () => {
     const prompt = buildDynamicSystemPrompt(returningState, null);
     expect(prompt).toContain("Be direct and action-first");
+    expect(prompt).toContain("MeetingConfirmationCard");
     expect(prompt).not.toContain("Create consultation");
+  });
+
+  it("includes tool card rules for onboarding mode", () => {
+    const prompt = buildDynamicSystemPrompt(
+      {
+        ...returningState,
+        userMode: "onboarding",
+        phase: "needs_meeting",
+        hasMeeting: false,
+      },
+      null
+    );
+
+    expect(prompt).toContain("intake_text_transcript");
+    expect(prompt).toContain("NEVER write meeting title");
   });
 });

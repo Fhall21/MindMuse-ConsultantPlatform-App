@@ -17,10 +17,7 @@ import type { OnboardingAccountState } from "@/lib/chat/onboarding-state";
 import { fetchJson } from "@/hooks/api";
 import { useChatSessions, useCreateChatSession } from "@/hooks/use-chat-sessions";
 import { useConsultations } from "@/hooks/use-consultations";
-import {
-  buildChatIntakeUserMessage,
-  captureFileForChatIntake,
-} from "@/lib/capture/chat-file-intake";
+import { captureFileForChatIntake } from "@/lib/capture/chat-file-intake";
 
 interface ChatBootstrap {
   sessionId: string;
@@ -209,6 +206,28 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     }
   }, [messages.length, queryClient, status]);
 
+  const wasStreamingRef = useRef(false);
+  useEffect(() => {
+    if (status === "submitted" || status === "streaming") {
+      wasStreamingRef.current = true;
+      return;
+    }
+
+    if (status !== "ready" || !wasStreamingRef.current) {
+      return;
+    }
+
+    wasStreamingRef.current = false;
+    const activeSessionId = sessionIdRef.current;
+    if (!activeSessionId) {
+      return;
+    }
+
+    void loadBootstrap({ sessionId: activeSessionId }).catch((reloadError) => {
+      console.error(reloadError);
+    });
+  }, [loadBootstrap, status]);
+
   const showCreateProject =
     bootstrapReady &&
     !bootstrapError &&
@@ -299,26 +318,34 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
       setIsCapturingFile(true);
       try {
         const { intakeKind, text } = await captureFileForChatIntake(file, kind);
-        const message = buildChatIntakeUserMessage({
-          intakeKind,
-          fileName: file.name,
-          text,
-          projectId: consultationId,
-        }).trim();
-        if (!message) {
-          return;
+        const activeSessionId = sessionIdRef.current;
+        if (!activeSessionId) {
+          throw new Error("Chat session is not ready yet. Refresh and try again.");
         }
 
         clearError();
         setInput("");
-        await sendMessage(
-          { text: message },
-          {
-            body: {
-              sessionId: sessionIdRef.current ?? undefined,
-            },
-          }
-        );
+
+        const response = await fetch("/api/chat/intake", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            sessionId: activeSessionId,
+            intakeKind,
+            fileName: file.name,
+            text,
+            projectId: consultationId,
+          }),
+        });
+
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as { detail?: string } | null;
+          throw new Error(data?.detail ?? "Could not process that file.");
+        }
+
+        const payload = (await response.json()) as { sessionId?: string };
+        await loadBootstrap({ sessionId: payload.sessionId ?? activeSessionId });
       } catch (captureError) {
         console.error(captureError);
         toast.error(
@@ -330,7 +357,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
         setIsCapturingFile(false);
       }
     },
-    [clearError, consultationId, isBusy, onboardingState?.phase, sendMessage]
+    [clearError, consultationId, isBusy, loadBootstrap, onboardingState?.phase]
   );
 
   const handleConsultationSelected = useCallback(

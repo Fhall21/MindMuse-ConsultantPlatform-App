@@ -109,8 +109,55 @@ async function buildMeetingDraftFromText(params: {
   return { ok: true, draft };
 }
 
+export type MeetingIntakeToolName =
+  | "intake_text_transcript"
+  | "intake_audio_transcript"
+  | "intake_notes";
+
+/** Shared intake execution for agent tools and direct upload API. */
+export async function executeMeetingIntakeTool(params: {
+  context: ChatToolRuntimeContext;
+  toolName: MeetingIntakeToolName;
+  input: Record<string, unknown>;
+  text: string;
+  projectId?: string;
+  intakeKind: MeetingDraft["intake_kind"];
+}) {
+  const draftResult = await buildMeetingDraftFromText({
+    context: params.context,
+    text: params.text,
+    projectId: params.projectId,
+    intakeKind: params.intakeKind,
+  });
+
+  if (!draftResult.ok) {
+    await persistToolExecution({
+      context: params.context,
+      toolName: params.toolName,
+      input: params.input,
+      output: { error: draftResult.error },
+      status: "error",
+    });
+    return { ok: false as const, error: draftResult.error };
+  }
+
+  const toolResult = await persistToolExecution({
+    context: params.context,
+    toolName: params.toolName,
+    input: params.input,
+    output: draftResult.draft,
+    status: "pending",
+  });
+
+  return {
+    ok: true as const,
+    draft: draftResult.draft,
+    toolResultId: toolResult.id,
+  };
+}
+
 function createIntakeTool(
-  name: "intake_text_transcript" | "intake_audio_transcript" | "intake_notes",
+  name: MeetingIntakeToolName,
   description: string,
   schema: z.ZodTypeAny,
   context: ChatToolRuntimeContext,
@@ -136,35 +183,22 @@ function createIntakeTool(
         return { error: resolved.error };
       }
 
-      const draftResult = await buildMeetingDraftFromText({
+      const result = await executeMeetingIntakeTool({
         context,
+        toolName: name,
+        input: payload,
         text: resolved.text,
         projectId: resolved.projectId,
         intakeKind: resolved.intakeKind,
       });
 
-      if (!draftResult.ok) {
-        await persistToolExecution({
-          context,
-          toolName: name,
-          input: payload,
-          output: { error: draftResult.error },
-          status: "error",
-        });
-        return { error: draftResult.error };
+      if (!result.ok) {
+        return { error: result.error };
       }
 
-      const toolResult = await persistToolExecution({
-        context,
-        toolName: name,
-        input: payload,
-        output: draftResult.draft,
-        status: "pending",
-      });
-
       return {
-        ...draftResult.draft,
-        tool_result_id: toolResult.id,
+        ...result.draft,
+        tool_result_id: result.toolResultId,
       };
     },
   });

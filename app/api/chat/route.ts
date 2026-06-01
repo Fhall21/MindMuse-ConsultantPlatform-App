@@ -34,8 +34,16 @@ import {
 import { loadOnboardingAccountState } from "@/lib/chat/onboarding-state";
 import { sessionTurnIncludesCardTool } from "@/lib/chat/card-tools";
 import { createChatTools } from "@/lib/chat/tools";
+import { composeCanvasState } from "@/lib/data/canvas-state";
 
 export const maxDuration = 60;
+
+const CANVAS_KEYWORDS = ["connect", "link", "rename", "frame", "node", "canvas", "group"];
+
+function hasCanvasKeyword(text: string): boolean {
+  const lower = text.toLowerCase();
+  return CANVAS_KEYWORDS.some((kw) => lower.includes(kw));
+}
 
 import { getChatModel } from "@/lib/chat/model";
 const chatRequestSchema = z.object({
@@ -181,10 +189,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let canvasContext: string | undefined;
+    if (latestUserText && session.consultationId && hasCanvasKeyword(latestUserText)) {
+      try {
+        const state = await composeCanvasState(session.consultationId, auth.id);
+        const top50 = state.nodes.slice(0, 50);
+        if (top50.length > 0) {
+          const lines = top50.map(
+            (n) =>
+              `- ${n.id}: "${n.label}" (type: ${n.type}${n.subgroup ? `, subgroup: ${n.subgroup}` : ""})`
+          );
+          canvasContext = lines.join("\n");
+        }
+      } catch {
+        // non-fatal — omit canvas context
+      }
+    }
+
     const systemPrompt = buildDynamicSystemPrompt(onboardingState, contextSummary, {
       proactiveTriggers,
       autoIntakeSuppressed,
       sessionContext,
+      canvasContext,
     });
     const tools = createChatTools({ userId: auth.id, sessionId: session.id });
 

@@ -1,6 +1,7 @@
-import { and, count, desc, eq, isNull, max } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, max } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
+  chatMessages,
   chatSessions,
   consultations,
   meetingGroups,
@@ -168,4 +169,87 @@ export async function createChatSession(userId: string, consultationId?: string 
     })
     .returning();
   return session;
+}
+
+export interface ChatSessionSummary {
+  id: string;
+  consultationId: string | null;
+  consultationLabel: string | null;
+  preview: string | null;
+  messageCount: number;
+  updatedAt: string;
+  createdAt: string;
+}
+
+function truncatePreview(text: string, maxLength = 120): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+export async function listChatSessionsForUser(userId: string): Promise<ChatSessionSummary[]> {
+  const sessions = await db
+    .select({
+      id: chatSessions.id,
+      consultationId: chatSessions.consultationId,
+      consultationLabel: consultations.label,
+      updatedAt: chatSessions.updatedAt,
+      createdAt: chatSessions.createdAt,
+    })
+    .from(chatSessions)
+    .leftJoin(consultations, eq(chatSessions.consultationId, consultations.id))
+    .where(and(eq(chatSessions.userId, userId), isNull(chatSessions.archivedAt)))
+    .orderBy(desc(chatSessions.updatedAt))
+    .limit(50);
+
+  if (sessions.length === 0) {
+    return [];
+  }
+
+  const sessionIds = sessions.map((session) => session.id);
+  const [messageCounts, firstUserMessages] = await Promise.all([
+    db
+      .select({
+        sessionId: chatMessages.sessionId,
+        count: count(),
+      })
+      .from(chatMessages)
+      .where(inArray(chatMessages.sessionId, sessionIds))
+      .groupBy(chatMessages.sessionId),
+    db
+      .select({
+        sessionId: chatMessages.sessionId,
+        content: chatMessages.content,
+      })
+      .from(chatMessages)
+      .where(
+        and(
+          inArray(chatMessages.sessionId, sessionIds),
+          eq(chatMessages.role, "user")
+        )
+      )
+      .orderBy(asc(chatMessages.createdAt)),
+  ]);
+
+  const countBySessionId = new Map(
+    messageCounts.map((row) => [row.sessionId, row.count])
+  );
+  const previewBySessionId = new Map<string, string>();
+  for (const row of firstUserMessages) {
+    if (!previewBySessionId.has(row.sessionId)) {
+      previewBySessionId.set(row.sessionId, truncatePreview(row.content));
+    }
+  }
+
+  return sessions.map((session) => ({
+    id: session.id,
+    consultationId: session.consultationId,
+    consultationLabel: session.consultationLabel,
+    preview: previewBySessionId.get(session.id) ?? null,
+    messageCount: countBySessionId.get(session.id) ?? 0,
+    updatedAt: session.updatedAt.toISOString(),
+    createdAt: session.createdAt.toISOString(),
+  }));
 }

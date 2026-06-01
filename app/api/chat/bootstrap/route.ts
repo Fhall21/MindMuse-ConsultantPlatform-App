@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
 import {
   countActiveConsultations,
@@ -13,15 +13,25 @@ import {
 import { loadRecentChatMessages, loadToolResultsForSession } from "@/lib/chat/persist";
 import { dbMessagesToUiMessages } from "@/lib/chat/ui-messages";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const auth = await requireAuthenticatedApiUser();
   if (auth instanceof NextResponse) {
     return auth;
   }
 
-  let session = await getUnarchivedSessionForUser(auth.id);
-  if (!session) {
+  const sessionId = request.nextUrl.searchParams.get("sessionId");
+  const createNew = request.nextUrl.searchParams.get("new") === "true";
+
+  let session;
+  if (createNew) {
     session = await createChatSession(auth.id);
+  } else if (sessionId) {
+    session = await getUnarchivedSessionForUser(auth.id, sessionId);
+    if (!session) {
+      return NextResponse.json({ detail: "Chat session not found" }, { status: 404 });
+    }
+  } else {
+    session = (await getUnarchivedSessionForUser(auth.id)) ?? (await createChatSession(auth.id));
   }
 
   const [messages, activeConsultations, toolResults] = await Promise.all([

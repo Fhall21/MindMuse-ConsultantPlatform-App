@@ -9,6 +9,8 @@ import {
   uploadAudioForTranscription,
 } from "@/lib/actions/ingestion";
 import type { TranscriptionJobStatus } from "@/lib/actions/ingestion";
+import { isAudioFile } from "@/lib/capture/audio-transcribe";
+import { CAPTURE_AUDIO_MIME_TYPES } from "@/lib/capture/constants";
 
 interface AudioUploadPanelProps {
   meetingId?: string;
@@ -16,17 +18,6 @@ interface AudioUploadPanelProps {
   /** Called when transcription completes with the transcript text */
   onTranscriptReady: (transcript: string) => void;
 }
-
-const ACCEPTED_AUDIO_TYPES = [
-  "audio/mpeg",
-  "audio/mp4",
-  "audio/wav",
-  "audio/x-wav",
-  "audio/webm",
-  "audio/ogg",
-  "audio/flac",
-  "audio/x-m4a",
-];
 
 const STATUS_LABELS: Record<TranscriptionJobStatus, string> = {
   queued: "Queued",
@@ -79,7 +70,7 @@ export function AudioUploadPanel({
     if (!file) return;
     let createdJobId: string | null = null;
 
-    if (!ACCEPTED_AUDIO_TYPES.includes(file.type)) {
+    if (!isAudioFile(file)) {
       setUploadError(
         "Unsupported file type. Please upload an MP3, MP4, WAV, WEBM, OGG, FLAC, or M4A file."
       );
@@ -183,7 +174,7 @@ export function AudioUploadPanel({
       <input
         ref={inputRef}
         type="file"
-        accept={ACCEPTED_AUDIO_TYPES.join(",")}
+        accept={CAPTURE_AUDIO_MIME_TYPES.join(",")}
         className="sr-only"
         onChange={handleFileChange}
         aria-label="Upload audio file"

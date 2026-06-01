@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
 import { getUnarchivedSessionForUser } from "@/lib/chat/context";
-import { confirmMeetingFromDraft, linkPeopleToMeeting } from "@/lib/chat/intake-db";
+import { confirmMeetingFromDraft, linkPeopleByIdsToMeeting, linkPeopleToMeeting } from "@/lib/chat/intake-db";
 import { confirmMeetingSchema } from "@/lib/chat/tools/intake";
 import { getToolResultForSession, updateToolResult } from "@/lib/chat/persist";
 
@@ -53,7 +53,13 @@ export async function POST(request: NextRequest) {
       meetingDraft: parsed.data.meeting_draft,
     });
 
-    if (parsed.data.meeting_draft.participants.length > 0) {
+    if (parsed.data.meeting_draft.person_ids?.length) {
+      await linkPeopleByIdsToMeeting({
+        userId: auth.id,
+        meetingId: record.id,
+        personIds: parsed.data.meeting_draft.person_ids,
+      });
+    } else if (parsed.data.meeting_draft.participants.length > 0) {
       await linkPeopleToMeeting({
         userId: auth.id,
         meetingId: record.id,

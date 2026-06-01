@@ -12,6 +12,10 @@ export interface ChatCardProps {
   onUpdated?: () => void;
 }
 
+function readOptionalString(record: Record<string, unknown>, key: string): string | undefined {
+  return typeof record[key] === "string" ? record[key] : undefined;
+}
+
 export function readMeetingDraft(output: unknown): MeetingDraft | null {
   if (!output || typeof output !== "object") {
     return null;
@@ -21,8 +25,7 @@ export function readMeetingDraft(output: unknown): MeetingDraft | null {
   if (
     typeof record.title !== "string" ||
     typeof record.date !== "string" ||
-    !Array.isArray(record.participants) ||
-    typeof record.notes_preview !== "string"
+    !Array.isArray(record.participants)
   ) {
     return null;
   }
@@ -33,17 +36,21 @@ export function readMeetingDraft(output: unknown): MeetingDraft | null {
     participants: record.participants.filter(
       (name): name is string => typeof name === "string"
     ),
-    notes_preview: record.notes_preview,
-    project_id:
-      typeof record.project_id === "string" ? record.project_id : undefined,
-    source_text:
-      typeof record.source_text === "string" ? record.source_text : undefined,
+    notes_preview:
+      typeof record.notes_preview === "string" ? record.notes_preview : "",
+    project_id: readOptionalString(record, "project_id"),
+    source_text: readOptionalString(record, "source_text"),
     intake_kind:
       record.intake_kind === "transcript" ||
       record.intake_kind === "audio" ||
       record.intake_kind === "notes"
         ? record.intake_kind
         : undefined,
+    meeting_type_id: readOptionalString(record, "meeting_type_id"),
+    suggested_type_code: readOptionalString(record, "suggested_type_code"),
+    person_ids: Array.isArray(record.person_ids)
+      ? record.person_ids.filter((id): id is string => typeof id === "string")
+      : undefined,
   };
 }
 

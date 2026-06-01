@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { consultations, meetingPeople, meetings, people } from "@/db/schema";
 import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";
@@ -31,14 +31,15 @@ export async function confirmMeetingFromDraft(params: {
       userId: params.userId,
       title: params.meetingDraft.title.trim(),
       consultationId: params.projectId,
+      meetingTypeId: params.meetingDraft.meeting_type_id ?? null,
       meetingDate,
       status: "draft",
       isArchived: false,
       transcriptRaw: intakeKind !== "notes" && sourceText ? sourceText : null,
       notes:
         intakeKind === "notes"
-          ? sourceText || params.meetingDraft.notes_preview
-          : params.meetingDraft.notes_preview || null,
+          ? sourceText || params.meetingDraft.notes_preview || null
+          : null,
     })
     .returning({
       id: meetings.id,
@@ -80,6 +81,58 @@ async function findOwnedPersonByName(userId: string, name: string) {
     .limit(1);
 
   return person ?? null;
+}
+
+export async function linkPeopleByIdsToMeeting(params: {
+  userId: string;
+  meetingId: string;
+  personIds: string[];
+}): Promise<LinkedPersonRecord[]> {
+  await requireOwnedMeeting(params.meetingId, params.userId);
+
+  const uniqueIds = [...new Set(params.personIds.filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const ownedPeople = await db
+    .select({ id: people.id, name: people.name })
+    .from(people)
+    .where(and(eq(people.userId, params.userId), inArray(people.id, uniqueIds)));
+
+  if (ownedPeople.length === 0) {
+    return [];
+  }
+
+  await db
+    .insert(meetingPeople)
+    .values(
+      ownedPeople.map((person) => ({
+        meetingId: params.meetingId,
+        personId: person.id,
+      }))
+    )
+    .onConflictDoNothing();
+
+  if (ownedPeople.length > 0) {
+    await emitAuditEvent({
+      consultationId: params.meetingId,
+      action: AUDIT_ACTIONS.PERSON_LINKED,
+      entityType: "meeting",
+      entityId: params.meetingId,
+      metadata: {
+        linked_count: ownedPeople.length,
+        source: "chat_link_people_ids",
+      },
+    });
+  }
+
+  return ownedPeople.map((person) => ({
+    id: person.id,
+    name: person.name,
+    matched: true,
+    created: false,
+  }));
 }
 
 export async function linkPeopleToMeeting(params: {

@@ -4,11 +4,14 @@ export const meetingDraftSchema = z.object({
   title: z.string().min(1),
   date: z.string().min(1),
   participants: z.array(z.string()),
-  notes_preview: z.string(),
+  notes_preview: z.string().optional().default(""),
   project_id: z.string().uuid().optional(),
   /** Full source text persisted on confirm (transcript or notes). */
   source_text: z.string().optional(),
   intake_kind: z.enum(["transcript", "audio", "notes"]).optional(),
+  meeting_type_id: z.string().uuid().optional(),
+  suggested_type_code: z.string().optional(),
+  person_ids: z.array(z.string().uuid()).optional(),
 });
 
 export type MeetingDraft = z.infer<typeof meetingDraftSchema>;
@@ -148,6 +151,19 @@ export function normalizeMeetingDraft(raw: unknown, fallbackText?: string): Meet
       record.intake_kind === "notes"
         ? record.intake_kind
         : undefined,
+    meeting_type_id:
+      typeof record.meeting_type_id === "string"
+        ? record.meeting_type_id
+        : typeof record.meetingTypeId === "string"
+          ? record.meetingTypeId
+          : undefined,
+    suggested_type_code:
+      typeof record.suggested_type_code === "string"
+        ? record.suggested_type_code
+        : undefined,
+    person_ids: Array.isArray(record.person_ids)
+      ? record.person_ids.filter((id): id is string => typeof id === "string")
+      : undefined,
   });
 }
 

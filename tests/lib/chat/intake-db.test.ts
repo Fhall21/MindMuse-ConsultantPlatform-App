@@ -56,6 +56,7 @@ describe("lib/chat/intake-db confirmMeetingFromDraft", () => {
         notes_preview: "Notes",
         source_text: "Full transcript",
         intake_kind: "transcript",
+        meeting_type_id: "type-1",
       },
     });
 
@@ -64,6 +65,7 @@ describe("lib/chat/intake-db confirmMeetingFromDraft", () => {
     expect(dbState.insertValues).toMatchObject({
       title: "Weekly sync",
       consultationId: "project-1",
+      meetingTypeId: "type-1",
       transcriptRaw: "Full transcript",
     });
     expect(auditMock.emitAuditEvent).toHaveBeenCalled();

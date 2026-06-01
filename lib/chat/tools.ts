@@ -10,6 +10,7 @@ import {
   insertToolResult,
   updateChatMessageContent,
 } from "./persist";
+import { enrichMeetingDraftWithInfer } from "./intake-enrich";
 import { dispatchToolToFastApi } from "./tool-dispatch";
 import { CHAT_TOOL_ENDPOINTS } from "./tool-allowlist";
 import {
@@ -106,7 +107,13 @@ async function buildMeetingDraftFromText(params: {
     params.text
   );
 
-  return { ok: true, draft };
+  const enrichedDraft = await enrichMeetingDraftWithInfer({
+    context: params.context,
+    text: params.text,
+    draft,
+  });
+
+  return { ok: true, draft: enrichedDraft };
 }
 
 export type MeetingIntakeToolName =

@@ -8,6 +8,7 @@ import { saveOcrCorrections } from "@/lib/actions/ocr";
 import { createOcrBatch, updateOcrJob } from "@/lib/actions/ingestion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { prepareImageBlob } from "@/lib/capture/ocr-image";
 
 interface OcrReviewPanelProps {
   meetingId?: string;
@@ -45,22 +46,6 @@ function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-async function loadHeic2Any() {
-  if (typeof window === "undefined") {
-    throw new Error("HEIC conversion is only available in the browser.");
-  }
-  const heicModule = await import("heic2any");
-  return heicModule.default;
-}
-
-async function prepareImageBlob(file: File): Promise<{ blob: Blob; name: string }> {
-  const isHeic = HEIC_TYPES.includes(file.type) || /\.(heic|heif)$/i.test(file.name);
-  if (!isHeic) return { blob: file, name: file.name };
-  const heic2any = await loadHeic2Any();
-  const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
-  const blob = Array.isArray(converted) ? converted[0] : converted;
-  return { blob, name: file.name.replace(/\.(heic|heif)$/i, ".jpg") };
-}
 
 function PageStatusBadge({ status }: { status: PageStatus }) {
   const styles: Record<PageStatus, string> = {

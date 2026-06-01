@@ -3,6 +3,7 @@ export const CHAT_TOOL_FASTAPI_ALLOWLIST = new Set([
   "/transcribe/text",
   "/transcribe/audio",
   "/ocr/extract",
+  "/infer/meeting-metadata",
   "/themes/extract",
   "/clarification/questions",
   "/quotes/identify",

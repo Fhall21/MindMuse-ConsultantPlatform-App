@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { MeetingTypeSelect } from "@/components/meetings/meeting-type-select";
+import { PeopleField } from "@/components/meetings/people-field";
+import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,25 +23,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { useConsultations } from "@/hooks/use-consultations";
+import { useMeetingTypes } from "@/hooks/use-meeting-types";
+import { usePeople } from "@/hooks/use-people";
 import type { MeetingDraft } from "@/lib/chat/tools/intake";
+import { buildMeetingTitle } from "@/lib/meeting-title";
+import { toDateInputValue, toIsoDate } from "@/lib/meetings/meeting-date";
+import { splitParticipantSuggestions } from "@/lib/meetings/participant-suggestions";
+import type { Person } from "@/types/db";
 import { readMeetingDraft, type ChatCardProps } from "./types";
 
-function toDateInputValue(isoDate: string): string {
-  if (/^\d{4}-\d{2}-\d{2}/.test(isoDate)) {
-    return isoDate.slice(0, 10);
-  }
-  const parsed = new Date(isoDate);
-  if (Number.isNaN(parsed.getTime())) {
-    return new Date().toISOString().slice(0, 10);
-  }
-  return parsed.toISOString().slice(0, 10);
-}
-
-function toIsoDate(dateValue: string): string {
-  return `${dateValue}T12:00:00.000Z`;
+function buildPersistedDraft(params: {
+  title: string;
+  meetingDate: string;
+  selectedPeople: Person[];
+  meetingTypeId: string;
+  projectId: string;
+  sourceText?: string;
+  intakeKind?: MeetingDraft["intake_kind"];
+}): MeetingDraft {
+  return {
+    title: params.title.trim(),
+    date: toIsoDate(params.meetingDate),
+    participants: params.selectedPeople.map((person) => person.name),
+    person_ids: params.selectedPeople.map((person) => person.id),
+    meeting_type_id: params.meetingTypeId || undefined,
+    notes_preview: "",
+    project_id: params.projectId,
+    source_text: params.sourceText,
+    intake_kind: params.intakeKind,
+  };
 }
 
 export function MeetingConfirmationCard({
@@ -49,18 +62,24 @@ export function MeetingConfirmationCard({
   onUpdated,
 }: ChatCardProps) {
   const initialDraft = useMemo(() => readMeetingDraft(tool.output), [tool.output]);
-  const { data: consultations = [], isLoading: consultationsLoading } =
-    useConsultations();
+  const { data: consultations = [], isLoading: consultationsLoading } = useConsultations();
+  const { data: meetingTypes = [] } = useMeetingTypes();
+  const { data: allPeople = [] } = usePeople();
   const { isPending, setPending } = useCardConfirm();
   const confirmKey = `confirm-meeting:${messageId}`;
 
-  const [draft, setDraft] = useState<MeetingDraft | null>(initialDraft);
   const [projectId, setProjectId] = useState(
     initialDraft?.project_id ?? consultations[0]?.id ?? ""
   );
-  const [participantsText, setParticipantsText] = useState(
-    initialDraft?.participants.join(", ") ?? ""
+  const [meetingTypeId, setMeetingTypeId] = useState(initialDraft?.meeting_type_id ?? "");
+  const [meetingDate, setMeetingDate] = useState(
+    initialDraft ? toDateInputValue(initialDraft.date) : new Date().toISOString().slice(0, 10)
   );
+  const [selectedPeople, setSelectedPeople] = useState<Person[]>([]);
+  const [suggestedExistingPeople, setSuggestedExistingPeople] = useState<Person[]>([]);
+  const [suggestedNewNames, setSuggestedNewNames] = useState<string[]>([]);
+  const [title, setTitle] = useState(initialDraft?.title ?? "");
+  const [titleManuallyEdited, setTitleManuallyEdited] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMeetingId, setSavedMeetingId] = useState<string | null>(null);
   const confirming = isPending(confirmKey);
@@ -68,14 +87,23 @@ export function MeetingConfirmationCard({
   const toolResultId = tool.toolResultId;
 
   useEffect(() => {
-    if (initialDraft) {
-      setDraft(initialDraft);
-      setParticipantsText(initialDraft.participants.join(", "));
-      if (initialDraft.project_id) {
-        setProjectId(initialDraft.project_id);
-      }
+    if (!initialDraft) {
+      return;
     }
-  }, [initialDraft]);
+
+    if (initialDraft.project_id) {
+      setProjectId(initialDraft.project_id);
+    }
+    if (initialDraft.meeting_type_id) {
+      setMeetingTypeId(initialDraft.meeting_type_id);
+    }
+    setMeetingDate(toDateInputValue(initialDraft.date));
+
+    const { suggestedExisting, suggestedNewNames: unmatchedNames } =
+      splitParticipantSuggestions(initialDraft.participants, allPeople);
+    setSuggestedExistingPeople(suggestedExisting);
+    setSuggestedNewNames(unmatchedNames);
+  }, [allPeople, initialDraft]);
 
   useEffect(() => {
     if (!projectId && consultations[0]?.id) {
@@ -83,8 +111,32 @@ export function MeetingConfirmationCard({
     }
   }, [consultations, projectId]);
 
+  useEffect(() => {
+    if (!initialDraft?.suggested_type_code || meetingTypeId || meetingTypes.length === 0) {
+      return;
+    }
+
+    const matched = meetingTypes.find((type) => type.code === initialDraft.suggested_type_code);
+    if (matched) {
+      setMeetingTypeId(matched.id);
+    }
+  }, [initialDraft?.suggested_type_code, meetingTypeId, meetingTypes]);
+
+  const selectedType = meetingTypes.find((type) => type.id === meetingTypeId);
+  const generatedTitle = useMemo(() => {
+    const firstNames = selectedPeople.map((person) => person.name.split(/\s+/)[0]);
+    const date = meetingDate ? new Date(`${meetingDate}T12:00:00`) : null;
+    return buildMeetingTitle(selectedType?.code, firstNames, date);
+  }, [meetingDate, selectedPeople, selectedType?.code]);
+
+  useEffect(() => {
+    if (!titleManuallyEdited) {
+      setTitle(generatedTitle);
+    }
+  }, [generatedTitle, titleManuallyEdited]);
+
   const persistPendingDraft = useCallback(
-    async (nextDraft: MeetingDraft, nextProjectId: string) => {
+    async (nextDraft: MeetingDraft) => {
       if (status !== "pending" || !toolResultId || !sessionId) {
         return;
       }
@@ -95,10 +147,7 @@ export function MeetingConfirmationCard({
         body: JSON.stringify({
           sessionId,
           status: "pending",
-          meeting_draft: {
-            ...nextDraft,
-            project_id: nextProjectId || undefined,
-          },
+          meeting_draft: nextDraft,
         }),
       });
     },
@@ -106,18 +155,38 @@ export function MeetingConfirmationCard({
   );
 
   useEffect(() => {
-    if (!draft || status !== "pending") {
+    if (status !== "pending" || !projectId) {
       return;
     }
 
     const handle = window.setTimeout(() => {
-      void persistPendingDraft(draft, projectId);
+      void persistPendingDraft(
+        buildPersistedDraft({
+          title,
+          meetingDate,
+          selectedPeople,
+          meetingTypeId,
+          projectId,
+          sourceText: initialDraft?.source_text,
+          intakeKind: initialDraft?.intake_kind,
+        })
+      );
     }, 400);
 
     return () => window.clearTimeout(handle);
-  }, [draft, persistPendingDraft, projectId, status]);
+  }, [
+    initialDraft?.intake_kind,
+    initialDraft?.source_text,
+    meetingDate,
+    meetingTypeId,
+    persistPendingDraft,
+    projectId,
+    selectedPeople,
+    status,
+    title,
+  ]);
 
-  if (!draft) {
+  if (!initialDraft) {
     return null;
   }
 
@@ -136,7 +205,8 @@ export function MeetingConfirmationCard({
         <CardHeader>
           <CardTitle>Meeting confirmed</CardTitle>
           <CardDescription>
-            {draft.title} saved{meetingId ? ` (${meetingId.slice(0, 8)}…)` : ""}.
+            {title || initialDraft.title} saved
+            {meetingId ? ` (${meetingId.slice(0, 8)}…)` : ""}.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -148,12 +218,18 @@ export function MeetingConfirmationCard({
   }
 
   async function handleConfirm() {
-    if (!draft) {
+    if (!projectId) {
+      setError("Select a consultation before confirming.");
       return;
     }
 
-    if (!projectId) {
-      setError("Select a project before confirming.");
+    if (selectedPeople.length === 0) {
+      setError("Add at least one person before confirming.");
+      return;
+    }
+
+    if (!title.trim()) {
+      setError("A meeting title is required.");
       return;
     }
 
@@ -162,20 +238,15 @@ export function MeetingConfirmationCard({
       return;
     }
 
-    const participants = participantsText
-      .split(",")
-      .map((name) => name.trim())
-      .filter(Boolean);
-
-    const payload: MeetingDraft = {
-      title: draft.title,
-      date: toIsoDate(toDateInputValue(draft.date)),
-      participants,
-      notes_preview: draft.notes_preview,
-      project_id: projectId,
-      source_text: draft.source_text,
-      intake_kind: draft.intake_kind,
-    };
+    const payload = buildPersistedDraft({
+      title,
+      meetingDate,
+      selectedPeople,
+      meetingTypeId,
+      projectId,
+      sourceText: initialDraft?.source_text,
+      intakeKind: initialDraft?.intake_kind,
+    });
 
     setPending(confirmKey, true);
     setError(null);
@@ -228,13 +299,13 @@ export function MeetingConfirmationCard({
   }
 
   return (
-    <Card size="sm" className="max-w-2xl">
+    <Card size="sm" className="max-w-xl">
       <CardHeader className="border-b">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
             <CardTitle>Confirm meeting</CardTitle>
             <CardDescription>
-              Review extracted details before saving to your project.
+              Review extracted details before saving to your consultation.
             </CardDescription>
           </div>
           <Button
@@ -250,7 +321,7 @@ export function MeetingConfirmationCard({
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4 pt-4">
+      <CardContent className="space-y-5 pt-4">
         {error ? (
           <div
             role="alert"
@@ -260,90 +331,106 @@ export function MeetingConfirmationCard({
           </div>
         ) : null}
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor={`meeting-title-${messageId}`}>Title</Label>
-            <Input
-              id={`meeting-title-${messageId}`}
-              value={draft.title}
-              onChange={(event) =>
-                setDraft((current) =>
-                  current ? { ...current, title: event.target.value } : current
-                )
-              }
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor={`meeting-date-${messageId}`}>Date</Label>
-            <Input
-              id={`meeting-date-${messageId}`}
-              type="date"
-              value={toDateInputValue(draft.date)}
-              onChange={(event) =>
-                setDraft((current) =>
-                  current
-                    ? { ...current, date: toIsoDate(event.target.value) }
-                    : current
-                )
-              }
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor={`meeting-project-${messageId}`}>Project</Label>
-            <Select
-              value={projectId}
-              onValueChange={setProjectId}
-              disabled={consultationsLoading || consultations.length === 0}
-            >
-              <SelectTrigger id={`meeting-project-${messageId}`}>
-                <SelectValue placeholder="Select project" />
-              </SelectTrigger>
-              <SelectContent>
-                {consultations.map((consultation) => (
-                  <SelectItem key={consultation.id} value={consultation.id}>
-                    {consultation.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor={`meeting-participants-${messageId}`}>
-              Participants
-            </Label>
-            <Input
-              id={`meeting-participants-${messageId}`}
-              value={participantsText}
-              placeholder="Comma-separated names"
-              onChange={(event) => setParticipantsText(event.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor={`meeting-notes-${messageId}`}>Notes preview</Label>
-            <Textarea
-              id={`meeting-notes-${messageId}`}
-              value={draft.notes_preview}
-              rows={4}
-              onChange={(event) =>
-                setDraft((current) =>
-                  current
-                    ? { ...current, notes_preview: event.target.value }
-                    : current
-                )
-              }
-            />
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor={`meeting-project-${messageId}`}>Consultation</Label>
+          <p className="text-xs text-muted-foreground">
+            Choose the consultation project this meeting belongs to.
+          </p>
+          <Select
+            value={projectId}
+            onValueChange={setProjectId}
+            disabled={consultationsLoading || consultations.length === 0}
+          >
+            <SelectTrigger id={`meeting-project-${messageId}`} className="h-9">
+              <SelectValue placeholder="Select consultation" />
+            </SelectTrigger>
+            <SelectContent>
+              {consultations.map((consultation) => (
+                <SelectItem key={consultation.id} value={consultation.id}>
+                  {consultation.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {draft.intake_kind ? (
-          <Badge variant="secondary" className="capitalize">
-            {draft.intake_kind} intake
-          </Badge>
-        ) : null}
+        <MeetingTypeSelect
+          id={`meeting-type-${messageId}`}
+          value={meetingTypeId}
+          onChange={setMeetingTypeId}
+        />
+
+        <div className="space-y-2">
+          <Label htmlFor={`meeting-date-${messageId}`}>Date</Label>
+          <Input
+            id={`meeting-date-${messageId}`}
+            type="date"
+            value={meetingDate}
+            onChange={(event) => setMeetingDate(event.target.value)}
+            className="h-9 text-sm"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>People</Label>
+          <PeopleField
+            selected={selectedPeople}
+            onAdd={(person) =>
+              setSelectedPeople((current) =>
+                current.some((entry) => entry.id === person.id)
+                  ? current
+                  : [...current, person]
+              )
+            }
+            onRemove={(id) =>
+              setSelectedPeople((current) => current.filter((person) => person.id !== id))
+            }
+            suggestedExisting={suggestedExistingPeople}
+            onDismissSuggestedExisting={(id) =>
+              setSuggestedExistingPeople((current) => current.filter((person) => person.id !== id))
+            }
+            suggestedNewNames={suggestedNewNames}
+            onDismissSuggestedNew={(name) =>
+              setSuggestedNewNames((current) => current.filter((entry) => entry !== name))
+            }
+          />
+          {selectedPeople.length === 0 ? (
+            <p className="text-xs text-muted-foreground">At least one person is required.</p>
+          ) : null}
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor={`meeting-title-${messageId}`}>Title</Label>
+            {titleManuallyEdited ? (
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                onClick={() => {
+                  setTitleManuallyEdited(false);
+                  setTitle(generatedTitle);
+                }}
+              >
+                Reset to generated
+              </button>
+            ) : null}
+          </div>
+          <Input
+            id={`meeting-title-${messageId}`}
+            value={title}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              setTitleManuallyEdited(true);
+            }}
+            placeholder="Meeting title"
+            className="h-9 text-sm"
+          />
+          {!titleManuallyEdited && !title ? (
+            <p className="text-xs text-muted-foreground">
+              Select a type, people, or date to auto-generate a title.
+            </p>
+          ) : null}
+        </div>
       </CardContent>
 
       <CardFooter className="justify-end gap-2 border-t">
@@ -355,7 +442,11 @@ export function MeetingConfirmationCard({
         >
           Dismiss
         </Button>
-        <Button type="button" onClick={() => void handleConfirm()} disabled={confirming}>
+        <Button
+          type="button"
+          onClick={() => void handleConfirm()}
+          disabled={confirming || !title.trim() || selectedPeople.length === 0}
+        >
           {confirming ? (
             <>
               <Loader2 className="size-4 animate-spin" />

@@ -1,5 +1,7 @@
 import type { ChatToolMessageMeta } from "@/lib/chat/ui-messages";
 import type { ClarificationQuestion, MeetingDraft } from "@/lib/chat/tools/intake";
+export { readThemeReviewOutput } from "@/lib/chat/tools/themes";
+export type { ThemeReviewOutput } from "@/lib/chat/tools/themes";
 
 export interface ChatCardProps {
   tool: ChatToolMessageMeta;

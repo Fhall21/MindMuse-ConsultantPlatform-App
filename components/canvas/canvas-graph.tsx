@@ -41,6 +41,10 @@ import {
   edgeStyle,
   orderNodesParentFirst,
 } from "@/lib/canvas-flow-builders";
+import {
+  applyThemeInsightNodeChanges,
+  translateGroupChildren,
+} from "@/lib/canvas-flow-drag";
 import { syncFlowNodes } from "@/lib/canvas-flow-sync";
 import { useCanvas, useSaveLayout, type CreateEdgePayload } from "@/hooks/use-canvas";
 import {
@@ -407,64 +411,6 @@ function reorderGroupChildren(params: {
   });
 }
 
-function translateGroupChildren(nodes: Node[], groupId: string, delta: { x: number; y: number }) {
-  return nodes.map((candidate) => {
-    const canvasNode = getFlowCanvasNode(candidate);
-    if (candidate.id === groupId || canvasNode?.groupId !== groupId) {
-      return candidate;
-    }
-
-    return {
-      ...candidate,
-      position: {
-        x: candidate.position.x + delta.x,
-        y: candidate.position.y + delta.y,
-      },
-    } satisfies Node;
-  });
-}
-
-function applyThemeDragTranslations(changes: NodeChange[], currentNodes: Node[]) {
-  const themeDeltas = new Map<string, { x: number; y: number }>();
-
-  for (const change of changes) {
-    if (change.type !== "position" || !change.position) {
-      continue;
-    }
-
-    const currentNode = currentNodes.find((candidate) => candidate.id === change.id);
-    if (!currentNode) {
-      continue;
-    }
-
-    const canvasNode = getFlowCanvasNode(currentNode);
-    if (canvasNode?.type !== "theme") {
-      continue;
-    }
-
-    themeDeltas.set(change.id, {
-      x: change.position.x - currentNode.position.x,
-      y: change.position.y - currentNode.position.y,
-    });
-  }
-
-  if (themeDeltas.size === 0) {
-    return applyNodeChanges(changes, currentNodes);
-  }
-
-  let nextNodes = applyNodeChanges(changes, currentNodes);
-
-  for (const [groupId, delta] of themeDeltas.entries()) {
-    if (Math.abs(delta.x) < 0.5 && Math.abs(delta.y) < 0.5) {
-      continue;
-    }
-
-    nextNodes = translateGroupChildren(nextNodes, groupId, delta);
-  }
-
-  return nextNodes;
-}
-
 export interface CanvasGraphHandle {
   fitView: (opts?: FitViewOptions) => void;
   getLayoutItems(): Array<{ id: string; text: string }>;
@@ -477,8 +423,6 @@ export interface CanvasGraphHandle {
   /** Cancel any pending debounced layout save. Call before reverting nodes so
    *  the optimistic drop position is not persisted to the layout DB. */
   cancelPendingLayout(): void;
-  /** Mark insight IDs as being newly added to a group so that syncFlowNodes
-   *  accepts the incoming server positions rather than preserving stale positions. */
 }
 
 const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(function CanvasGraphInner({
@@ -781,9 +725,14 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
       }
 
       if (themeInsightChanges.length > 0) {
-        setFlowNodes((currentNodes) =>
-          orderNodesParentFirst(applyThemeDragTranslations(themeInsightChanges, currentNodes))
+        // Keep the ref current before drag-stop runs. React may not commit the
+        // state render before onNodeDragStop reads the latest runtime positions.
+        const nextNodes = applyThemeInsightNodeChanges(
+          themeInsightChanges,
+          flowNodesRef.current
         );
+        flowNodesRef.current = nextNodes;
+        setFlowNodes(nextNodes);
       }
     },
     [setFlowNodes, setFrameFlowNodes, onFramePersist]
@@ -1473,6 +1422,7 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
         onConnect={handleConnect}
         connectionRadius={48}
         multiSelectionKeyCode={["Meta", "Control", "Shift"]}
+        elevateNodesOnSelect={false}
         // Disable selection-on-drag and pan-on-drag while drawing a frame so
         // the rubber-band gesture isn't intercepted.
         selectionOnDrag={!frameDrawingMode}

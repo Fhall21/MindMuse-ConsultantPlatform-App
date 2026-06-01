@@ -82,13 +82,18 @@ export function ChatToolCardShell({
   return (
     <Card
       size="sm"
-      className={cn(maxWidth === "2xl" ? "max-w-2xl" : "max-w-xl", className)}
+      className={cn(
+        maxWidth === "2xl" ? "max-w-2xl" : "max-w-xl",
+        error ? "border-destructive/40 bg-destructive/5" : null,
+        className,
+      )}
     >
       <CardHeader className="border-b">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
             <CardTitle>{title}</CardTitle>
             {description ? <CardDescription>{description}</CardDescription> : null}
+            {error ? <p className="text-sm text-destructive/80 mt-1">{error}</p> : null}
           </div>
           {onDismiss ? (
             <Button
@@ -105,18 +110,8 @@ export function ChatToolCardShell({
         </div>
       </CardHeader>
 
-      {children || error ? (
-        <CardContent className="space-y-3 pt-4">
-          {error ? (
-            <div
-              role="alert"
-              className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              {error}
-            </div>
-          ) : null}
-          {children}
-        </CardContent>
+      {children ? (
+        <CardContent className="space-y-3 pt-4">{children}</CardContent>
       ) : null}
 
       {footer ? (

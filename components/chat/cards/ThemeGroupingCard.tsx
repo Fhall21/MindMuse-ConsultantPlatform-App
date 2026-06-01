@@ -159,6 +159,7 @@ export function ThemeGroupingCard({
   }
 
   function toggleTheme(themeId: string, checked: boolean) {
+    if (!review) return;
     const nextIds = checked
       ? Array.from(new Set([...review.theme_ids, themeId]))
       : review.theme_ids.filter((id) => id !== themeId);

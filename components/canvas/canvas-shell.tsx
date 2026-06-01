@@ -666,7 +666,6 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
         }
       }
 
-      canvasGraphRef.current?.markGroupJoin(insightIds);
       void invalidateCanvas();
       setGroupPopover(null);
       setSelectedNodeIds([]);

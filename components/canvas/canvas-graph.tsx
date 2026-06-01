@@ -41,6 +41,7 @@ import {
   edgeStyle,
   orderNodesParentFirst,
 } from "@/lib/canvas-flow-builders";
+import { syncFlowNodes } from "@/lib/canvas-flow-sync";
 import { useCanvas, useSaveLayout, type CreateEdgePayload } from "@/hooks/use-canvas";
 import {
   buildCanvasReorganiseLayout,
@@ -244,100 +245,6 @@ function applyFilters(nodes: CanvasNode[], edges: CanvasEdge[], filters: CanvasF
   );
 
   return { filteredNodes, filteredEdges };
-}
-
-function syncFlowNodes(
-  currentNodes: Node[],
-  nextNodes: Node[],
-  selectedNodeIds: string[],
-  pendingGroupJoins: Set<string>
-) {
-  const currentById = new Map(currentNodes.map((node) => [node.id, node] as const));
-  const nextById = new Map(nextNodes.map((node) => [node.id, node] as const));
-  const selectedSet = new Set(selectedNodeIds);
-
-  return orderNodesParentFirst(
-    nextNodes.map((nextNode) => {
-      const currentNode = currentById.get(nextNode.id);
-      const currentData = currentNode?.data as unknown as CanvasNodeCardData | undefined;
-      const nextData = nextNode.data as unknown as CanvasNodeCardData;
-
-      // Don't preserve position when an insight has just been added to a group —
-      // it needs to animate to its slot inside the group card.
-      // Do preserve position when an insight just left a group — the user dragged
-      // it out, so we honour the drop position even before persistLayout flushes.
-      const currentGroupId = currentData?.node?.groupId ?? null;
-      const nextGroupId = nextData?.node?.groupId ?? null;
-      const groupIdChanged = currentGroupId !== nextGroupId;
-      const leftGroup = currentGroupId !== null && nextGroupId === null;
-      // Stale-server case: local state already detached (groupId=null) but server
-      // data hasn't caught up yet (still shows groupId set). Preserve local
-      // position AND data so the node doesn't snap back mid-flight.
-      // Exception: if this node is in pendingGroupJoins it's being newly added to
-      // a group via handleGroupConfirm — accept the server position instead.
-      const justDetached = currentNode && currentGroupId === null && nextGroupId !== null && !pendingGroupJoins.has(nextNode.id);
-      if (justDetached) {
-        return {
-          ...nextNode,
-          position: currentNode.position,
-          selected: selectedSet.has(nextNode.id),
-          data: {
-            ...currentData,
-            expanded: currentData?.expanded,
-          },
-        } satisfies Node;
-      }
-
-      const shouldPreservePosition =
-        currentNode && currentNode.type === nextNode.type && (!groupIdChanged || leftGroup);
-
-      if (shouldPreservePosition) {
-        return {
-          ...nextNode,
-          position: currentNode.position,
-          selected: selectedSet.has(nextNode.id),
-          data: {
-            ...nextData,
-            expanded: currentData?.expanded,
-          },
-        } satisfies Node;
-      }
-
-      // Carry expanded state even when not preserving position.
-      const dataWithExpanded = currentData?.expanded !== undefined
-        ? { ...nextData, expanded: currentData.expanded }
-        : nextData;
-
-      // For grouped insights re-entering after their parent group was dragged,
-      // shift by the delta between the group's runtime position and its DB-based position.
-      const groupId = nextGroupId;
-      if (groupId && !groupIdChanged) {
-        const currentGroupNode = currentById.get(groupId);
-        const nextGroupNode = nextById.get(groupId);
-        if (currentGroupNode && nextGroupNode) {
-          const deltaX = currentGroupNode.position.x - nextGroupNode.position.x;
-          const deltaY = currentGroupNode.position.y - nextGroupNode.position.y;
-          if (Math.abs(deltaX) > 0.5 || Math.abs(deltaY) > 0.5) {
-            return {
-              ...nextNode,
-              position: {
-                x: nextNode.position.x + deltaX,
-                y: nextNode.position.y + deltaY,
-              },
-              selected: selectedSet.has(nextNode.id),
-              data: dataWithExpanded,
-            } satisfies Node;
-          }
-        }
-      }
-
-      return {
-        ...nextNode,
-        selected: selectedSet.has(nextNode.id),
-        data: dataWithExpanded,
-      } satisfies Node;
-    })
-  );
 }
 
 function syncFlowEdges(currentEdges: Edge[], nextEdges: Edge[], selectedEdgeId: string | null) {
@@ -572,7 +479,6 @@ export interface CanvasGraphHandle {
   cancelPendingLayout(): void;
   /** Mark insight IDs as being newly added to a group so that syncFlowNodes
    *  accepts the incoming server positions rather than preserving stale positions. */
-  markGroupJoin(insightIds: string[]): void;
 }
 
 const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(function CanvasGraphInner({
@@ -883,15 +789,14 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
     [setFlowNodes, setFrameFlowNodes, onFramePersist]
   );
 
+  // Insight IDs optimistically detached while their server mutation is in flight.
+  const pendingGroupDetachesRef = useRef(new Set<string>());
+
   // Preserve runtime positions while dragging/selecting. Recomputing from server
   // data on every render reintroduces cursor lag and snap-back.
   useEffect(() => {
-    // Capture and clear before the state update so each refetch cycle consumes
-    // the set exactly once.
-    const pendingJoins = pendingGroupJoinsRef.current;
-    pendingGroupJoinsRef.current = new Set();
     setFlowNodes((currentNodes) =>
-      syncFlowNodes(currentNodes, nextFlowNodes, selectedNodeIds, pendingJoins).map((node) =>
+      syncFlowNodes(currentNodes, nextFlowNodes, selectedNodeIds, pendingGroupDetachesRef.current).map((node) =>
         attachCardUiData(node)
       )
     );
@@ -930,10 +835,6 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
   );
   const saveLayoutNowRef = useRef(saveLayoutNow);
   saveLayoutNowRef.current = saveLayoutNow;
-
-  // Insight IDs that are being newly added to a group via handleGroupConfirm.
-  // syncFlowNodes reads this set to skip the justDetached guard for those nodes.
-  const pendingGroupJoinsRef = useRef(new Set<string>());
 
   // Refreshed each render so getLayoutSavePending() never needs to be in handle deps.
   const savePendingRef = useRef(false);
@@ -1050,9 +951,9 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
       },
 
       revertNodes() {
-        // Bypass syncFlowNodes (and its optimistic guards like justDetached) and
-        // reset local state to the current server-computed nodes. Call this after
-        // a failed mutation to undo optimistic updates.
+        // Bypass syncFlowNodes and reset local state to current server-computed
+        // nodes. Also clear detach markers so a later join cannot inherit stale state.
+        pendingGroupDetachesRef.current.clear();
         setFlowNodes(nextFlowNodesRef.current);
       },
 
@@ -1064,11 +965,6 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
         }
       },
 
-      markGroupJoin(insightIds: string[]) {
-        for (const id of insightIds) {
-          pendingGroupJoinsRef.current.add(id);
-        }
-      },
     }),
     // fitView is the only external dep; everything else is read via stable refs.
     [fitView, setFlowNodes]
@@ -1391,6 +1287,18 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
             }
           : null;
 
+      const detachedGroupId =
+        draggedNodeBeforeDrag?.type === "insight" &&
+        draggedNodeBeforeDrag.groupId &&
+        !targetNodeId
+          ? draggedNodeBeforeDrag.groupId
+          : null;
+      if (detachedGroupId) {
+        for (const insightId of draggedInsightIds) {
+          pendingGroupDetachesRef.current.add(insightId);
+        }
+      }
+
       const settledNodes =
         targetGroupId && draggedInsightIds.length > 0 && typeof insertionIndex === "number"
           ? reorderGroupChildren({
@@ -1401,8 +1309,8 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
             })
           : draggedNodeBeforeDrag?.type === "theme" && themeDelta
             ? runtimeNodes
-            : draggedNodeBeforeDrag?.type === "insight" && draggedNodeBeforeDrag.groupId && !targetNodeId
-              ? detachInsightsFromGroup(runtimeNodes, draggedInsightIds, draggedNodeBeforeDrag.groupId)
+            : detachedGroupId
+              ? detachInsightsFromGroup(runtimeNodes, draggedInsightIds, detachedGroupId)
               : plan.type === "noop" && draggedNodeBeforeDrag?.type === "insight" && draggedNodeBeforeDrag.groupId
                 ? snapGroupChildren(runtimeNodes, draggedNodeBeforeDrag.groupId)
               : runtimeNodes;

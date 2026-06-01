@@ -246,7 +246,12 @@ function applyFilters(nodes: CanvasNode[], edges: CanvasEdge[], filters: CanvasF
   return { filteredNodes, filteredEdges };
 }
 
-function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds: string[]) {
+function syncFlowNodes(
+  currentNodes: Node[],
+  nextNodes: Node[],
+  selectedNodeIds: string[],
+  pendingGroupJoins: Set<string>
+) {
   const currentById = new Map(currentNodes.map((node) => [node.id, node] as const));
   const nextById = new Map(nextNodes.map((node) => [node.id, node] as const));
   const selectedSet = new Set(selectedNodeIds);
@@ -268,7 +273,9 @@ function syncFlowNodes(currentNodes: Node[], nextNodes: Node[], selectedNodeIds:
       // Stale-server case: local state already detached (groupId=null) but server
       // data hasn't caught up yet (still shows groupId set). Preserve local
       // position AND data so the node doesn't snap back mid-flight.
-      const justDetached = currentNode && currentGroupId === null && nextGroupId !== null;
+      // Exception: if this node is in pendingGroupJoins it's being newly added to
+      // a group via handleGroupConfirm — accept the server position instead.
+      const justDetached = currentNode && currentGroupId === null && nextGroupId !== null && !pendingGroupJoins.has(nextNode.id);
       if (justDetached) {
         return {
           ...nextNode,
@@ -563,6 +570,9 @@ export interface CanvasGraphHandle {
   /** Cancel any pending debounced layout save. Call before reverting nodes so
    *  the optimistic drop position is not persisted to the layout DB. */
   cancelPendingLayout(): void;
+  /** Mark insight IDs as being newly added to a group so that syncFlowNodes
+   *  accepts the incoming server positions rather than preserving stale positions. */
+  markGroupJoin(insightIds: string[]): void;
 }
 
 const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(function CanvasGraphInner({
@@ -876,8 +886,12 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
   // Preserve runtime positions while dragging/selecting. Recomputing from server
   // data on every render reintroduces cursor lag and snap-back.
   useEffect(() => {
+    // Capture and clear before the state update so each refetch cycle consumes
+    // the set exactly once.
+    const pendingJoins = pendingGroupJoinsRef.current;
+    pendingGroupJoinsRef.current = new Set();
     setFlowNodes((currentNodes) =>
-      syncFlowNodes(currentNodes, nextFlowNodes, selectedNodeIds).map((node) =>
+      syncFlowNodes(currentNodes, nextFlowNodes, selectedNodeIds, pendingJoins).map((node) =>
         attachCardUiData(node)
       )
     );
@@ -916,6 +930,10 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
   );
   const saveLayoutNowRef = useRef(saveLayoutNow);
   saveLayoutNowRef.current = saveLayoutNow;
+
+  // Insight IDs that are being newly added to a group via handleGroupConfirm.
+  // syncFlowNodes reads this set to skip the justDetached guard for those nodes.
+  const pendingGroupJoinsRef = useRef(new Set<string>());
 
   // Refreshed each render so getLayoutSavePending() never needs to be in handle deps.
   const savePendingRef = useRef(false);
@@ -1043,6 +1061,12 @@ const CanvasGraphInner = forwardRef<CanvasGraphHandle, CanvasGraphProps>(functio
           clearTimeout(saveTimerRef.current);
           saveTimerRef.current = null;
           setHasQueuedSave(false);
+        }
+      },
+
+      markGroupJoin(insightIds: string[]) {
+        for (const id of insightIds) {
+          pendingGroupJoinsRef.current.add(id);
         }
       },
     }),

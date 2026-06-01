@@ -23,6 +23,11 @@ import {
   normalizeMeetingDraft,
   type MeetingDraft,
 } from "./tools/intake";
+import {
+  confirmThemesSchema,
+  extractThemesSchema,
+} from "./tools/themes";
+import { extractAndPersistThemes, finalizeThemeReview } from "./themes-db";
 
 export interface ChatToolRuntimeContext {
   userId: string;
@@ -398,15 +403,81 @@ export function createChatTools(context: ChatToolRuntimeContext) {
         mapOutput: mapClarificationQuestions,
       }
     ),
-    extract_themes: createFastApiTool(
-      "extract_themes",
-      "Extract themes from meeting transcript",
-      z.object({
-        meetingId: z.string().uuid(),
-        transcript: z.string().min(1),
-      }),
-      context
-    ),
+    extract_themes: tool({
+      description: "Extract themes from a confirmed meeting transcript.",
+      inputSchema: extractThemesSchema,
+      execute: async (input) => {
+        const parsed = extractThemesSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+
+        const result = await extractAndPersistThemes({
+          userId: context.userId,
+          sessionId: context.sessionId,
+          meetingId: parsed.meeting_id,
+        });
+
+        if (!result.ok) {
+          await persistToolExecution({
+            context,
+            toolName: "extract_themes",
+            input: payload,
+            output: { error: result.error },
+            status: "error",
+          });
+          return { error: result.error };
+        }
+
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "extract_themes",
+          input: payload,
+          output: result.output,
+          status: "pending",
+        });
+
+        return {
+          ...result.output,
+          tool_result_id: toolResult.id,
+        };
+      },
+    }),
+    confirm_themes: tool({
+      description: "Finalize theme review and return accepted themes.",
+      inputSchema: confirmThemesSchema,
+      execute: async (input) => {
+        const parsed = confirmThemesSchema.parse(input);
+        try {
+          const accepted = await finalizeThemeReview({
+            userId: context.userId,
+            sessionId: context.sessionId,
+            meetingId: parsed.meeting_id,
+            acceptedThemeIds: parsed.accepted_theme_ids,
+            rejectedThemeIds: parsed.rejected_theme_ids,
+          });
+
+          await persistToolExecution({
+            context,
+            toolName: "confirm_themes",
+            input: parsed as unknown as Record<string, unknown>,
+            output: { meeting_id: parsed.meeting_id, themes: accepted },
+            status: "success",
+          });
+
+          return accepted;
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Failed to finalize theme review";
+          await persistToolExecution({
+            context,
+            toolName: "confirm_themes",
+            input: parsed as unknown as Record<string, unknown>,
+            output: { error: message },
+            status: "error",
+          });
+          return { error: message };
+        }
+      },
+    }),
     identify_quotes: createFastApiTool(
       "identify_quotes",
       "Identify key quotes linked to themes",

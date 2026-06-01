@@ -94,6 +94,22 @@ export async function insertToolResult(params: {
   return row;
 }
 
+export async function dismissPriorPendingToolResults(
+  sessionId: string,
+  toolName: string
+): Promise<void> {
+  await db
+    .update(chatToolResults)
+    .set({ status: "dismissed" })
+    .where(
+      and(
+        eq(chatToolResults.sessionId, sessionId),
+        eq(chatToolResults.toolName, toolName),
+        eq(chatToolResults.status, "pending")
+      )
+    );
+}
+
 export async function updateToolResult(params: {
   toolResultId: string;
   sessionId: string;

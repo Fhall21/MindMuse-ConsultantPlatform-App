@@ -61,6 +61,8 @@ import {
   manipulateCanvasSchema,
   type CanvasOperationProposal,
 } from "./tools/canvas-manipulate";
+import { queryConsultationDataSchema } from "./tools/analytics";
+import { executeConsultationQuery } from "./queries/consultation-analytics";
 import {
   listMeetingsForConsultation,
   listPeopleForUser,
@@ -1166,6 +1168,18 @@ export function createChatTools(context: ChatToolRuntimeContext) {
         });
 
         return { ...output, tool_result_id: toolResult.id };
+      },
+    }),
+
+    // ── Sprint 22 Task 05 — Analytics NL ─────────────────────────────────
+
+    query_consultation_data: tool({
+      description:
+        "Answer analytical questions about the consultation using confirmed DB records only. Use for 'how many', 'which group has most', 'what did [person] say about [topic]', 'compare meetings', 'who is mentioned most' queries. Never hallucinate — only report what the query returns.",
+      inputSchema: queryConsultationDataSchema,
+      execute: async (input) => {
+        const parsed = queryConsultationDataSchema.parse(input);
+        return executeConsultationQuery(parsed);
       },
     }),
 

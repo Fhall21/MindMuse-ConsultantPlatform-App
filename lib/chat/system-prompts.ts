@@ -11,6 +11,19 @@ export interface ProactiveTriggerFlags {
   canvasPending?: boolean;
 }
 
+export interface SessionRuntimeContext {
+  lastAction: {
+    toolName: string;
+    createdAt: Date;
+    input?: Record<string, unknown> | null;
+  } | null;
+  pendingItem: {
+    toolName: string;
+    input?: Record<string, unknown> | null;
+  } | null;
+  isFirstTurnReturning: boolean;
+}
+
 const NL_INTENTS_BLOCK = `Natural-language intents — respond directly without calling a tool:
 
 1. THEME RECALL — user asks what themes emerged from a meeting
@@ -113,6 +126,43 @@ Maintain clinical neutrality — no celebration, no urgency.
 
 ${TOOL_CARD_RULES}`;
 
+const UNDO_RULES = `Undo / revision:
+- Detect intent: "undo that", "go back", "wait", "change what I just confirmed", "actually [different value]"
+- If [UNDO CONTEXT] block is present below: respond "${AGENT_VOICE.UNDO_PROMPT("[description from context]")}" then dispatch the appropriate correction tool (edit_meeting, edit_theme, etc.)
+- If no [UNDO CONTEXT] block: respond "${AGENT_VOICE.UNDO_NOTHING_IN_SESSION}"
+- For irreversible ops (generate_report, draft_evidence_email, audit log entries): respond "${AGENT_VOICE.UNDO_BULK_NOT_REVERSIBLE}"`;
+
+function formatUndoContext(
+  lastAction: SessionRuntimeContext["lastAction"]
+): string {
+  if (!lastAction) return "";
+  const time = lastAction.createdAt.toISOString();
+  return `[UNDO CONTEXT: Last confirmed action: ${lastAction.toolName} at ${time}]`;
+}
+
+function describeToolForMemory(toolName: string, input?: Record<string, unknown> | null): string {
+  if (!input) return toolName.replace(/_/g, " ");
+  const name = (input.name ?? input.title ?? input.theme_name ?? "") as string;
+  return name ? `${toolName.replace(/_/g, " ")} — "${name}"` : toolName.replace(/_/g, " ");
+}
+
+function formatSessionMemoryContext(ctx: SessionRuntimeContext): string {
+  if (!ctx.isFirstTurnReturning) return "";
+
+  if (ctx.pendingItem) {
+    const desc = describeToolForMemory(
+      ctx.pendingItem.toolName,
+      ctx.pendingItem.input as Record<string, unknown> | null | undefined
+    );
+    return [
+      `[SESSION MEMORY: User has a pending ${ctx.pendingItem.toolName} from last session: ${desc}]`,
+      `Lead with: "${AGENT_VOICE.WELCOME_BACK_WITH_PENDING(desc)}"`,
+    ].join(" ");
+  }
+
+  return `[SESSION MEMORY: No pending items. Greet with: "${AGENT_VOICE.WELCOME_BACK_NO_PENDING}"]`;
+}
+
 function formatContextBlock(summary: ProjectContextSummary | null): string {
   if (!summary) {
     return "[PROJECT CONTEXT: No consultation selected. Prompt user to choose or create a consultation.]";
@@ -140,6 +190,7 @@ export function buildDynamicSystemPrompt(
   options?: {
     proactiveTriggers?: ProactiveTriggerFlags;
     autoIntakeSuppressed?: boolean;
+    sessionContext?: SessionRuntimeContext;
   }
 ): string {
   const base = state.userMode === "returning" ? RETURNING_BASE : ONBOARDING_BASE;
@@ -155,15 +206,26 @@ export function buildDynamicSystemPrompt(
       ? buildProactiveTriggerBlock(options.proactiveTriggers)
       : "";
 
+  const undoContextBlock = options?.sessionContext
+    ? formatUndoContext(options.sessionContext.lastAction)
+    : "";
+
+  const sessionMemoryBlock = options?.sessionContext
+    ? formatSessionMemoryContext(options.sessionContext)
+    : "";
+
   return [
     base,
     NL_INTENTS_BLOCK,
     BULK_NL_OPS_BLOCK,
+    UNDO_RULES,
     autoIntakeBlock,
     ...blocks,
     formatContextBlock(contextSummary),
     formatAccountInjection(state),
     proactiveBlock,
+    undoContextBlock,
+    sessionMemoryBlock,
   ]
     .filter(Boolean)
     .join("\n\n");

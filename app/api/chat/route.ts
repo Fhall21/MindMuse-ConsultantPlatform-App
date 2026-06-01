@@ -23,7 +23,8 @@ import {
   toModelMessages,
 } from "@/lib/chat/persist";
 import { acquireSessionLock, releaseSessionLock } from "@/lib/chat/session-lock";
-import { buildSystemPrompt } from "@/lib/chat/system-prompts";
+import { buildDynamicSystemPrompt } from "@/lib/chat/system-prompts";
+import { loadOnboardingAccountState } from "@/lib/chat/onboarding-state";
 import { createChatTools } from "@/lib/chat/tools";
 
 export const maxDuration = 60;
@@ -118,13 +119,15 @@ export async function POST(request: NextRequest) {
     });
 
     const storedMessages = await loadRecentChatMessages(session.id);
-    const [contextSummary, consecutiveToolErrors, activeConsultations] = await Promise.all([
+    const [contextSummary, consecutiveToolErrors, activeConsultations, onboardingState] =
+      await Promise.all([
       buildProjectContextSummary(auth.id, session.consultationId),
       countConsecutiveToolErrors(session.id),
       countActiveConsultations(auth.id),
+      loadOnboardingAccountState(auth.id),
     ]);
 
-    const systemPrompt = buildSystemPrompt(session.userMode, contextSummary);
+    const systemPrompt = buildDynamicSystemPrompt(onboardingState, contextSummary);
     const tools = createChatTools({ userId: auth.id, sessionId: session.id });
 
     const result = streamText({

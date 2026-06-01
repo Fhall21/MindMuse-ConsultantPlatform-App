@@ -5,6 +5,11 @@ import {
   createChatSession,
   getUnarchivedSessionForUser,
 } from "@/lib/chat/context";
+import {
+  buildOnboardingBootstrapFields,
+  loadOnboardingAccountState,
+  syncUserModeFromAccountState,
+} from "@/lib/chat/onboarding-state";
 import { loadRecentChatMessages, loadToolResultsForSession } from "@/lib/chat/persist";
 import { dbMessagesToUiMessages } from "@/lib/chat/ui-messages";
 
@@ -25,12 +30,18 @@ export async function GET() {
     loadToolResultsForSession(session.id),
   ]);
 
+  await syncUserModeFromAccountState(session.id, auth.id);
+  const freshState = await loadOnboardingAccountState(auth.id);
+  const bootstrapFields = buildOnboardingBootstrapFields(freshState);
+
   return NextResponse.json({
     sessionId: session.id,
     consultationId: session.consultationId,
-    userMode: session.userMode,
+    userMode: bootstrapFields.userMode,
     needsConsultationSelection:
       !session.consultationId && activeConsultations >= 2,
+    onboardingState: bootstrapFields.onboardingState,
+    welcomeVariant: bootstrapFields.welcomeVariant,
     messages: dbMessagesToUiMessages(messages, toolResults),
   });
 }

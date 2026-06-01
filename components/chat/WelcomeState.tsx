@@ -10,7 +10,17 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDashboardStats } from "@/hooks/use-dashboard-stats";
 import { CreateProjectCard } from "@/components/chat/cards/CreateProjectCard";
+import type { WelcomeVariant } from "@/lib/chat/onboarding-copy";
+import {
+  getWelcomeGreeting,
+  getWelcomeQuickActionPriority,
+} from "@/lib/chat/onboarding-copy";
+import type { OnboardingPhase } from "@/lib/chat/onboarding-state";
 import type { Consultation } from "@/types/db";
+import {
+  CAPTURE_NOTES_ACCEPT_ATTR,
+  CAPTURE_TRANSCRIPT_ACCEPT_ATTR,
+} from "@/lib/capture/constants";
 
 export type WelcomeQuickAction =
   | { type: "prefill"; text: string }
@@ -18,7 +28,8 @@ export type WelcomeQuickAction =
 
 interface WelcomeStateProps {
   displayName: string;
-  isFirstTime: boolean;
+  welcomeVariant: WelcomeVariant;
+  onboardingPhase: OnboardingPhase;
   activeProject?: Consultation | null;
   showCreateProject?: boolean;
   onQuickAction: (action: WelcomeQuickAction) => void;
@@ -61,7 +72,8 @@ function StatPill({
 
 export function WelcomeState({
   displayName,
-  isFirstTime,
+  welcomeVariant,
+  onboardingPhase,
   activeProject,
   showCreateProject = false,
   onQuickAction,
@@ -73,24 +85,31 @@ export function WelcomeState({
   const transcriptInputRef = useRef<HTMLInputElement>(null);
   const notesInputRef = useRef<HTMLInputElement>(null);
 
-  const greeting = isFirstTime
-    ? "Welcome to MindMuse. Let's start your first engagement."
-    : `Welcome back ${displayName}. What would you like to do today?`;
+  const greeting = getWelcomeGreeting(welcomeVariant, displayName);
+  const chipPriority = getWelcomeQuickActionPriority(onboardingPhase);
 
-  const chips: { label: string; action: WelcomeQuickAction }[] = [
-    {
-      label: "Upload transcript",
-      action: { type: "file", accept: ".txt,.doc,.docx,.pdf", label: "transcript" },
-    },
-    {
-      label: "Upload notes",
-      action: { type: "file", accept: "image/*,.pdf", label: "notes" },
-    },
-    {
+  const chips: { label: string; action: WelcomeQuickAction }[] = [];
+
+  if (chipPriority.showUploadTranscript) {
+    chips.push({
+      label: "Upload consultation transcript",
+      action: { type: "file", accept: CAPTURE_TRANSCRIPT_ACCEPT_ATTR, label: "transcript" },
+    });
+  }
+
+  if (chipPriority.showUploadNotes) {
+    chips.push({
+      label: "Upload consultation notes",
+      action: { type: "file", accept: CAPTURE_NOTES_ACCEPT_ATTR, label: "notes" },
+    });
+  }
+
+  if (chipPriority.showPendingInsights) {
+    chips.push({
       label: "Review pending insights",
       action: { type: "prefill", text: "Show me pending insights" },
-    },
-  ];
+    });
+  }
 
   if (activeProject) {
     chips.push({
@@ -123,7 +142,7 @@ export function WelcomeState({
         ref={transcriptInputRef}
         type="file"
         className="hidden"
-        accept=".txt,.doc,.docx,.pdf"
+        accept={CAPTURE_TRANSCRIPT_ACCEPT_ATTR}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file && onAttachFile) {
@@ -136,7 +155,7 @@ export function WelcomeState({
         ref={notesInputRef}
         type="file"
         className="hidden"
-        accept="image/*,.pdf"
+        accept={CAPTURE_NOTES_ACCEPT_ATTR}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file && onAttachFile) {

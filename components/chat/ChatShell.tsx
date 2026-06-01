@@ -4,11 +4,14 @@ import type { UIMessage } from "ai";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ChatThread } from "@/components/chat/ChatThread";
 import { WelcomeState, type WelcomeQuickAction } from "@/components/chat/WelcomeState";
+import type { WelcomeVariant } from "@/lib/chat/onboarding-copy";
+import type { OnboardingPhase } from "@/lib/chat/onboarding-state";
 import type { Consultation } from "@/types/db";
 
 interface ChatShellProps {
   displayName: string;
-  isFirstTime: boolean;
+  welcomeVariant: WelcomeVariant;
+  onboardingPhase: OnboardingPhase;
   activeProject: Consultation | null;
   messages: UIMessage[];
   input: string;
@@ -31,7 +34,8 @@ interface ChatShellProps {
 
 export function ChatShell({
   displayName,
-  isFirstTime,
+  welcomeVariant,
+  onboardingPhase,
   activeProject,
   messages,
   input,
@@ -71,7 +75,8 @@ export function ChatShell({
         {showWelcome ? (
           <WelcomeState
             displayName={displayName}
-            isFirstTime={isFirstTime}
+            welcomeVariant={welcomeVariant}
+            onboardingPhase={onboardingPhase}
             activeProject={activeProject}
             showCreateProject={showCreateProjectInWelcome}
             onQuickAction={onQuickAction}

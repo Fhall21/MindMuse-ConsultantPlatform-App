@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CREATE_CONSULTATION_COPY } from "@/lib/chat/onboarding-copy";
 import { createRound } from "@/lib/actions/rounds";
 import { fetchJson } from "@/hooks/api";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
@@ -42,33 +43,33 @@ export function CreateProjectCard({
         body: JSON.stringify({
           sessionId: bootstrap.sessionId,
           consultationId,
+          syncOnboarding: true,
         }),
       });
       queryClient.invalidateQueries({ queryKey: ["consultations"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
-      queryClient.invalidateQueries({ queryKey: ["consultations"] });
       onProjectCreated?.(consultationId);
-      toast.success("Consultation project created.");
+      toast.success(CREATE_CONSULTATION_COPY.success);
     } catch (error) {
       console.error(error);
-      toast.error("Could not create project. Try again.");
+      toast.error(CREATE_CONSULTATION_COPY.error);
       setPending(confirmKey, false);
     }
   }
 
   return (
     <div className="rounded-lg border bg-card p-4 text-card-foreground">
-      <p className="text-sm font-medium">Create your first consultation project</p>
+      <p className="text-sm font-medium">{CREATE_CONSULTATION_COPY.title}</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        The assistant needs a project before intake and analysis can begin.
+        {CREATE_CONSULTATION_COPY.description}
       </p>
       <div className="mt-4 space-y-2">
-        <Label htmlFor={`project-label-${messageId}`}>Project title</Label>
+        <Label htmlFor={`project-label-${messageId}`}>{CREATE_CONSULTATION_COPY.label}</Label>
         <Input
           id={`project-label-${messageId}`}
           value={label}
           onChange={(event) => setLabel(event.target.value)}
-          placeholder="e.g. Leadership round — Q2"
+          placeholder={CREATE_CONSULTATION_COPY.placeholder}
           disabled={pending}
         />
       </div>
@@ -78,7 +79,7 @@ export function CreateProjectCard({
         onClick={() => void handleCreate()}
         disabled={pending || !label.trim()}
       >
-        {pending ? "Creating…" : "Create project"}
+        {pending ? CREATE_CONSULTATION_COPY.pending : CREATE_CONSULTATION_COPY.submit}
       </Button>
     </div>
   );

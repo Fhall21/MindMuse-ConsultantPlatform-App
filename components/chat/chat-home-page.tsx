@@ -4,18 +4,29 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { CardConfirmProvider } from "@/components/chat/card-confirm-context";
 import { ChatShell } from "@/components/chat/ChatShell";
 import type { WelcomeQuickAction } from "@/components/chat/WelcomeState";
+import {
+  FILE_ATTACH_STARTED_COPY,
+  type WelcomeVariant,
+} from "@/lib/chat/onboarding-copy";
+import type { OnboardingAccountState } from "@/lib/chat/onboarding-state";
 import { fetchJson } from "@/hooks/api";
 import { useConsultations } from "@/hooks/use-consultations";
-import { useDashboardStats } from "@/hooks/use-dashboard-stats";
+import {
+  buildChatIntakeUserMessage,
+  captureFileForChatIntake,
+} from "@/lib/capture/chat-file-intake";
 
 interface ChatBootstrap {
   sessionId: string;
   consultationId: string | null;
   userMode: "onboarding" | "returning";
   needsConsultationSelection: boolean;
+  onboardingState: OnboardingAccountState;
+  welcomeVariant: WelcomeVariant;
   messages: UIMessage[];
 }
 
@@ -28,11 +39,13 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [consultationId, setConsultationId] = useState<string | null>(null);
   const [needsConsultationSelection, setNeedsConsultationSelection] = useState(false);
+  const [onboardingState, setOnboardingState] = useState<OnboardingAccountState | null>(null);
+  const [welcomeVariant, setWelcomeVariant] = useState<WelcomeVariant>("brand_new");
   const [bootstrapError, setBootstrapError] = useState(false);
   const [bootstrapReady, setBootstrapReady] = useState(false);
+  const [isCapturingFile, setIsCapturingFile] = useState(false);
   const sessionIdRef = useRef<string | null>(null);
   const queryClient = useQueryClient();
-  const statsQuery = useDashboardStats();
   const consultationsQuery = useConsultations();
 
   const transport = useMemo(
@@ -76,6 +89,8 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
         setSessionId(data.sessionId);
         setConsultationId(data.consultationId);
         setNeedsConsultationSelection(data.needsConsultationSelection);
+        setOnboardingState(data.onboardingState);
+        setWelcomeVariant(data.welcomeVariant);
         setMessages(data.messages);
         setBootstrapError(false);
       } catch (loadError) {
@@ -96,11 +111,10 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     };
   }, [setMessages]);
 
-  const isFirstTime = (statsQuery.data?.totalConsultations ?? 0) === 0;
   const showCreateProject =
     bootstrapReady &&
     !bootstrapError &&
-    isFirstTime &&
+    onboardingState?.phase === "needs_consultation" &&
     !consultationId;
 
   const activeProject = useMemo(() => {
@@ -115,7 +129,10 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   }, [consultationId, consultationsQuery.data]);
 
   const isBusy =
-    !bootstrapReady || status === "submitted" || status === "streaming";
+    !bootstrapReady ||
+    isCapturingFile ||
+    status === "submitted" ||
+    status === "streaming";
   const lastAssistantText = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
@@ -171,14 +188,50 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   );
 
   const handleAttachFile = useCallback(
-    (file: File, kind: "transcript" | "notes") => {
-      const prefix =
-        kind === "transcript"
-          ? "Please process this transcript file"
-          : "Please process these meeting notes";
-      void sendUserText(`${prefix}: ${file.name}`);
+    async (file: File, kind: "transcript" | "notes") => {
+      if (isBusy) {
+        return;
+      }
+
+      if (onboardingState?.phase === "needs_consultation") {
+        toast.info(FILE_ATTACH_STARTED_COPY);
+      }
+
+      setIsCapturingFile(true);
+      try {
+        const { intakeKind, text } = await captureFileForChatIntake(file, kind);
+        const message = buildChatIntakeUserMessage({
+          intakeKind,
+          fileName: file.name,
+          text,
+          projectId: consultationId,
+        }).trim();
+        if (!message) {
+          return;
+        }
+
+        clearError();
+        setInput("");
+        await sendMessage(
+          { text: message },
+          {
+            body: {
+              sessionId: sessionIdRef.current ?? undefined,
+            },
+          }
+        );
+      } catch (captureError) {
+        console.error(captureError);
+        toast.error(
+          captureError instanceof Error
+            ? captureError.message
+            : "Could not process that file. Try again or paste the text manually."
+        );
+      } finally {
+        setIsCapturingFile(false);
+      }
     },
-    [sendUserText]
+    [consultationId, isBusy, onboardingState?.phase, sendUserText]
   );
 
   const handleConsultationSelected = useCallback(
@@ -194,7 +247,8 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     <CardConfirmProvider>
       <ChatShell
         displayName={displayName}
-        isFirstTime={isFirstTime}
+        welcomeVariant={welcomeVariant}
+        onboardingPhase={onboardingState?.phase ?? "needs_consultation"}
         activeProject={activeProject}
         messages={messages}
         input={input}

@@ -2,12 +2,14 @@ import { and, eq, isNull } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
+import { syncUserModeFromAccountState } from "@/lib/chat/onboarding-state";
 import { db } from "@/db/client";
 import { chatSessions, consultations } from "@/db/schema";
 
 const patchSchema = z.object({
   sessionId: z.string().uuid(),
   consultationId: z.string().uuid(),
+  syncOnboarding: z.boolean().optional(),
 });
 
 export async function PATCH(request: NextRequest) {
@@ -63,6 +65,22 @@ export async function PATCH(request: NextRequest) {
 
   if (!updated) {
     return NextResponse.json({ detail: "Chat session not found" }, { status: 404 });
+  }
+
+  if (parsed.data.syncOnboarding) {
+    await syncUserModeFromAccountState(updated.id, auth.id);
+    const [refreshed] = await db
+      .select()
+      .from(chatSessions)
+      .where(eq(chatSessions.id, updated.id))
+      .limit(1);
+    if (refreshed) {
+      return NextResponse.json({
+        sessionId: refreshed.id,
+        consultationId: refreshed.consultationId,
+        userMode: refreshed.userMode,
+      });
+    }
   }
 
   return NextResponse.json({

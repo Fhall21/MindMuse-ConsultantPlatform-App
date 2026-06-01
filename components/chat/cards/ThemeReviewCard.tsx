@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { INSIGHT_ACCEPT_COPY, INSIGHT_REVIEW_DONE_COPY } from "@/lib/chat/onboarding-copy";
 import { cn } from "@/lib/utils";
 import {
   getConfidenceLabel,
@@ -153,6 +154,8 @@ function ThemeRow({
             Reject
           </Button>
         </div>
+      ) : isAccepted ? (
+        <p className="mt-3 text-xs text-muted-foreground">{INSIGHT_ACCEPT_COPY}</p>
       ) : null}
     </div>
   );
@@ -217,7 +220,7 @@ export function ThemeReviewCard({
         <CardHeader>
           <CardTitle>Theme review complete</CardTitle>
           <CardDescription>
-            {acceptedCount} theme{acceptedCount === 1 ? "" : "s"} accepted for this meeting.
+            {INSIGHT_REVIEW_DONE_COPY(acceptedCount)}
           </CardDescription>
         </CardHeader>
       </Card>

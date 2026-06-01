@@ -53,6 +53,16 @@ export function ProjectSelectionCard({
 
   const consultations = consultationsQuery.data ?? [];
 
+  if (consultations.length === 0) {
+    return (
+      <div className="rounded-lg border bg-card p-4 text-card-foreground">
+        <p className="text-sm text-muted-foreground">
+          No consultation projects yet. Create one above to continue.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border bg-card p-4 text-card-foreground">
       <p className="text-sm font-medium">Which project should we work on?</p>

@@ -10,7 +10,7 @@ import {
   insertToolResult,
   updateChatMessageContent,
 } from "./persist";
-import { enrichMeetingDraftWithInfer } from "./intake-enrich";
+import { buildMeetingDraftFromExtractedText } from "./intake-draft";
 import { dispatchToolToFastApi } from "./tool-dispatch";
 import { CHAT_TOOL_ENDPOINTS } from "./tool-allowlist";
 import {
@@ -21,7 +21,6 @@ import {
   intakeTextTranscriptSchema,
   linkPeopleSchema,
   mapClarificationQuestions,
-  normalizeMeetingDraft,
   type MeetingDraft,
 } from "./tools/intake";
 import {
@@ -83,37 +82,7 @@ async function buildMeetingDraftFromText(params: {
   projectId?: string;
   intakeKind: MeetingDraft["intake_kind"];
 }): Promise<{ ok: true; draft: MeetingDraft } | { ok: false; error: string }> {
-  const result = await dispatchToolToFastApi({
-    userId: params.context.userId,
-    sessionId: params.context.sessionId,
-    endpoint: CHAT_TOOL_ENDPOINTS.intake_text_transcript,
-    body: {
-      text: params.text,
-      project_id: params.projectId,
-    },
-  });
-
-  if (!result.ok) {
-    return result;
-  }
-
-  const draft = normalizeMeetingDraft(
-    {
-      ...(result.data as Record<string, unknown>),
-      project_id: params.projectId,
-      source_text: params.text,
-      intake_kind: params.intakeKind,
-    },
-    params.text
-  );
-
-  const enrichedDraft = await enrichMeetingDraftWithInfer({
-    context: params.context,
-    text: params.text,
-    draft,
-  });
-
-  return { ok: true, draft: enrichedDraft };
+  return buildMeetingDraftFromExtractedText(params);
 }
 
 export type MeetingIntakeToolName =

@@ -4,6 +4,7 @@ import {
   normalizeMeetingDraft,
   previewText,
 } from "@/lib/chat/tools/intake";
+import { readMeetingDraft } from "@/components/chat/cards/types";
 
 describe("lib/chat/tools/intake", () => {
   it("normalizes FastAPI meeting draft payloads", () => {
@@ -57,5 +58,22 @@ describe("lib/chat/tools/intake", () => {
     const preview = previewText("a".repeat(400), 120);
     expect(preview.endsWith("…")).toBe(true);
     expect(preview.length).toBeLessThanOrEqual(121);
+  });
+});
+
+describe("readMeetingDraft", () => {
+  it("unwraps meeting_draft from POST /api/meetings success output", () => {
+    const draft = readMeetingDraft({
+      meeting_draft: {
+        title: "Leadership sync",
+        date: "2026-06-01T12:00:00.000Z",
+        participants: ["Alex Chen"],
+        project_id: "11111111-1111-4111-8111-111111111111",
+      },
+      meeting_record: { id: "22222222-2222-4222-8222-222222222222" },
+    });
+
+    expect(draft?.title).toBe("Leadership sync");
+    expect(draft?.participants).toEqual(["Alex Chen"]);
   });
 });

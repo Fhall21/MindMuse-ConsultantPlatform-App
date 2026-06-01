@@ -61,6 +61,10 @@ export const CARD_DISMISSED_COPY =
 export const MEETING_CONFIRM_SUCCESS_COPY =
   "Meeting saved. You can extract insights from it next.";
 
+/** Inserted as assistant message after UI meeting confirm (chat session). */
+export const MEETING_SAVED_FOLLOW_UP =
+  "Your meeting is saved. I can extract themes from the transcript next — say when you are ready, or ask what you would like to do.";
+
 export function meetingSavedDescription(title: string) {
   const trimmed = title.trim();
   return trimmed

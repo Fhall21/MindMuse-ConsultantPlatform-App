@@ -9,6 +9,16 @@ export const CHAT_CARD_TOOL_NAMES = new Set<string>([
   "generate_clarification",
 ]);
 
+/** Internal agent tools — never render ToolResultFallbackCard in the thread. */
+export const CHAT_HIDDEN_THREAD_TOOL_NAMES = new Set<string>([
+  "confirm_meeting",
+  "link_people",
+]);
+
+export function isHiddenThreadToolName(toolName: string): boolean {
+  return CHAT_HIDDEN_THREAD_TOOL_NAMES.has(toolName);
+}
+
 export function isChatCardToolName(toolName: string): boolean {
   return CHAT_CARD_TOOL_NAMES.has(toolName);
 }

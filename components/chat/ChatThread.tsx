@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { resolveChatCard } from "@/components/chat/cards/index";
 import { CreateProjectCard } from "@/components/chat/cards/CreateProjectCard";
 import { ProjectSelectionCard } from "@/components/chat/cards/ProjectSelectionCard";
+import { isHiddenThreadToolName } from "@/lib/chat/card-tools";
 import type { ChatToolMessageMeta } from "@/lib/chat/ui-messages";
 
 interface ChatThreadProps {
@@ -55,6 +56,9 @@ function MessageBubble({
 }) {
   const toolMeta = getToolMeta(message);
   if (toolMeta) {
+    if (isHiddenThreadToolName(toolMeta.toolName)) {
+      return null;
+    }
     const Card = resolveChatCard(toolMeta.toolName);
     return (
       <div className="py-2">

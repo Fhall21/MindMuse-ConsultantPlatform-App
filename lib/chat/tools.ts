@@ -1,6 +1,5 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { confirmMeetingFromDraft, linkPeopleToMeeting } from "./intake-db";
 import {
   resolveNotesFromArtifact,
   resolveTranscriptFromArtifact,
@@ -14,12 +13,10 @@ import { buildMeetingDraftFromExtractedText } from "./intake-draft";
 import { dispatchToolToFastApi } from "./tool-dispatch";
 import { CHAT_TOOL_ENDPOINTS } from "./tool-allowlist";
 import {
-  confirmMeetingSchema,
   generateClarificationSchema,
   intakeAudioTranscriptSchema,
   intakeNotesSchema,
   intakeTextTranscriptSchema,
-  linkPeopleSchema,
   mapClarificationQuestions,
   type MeetingDraft,
 } from "./tools/intake";
@@ -323,84 +320,6 @@ export function createChatTools(context: ChatToolRuntimeContext) {
         };
       }
     ),
-    confirm_meeting: tool({
-      description: "Save confirmed meeting details to the database.",
-      inputSchema: confirmMeetingSchema,
-      execute: async (input) => {
-        const parsed = confirmMeetingSchema.parse(input);
-        try {
-          const record = await confirmMeetingFromDraft({
-            userId: context.userId,
-            projectId: parsed.project_id,
-            meetingDraft: parsed.meeting_draft,
-          });
-
-          if (parsed.meeting_draft.participants.length > 0) {
-            await linkPeopleToMeeting({
-              userId: context.userId,
-              meetingId: record.id,
-              participantNames: parsed.meeting_draft.participants,
-            });
-          }
-
-          await persistToolExecution({
-            context,
-            toolName: "confirm_meeting",
-            input: parsed as unknown as Record<string, unknown>,
-            output: record,
-            status: "success",
-          });
-
-          return record;
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Failed to save meeting";
-          await persistToolExecution({
-            context,
-            toolName: "confirm_meeting",
-            input: parsed as unknown as Record<string, unknown>,
-            output: { error: message },
-            status: "error",
-          });
-          return { error: message };
-        }
-      },
-    }),
-    link_people: tool({
-      description: "Match participant names to people records and link them to a meeting.",
-      inputSchema: linkPeopleSchema,
-      execute: async (input) => {
-        const parsed = linkPeopleSchema.parse(input);
-        try {
-          const linked = await linkPeopleToMeeting({
-            userId: context.userId,
-            meetingId: parsed.meeting_id,
-            participantNames: parsed.participant_names,
-          });
-
-          await persistToolExecution({
-            context,
-            toolName: "link_people",
-            input: parsed as unknown as Record<string, unknown>,
-            output: linked,
-            status: "success",
-          });
-
-          return linked;
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Failed to link people";
-          await persistToolExecution({
-            context,
-            toolName: "link_people",
-            input: parsed as unknown as Record<string, unknown>,
-            output: { error: message },
-            status: "error",
-          });
-          return { error: message };
-        }
-      },
-    }),
     generate_clarification: createFastApiTool(
       "generate_clarification",
       "Generate clarification questions when notes are ambiguous.",

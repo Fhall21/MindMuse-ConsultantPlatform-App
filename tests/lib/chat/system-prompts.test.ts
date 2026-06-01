@@ -57,5 +57,6 @@ describe("lib/chat/system-prompts", () => {
     expect(prompt).toContain("extract_themes");
     expect(prompt).toContain("ThemeReviewCard");
     expect(prompt).toContain("NEVER write meeting fields");
+    expect(prompt).toContain("NEVER call confirm_meeting");
   });
 });

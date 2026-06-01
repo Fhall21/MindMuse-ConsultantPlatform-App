@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
 import { getUnarchivedSessionForUser } from "@/lib/chat/context";
 import { confirmMeetingFromDraft, linkPeopleByIdsToMeeting, linkPeopleToMeeting } from "@/lib/chat/intake-db";
+import { MEETING_SAVED_FOLLOW_UP } from "@/lib/chat/onboarding-copy";
+import { getToolResultForSession, insertChatMessage, updateToolResult } from "@/lib/chat/persist";
 import { confirmMeetingSchema } from "@/lib/chat/tools/intake";
-import { getToolResultForSession, updateToolResult } from "@/lib/chat/persist";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedApiUser();
@@ -76,6 +77,12 @@ export async function POST(request: NextRequest) {
           meeting_record: record,
         },
         status: "success",
+      });
+
+      await insertChatMessage({
+        sessionId,
+        role: "assistant",
+        content: MEETING_SAVED_FOLLOW_UP,
       });
     }
 

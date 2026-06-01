@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CHAT_CARD_TOOL_NAMES,
   isChatCardToolName,
+  isHiddenThreadToolName,
   messageContentIsCardTool,
   sessionTurnIncludesCardTool,
 } from "@/lib/chat/card-tools";
@@ -13,6 +14,9 @@ describe("lib/chat/card-tools", () => {
     expect(CHAT_CARD_TOOL_NAMES.has("identify_quotes")).toBe(true);
     expect(CHAT_CARD_TOOL_NAMES.has("generate_clarification")).toBe(true);
     expect(isChatCardToolName("confirm_meeting")).toBe(false);
+    expect(isHiddenThreadToolName("confirm_meeting")).toBe(true);
+    expect(isHiddenThreadToolName("link_people")).toBe(true);
+    expect(isHiddenThreadToolName("extract_themes")).toBe(false);
   });
 
   it("detects card tool messages in a turn", async () => {

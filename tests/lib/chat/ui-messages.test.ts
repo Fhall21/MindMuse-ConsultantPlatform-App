@@ -183,4 +183,61 @@ describe("lib/chat/ui-messages", () => {
       (messages[0].metadata as { chatTool?: { toolName?: string } }).chatTool?.toolName
     ).toBe("generate_clarification");
   });
+
+  it("keeps MeetingConfirmationCard metadata after success output shape", () => {
+    const toolMessageId = "msg-tool-success";
+    const toolResultId = "result-success";
+
+    const messages = dbMessagesToUiMessages(
+      [
+        {
+          id: toolMessageId,
+          sessionId: "session-1",
+          role: "tool",
+          content: JSON.stringify({
+            tool: "intake_text_transcript",
+            input: { text: "Speaker one said hello." },
+            status: "success",
+            toolResultId,
+          }),
+          toolCallId: "intake_text_transcript",
+          createdAt: new Date("2026-06-01T10:00:01.000Z"),
+        },
+      ],
+      [
+        {
+          id: toolResultId,
+          sessionId: "session-1",
+          messageId: toolMessageId,
+          toolName: "intake_text_transcript",
+          input: { text: "Speaker one said hello." },
+          output: {
+            meeting_draft: {
+              title: "Leadership sync",
+              date: "2026-06-01T12:00:00.000Z",
+              participants: ["Alex Chen"],
+              intake_kind: "transcript",
+            },
+            meeting_record: {
+              id: "33333333-3333-4333-8333-333333333333",
+              title: "Leadership sync",
+            },
+          },
+          status: "success",
+          createdAt: new Date("2026-06-01T10:00:02.000Z"),
+        },
+      ]
+    );
+
+    const cardMessage = messages[0];
+    expect(
+      (cardMessage.metadata as { chatTool?: { status?: string } }).chatTool?.status
+    ).toBe("success");
+    expect(
+      (
+        (cardMessage.metadata as { chatTool?: { output?: { meeting_draft?: { title?: string } } } })
+          .chatTool?.output as { meeting_draft?: { title?: string } }
+      )?.meeting_draft?.title
+    ).toBe("Leadership sync");
+  });
 });

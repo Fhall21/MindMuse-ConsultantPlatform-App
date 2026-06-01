@@ -22,6 +22,12 @@ export function readMeetingDraft(output: unknown): MeetingDraft | null {
   }
 
   const record = output as Record<string, unknown>;
+
+  // POST /api/meetings success shape: { meeting_draft, meeting_record }
+  if (record.meeting_draft && typeof record.meeting_draft === "object") {
+    return readMeetingDraft(record.meeting_draft);
+  }
+
   if (
     typeof record.title !== "string" ||
     typeof record.date !== "string" ||

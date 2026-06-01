@@ -123,8 +123,14 @@ export function NotificationBell() {
   const handleAction = useCallback(
     (notification: JobNotification) => {
       const url = notification.output?.action_url;
-      if (!url) return;
-      // Mark seen optimistically
+      // Require a relative path — reject absolute URLs, protocol-relative, and scheme injections
+      if (
+        typeof url !== "string" ||
+        !url.startsWith("/") ||
+        url.startsWith("//")
+      ) {
+        return;
+      }
       setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
       void markSeen(notification.id);
       router.push(url);

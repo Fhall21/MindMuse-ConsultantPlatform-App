@@ -16,6 +16,7 @@ import {
   inferConsultationForSession,
 } from "@/lib/chat/context";
 import {
+  checkAutoIntakeSuppressed,
   countConsecutiveToolErrors,
   insertChatMessage,
   loadRecentChatMessages,
@@ -23,7 +24,7 @@ import {
   toModelMessages,
 } from "@/lib/chat/persist";
 import { acquireSessionLock, releaseSessionLock } from "@/lib/chat/session-lock";
-import { buildDynamicSystemPrompt } from "@/lib/chat/system-prompts";
+import { buildDynamicSystemPrompt, type ProactiveTriggerFlags } from "@/lib/chat/system-prompts";
 import { loadOnboardingAccountState } from "@/lib/chat/onboarding-state";
 import { sessionTurnIncludesCardTool } from "@/lib/chat/card-tools";
 import { createChatTools } from "@/lib/chat/tools";
@@ -120,15 +121,32 @@ export async function POST(request: NextRequest) {
     });
 
     const storedMessages = await loadRecentChatMessages(session.id);
-    const [contextSummary, consecutiveToolErrors, activeConsultations, onboardingState] =
+    const [contextSummary, consecutiveToolErrors, activeConsultations, onboardingState, autoIntakeSuppressed] =
       await Promise.all([
-      buildProjectContextSummary(auth.id, session.consultationId),
-      countConsecutiveToolErrors(session.id),
-      countActiveConsultations(auth.id),
-      loadOnboardingAccountState(auth.id),
-    ]);
+        buildProjectContextSummary(auth.id, session.consultationId),
+        countConsecutiveToolErrors(session.id),
+        countActiveConsultations(auth.id),
+        loadOnboardingAccountState(auth.id),
+        checkAutoIntakeSuppressed(session.id),
+      ]);
 
-    const systemPrompt = buildDynamicSystemPrompt(onboardingState, contextSummary);
+    const proactiveTriggers: ProactiveTriggerFlags = {};
+    if (contextSummary) {
+      if (contextSummary.meetingCount >= 2 && contextSummary.groupCount === 0) {
+        proactiveTriggers.meetingsReadyToGroup = { count: contextSummary.meetingCount };
+      }
+      if (contextSummary.themeCount > 0 && !onboardingState.hasQuotes) {
+        proactiveTriggers.themesNeedQuotes = { count: contextSummary.themeCount };
+      }
+      if (onboardingState.hasReport && contextSummary.recentMeetings[0]) {
+        proactiveTriggers.reportReady = { meetingName: contextSummary.recentMeetings[0].title };
+      }
+    }
+
+    const systemPrompt = buildDynamicSystemPrompt(onboardingState, contextSummary, {
+      proactiveTriggers,
+      autoIntakeSuppressed,
+    });
     const tools = createChatTools({ userId: auth.id, sessionId: session.id });
 
     const result = streamText({

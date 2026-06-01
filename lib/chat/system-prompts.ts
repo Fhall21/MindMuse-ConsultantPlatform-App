@@ -2,6 +2,89 @@ import type { ChatUserMode } from "@/db/schema/chat";
 import type { OnboardingAccountState } from "./onboarding-state";
 import { selectSubPrompts } from "./onboarding-prompts";
 import type { ProjectContextSummary } from "./context";
+import { AGENT_VOICE } from "./agent-voice";
+
+export interface ProactiveTriggerFlags {
+  meetingsReadyToGroup?: { count: number };
+  themesNeedQuotes?: { count: number };
+  reportReady?: { meetingName: string };
+  canvasPending?: boolean;
+}
+
+const NL_INTENTS_BLOCK = `Natural-language intents — respond directly without calling a tool:
+
+1. THEME RECALL — user asks what themes emerged from a meeting
+   Examples: "What themes came out of the July meeting?", "Which topics came up in last week's interview?", "What emerged from the Smith engagement?", "Summarise the themes from Tuesday's session"
+   Respond: bullet list — theme label, brief description, meeting attribution
+
+2. STATUS QUERY — user asks for a count or summary of consultation progress
+   Examples: "How many meetings are in this consultation?", "Where are we in the engagement?", "Give me a status update", "How much have we processed so far?"
+   Respond: single sentence — N meetings, M themes confirmed, K groups
+
+3. PERSON UNLINK — user asks to remove a person from the consultation
+   Examples: "Remove Felix from this consultation", "Unlink Sarah from this engagement", "Take Marcus off this project", "Felix shouldn't be listed here"
+   Respond: confirm prompt — "Remove [Name]? Reply yes to confirm." On yes, dispatch via edit flow.
+
+4. THEME RENAME — user wants to rename a theme
+   Examples: "Rename the trust theme to institutional distrust", "Change 'power dynamics' to 'authority structures'", "Call the leadership theme 'executive accountability'", "Relabel the first theme"
+   Respond: confirm prompt — "Rename '[old]' to '[new]'? Reply yes to confirm." On yes, dispatch edit_theme tool.
+
+5. AUDIT SUMMARY — user asks what changed recently
+   Examples: "What changed this week?", "Give me a change log", "What happened in the last 7 days?", "Show me recent activity on this engagement"
+   Respond: 5-item bulleted timeline, most recent first.
+
+6. EVIDENCE RECALL — user searches for quotes or past decisions
+   Examples: "What did we decide about leadership?", "Find quotes about trust", "What did participants say about power?", "Pull evidence on budget concerns from the interviews"
+   Respond: up to 3 matching quotes + theme names + meeting attribution.
+
+7. REPORT STATUS — user asks if report is ready
+   Examples: "Is the report ready?", "Has the report been generated?", "Can I download the report?", "Is the draft email done for this consultation?"
+   Respond: "Yes, generated [date]." or "Not yet — want me to generate it now?"
+
+8. NOTE ATTACH — user asks to add a note to a meeting
+   Examples: "Add a note to the August meeting: we need to follow up on budget", "Note on Tuesday's interview: participant was distressed", "Attach a comment to the last meeting", "Flag the July session — it needs review"
+   Respond: write the note silently → ack: "Note added to [meeting name]."
+
+9. PEOPLE ROSTER — user asks who is in the consultation
+   Examples: "Who's in this consultation?", "List the participants", "Who have we linked to this engagement?", "Show me the people roster for this project"
+   Respond: plain-text list — name, role, date linked.
+
+10. BULK DISMISS — user wants to dismiss all pending items
+    Examples: "Dismiss all pending suggestions", "Clear all suggestions", "Remove all pending items", "Dismiss everything waiting for review in this session"
+    Respond: confirm prompt — "Dismiss N pending items? This cannot be undone. Reply yes to confirm." On yes, bulk write dismissed status (max 10 per batch).`;
+
+const AUTO_INTAKE_BLOCK = `Transcript auto-intake detection:
+If the user's message is >200 words and contains no command keywords (add, rename, dismiss, undo, show, link, remove, export, create, who, what, how, is, give), respond with exactly: "${AGENT_VOICE.AUTO_INTAKE_PROMPT}" — do not call any tools.`;
+
+const AUTO_INTAKE_SUPPRESSED_NOTE = `[AUTO-INTAKE SUPPRESSED: user declined transcript detection this session — do not trigger auto-intake for long pastes]`;
+
+const BULK_NL_OPS_BLOCK = `Bulk NL operations:
+- "Accept all themes" → confirm chip: "Accept all N themes? This cannot be undone." On yes, use edit_theme per item, max 10 per batch, keyword match only — no semantic inference.
+- "Reject everything about [keyword]" → confirm chip with preview list (max 10 matching themes). On yes, bulk reject.
+- Always note: "Bulk writes cannot be undone via undo."`;
+
+function buildProactiveTriggerBlock(flags: ProactiveTriggerFlags): string {
+  const hints: string[] = [];
+
+  if (flags.meetingsReadyToGroup) {
+    hints.push(AGENT_VOICE.PROACTIVE_GROUP_THEMES(flags.meetingsReadyToGroup.count));
+  }
+  if (flags.themesNeedQuotes) {
+    hints.push(AGENT_VOICE.PROACTIVE_IDENTIFY_QUOTES(flags.themesNeedQuotes.count));
+  }
+  if (flags.reportReady) {
+    hints.push(AGENT_VOICE.PROACTIVE_REPORT_READY(flags.reportReady.meetingName));
+  }
+  if (flags.canvasPending) {
+    hints.push(AGENT_VOICE.PROACTIVE_CANVAS_PENDING);
+  }
+
+  if (hints.length === 0) return "";
+
+  // Cap at 2 triggers per request (~60 token budget)
+  const active = hints.slice(0, 2);
+  return `[PROACTIVE SUGGESTIONS — lead with one of these as a quick-action chip if relevant:\n${active.map((h) => `- ${h}`).join("\n")}]`;
+}
 
 const TOOL_CARD_RULES = `Tool cards:
 - Meeting intake: ALWAYS call intake_text_transcript, intake_audio_transcript, or intake_notes. NEVER write meeting fields as markdown — MeetingConfirmationCard renders from the pending tool result.
@@ -53,15 +136,37 @@ function formatAccountInjection(state: OnboardingAccountState): string {
 
 export function buildDynamicSystemPrompt(
   state: OnboardingAccountState,
-  contextSummary: ProjectContextSummary | null
+  contextSummary: ProjectContextSummary | null,
+  options?: {
+    proactiveTriggers?: ProactiveTriggerFlags;
+    autoIntakeSuppressed?: boolean;
+  }
 ): string {
   const base = state.userMode === "returning" ? RETURNING_BASE : ONBOARDING_BASE;
   const blocks =
     state.userMode === "onboarding" ? selectSubPrompts(state) : [];
 
-  return [base, ...blocks, formatContextBlock(contextSummary), formatAccountInjection(state)].join(
-    "\n\n"
-  );
+  const autoIntakeBlock = options?.autoIntakeSuppressed
+    ? AUTO_INTAKE_SUPPRESSED_NOTE
+    : AUTO_INTAKE_BLOCK;
+
+  const proactiveBlock =
+    options?.proactiveTriggers
+      ? buildProactiveTriggerBlock(options.proactiveTriggers)
+      : "";
+
+  return [
+    base,
+    NL_INTENTS_BLOCK,
+    BULK_NL_OPS_BLOCK,
+    autoIntakeBlock,
+    ...blocks,
+    formatContextBlock(contextSummary),
+    formatAccountInjection(state),
+    proactiveBlock,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /** @deprecated Use buildDynamicSystemPrompt with account state. */

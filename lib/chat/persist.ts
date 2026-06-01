@@ -94,6 +94,21 @@ export async function insertToolResult(params: {
   return row;
 }
 
+export async function checkAutoIntakeSuppressed(sessionId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: chatToolResults.id })
+    .from(chatToolResults)
+    .where(
+      and(
+        eq(chatToolResults.sessionId, sessionId),
+        eq(chatToolResults.toolName, "auto_intake_suppressed"),
+        eq(chatToolResults.status, "dismissed")
+      )
+    )
+    .limit(1);
+  return !!row;
+}
+
 export async function dismissPriorPendingToolResults(
   sessionId: string,
   toolName: string

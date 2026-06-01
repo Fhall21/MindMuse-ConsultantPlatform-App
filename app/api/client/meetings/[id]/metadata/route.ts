@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { updateMeetingTitle, updateMeetingFields } from "@/lib/actions/consultations";
-import { jsonError, requireRouteClient } from "../../../../_helpers";
+import { jsonError, requireRouteClient } from "../../../_helpers";
 
 const patchSchema = z.object({
   title: z.string().min(1).optional(),

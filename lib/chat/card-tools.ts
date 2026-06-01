@@ -15,6 +15,15 @@ export const CHAT_CARD_TOOL_NAMES = new Set<string>([
   "draft_evidence_email",
   "generate_report",
   "link_research_to_themes",
+  // Sprint 22 Task 01
+  "select_meeting_for_action",
+  "link_person_to_consultation",
+  "create_insight",
+  "show_report",
+  "edit_meeting",
+  "edit_theme",
+  "show_audit_trail",
+  "export_report",
 ]);
 
 /** Internal agent tools — never render ToolResultFallbackCard in the thread. */

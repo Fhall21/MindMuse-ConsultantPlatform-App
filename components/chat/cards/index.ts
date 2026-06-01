@@ -12,6 +12,15 @@ import { ResearchThemeLinkCard } from "./ResearchThemeLinkCard";
 import { ThemeGroupingCard } from "./ThemeGroupingCard";
 import { ThemeReviewCard } from "./ThemeReviewCard";
 import { ToolResultFallbackCard } from "./ToolResultFallbackCard";
+// Sprint 22 Task 01
+import { MeetingActionPickerCard } from "./MeetingActionPickerCard";
+import { PersonLinkCard } from "./PersonLinkCard";
+import { InsightCreateCard } from "./InsightCreateCard";
+import { ReportSummaryCard } from "./ReportSummaryCard";
+import { MeetingEditCard } from "./MeetingEditCard";
+import { ThemeEditCard } from "./ThemeEditCard";
+import { AuditTrailCard } from "./AuditTrailCard";
+import { ReportExportCard } from "./ReportExportCard";
 import type { ChatCardProps } from "./types";
 
 export type ChatCardComponent = ComponentType<ChatCardProps>;
@@ -32,6 +41,15 @@ export const CHAT_CARD_MAP: Record<string, ChatCardComponent> = {
   generate_report: ReportPreviewCard,
   link_research_to_themes: ResearchThemeLinkCard,
   create_project: CreateProjectCard,
+  // Sprint 22 Task 01
+  select_meeting_for_action: MeetingActionPickerCard,
+  link_person_to_consultation: PersonLinkCard,
+  create_insight: InsightCreateCard,
+  show_report: ReportSummaryCard,
+  edit_meeting: MeetingEditCard,
+  edit_theme: ThemeEditCard,
+  show_audit_trail: AuditTrailCard,
+  export_report: ReportExportCard,
 };
 
 export function resolveChatCard(toolName: string): ChatCardComponent {

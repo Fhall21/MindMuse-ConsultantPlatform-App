@@ -7,11 +7,21 @@ import {
   updateToolResult,
 } from "@/lib/chat/persist";
 import { meetingDraftSchema } from "@/lib/chat/tools/intake";
+import {
+  readThemeReviewOutput,
+  themeReviewItemSchema,
+} from "@/lib/chat/tools/themes";
+import { mergeThemeDecision } from "@/lib/chat/themes-db";
+
+const themeDecisionSchema = z.enum(["accepted", "rejected"]);
 
 const patchSchema = z.object({
   sessionId: z.string().uuid(),
-  status: z.enum(["pending", "dismissed"]).optional(),
+  status: z.enum(["pending", "success", "dismissed"]).optional(),
   meeting_draft: meetingDraftSchema.optional(),
+  meeting_id: z.string().uuid().optional(),
+  themes: z.array(themeReviewItemSchema).optional(),
+  theme_decisions: z.record(z.string().uuid(), themeDecisionSchema).optional(),
 });
 
 export async function PATCH(
@@ -50,15 +60,49 @@ export async function PATCH(
     return NextResponse.json({ detail: "Tool result not found" }, { status: 404 });
   }
 
-  const nextOutput =
-    parsed.data.meeting_draft !== undefined
-      ? {
-          ...(typeof existing.output === "object" && existing.output
-            ? (existing.output as Record<string, unknown>)
-            : {}),
-          ...parsed.data.meeting_draft,
+  const existingOutput =
+    typeof existing.output === "object" && existing.output
+      ? (existing.output as Record<string, unknown>)
+      : {};
+
+  const existingReview = readThemeReviewOutput(existing.output);
+
+  let nextOutput: Record<string, unknown> = { ...existingOutput };
+
+  if (parsed.data.meeting_draft !== undefined) {
+    nextOutput = {
+      ...nextOutput,
+      ...parsed.data.meeting_draft,
+    };
+  }
+
+  if (existingReview || parsed.data.themes || parsed.data.meeting_id) {
+    const baseReview =
+      existingReview ??
+      (parsed.data.meeting_id && parsed.data.themes
+        ? {
+            meeting_id: parsed.data.meeting_id,
+            themes: parsed.data.themes,
+            decisions: {},
+          }
+        : null);
+
+    if (baseReview) {
+      let review = {
+        ...baseReview,
+        ...(parsed.data.meeting_id ? { meeting_id: parsed.data.meeting_id } : {}),
+        ...(parsed.data.themes ? { themes: parsed.data.themes } : {}),
+      };
+
+      if (parsed.data.theme_decisions) {
+        for (const [themeId, decision] of Object.entries(parsed.data.theme_decisions)) {
+          review = mergeThemeDecision(review, themeId, decision);
         }
-      : existing.output;
+      }
+
+      nextOutput = review;
+    }
+  }
 
   const updated = await updateToolResult({
     toolResultId,

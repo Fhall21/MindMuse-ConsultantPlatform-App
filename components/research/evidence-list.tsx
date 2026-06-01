@@ -134,11 +134,15 @@ function EvidenceItem({
         <span className="tabular-nums">
           Relevance{" "}
           <span className="font-medium text-foreground/80">
-            {Number.isFinite(item.score) && item.score > 1
-              ? `${item.score.toFixed(0)}/10`
-              : Number.isFinite(item.score)
-              ? `${(item.score * 100).toFixed(0)}%`
-              : "—"}
+            {(() => {
+              const raw = item.score;
+              if (!Number.isFinite(raw)) return "—";
+
+              const normalizedToTen = raw <= 1 ? raw * 10 : raw;
+              const clamped = Math.min(10, Math.max(0, normalizedToTen));
+
+              return `${clamped.toFixed(1)}/10`;
+            })()}
           </span>
         </span>
         {hasSource && onJumpToReference && (

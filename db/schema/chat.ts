@@ -65,13 +65,12 @@ export const chatToolResults = pgTable(
     sessionId: uuid("session_id")
       .notNull()
       .references(() => chatSessions.id, { onDelete: "cascade" }),
-    messageId: uuid("message_id")
-      .notNull()
-      .references(() => chatMessages.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id").references(() => chatMessages.id, { onDelete: "cascade" }),
     toolName: text("tool_name").notNull(),
     input: jsonb("input").notNull(),
     output: jsonb("output"),
     status: text("status").$type<ChatToolResultStatus>().default("pending").notNull(),
+    seenAt: timestamp("seen_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({

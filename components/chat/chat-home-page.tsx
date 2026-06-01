@@ -7,15 +7,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CardConfirmProvider } from "@/components/chat/card-confirm-context";
 import { ChatPageHeader } from "@/components/chat/chat-page-header";
+import { NotificationBell } from "@/components/chat/notification-bell";
 import { ChatShell } from "@/components/chat/ChatShell";
-import type { WelcomeQuickAction } from "@/components/chat/WelcomeState";
+import { ChatHomeView } from "@/components/chat/ChatHomeView";
 import {
   FILE_ATTACH_STARTED_COPY,
   type WelcomeVariant,
 } from "@/lib/chat/onboarding-copy";
 import type { OnboardingAccountState } from "@/lib/chat/onboarding-state";
 import { fetchJson } from "@/hooks/api";
-import { useChatSessions, useCreateChatSession } from "@/hooks/use-chat-sessions";
+import { useChatSessions } from "@/hooks/use-chat-sessions";
 import { useConsultations } from "@/hooks/use-consultations";
 import { captureFileForChatIntake } from "@/lib/capture/chat-file-intake";
 import { mergeBootstrapWithStreamingAssistant } from "@/lib/chat/merge-bootstrap-messages";
@@ -49,6 +50,7 @@ function buildBootstrapUrl(sessionId?: string | null, createNew = false) {
 
 export function ChatHomePage({ displayName }: ChatHomePageProps) {
   const [input, setInput] = useState("");
+  const [view, setView] = useState<"home" | "chat">("home");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [consultationId, setConsultationId] = useState<string | null>(null);
   const [needsConsultationSelection, setNeedsConsultationSelection] = useState(false);
@@ -67,7 +69,6 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   const queryClient = useQueryClient();
   const consultationsQuery = useConsultations();
   const sessionsQuery = useChatSessions();
-  const createSessionMutation = useCreateChatSession();
 
   const transport = useMemo(
     () =>
@@ -143,9 +144,12 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
 
     async function bootstrapInitialSession() {
       try {
-        await loadBootstrap();
+        const data = await loadBootstrap();
         if (!cancelled) {
           setBootstrapError(false);
+          if (data.messages.length > 0) {
+            setView("chat");
+          }
         }
       } catch (loadError) {
         console.error(loadError);
@@ -170,12 +174,6 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     [sessionsQuery.data]
   );
 
-  const showSessionList = useMemo(
-    () => listableSessions.some((session) => session.id !== sessionId),
-    [listableSessions, sessionId]
-  );
-  const showNewChat = listableSessions.length >= 1;
-
   const handleSelectSession = useCallback(
     async (nextSessionId: string) => {
       if (!nextSessionId || nextSessionId === sessionId || isSwitchingSession) {
@@ -188,6 +186,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
       setCreateProjectCardPinned(false);
       try {
         await loadBootstrap({ sessionId: nextSessionId });
+        setView("chat");
       } catch (switchError) {
         console.error(switchError);
         toast.error("Could not open that conversation.");
@@ -198,33 +197,24 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     [clearError, isSwitchingSession, loadBootstrap, sessionId]
   );
 
-  const handleNewChat = useCallback(async () => {
-    if (createSessionMutation.isPending || isSwitchingSession) {
+  const handleBackToHome = useCallback(async () => {
+    if (isSwitchingSession) {
       return;
     }
 
+    setView("home");
     setIsSwitchingSession(true);
     clearError();
     setInput("");
     setCreateProjectCardPinned(false);
     try {
-      const created = await createSessionMutation.mutateAsync(
-        consultationId ? { consultationId } : undefined
-      );
-      await loadBootstrap({ sessionId: created.sessionId });
-    } catch (createError) {
-      console.error(createError);
-      toast.error("Could not start a new conversation.");
+      await loadBootstrap({ createNew: true });
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsSwitchingSession(false);
     }
-  }, [
-    clearError,
-    consultationId,
-    createSessionMutation,
-    isSwitchingSession,
-    loadBootstrap,
-  ]);
+  }, [clearError, isSwitchingSession, loadBootstrap]);
 
   useEffect(() => {
     if (status === "ready" && messages.length > 0) {
@@ -299,6 +289,18 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   const isThinking =
     status === "submitted" || (status === "streaming" && !lastAssistantText.trim());
 
+  const sessionPreview = useMemo(() => {
+    if (activeProject?.label) return activeProject.label;
+    const firstUserMsg = messages.find((m) => m.role === "user");
+    if (!firstUserMsg) return null;
+    const text = firstUserMsg.parts
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join("")
+      .trim();
+    return text.length > 50 ? text.slice(0, 50) + "…" : text || null;
+  }, [activeProject, messages]);
+
   const sendUserText = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
@@ -306,6 +308,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
         return;
       }
 
+      setView("chat");
       clearError();
       setInput("");
       await sendMessage(
@@ -323,15 +326,6 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   const handleSend = useCallback(() => {
     void sendUserText(input);
   }, [input, sendUserText]);
-
-  const handleQuickAction = useCallback(
-    (action: WelcomeQuickAction) => {
-      if (action.type === "prefill") {
-        setInput(action.text);
-      }
-    },
-    []
-  );
 
   const handleAttachFile = useCallback(
     async (file: File, kind: "transcript" | "notes") => {
@@ -374,6 +368,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
 
         const payload = (await response.json()) as { sessionId?: string };
         await loadBootstrap({ sessionId: payload.sessionId ?? activeSessionId });
+        setView("chat");
       } catch (captureError) {
         console.error(captureError);
         toast.error(
@@ -475,56 +470,75 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
 
   return (
     <CardConfirmProvider>
-      <div className="-mx-4 -my-5 flex h-[calc(100dvh-3rem)] max-h-[calc(100dvh-3rem)] flex-col overflow-hidden sm:-mx-6">
-        <div className="shrink-0 px-4 pt-1 sm:px-6">
+      <div
+        className={
+          view === "chat"
+            ? "-mx-4 -my-5 flex h-[calc(100dvh-3rem)] max-h-[calc(100dvh-3rem)] flex-col overflow-hidden sm:-mx-6"
+            : "-mx-4 -my-5 sm:-mx-6"
+        }
+      >
+        <div className="shrink-0 px-4 pt-4 sm:px-6">
           <ChatPageHeader
-            activeProject={activeProject}
-            showNewChat={showNewChat}
-            onNewChat={() => {
-              void handleNewChat();
+            view={view}
+            sessionPreview={sessionPreview}
+            onBackToHome={() => {
+              void handleBackToHome();
             }}
-            isCreatingSession={createSessionMutation.isPending || isSwitchingSession}
+            rightSlot={<NotificationBell />}
           />
         </div>
-        <ChatShell
-          displayName={displayName}
-          welcomeVariant={welcomeVariant}
-          onboardingPhase={onboardingState?.phase ?? "needs_consultation"}
-          activeProject={activeProject}
-          messages={messages}
-          input={input}
-          onInputChange={setInput}
-          onSend={handleSend}
-          onQuickAction={handleQuickAction}
-          onAttachFile={handleAttachFile}
-          isBusy={isBusy}
-          isThinking={isThinking}
-          isUnavailable={bootstrapError}
-          sessionId={sessionId}
-          needsConsultationSelection={needsConsultationSelection}
-          showCreateProject={showCreateProject}
-          showCreateProjectInWelcome={showCreateProject}
-          showRetry={Boolean(error)}
-          onRetry={() => {
-            clearError();
-            void regenerate();
-          }}
-          onConsultationSelected={handleConsultationSelected}
-          onProjectCreated={(nextConsultationId) => {
-            setCreateProjectCardPinned(false);
-            setConsultationId(nextConsultationId);
-          }}
-          onCardUpdated={handleCardUpdated}
-          showSessionList={showSessionList}
-          priorSessions={listableSessions}
-          sessionsLoading={sessionsQuery.isLoading}
-          sessionsError={Boolean(sessionsQuery.error)}
-          onSelectSession={(nextSessionId) => {
-            void handleSelectSession(nextSessionId);
-          }}
-          analysisNotifications={analysisNotifications}
-          onDismissAnalysisNotification={handleDismissAnalysisNotification}
-        />
+        {view === "home" ? (
+          <div className="px-4 sm:px-6">
+            <ChatHomeView
+              displayName={displayName}
+              input={input}
+              onInputChange={setInput}
+              onSend={handleSend}
+              onAttachFile={handleAttachFile}
+              isBusy={isBusy}
+              sessions={listableSessions}
+              sessionsLoading={sessionsQuery.isLoading}
+              sessionsError={Boolean(sessionsQuery.error)}
+              onSelectSession={(nextSessionId) => {
+                void handleSelectSession(nextSessionId);
+              }}
+              activeSessionId={sessionId}
+              welcomeVariant={welcomeVariant}
+              showCreateProject={showCreateProject}
+              onProjectCreated={(nextConsultationId) => {
+                setCreateProjectCardPinned(false);
+                setConsultationId(nextConsultationId);
+              }}
+            />
+          </div>
+        ) : (
+          <ChatShell
+            messages={messages}
+            input={input}
+            onInputChange={setInput}
+            onSend={handleSend}
+            onAttachFile={handleAttachFile}
+            isBusy={isBusy}
+            isThinking={isThinking}
+            isUnavailable={bootstrapError}
+            sessionId={sessionId}
+            needsConsultationSelection={needsConsultationSelection}
+            showCreateProject={showCreateProject}
+            showRetry={Boolean(error)}
+            onRetry={() => {
+              clearError();
+              void regenerate();
+            }}
+            onConsultationSelected={handleConsultationSelected}
+            onProjectCreated={(nextConsultationId) => {
+              setCreateProjectCardPinned(false);
+              setConsultationId(nextConsultationId);
+            }}
+            onCardUpdated={handleCardUpdated}
+            analysisNotifications={analysisNotifications}
+            onDismissAnalysisNotification={handleDismissAnalysisNotification}
+          />
+        )}
       </div>
     </CardConfirmProvider>
   );

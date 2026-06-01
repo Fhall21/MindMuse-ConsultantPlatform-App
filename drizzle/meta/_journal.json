@@ -302,6 +302,13 @@
       "when": 1780285158276,
       "tag": "0042_glamorous_beyonder",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1780312317581,
+      "tag": "0043_clammy_lady_deathstrike",
+      "breakpoints": true
     }
   ]
 }

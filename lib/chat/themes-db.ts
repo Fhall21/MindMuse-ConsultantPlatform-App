@@ -89,10 +89,14 @@ async function insertInsightsForMeeting(
     .returning({ id: insights.id, label: insights.label, description: insights.description });
 
   await emitAuditEvent({
-    consultationId: meeting.consultationId,
+    consultationId: meeting.id,
     action: AUDIT_ACTIONS.THEME_EXTRACTION_REQUESTED,
     entityType: "themes",
-    metadata: { count: drafts.length, source: "chat_extract_themes" },
+    metadata: {
+      count: drafts.length,
+      source: "chat_extract_themes",
+      consultation_id: meeting.consultationId,
+    },
   });
 
   return rows.map((row, index) => ({

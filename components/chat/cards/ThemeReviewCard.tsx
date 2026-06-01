@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { AddThemeForm } from "@/components/insights/add-theme-form";
 import { ThemeReviewRow } from "@/components/insights/theme-review-row";
 import {
   CARD_DISMISSED_COPY,
@@ -11,6 +12,7 @@ import {
   INSIGHT_ACCEPT_COPY,
   INSIGHT_REVIEW_DONE_COPY,
 } from "@/lib/chat/onboarding-copy";
+import { addUserTheme } from "@/lib/actions/themes";
 import type { ThemeDecision, ThemeReviewItem } from "@/lib/chat/tools/themes";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { readThemeReviewOutput, type ChatCardProps } from "./types";
@@ -22,6 +24,7 @@ function ThemeReviewRowContainer({
   sessionId,
   toolResultId,
   disabled,
+  source = "ai",
   onDecision,
 }: {
   theme: ThemeReviewItem;
@@ -30,6 +33,7 @@ function ThemeReviewRowContainer({
   sessionId: string;
   toolResultId: string;
   disabled: boolean;
+  source?: "ai" | "user";
   onDecision: (themeId: string, next: ThemeDecision, error: string | null) => void;
 }) {
   const [rowPending, setRowPending] = useState(false);
@@ -75,6 +79,7 @@ function ThemeReviewRowContainer({
       description={theme.description}
       confidence={theme.confidence}
       decision={decision}
+      source={source}
       isBusy={disabled || rowPending}
       error={rowError}
       acceptHelperText={decision === "accepted" ? INSIGHT_ACCEPT_COPY : undefined}
@@ -97,6 +102,12 @@ export function ThemeReviewCard({
   const [review, setReview] = useState(initialReview);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  const [addThemeOpen, setAddThemeOpen] = useState(false);
+  const [addThemeLabel, setAddThemeLabel] = useState("");
+  const [addThemeDescription, setAddThemeDescription] = useState("");
+  const [addThemeError, setAddThemeError] = useState<string | null>(null);
+  const [isAddingTheme, setIsAddingTheme] = useState(false);
+  const [userAddedThemeIds, setUserAddedThemeIds] = useState<Set<string>>(new Set());
 
   const status = tool.status ?? "pending";
   const toolResultId = tool.toolResultId;
@@ -214,6 +225,64 @@ export function ThemeReviewCard({
     );
   }
 
+  async function handleAddCustomTheme() {
+    if (!review) {
+      return;
+    }
+
+    const label = addThemeLabel.trim();
+    if (!label) {
+      setAddThemeError("Theme label is required.");
+      return;
+    }
+
+    setAddThemeError(null);
+    setIsAddingTheme(true);
+    setError(null);
+
+    try {
+      const created = await addUserTheme(
+        review.meeting_id,
+        label,
+        addThemeDescription.trim() || undefined
+      );
+
+      const nextTheme: ThemeReviewItem = {
+        id: created.id,
+        label,
+        description: addThemeDescription.trim(),
+        source_quotes: [],
+        confidence: 1,
+      };
+
+      const nextReview = {
+        ...review,
+        themes: [...review.themes, nextTheme],
+        decisions: { ...review.decisions, [created.id]: "accepted" as const },
+      };
+
+      setReview(nextReview);
+      setUserAddedThemeIds((current) => new Set([...current, created.id]));
+      setAddThemeLabel("");
+      setAddThemeDescription("");
+      setAddThemeOpen(false);
+      await persistReviewState(nextReview);
+    } catch (addError) {
+      setAddThemeError(
+        addError instanceof Error ? addError.message : "Could not add insight"
+      );
+    } finally {
+      setIsAddingTheme(false);
+    }
+  }
+
+  function resetAddThemeForm() {
+    setAddThemeOpen(false);
+    setAddThemeLabel("");
+    setAddThemeDescription("");
+    setAddThemeError(null);
+  }
+
   return (
     <ChatToolCardShell
       maxWidth="2xl"
@@ -225,6 +294,16 @@ export function ThemeReviewCard({
       dismissDisabled={confirming}
       footer={
         <>
+          {!addThemeOpen ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setAddThemeOpen(true)}
+              disabled={confirming || isAddingTheme}
+            >
+              Add insight
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -246,6 +325,26 @@ export function ThemeReviewCard({
         </>
       }
     >
+      {addThemeOpen ? (
+        <AddThemeForm
+          label={addThemeLabel}
+          description={addThemeDescription}
+          error={addThemeError}
+          isSubmitting={isAddingTheme}
+          onLabelChange={(value) => {
+            setAddThemeLabel(value);
+            if (addThemeError) {
+              setAddThemeError(null);
+            }
+          }}
+          onDescriptionChange={setAddThemeDescription}
+          onSubmit={() => void handleAddCustomTheme()}
+          onCancel={resetAddThemeForm}
+          heading="Add a manual insight"
+          labelPlaceholder="Insight label…"
+        />
+      ) : null}
+
       {review.themes.map((theme) => (
         <ThemeReviewRowContainer
           key={theme.id}
@@ -255,6 +354,7 @@ export function ThemeReviewCard({
           sessionId={sessionId ?? ""}
           toolResultId={toolResultId ?? ""}
           disabled={confirming || !sessionId || !toolResultId}
+          source={userAddedThemeIds.has(theme.id) ? "user" : "ai"}
           onDecision={handleDecision}
         />
       ))}

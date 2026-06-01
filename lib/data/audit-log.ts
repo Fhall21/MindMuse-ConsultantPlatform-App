@@ -5,6 +5,7 @@ import { auditLog } from "@/db/schema";
 import { requireCurrentUserId } from "./auth-context";
 
 interface EmitAuditEventParams {
+  /** FK to meetings.id (legacy param name retained for call-site compatibility). */
   consultationId?: string | null;
   action: string;
   entityType?: string;

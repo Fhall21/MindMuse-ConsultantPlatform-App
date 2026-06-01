@@ -100,6 +100,15 @@ describe("lib/chat/themes-db", () => {
         body: expect.objectContaining({ transcript: "Full transcript text" }),
       })
     );
-    expect(auditMock.emitAuditEvent).toHaveBeenCalled();
+    expect(auditMock.emitAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        consultationId: "meeting-1",
+        action: "theme.extraction_requested",
+        metadata: expect.objectContaining({
+          consultation_id: "consult-1",
+          source: "chat_extract_themes",
+        }),
+      })
+    );
   });
 });

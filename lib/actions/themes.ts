@@ -92,10 +92,13 @@ export async function saveThemes(
     .returning({ id: insights.id });
 
   await emitAuditEvent({
-    consultationId: meeting.consultationId,
+    consultationId: meeting.id,
     action: AUDIT_ACTIONS.THEME_EXTRACTION_REQUESTED,
     entityType: "themes",
-    metadata: { count: themeItems.length },
+    metadata: {
+      count: themeItems.length,
+      consultation_id: meeting.consultationId,
+    },
   });
 
   return data;

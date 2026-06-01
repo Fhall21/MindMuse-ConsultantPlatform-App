@@ -105,7 +105,8 @@ const TOOL_CARD_RULES = `Tool cards:
 - Theme review: call extract_themes (meeting_id optional — uses lastMeetingId from PROJECT CONTEXT when omitted). If multiple meetings exist, call select_meeting_for_themes or extract_themes without meeting_id to show MeetingPickerCard. NEVER ask the user to re-paste or re-upload a transcript. NEVER list theme labels, descriptions, or confidence in prose — ThemeReviewCard renders from the pending tool result.
 - Quote review: call identify_quotes with meeting_id and theme_ids. NEVER list quote text or speakers in prose — QuoteCard renders from the pending tool result.
 - Theme grouping: call group_themes with project_id (consultation id) and optional hint when proposing a new cluster. Call link_insights_to_group with project_id and group_name when the user names an existing group and wants insights connected to it. NEVER describe the proposed group in prose — ThemeGroupingCard renders from the pending tool result.
-- Canvas preview: call preview_canvas with consultation_id after grouping or when the user asks to see the canvas; use layout_action=arrange when they ask to arrange/cluster the layout (preview only, not saved). NEVER describe node positions in prose — CanvasPreviewCard renders React Flow. To connect groups or persist layout changes, use Open full canvas.
+- Canvas preview: call preview_canvas with consultation_id after grouping or when the user asks to see the canvas; use layout_action=arrange when they ask to arrange/cluster the layout (preview only, not saved). NEVER describe node positions in prose — CanvasPreviewCard renders React Flow.
+- Canvas manipulation: call manipulate_canvas to connect two nodes or rename a canvas frame. Use node IDs from the [CANVAS CONTEXT] block below when present. For connect: supply source_node_id, source_node_label, target_node_id, target_node_label, and connection_type (default "related_to"). For rename: supply node_id, node_label, new_label, and is_frame=true for canvas frames. If the reference is ambiguous, ask "Did you mean '[A]' or '[B]'?" before calling. For unsupported ops (move, delete, create frames, multi-select): respond "I can only connect and rename in chat. For [operation], open the canvas editor from the sidebar." NEVER write the proposed change in prose — CanvasOperationCard renders from the pending tool result.
 - Async outputs: call generate_research_questions, draft_evidence_email, or generate_report when asked. NEVER duplicate generated content in prose — the preview cards render inline.
 - Research linking: call link_research_to_themes when linking literature insights to theme groups.
 - Clarification: call generate_clarification when notes are ambiguous. NEVER repeat the questions in prose — ClarificationQuestionCard renders from the tool result.
@@ -184,6 +185,11 @@ function formatAccountInjection(state: OnboardingAccountState): string {
   })}]`;
 }
 
+function formatCanvasContextBlock(canvasContext: string | undefined): string {
+  if (!canvasContext) return "";
+  return `[CANVAS CONTEXT — use these node IDs when calling manipulate_canvas:\n${canvasContext}]`;
+}
+
 export function buildDynamicSystemPrompt(
   state: OnboardingAccountState,
   contextSummary: ProjectContextSummary | null,
@@ -191,6 +197,7 @@ export function buildDynamicSystemPrompt(
     proactiveTriggers?: ProactiveTriggerFlags;
     autoIntakeSuppressed?: boolean;
     sessionContext?: SessionRuntimeContext;
+    canvasContext?: string;
   }
 ): string {
   const base = state.userMode === "returning" ? RETURNING_BASE : ONBOARDING_BASE;
@@ -214,6 +221,8 @@ export function buildDynamicSystemPrompt(
     ? formatSessionMemoryContext(options.sessionContext)
     : "";
 
+  const canvasContextBlock = formatCanvasContextBlock(options?.canvasContext);
+
   return [
     base,
     NL_INTENTS_BLOCK,
@@ -226,6 +235,7 @@ export function buildDynamicSystemPrompt(
     proactiveBlock,
     undoContextBlock,
     sessionMemoryBlock,
+    canvasContextBlock,
   ]
     .filter(Boolean)
     .join("\n\n");

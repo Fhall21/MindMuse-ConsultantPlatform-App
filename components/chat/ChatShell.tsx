@@ -55,7 +55,7 @@ export function ChatShell({
 
   if (isUnavailable) {
     return (
-      <div className="flex min-h-[calc(100dvh-3rem)] flex-col">
+      <div className="flex h-[calc(100dvh-3rem)] max-h-[calc(100dvh-3rem)] flex-col overflow-hidden">
         <div className="flex flex-1 items-center justify-center px-6 text-center">
           <p className="max-w-md text-sm text-muted-foreground">
             The assistant is temporarily unavailable. Use the sidebar to navigate.
@@ -66,8 +66,8 @@ export function ChatShell({
   }
 
   return (
-    <div className="-mx-4 -my-5 flex min-h-[calc(100dvh-3rem)] flex-col sm:-mx-6">
-      <div className="min-h-0 flex-1 overflow-y-auto">
+    <div className="-mx-4 -my-5 flex h-[calc(100dvh-3rem)] max-h-[calc(100dvh-3rem)] flex-col overflow-hidden sm:-mx-6">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {showWelcome ? (
           <WelcomeState
             displayName={displayName}

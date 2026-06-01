@@ -99,7 +99,7 @@ export function ChatThread({
   }, [messages.length, isThinking]);
 
   return (
-    <div className="mx-auto w-full max-w-3xl flex-1 space-y-1 px-4 py-4 sm:px-6">
+    <div className="mx-auto w-full max-w-3xl space-y-1 px-4 py-4 sm:px-6">
       {showCreateProject ? (
         <div className="py-2">
           <CreateProjectCard

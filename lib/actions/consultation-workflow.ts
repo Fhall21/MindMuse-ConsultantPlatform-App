@@ -479,15 +479,16 @@ function mapThemeRecord(row: ThemeRow): Theme {
 function mapThemeMemberRecord(
   row: ThemeMemberRow
 ): ThemeMember {
+  const sourceMeetingId = row.sourceMeetingId ?? row.consultationId;
   const sourceMeetingIds =
-    row.sourceMeetingIds.length > 0 ? row.sourceMeetingIds : [row.sourceMeetingId];
+    row.sourceMeetingIds.length > 0 ? row.sourceMeetingIds : [sourceMeetingId];
 
   return {
     id: row.id,
     theme_id: row.themeId,
     consultation_id: row.consultationId,
     insight_id: row.insightId,
-    source_meeting_id: row.sourceMeetingId,
+    source_meeting_id: sourceMeetingId,
     source_meeting_ids: sourceMeetingIds,
     user_id: row.userId,
     position: row.position,

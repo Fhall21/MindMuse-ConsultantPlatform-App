@@ -21,7 +21,7 @@ export function formatMeetingPickerToolReturn(result: {
   ok: boolean;
   error?: string;
   picker?: boolean;
-  output?: MeetingPickerOutput;
+  output?: MeetingPickerOutput | ThemeReviewOutput;
   toolResultId?: string;
 }) {
   if (!result.ok) {

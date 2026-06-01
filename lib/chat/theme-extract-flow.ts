@@ -67,7 +67,7 @@ function mapMeetingsForPicker(
   return meetings.map((meeting) => ({
     id: meeting.id,
     title: meeting.title,
-    date: meeting.meetingDate ?? null,
+    date: meeting.meeting_date ?? null,
   }));
 }
 

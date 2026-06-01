@@ -123,8 +123,8 @@ export async function loadAcceptedInsightOptions(params: {
     id: row.id,
     label: row.label,
     description: row.description ?? "",
-    source_meeting_id: row.meetingId,
-    source_meeting_title: meetingTitleById.get(row.meetingId) ?? "Meeting",
+    source_meeting_id: row.meetingId ?? undefined,
+    source_meeting_title: row.meetingId ? meetingTitleById.get(row.meetingId) ?? "Meeting" : "Meeting",
     is_user_added: row.isUserAdded,
   }));
 }
@@ -221,8 +221,8 @@ export async function loadGroupingExistingGroups(params: {
       id: row.insightId,
       label: row.label,
       description: row.description ?? "",
-      source_meeting_id: row.meetingId,
-      source_meeting_title: meetingTitleById.get(row.meetingId) ?? "Meeting",
+      source_meeting_id: row.meetingId ?? undefined,
+      source_meeting_title: row.meetingId ? meetingTitleById.get(row.meetingId) ?? "Meeting" : "Meeting",
       is_user_added: row.isUserAdded,
     });
     membersByGroupId.set(row.themeId, members);
@@ -237,8 +237,8 @@ export async function loadGroupingExistingGroups(params: {
       id: group.id,
       label: group.label,
       description: group.description ?? "",
-      status: group.status,
-      origin: group.origin,
+      status: group.status as GroupingExistingGroup["status"],
+      origin: group.origin as GroupingExistingGroup["origin"],
       member_insight_ids: members.map((member) => member.id),
       members,
       pending_draft: hasDraft

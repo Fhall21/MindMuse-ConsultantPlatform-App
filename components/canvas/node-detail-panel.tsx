@@ -75,7 +75,7 @@ export function NodeDetailPanel({
 
     return selectedNode.memberIds
       .map((memberId) => nodeById.get(memberId))
-      .filter((node): node is CanvasNode => Boolean(node) && node.type === "insight");
+      .filter((node): node is CanvasNode => node !== undefined && node.type === "insight");
   }, [isThemeNode, nodes, selectedNode]);
 
   const hasThemeChanges =

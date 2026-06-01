@@ -69,7 +69,7 @@ export function normalizeIdentifiedQuotes(raw: unknown): IdentifiedQuoteDraft[] 
         span_end: typeof record.span_end === "number" ? record.span_end : null,
       };
     })
-    .filter((item): item is IdentifiedQuoteDraft => item !== null);
+    .filter((item): item is NonNullable<typeof item> => item !== null);
 }
 
 export function buildQuoteReviewOutput(params: {

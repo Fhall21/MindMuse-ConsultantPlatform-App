@@ -25,7 +25,7 @@ interface ChatToolCardShellProps {
   success?: boolean;
   successHelp?: ReactNode;
   dismissed?: boolean;
-  maxWidth?: "xl" | "2xl";
+  maxWidth?: "xl" | "2xl" | "5xl";
   className?: string;
 }
 
@@ -83,7 +83,7 @@ export function ChatToolCardShell({
     <Card
       size="sm"
       className={cn(
-        maxWidth === "2xl" ? "max-w-2xl" : "max-w-xl",
+        maxWidth === "5xl" ? "max-w-5xl" : maxWidth === "2xl" ? "max-w-2xl" : "max-w-xl",
         error ? "border-destructive/40 bg-destructive/5" : null,
         className,
       )}

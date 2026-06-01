@@ -25,16 +25,16 @@ interface ThemeGroupCardProps {
   group: RoundThemeGroup;
   selectedThemeIds: Set<string>;
   onThemeSelect: (themeId: string) => void;
-  onThemeDragStart: (e: React.DragEvent, themeId: string) => void;
-  onDrop: (e: React.DragEvent, groupId: string) => void;
-  onLabelChange: (groupId: string, label: string) => void;
-  onDescriptionChange: (groupId: string, description: string) => void;
-  onAcceptDraft: (groupId: string) => void;
-  onDiscardDraft: (groupId: string) => void;
-  onAccept: (groupId: string) => void;
-  onDiscard: (groupId: string) => void;
-  onManagementReject: (groupId: string) => void;
-  onSplit: (groupId: string) => void;
+  onThemeDragStart?: (e: React.DragEvent, themeId: string) => void;
+  onDrop?: (e: React.DragEvent, groupId: string) => void;
+  onLabelChange?: (groupId: string, label: string) => void;
+  onDescriptionChange?: (groupId: string, description: string) => void;
+  onAcceptDraft?: (groupId: string) => void;
+  onDiscardDraft?: (groupId: string) => void;
+  onAccept?: (groupId: string) => void;
+  onDiscard?: (groupId: string) => void;
+  onManagementReject?: (groupId: string) => void;
+  onSplit?: (groupId: string) => void;
   mergeSelected?: boolean;
   onToggleMergeSelect?: (groupId: string) => void;
   disabled?: boolean;
@@ -67,8 +67,15 @@ export function ThemeGroupCard({
   const selectedMembersCount = group.members.filter((member: ThemeMemberDetail) =>
     selectedThemeIds.has(member.insightId)
   ).length;
+  const isTerminal = group.status === "discarded" || group.status === "management_rejected";
+  const canEdit = !isTerminal && !!onLabelChange && !!onDescriptionChange;
+  const onReject = hasLockedMembers ? onManagementReject : onDiscard;
 
   function handleSaveEdit() {
+    if (!onLabelChange || !onDescriptionChange) {
+      return;
+    }
+
     onLabelChange(group.id, editLabel);
     if (editDescription !== (group.description ?? "")) {
       onDescriptionChange(group.id, editDescription);
@@ -87,18 +94,20 @@ export function ThemeGroupCard({
   }
 
   function handleDrop(e: React.DragEvent) {
+    if (!onDrop) {
+      return;
+    }
+
     e.preventDefault();
     setIsDragOver(false);
     onDrop(e, group.id);
   }
 
-  const isTerminal = group.status === "discarded" || group.status === "management_rejected";
-
   return (
     <Card
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      onDragOver={onDrop ? handleDragOver : undefined}
+      onDragLeave={onDrop ? handleDragLeave : undefined}
+      onDrop={onDrop ? handleDrop : undefined}
       className={cn(
         "transition-colors",
         isDragOver && "border-primary bg-primary/5",
@@ -143,7 +152,7 @@ export function ThemeGroupCard({
               </div>
             ) : (
               <div>
-                {!isTerminal ? (
+                {canEdit ? (
                   <button
                     type="button"
                     className="group flex w-full items-center gap-1.5 text-left"
@@ -160,7 +169,7 @@ export function ThemeGroupCard({
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {group.description}
                   </p>
-                ) : !isTerminal ? (
+                ) : canEdit ? (
                   <button
                     type="button"
                     className="mt-0.5 text-xs text-muted-foreground/40 italic hover:text-muted-foreground transition-colors"
@@ -229,7 +238,7 @@ export function ThemeGroupCard({
         )}
 
         {/* AI Draft review */}
-        {group.pendingDraft ? (
+        {group.pendingDraft && onAcceptDraft && onDiscardDraft ? (
           <AIDraftReview
             currentLabel={group.label}
             currentDescription={group.description}
@@ -243,7 +252,7 @@ export function ThemeGroupCard({
         {/* Action bar */}
         {!isTerminal ? (
           <div className="flex flex-wrap items-center gap-1.5 border-t pt-2">
-            {group.status === "draft" ? (
+            {group.status === "draft" && onAccept && onReject ? (
               <>
                 <Button
                   size="sm"
@@ -257,20 +266,14 @@ export function ThemeGroupCard({
                   size="sm"
                   variant="outline"
                   className="h-6 text-xs"
-                  onClick={() => {
-                    if (hasLockedMembers) {
-                      onManagementReject(group.id);
-                    } else {
-                      onDiscard(group.id);
-                    }
-                  }}
+                  onClick={() => onReject(group.id)}
                   disabled={disabled}
                 >
                   {hasLockedMembers ? "Mgmt Reject" : "Discard"}
                 </Button>
               </>
             ) : null}
-            {selectedMembersCount > 0 ? (
+            {selectedMembersCount > 0 && onSplit ? (
               <Button
                 size="sm"
                 variant="outline"

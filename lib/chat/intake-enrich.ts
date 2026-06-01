@@ -1,4 +1,5 @@
 import { listMeetingTypes } from "@/lib/actions/meeting-types";
+import { extractSpeakerNamesFromTranscript } from "@/lib/meetings/transcript-speakers";
 import { dispatchToolToFastApi } from "./tool-dispatch";
 import type { ChatToolRuntimeContext } from "./tools";
 import type { MeetingDraft } from "./tools/intake";
@@ -47,12 +48,17 @@ export async function enrichMeetingDraftWithInfer(params: {
         .filter(Boolean)
     : [];
 
+  const localSpeakers =
+    params.draft.participants.length > 0
+      ? params.draft.participants
+      : extractSpeakerNamesFromTranscript(params.text);
+
   return {
     ...params.draft,
     meeting_type_id: matchedType?.id ?? params.draft.meeting_type_id,
     suggested_type_code: suggestedTypeCode ?? params.draft.suggested_type_code,
     date: suggestedDate ? `${suggestedDate}T12:00:00.000Z` : params.draft.date,
     participants:
-      suggestedPeople.length > 0 ? suggestedPeople : params.draft.participants,
+      suggestedPeople.length > 0 ? suggestedPeople : localSpeakers,
   };
 }

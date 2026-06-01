@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { extractSpeakerNamesFromTranscript } from "@/lib/meetings/transcript-speakers";
 
 export const meetingDraftSchema = z.object({
   title: z.string().min(1),
@@ -120,11 +121,15 @@ export function normalizeMeetingDraft(raw: unknown, fallbackText?: string): Meet
         ? `${record.suggested_date}T12:00:00.000Z`
         : new Date().toISOString();
 
-  const participants = Array.isArray(record.participants)
+  let participants = Array.isArray(record.participants)
     ? record.participants.filter((name): name is string => typeof name === "string")
     : Array.isArray(record.suggested_people)
       ? record.suggested_people.filter((name): name is string => typeof name === "string")
       : [];
+
+  if (participants.length === 0 && sourceText) {
+    participants = extractSpeakerNamesFromTranscript(sourceText);
+  }
 
   const notesPreview =
     typeof record.notes_preview === "string" && record.notes_preview.trim()

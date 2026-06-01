@@ -65,6 +65,14 @@ export const MEETING_CONFIRM_SUCCESS_COPY =
 export const MEETING_SAVED_FOLLOW_UP =
   "Your meeting is saved. I can extract themes from the transcript next — say when you are ready, or ask what you would like to do.";
 
+/** Inserted after ThemeReviewCard completes (Done reviewing). */
+export const THEME_REVIEW_DONE_FOLLOW_UP =
+  "Your theme decisions are saved. I can identify supporting quotes from the transcript next — say when you are ready, or ask what you would like to do.";
+
+/** Inserted after QuoteCard completes (Done reviewing). */
+export const QUOTE_REVIEW_DONE_FOLLOW_UP =
+  "Quote review is done. You can review everything under Meetings in the sidebar, or tell me what you would like to do next.";
+
 export function meetingSavedDescription(title: string) {
   const trimmed = title.trim();
   return trimmed

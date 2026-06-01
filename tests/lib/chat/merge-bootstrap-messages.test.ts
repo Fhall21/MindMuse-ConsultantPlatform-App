@@ -52,4 +52,24 @@ describe("lib/chat/merge-bootstrap-messages", () => {
 
     expect(mergeBootstrapWithStreamingAssistant(streaming, bootstrap)).toEqual(bootstrap);
   });
+
+  it("does not append streamed prose contained in bootstrap after dedupe", () => {
+    const once = "Guide the user to add their first meeting.";
+    const streaming: UIMessage[] = [
+      {
+        id: "assistant-stream",
+        role: "assistant",
+        parts: [{ type: "text", text: `${once}${once}` }],
+      },
+    ];
+    const bootstrap: UIMessage[] = [
+      {
+        id: "assistant-db",
+        role: "assistant",
+        parts: [{ type: "text", text: once }],
+      },
+    ];
+
+    expect(mergeBootstrapWithStreamingAssistant(streaming, bootstrap)).toEqual(bootstrap);
+  });
 });

@@ -8,6 +8,7 @@ import { resolveChatCard } from "@/components/chat/cards/index";
 import { CreateProjectCard } from "@/components/chat/cards/CreateProjectCard";
 import { ProjectSelectionCard } from "@/components/chat/cards/ProjectSelectionCard";
 import { isHiddenThreadToolName } from "@/lib/chat/card-tools";
+import { collapseDuplicateProse } from "@/lib/chat/dedupe-prose";
 import type { ChatToolMessageMeta } from "@/lib/chat/ui-messages";
 
 interface ChatThreadProps {
@@ -23,11 +24,11 @@ interface ChatThreadProps {
 }
 
 function getTextFromMessage(message: UIMessage): string {
-  return message.parts
+  const text = message.parts
     .filter((part) => part.type === "text")
     .map((part) => part.text)
-    .join("\n")
-    .trim();
+    .join("\n");
+  return collapseDuplicateProse(text);
 }
 
 function getToolMeta(message: UIMessage): ChatToolMessageMeta | null {
@@ -112,7 +113,7 @@ export function ChatThread({
   }, [messages.length, isThinking]);
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-1 px-4 py-4 sm:px-6">
+    <div className="mx-auto w-full max-w-3xl space-y-1 px-4 py-4 pb-36 sm:px-6">
       {showCreateProject ? (
         <div className="py-2">
           <CreateProjectCard

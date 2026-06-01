@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
 import { getUnarchivedSessionForUser } from "@/lib/chat/context";
+import { maybeInsertCardCompletionFollowUp } from "@/lib/chat/card-completion-follow-up";
 import {
   getToolResultForSession,
   updateToolResult,
@@ -153,12 +154,24 @@ export async function PATCH(
     }
   }
 
+  const nextStatus = parsed.data.status ?? existing.status ?? "pending";
+
   const updated = await updateToolResult({
     toolResultId,
     sessionId: parsed.data.sessionId,
     output: nextOutput,
-    status: parsed.data.status ?? "pending",
+    status: nextStatus,
   });
+
+  if (updated) {
+    await maybeInsertCardCompletionFollowUp({
+      sessionId: parsed.data.sessionId,
+      toolName: existing.toolName,
+      previousStatus: existing.status,
+      nextStatus,
+      output: nextOutput,
+    });
+  }
 
   return NextResponse.json(updated);
 }

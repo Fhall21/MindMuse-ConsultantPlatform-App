@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { MeetingTypeSelect } from "@/components/meetings/meeting-type-select";
 import { PeopleField } from "@/components/meetings/people-field";
@@ -88,6 +88,7 @@ export function MeetingConfirmationCard({
   const [titleManuallyEdited, setTitleManuallyEdited] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMeetingId, setSavedMeetingId] = useState<string | null>(null);
+  const autoFilledPeopleRef = useRef(false);
   const confirming = isPending(confirmKey);
   const status = tool.status ?? "pending";
   const toolResultId = tool.toolResultId;
@@ -109,6 +110,15 @@ export function MeetingConfirmationCard({
       splitParticipantSuggestions(initialDraft.participants, allPeople);
     setSuggestedExistingPeople(suggestedExisting);
     setSuggestedNewNames(unmatchedNames);
+
+    if (!autoFilledPeopleRef.current && suggestedExisting.length > 0) {
+      autoFilledPeopleRef.current = true;
+      setSelectedPeople((current) => {
+        const selectedIds = new Set(current.map((person) => person.id));
+        const toAdd = suggestedExisting.filter((person) => !selectedIds.has(person.id));
+        return toAdd.length > 0 ? [...current, ...toAdd] : current;
+      });
+    }
   }, [allPeople, initialDraft]);
 
   useEffect(() => {
@@ -340,7 +350,7 @@ export function MeetingConfirmationCard({
             Choose the consultation project this meeting belongs to.
           </p>
           <Select
-            value={projectId}
+            value={projectId || undefined}
             onValueChange={setProjectId}
             disabled={consultationsLoading || consultations.length === 0}
           >

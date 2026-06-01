@@ -59,6 +59,12 @@ describe("lib/chat/tools/intake", () => {
     expect(preview.endsWith("…")).toBe(true);
     expect(preview.length).toBeLessThanOrEqual(121);
   });
+
+  it("extracts speaker names from transcript text when participants are missing", () => {
+    const draft = normalizeMeetingDraft({}, "Louise: Hello.\nChris: Hi there.");
+
+    expect(draft.participants).toEqual(["Louise", "Chris"]);
+  });
 });
 
 describe("readMeetingDraft", () => {

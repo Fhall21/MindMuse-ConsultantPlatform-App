@@ -83,5 +83,6 @@ describe("buildMeetingDraftFromExtractedText", () => {
 
     expect(result.draft.title).toBe("Untitled meeting");
     expect(result.draft.source_text).toBe("Speaker: hello");
+    expect(result.draft.participants).toEqual(["Speaker"]);
   });
 });

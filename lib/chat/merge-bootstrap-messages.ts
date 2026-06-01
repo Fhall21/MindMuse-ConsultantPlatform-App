@@ -1,15 +1,16 @@
 import type { UIMessage } from "ai";
+import { collapseDuplicateProse } from "@/lib/chat/dedupe-prose";
 
 function getPlainAssistantText(message: UIMessage): string {
   const metadata = message.metadata as { chatTool?: unknown } | undefined;
   if (metadata?.chatTool) {
     return "";
   }
-  return message.parts
+  const text = message.parts
     .filter((part) => part.type === "text")
     .map((part) => part.text)
-    .join("")
-    .trim();
+    .join("");
+  return collapseDuplicateProse(text);
 }
 
 function findLastStreamedAssistantProse(messages: UIMessage[]): UIMessage | null {
@@ -26,9 +27,22 @@ function findLastStreamedAssistantProse(messages: UIMessage[]): UIMessage | null
 }
 
 function bootstrapIncludesAssistantText(messages: UIMessage[], text: string): boolean {
-  return messages.some(
-    (message) => message.role === "assistant" && getPlainAssistantText(message) === text
-  );
+  const normalized = collapseDuplicateProse(text);
+  if (!normalized) {
+    return false;
+  }
+
+  return messages.some((message) => {
+    if (message.role !== "assistant") {
+      return false;
+    }
+    const bootstrapText = getPlainAssistantText(message);
+    return (
+      bootstrapText === normalized ||
+      bootstrapText.includes(normalized) ||
+      normalized.includes(bootstrapText)
+    );
+  });
 }
 
 /** Keep streamed assistant prose when bootstrap reload races persistence. */

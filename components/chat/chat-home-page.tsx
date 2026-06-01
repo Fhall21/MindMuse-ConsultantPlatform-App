@@ -439,7 +439,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
           }}
           onConsultationSelected={handleConsultationSelected}
           onProjectCreated={(nextConsultationId) => {
-            setCreateProjectCardPinned(true);
+            setCreateProjectCardPinned(false);
             setConsultationId(nextConsultationId);
           }}
           onCardUpdated={handleCardUpdated}

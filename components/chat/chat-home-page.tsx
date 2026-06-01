@@ -19,6 +19,8 @@ import { useChatSessions, useCreateChatSession } from "@/hooks/use-chat-sessions
 import { useConsultations } from "@/hooks/use-consultations";
 import { captureFileForChatIntake } from "@/lib/capture/chat-file-intake";
 import { mergeBootstrapWithStreamingAssistant } from "@/lib/chat/merge-bootstrap-messages";
+import type { CrossAnalysisResults } from "@/lib/chat/analysis-db";
+import type { ChatAnalysisNotification } from "@/components/chat/chat-analysis-notifications";
 
 interface ChatBootstrap {
   sessionId: string;
@@ -57,6 +59,10 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   const [isCapturingFile, setIsCapturingFile] = useState(false);
   const [isSwitchingSession, setIsSwitchingSession] = useState(false);
   const [createProjectCardPinned, setCreateProjectCardPinned] = useState(false);
+  const [analysisNotifications, setAnalysisNotifications] = useState<ChatAnalysisNotification[]>(
+    []
+  );
+  const seenAnalysisTaskIdsRef = useRef<Set<string>>(new Set());
   const sessionIdRef = useRef<string | null>(null);
   const queryClient = useQueryClient();
   const consultationsQuery = useConsultations();

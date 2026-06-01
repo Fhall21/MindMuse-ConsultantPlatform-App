@@ -7,6 +7,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { resolveChatCard } from "@/components/chat/cards/index";
 import { CreateProjectCard } from "@/components/chat/cards/CreateProjectCard";
 import { ProjectSelectionCard } from "@/components/chat/cards/ProjectSelectionCard";
+import {
+  ChatAnalysisNotifications,
+  type ChatAnalysisNotification,
+} from "@/components/chat/chat-analysis-notifications";
 import { isHiddenThreadToolName } from "@/lib/chat/card-tools";
 import { collapseDuplicateProse } from "@/lib/chat/dedupe-prose";
 import type { ChatToolMessageMeta } from "@/lib/chat/ui-messages";
@@ -17,6 +21,8 @@ interface ChatThreadProps {
   sessionId: string | null;
   needsConsultationSelection: boolean;
   showCreateProject: boolean;
+  analysisNotifications?: ChatAnalysisNotification[];
+  onDismissAnalysisNotification?: (id: string) => void;
   onRetry?: () => void;
   onConsultationSelected?: (consultationId: string) => void;
   onProjectCreated?: (consultationId: string) => void;
@@ -101,6 +107,8 @@ export function ChatThread({
   sessionId,
   needsConsultationSelection,
   showCreateProject,
+  analysisNotifications = [],
+  onDismissAnalysisNotification,
   onRetry,
   onConsultationSelected,
   onProjectCreated,
@@ -143,6 +151,11 @@ export function ChatThread({
           onCardUpdated={onCardUpdated}
         />
       ))}
+
+      <ChatAnalysisNotifications
+        notifications={analysisNotifications}
+        onDismiss={onDismissAnalysisNotification}
+      />
 
       {isThinking ? <ThinkingIndicator /> : null}
 

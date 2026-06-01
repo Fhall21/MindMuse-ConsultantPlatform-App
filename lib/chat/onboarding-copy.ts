@@ -92,6 +92,15 @@ export const QUOTE_REVIEW_COMPLETE_COPY = (count: number) =>
     ? "1 quote linked to your insights."
     : `${count} quotes linked to your insights.`;
 
+export const GROUPING_CONFIRMED_COPY = (groupName: string) =>
+  `"${groupName}" is saved to your consultation canvas.`;
+
+export const EMAIL_DRAFT_SAVED_COPY =
+  "Evidence email draft saved. Open it from the consultation when you are ready to send.";
+
+export const REPORT_DRAFT_SAVED_COPY =
+  "Report draft saved. Open the full report from the consultation sidebar.";
+
 export function shouldShowCreateConsultationCard(
   phase: OnboardingPhase,
   consultationId: string | null

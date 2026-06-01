@@ -1,9 +1,15 @@
 import type { ComponentType } from "react";
 import { ClarificationQuestionCard } from "./ClarificationQuestionCard";
 import { CreateProjectCard } from "./CreateProjectCard";
+import { CanvasPreviewCard } from "./CanvasPreviewCard";
+import { DraftPreviewCard } from "./DraftPreviewCard";
 import { MeetingConfirmationCard } from "./MeetingConfirmationCard";
 import { MeetingPickerCard } from "./MeetingPickerCard";
 import { QuoteCard } from "./QuoteCard";
+import { ReportPreviewCard } from "./ReportPreviewCard";
+import { ResearchQuestionCard } from "./ResearchQuestionCard";
+import { ResearchThemeLinkCard } from "./ResearchThemeLinkCard";
+import { ThemeGroupingCard } from "./ThemeGroupingCard";
 import { ThemeReviewCard } from "./ThemeReviewCard";
 import { ToolResultFallbackCard } from "./ToolResultFallbackCard";
 import type { ChatCardProps } from "./types";
@@ -18,6 +24,12 @@ export const CHAT_CARD_MAP: Record<string, ChatCardComponent> = {
   extract_themes: ThemeReviewCard,
   select_meeting_for_themes: MeetingPickerCard,
   identify_quotes: QuoteCard,
+  group_themes: ThemeGroupingCard,
+  preview_canvas: CanvasPreviewCard,
+  generate_research_questions: ResearchQuestionCard,
+  draft_evidence_email: DraftPreviewCard,
+  generate_report: ReportPreviewCard,
+  link_research_to_themes: ResearchThemeLinkCard,
   create_project: CreateProjectCard,
 };
 
@@ -26,11 +38,17 @@ export function resolveChatCard(toolName: string): ChatCardComponent {
 }
 
 export {
+  CanvasPreviewCard,
   ClarificationQuestionCard,
   CreateProjectCard,
+  DraftPreviewCard,
   MeetingConfirmationCard,
   MeetingPickerCard,
   QuoteCard,
+  ReportPreviewCard,
+  ResearchQuestionCard,
+  ResearchThemeLinkCard,
+  ThemeGroupingCard,
   ThemeReviewCard,
   ToolResultFallbackCard,
 };

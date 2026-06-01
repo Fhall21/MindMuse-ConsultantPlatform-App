@@ -8,6 +8,12 @@ export const CHAT_CARD_TOOL_NAMES = new Set<string>([
   "select_meeting_for_themes",
   "identify_quotes",
   "generate_clarification",
+  "group_themes",
+  "preview_canvas",
+  "generate_research_questions",
+  "draft_evidence_email",
+  "generate_report",
+  "link_research_to_themes",
 ]);
 
 /** Internal agent tools — never render ToolResultFallbackCard in the thread. */

@@ -31,6 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from middleware.chat_service_token import ChatServiceTokenMiddleware
 from routers import (
+    analysis,
     canvas,
     clarification,
     draft,
@@ -163,6 +164,7 @@ app.include_router(interview.router)
 app.include_router(research.router)
 app.include_router(research_enhance.router)
 app.include_router(canvas.router)
+app.include_router(analysis.router)
 
 
 @app.get("/health")

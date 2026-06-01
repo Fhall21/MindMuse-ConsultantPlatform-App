@@ -4,6 +4,16 @@ export { readThemeReviewOutput } from "@/lib/chat/tools/themes";
 export type { ThemeReviewOutput } from "@/lib/chat/tools/themes";
 export { readQuoteReviewOutput } from "@/lib/chat/tools/quotes";
 export type { QuoteReviewOutput } from "@/lib/chat/tools/quotes";
+export { readGroupingReviewOutput } from "@/lib/chat/tools/grouping";
+export type { GroupingReviewOutput } from "@/lib/chat/tools/grouping";
+export { readCanvasLayoutPreview } from "@/lib/chat/tools/canvas";
+export type { CanvasLayoutPreview } from "@/lib/chat/tools/canvas";
+export {
+  readEmailDraftReviewOutput,
+  readReportDraftReviewOutput,
+  readResearchQuestionReviewOutput,
+  readResearchThemeLinkProposal,
+} from "@/lib/chat/tools/async-actions";
 
 export interface ChatCardProps {
   tool: ChatToolMessageMeta;

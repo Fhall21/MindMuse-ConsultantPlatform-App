@@ -9,6 +9,7 @@ import type { ChatSessionSummary } from "@/hooks/use-chat-sessions";
 import type { WelcomeVariant } from "@/lib/chat/onboarding-copy";
 import type { OnboardingPhase } from "@/lib/chat/onboarding-state";
 import type { Consultation } from "@/types/db";
+import type { ChatAnalysisNotification } from "@/components/chat/chat-analysis-notifications";
 
 interface ChatShellProps {
   displayName: string;
@@ -38,6 +39,8 @@ interface ChatShellProps {
   sessionsLoading?: boolean;
   sessionsError?: boolean;
   onSelectSession?: (sessionId: string) => void;
+  analysisNotifications?: ChatAnalysisNotification[];
+  onDismissAnalysisNotification?: (id: string) => void;
 }
 
 export function ChatShell({
@@ -68,6 +71,8 @@ export function ChatShell({
   sessionsLoading = false,
   sessionsError = false,
   onSelectSession,
+  analysisNotifications = [],
+  onDismissAnalysisNotification,
 }: ChatShellProps) {
   const showWelcome = messages.length === 0 && !isThinking;
 
@@ -127,6 +132,8 @@ export function ChatShell({
               sessionId={sessionId}
               needsConsultationSelection={needsConsultationSelection}
               showCreateProject={showCreateProject}
+              analysisNotifications={analysisNotifications}
+              onDismissAnalysisNotification={onDismissAnalysisNotification}
               onRetry={showRetry ? onRetry : undefined}
               onConsultationSelected={onConsultationSelected}
               onProjectCreated={onProjectCreated}

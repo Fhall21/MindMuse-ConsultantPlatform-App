@@ -6,6 +6,7 @@ import { consultations } from "./domain";
 export type ChatUserMode = "onboarding" | "returning";
 export type ChatMessageRole = "user" | "assistant" | "tool" | "system";
 export type ChatToolResultStatus = "pending" | "success" | "error" | "dismissed";
+export type CrossAnalysisJobStatus = "queued" | "running" | "complete" | "error";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -80,5 +81,34 @@ export const chatToolResults = pgTable(
     ),
     sessionIdx: index("chat_tool_results_session_id_idx").on(table.sessionId),
     messageIdx: index("chat_tool_results_message_id_idx").on(table.messageId),
+  })
+);
+
+export const crossAnalysisJobs = pgTable(
+  "cross_analysis_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    taskId: text("task_id").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    consultationId: uuid("consultation_id")
+      .notNull()
+      .references(() => consultations.id, { onDelete: "cascade" }),
+    status: text("status").$type<CrossAnalysisJobStatus>().default("queued").notNull(),
+    results: jsonb("results").$type<Record<string, unknown> | null>(),
+    errorMessage: text("error_message"),
+    ...timestamps,
+  },
+  (table) => ({
+    statusCheck: check(
+      "cross_analysis_jobs_status_check",
+      sql`${table.status} in ('queued', 'running', 'complete', 'error')`
+    ),
+    consultationIdx: index("cross_analysis_jobs_consultation_id_idx").on(table.consultationId),
+    userConsultationIdx: index("cross_analysis_jobs_user_consultation_idx").on(
+      table.userId,
+      table.consultationId
+    ),
   })
 );

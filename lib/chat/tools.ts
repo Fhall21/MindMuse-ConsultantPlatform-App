@@ -33,6 +33,22 @@ import { selectMeetingForThemesSchema } from "./tools/meetings-picker";
 import { identifyQuotesSchema } from "./tools/quotes";
 import { extractAndPersistThemes, finalizeThemeReview } from "./themes-db";
 import { identifyAndPersistQuotes } from "./quotes-db";
+import { buildCanvasLayoutPreview } from "./canvas-preview";
+import { executeGroupThemesTool } from "./grouping-db";
+import {
+  executeDraftEvidenceEmail,
+  executeGenerateReport,
+  executeGenerateResearchQuestions,
+  executeLinkResearchToThemes,
+} from "./async-actions-db";
+import { groupThemesSchema } from "./tools/grouping";
+import { previewCanvasSchema } from "./tools/canvas";
+import {
+  draftEvidenceEmailSchema,
+  generateReportSchema,
+  generateResearchQuestionsSchema,
+  linkResearchToThemesSchema,
+} from "./tools/async-actions";
 
 export interface ChatToolRuntimeContext {
   userId: string;
@@ -439,6 +455,221 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           ...result.output,
           tool_result_id: toolResult.id,
         };
+      },
+    }),
+    group_themes: tool({
+      description:
+        "Propose a theme group by finding relevant insights and suggesting a name, description, and theme membership.",
+      inputSchema: groupThemesSchema,
+      execute: async (input) => {
+        const parsed = groupThemesSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+
+        const result = await executeGroupThemesTool({
+          userId: context.userId,
+          sessionId: context.sessionId,
+          consultationId: parsed.project_id,
+          hint: parsed.hint,
+        });
+
+        if (!result.ok) {
+          await persistToolExecution({
+            context,
+            toolName: "group_themes",
+            input: payload,
+            output: { error: result.error },
+            status: "error",
+          });
+          return { error: result.error };
+        }
+
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "group_themes",
+          input: payload,
+          output: result.output,
+          status: "pending",
+        });
+
+        return {
+          ...result.output,
+          tool_result_id: toolResult.id,
+        };
+      },
+    }),
+    preview_canvas: tool({
+      description: "Generate a canvas layout preview for the current consultation.",
+      inputSchema: previewCanvasSchema,
+      execute: async (input) => {
+        const parsed = previewCanvasSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+
+        try {
+          const layout = await buildCanvasLayoutPreview({
+            userId: context.userId,
+            consultationId: parsed.consultation_id,
+          });
+
+          await persistToolExecution({
+            context,
+            toolName: "preview_canvas",
+            input: payload,
+            output: layout,
+            status: "success",
+          });
+
+          return layout;
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Failed to build canvas preview";
+          await persistToolExecution({
+            context,
+            toolName: "preview_canvas",
+            input: payload,
+            output: { error: message },
+            status: "error",
+          });
+          return { error: message };
+        }
+      },
+    }),
+    generate_research_questions: tool({
+      description: "Generate research questions based on extracted themes.",
+      inputSchema: generateResearchQuestionsSchema,
+      execute: async (input) => {
+        const parsed = generateResearchQuestionsSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+        const result = await executeGenerateResearchQuestions({
+          userId: context.userId,
+          sessionId: context.sessionId,
+          consultationId: parsed.consultation_id,
+          themeIds: parsed.theme_ids,
+        });
+
+        if (!result.ok) {
+          await persistToolExecution({
+            context,
+            toolName: "generate_research_questions",
+            input: payload,
+            output: { error: result.error },
+            status: "error",
+          });
+          return { error: result.error };
+        }
+
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "generate_research_questions",
+          input: payload,
+          output: result.output,
+          status: "pending",
+        });
+
+        return { ...result.output, tool_result_id: toolResult.id };
+      },
+    }),
+    draft_evidence_email: tool({
+      description: "Draft an evidence email for a consultation engagement.",
+      inputSchema: draftEvidenceEmailSchema,
+      execute: async (input) => {
+        const parsed = draftEvidenceEmailSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+        const result = await executeDraftEvidenceEmail({
+          userId: context.userId,
+          sessionId: context.sessionId,
+          consultationId: parsed.consultation_id,
+          meetingIds: parsed.meeting_ids,
+        });
+
+        if (!result.ok) {
+          await persistToolExecution({
+            context,
+            toolName: "draft_evidence_email",
+            input: payload,
+            output: { error: result.error },
+            status: "error",
+          });
+          return { error: result.error };
+        }
+
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "draft_evidence_email",
+          input: payload,
+          output: result.output,
+          status: "pending",
+        });
+
+        return { ...result.output, tool_result_id: toolResult.id };
+      },
+    }),
+    generate_report: tool({
+      description: "Generate a consultation report for a consultation.",
+      inputSchema: generateReportSchema,
+      execute: async (input) => {
+        const parsed = generateReportSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+        const result = await executeGenerateReport({
+          userId: context.userId,
+          sessionId: context.sessionId,
+          consultationId: parsed.consultation_id,
+        });
+
+        if (!result.ok) {
+          await persistToolExecution({
+            context,
+            toolName: "generate_report",
+            input: payload,
+            output: { error: result.error },
+            status: "error",
+          });
+          return { error: result.error };
+        }
+
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "generate_report",
+          input: payload,
+          output: result.output,
+          status: "pending",
+        });
+
+        return { ...result.output, tool_result_id: toolResult.id };
+      },
+    }),
+    link_research_to_themes: tool({
+      description:
+        "Find and link a research insight to the most relevant theme groups.",
+      inputSchema: linkResearchToThemesSchema,
+      execute: async (input) => {
+        const parsed = linkResearchToThemesSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+        const result = await executeLinkResearchToThemes({
+          userId: context.userId,
+          consultationId: parsed.consultation_id,
+          researchId: parsed.research_id,
+        });
+
+        if (!result.ok) {
+          await persistToolExecution({
+            context,
+            toolName: "link_research_to_themes",
+            input: payload,
+            output: { error: result.error },
+            status: "error",
+          });
+          return { error: result.error };
+        }
+
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "link_research_to_themes",
+          input: payload,
+          output: result.output,
+          status: "pending",
+        });
+
+        return { ...result.output, tool_result_id: toolResult.id };
       },
     }),
   };

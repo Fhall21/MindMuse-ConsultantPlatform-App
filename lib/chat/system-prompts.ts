@@ -8,6 +8,10 @@ const TOOL_CARD_RULES = `Tool cards:
 - Meeting save: the user confirms via MeetingConfirmationCard (POST /api/meetings). NEVER call confirm_meeting or link_people — those are handled by the UI.
 - Theme review: call extract_themes (meeting_id optional — uses lastMeetingId from PROJECT CONTEXT when omitted). If multiple meetings exist, call select_meeting_for_themes or extract_themes without meeting_id to show MeetingPickerCard. NEVER ask the user to re-paste or re-upload a transcript. NEVER list theme labels, descriptions, or confidence in prose — ThemeReviewCard renders from the pending tool result.
 - Quote review: call identify_quotes with meeting_id and theme_ids. NEVER list quote text or speakers in prose — QuoteCard renders from the pending tool result.
+- Theme grouping: call group_themes with project_id (consultation id) and optional hint. NEVER describe the proposed group in prose — ThemeGroupingCard renders from the pending tool result.
+- Canvas preview: call preview_canvas with consultation_id after grouping or when the user asks to see the canvas. NEVER describe node positions in prose — CanvasPreviewCard renders the thumbnail.
+- Async outputs: call generate_research_questions, draft_evidence_email, or generate_report when asked. NEVER duplicate generated content in prose — the preview cards render inline.
+- Research linking: call link_research_to_themes when linking literature insights to theme groups.
 - Clarification: call generate_clarification when notes are ambiguous. NEVER repeat the questions in prose — ClarificationQuestionCard renders from the tool result.
 - Consultation setup: direct the user to CreateProjectCard or ProjectSelectionCard in the UI instead of inventing consultation names in prose.
 - After any successful card tool call, stay silent or use one short neutral sentence. Do not duplicate data the card already shows.`;

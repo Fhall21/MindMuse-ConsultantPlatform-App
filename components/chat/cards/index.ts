@@ -21,6 +21,8 @@ import { MeetingEditCard } from "./MeetingEditCard";
 import { ThemeEditCard } from "./ThemeEditCard";
 import { AuditTrailCard } from "./AuditTrailCard";
 import { ReportExportCard } from "./ReportExportCard";
+// Sprint 22 Task 04
+import { CanvasOperationCard } from "./CanvasOperationCard";
 import type { ChatCardProps } from "./types";
 
 export type ChatCardComponent = ComponentType<ChatCardProps>;
@@ -50,6 +52,8 @@ export const CHAT_CARD_MAP: Record<string, ChatCardComponent> = {
   edit_theme: ThemeEditCard,
   show_audit_trail: AuditTrailCard,
   export_report: ReportExportCard,
+  // Sprint 22 Task 04
+  manipulate_canvas: CanvasOperationCard,
 };
 
 export function resolveChatCard(toolName: string): ChatCardComponent {

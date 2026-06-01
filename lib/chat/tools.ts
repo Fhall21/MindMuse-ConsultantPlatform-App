@@ -540,7 +540,8 @@ export function createChatTools(context: ChatToolRuntimeContext) {
       },
     }),
     preview_canvas: tool({
-      description: "Generate a canvas layout preview for the current consultation.",
+      description:
+        "Show an inline canvas preview for the consultation. Use after grouping or when the user asks to see the canvas. Pass layout_action=arrange for a preview-only auto-layout (does not save). To connect groups or edit edges, direct the user to Open full canvas.",
       inputSchema: previewCanvasSchema,
       execute: async (input) => {
         const parsed = previewCanvasSchema.parse(input);
@@ -550,6 +551,7 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           const layout = await buildCanvasLayoutPreview({
             userId: context.userId,
             consultationId: parsed.consultation_id,
+            layoutAction: parsed.layout_action,
           });
 
           await persistToolExecution({

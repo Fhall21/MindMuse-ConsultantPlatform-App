@@ -25,6 +25,7 @@ import {
 import { acquireSessionLock, releaseSessionLock } from "@/lib/chat/session-lock";
 import { buildDynamicSystemPrompt } from "@/lib/chat/system-prompts";
 import { loadOnboardingAccountState } from "@/lib/chat/onboarding-state";
+import { sessionTurnIncludesCardTool } from "@/lib/chat/card-tools";
 import { createChatTools } from "@/lib/chat/tools";
 
 export const maxDuration = 60;
@@ -138,7 +139,10 @@ export async function POST(request: NextRequest) {
       stopWhen: stepCountIs(CHAT_MAX_TOOL_ROUNDTRIPS + 1),
       onFinish: async ({ text }) => {
         try {
-          if (text.trim()) {
+          const messagesAfterTurn = await loadRecentChatMessages(session.id);
+          const cardToolRendered = await sessionTurnIncludesCardTool(messagesAfterTurn);
+
+          if (text.trim() && !cardToolRendered) {
             await insertChatMessage({
               sessionId: session.id,
               role: "assistant",

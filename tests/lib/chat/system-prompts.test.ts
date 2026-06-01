@@ -54,6 +54,8 @@ describe("lib/chat/system-prompts", () => {
     );
 
     expect(prompt).toContain("intake_text_transcript");
-    expect(prompt).toContain("NEVER write meeting title");
+    expect(prompt).toContain("extract_themes");
+    expect(prompt).toContain("ThemeReviewCard");
+    expect(prompt).toContain("NEVER write meeting fields");
   });
 });

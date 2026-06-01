@@ -360,6 +360,16 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     [clearError, consultationId, isBusy, loadBootstrap, onboardingState?.phase]
   );
 
+  const handleCardUpdated = useCallback(() => {
+    const activeSessionId = sessionIdRef.current;
+    if (!activeSessionId) {
+      return;
+    }
+    void loadBootstrap({ sessionId: activeSessionId }).catch((reloadError) => {
+      console.error(reloadError);
+    });
+  }, [loadBootstrap]);
+
   const handleConsultationSelected = useCallback(
     (nextConsultationId: string) => {
       setConsultationId(nextConsultationId);
@@ -409,6 +419,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
           onProjectCreated={(nextConsultationId) => {
             setConsultationId(nextConsultationId);
           }}
+          onCardUpdated={handleCardUpdated}
           showSessionList={showSessionList}
           priorSessions={listableSessions}
           sessionsLoading={sessionsQuery.isLoading}

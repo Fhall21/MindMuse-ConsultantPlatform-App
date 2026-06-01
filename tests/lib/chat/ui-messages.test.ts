@@ -80,4 +80,107 @@ describe("lib/chat/ui-messages", () => {
       },
     });
   });
+
+  it("maps extract_themes output to ThemeReviewCard metadata", () => {
+    const toolMessageId = "msg-theme-1";
+    const toolResultId = "result-theme-1";
+    const meetingId = "11111111-1111-4111-8111-111111111111";
+    const themeId = "22222222-2222-4222-8222-222222222222";
+
+    const messages = dbMessagesToUiMessages(
+      [
+        {
+          id: toolMessageId,
+          sessionId: "session-1",
+          role: "tool",
+          content: JSON.stringify({
+            tool: "extract_themes",
+            input: { meeting_id: meetingId },
+            output: {
+              meeting_id: meetingId,
+              themes: [
+                {
+                  id: themeId,
+                  label: "Workload",
+                  description: "Pressure on team capacity",
+                  source_quotes: [],
+                  confidence: 0.8,
+                },
+              ],
+              decisions: {},
+            },
+            status: "pending",
+            toolResultId,
+          }),
+          toolCallId: "extract_themes",
+          createdAt: new Date("2026-06-01T10:00:01.000Z"),
+        },
+      ],
+      [
+        {
+          id: toolResultId,
+          sessionId: "session-1",
+          messageId: toolMessageId,
+          toolName: "extract_themes",
+          input: { meeting_id: meetingId },
+          output: {
+            meeting_id: meetingId,
+            themes: [
+              {
+                id: themeId,
+                label: "Workload",
+                description: "Pressure on team capacity",
+                source_quotes: [],
+                confidence: 0.8,
+              },
+            ],
+            decisions: {},
+          },
+          status: "pending",
+          createdAt: new Date("2026-06-01T10:00:01.000Z"),
+        },
+      ]
+    );
+
+    const cardMessage = messages[0];
+    expect(
+      (cardMessage.metadata as { chatTool?: { toolName?: string } }).chatTool?.toolName
+    ).toBe("extract_themes");
+    expect(
+      (cardMessage.metadata as { chatTool?: { status?: string } }).chatTool?.status
+    ).toBe("pending");
+  });
+
+  it("maps generate_clarification output to ClarificationQuestionCard metadata", () => {
+    const messages = dbMessagesToUiMessages([
+      {
+        id: "msg-clarify-1",
+        sessionId: "session-1",
+        role: "tool",
+        content: JSON.stringify({
+          tool: "generate_clarification",
+          input: {
+            notes_text: "Ambiguous notes",
+            meeting_id: "11111111-1111-4111-8111-111111111111",
+          },
+          output: {
+            questions: [
+              {
+                id: "q-1",
+                question: "Was follow-up agreed?",
+                field: "follow_up",
+              },
+            ],
+          },
+          status: "pending",
+        }),
+        toolCallId: "generate_clarification",
+        createdAt: new Date("2026-06-01T10:00:01.000Z"),
+      },
+    ]);
+
+    expect(
+      (messages[0].metadata as { chatTool?: { toolName?: string } }).chatTool?.toolName
+    ).toBe("generate_clarification");
+  });
 });

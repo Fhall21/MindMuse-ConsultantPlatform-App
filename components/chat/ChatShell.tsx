@@ -32,6 +32,7 @@ interface ChatShellProps {
   onRetry?: () => void;
   onConsultationSelected?: (consultationId: string) => void;
   onProjectCreated?: (consultationId: string) => void;
+  onCardUpdated?: () => void;
   showSessionList?: boolean;
   priorSessions?: ChatSessionSummary[];
   sessionsLoading?: boolean;
@@ -61,6 +62,7 @@ export function ChatShell({
   onRetry,
   onConsultationSelected,
   onProjectCreated,
+  onCardUpdated,
   showSessionList = false,
   priorSessions = [],
   sessionsLoading = false,
@@ -128,6 +130,7 @@ export function ChatShell({
               onRetry={showRetry ? onRetry : undefined}
               onConsultationSelected={onConsultationSelected}
               onProjectCreated={onProjectCreated}
+              onCardUpdated={onCardUpdated}
             />
           </div>
         )}

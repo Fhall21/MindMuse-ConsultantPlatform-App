@@ -4,9 +4,12 @@ import { selectSubPrompts } from "./onboarding-prompts";
 import type { ProjectContextSummary } from "./context";
 
 const TOOL_CARD_RULES = `Tool cards:
-- For meeting intake, ALWAYS call intake_text_transcript, intake_audio_transcript, or intake_notes with the source text.
-- NEVER write meeting title, date, participants, or notes preview as markdown prose — the UI renders a MeetingConfirmationCard from the pending tool result.
-- After a successful intake tool call, stay silent or use one short neutral sentence. Do not duplicate fields the card already shows.`;
+- Meeting intake: ALWAYS call intake_text_transcript, intake_audio_transcript, or intake_notes. NEVER write meeting fields as markdown — MeetingConfirmationCard renders from the pending tool result.
+- Theme review: call extract_themes for a meeting_id. NEVER list theme labels, descriptions, or confidence in prose — ThemeReviewCard renders from the pending tool result.
+- Quote review: call identify_quotes with meeting_id and theme_ids. NEVER list quote text or speakers in prose — QuoteCard renders from the pending tool result.
+- Clarification: call generate_clarification when notes are ambiguous. NEVER repeat the questions in prose — ClarificationQuestionCard renders from the tool result.
+- Consultation setup: direct the user to CreateProjectCard or ProjectSelectionCard in the UI instead of inventing consultation names in prose.
+- After any successful card tool call, stay silent or use one short neutral sentence. Do not duplicate data the card already shows.`;
 
 const ONBOARDING_BASE = `You are MindMuse, a psychosocial consultation assistant.
 Guide the user through their engagement workflow step by step. Narrate what each action does in plain language.

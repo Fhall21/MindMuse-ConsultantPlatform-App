@@ -32,4 +32,5 @@ export {
   ToolResultFallbackCard,
 };
 export { ProjectSelectionCard } from "./ProjectSelectionCard";
+export { CHAT_CARD_TOOL_NAMES, isChatCardToolName } from "@/lib/chat/card-tools";
 export type { ChatCardProps } from "./types";

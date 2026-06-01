@@ -443,7 +443,10 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           themes: [],
           context_notes: `Meeting ID: ${input.meeting_id}`,
         }),
-        mapOutput: mapClarificationQuestions,
+        mapOutput: (data) => ({
+          questions: mapClarificationQuestions(data),
+        }),
+        status: "pending",
       }
     ),
     extract_themes: tool({

@@ -18,6 +18,7 @@ interface ChatThreadProps {
   onRetry?: () => void;
   onConsultationSelected?: (consultationId: string) => void;
   onProjectCreated?: (consultationId: string) => void;
+  onCardUpdated?: () => void;
 }
 
 function getTextFromMessage(message: UIMessage): string {
@@ -46,16 +47,23 @@ function ThinkingIndicator() {
 function MessageBubble({
   message,
   sessionId,
+  onCardUpdated,
 }: {
   message: UIMessage;
   sessionId: string | null;
+  onCardUpdated?: () => void;
 }) {
   const toolMeta = getToolMeta(message);
   if (toolMeta) {
     const Card = resolveChatCard(toolMeta.toolName);
     return (
       <div className="py-2">
-        <Card tool={toolMeta} messageId={message.id} sessionId={sessionId} />
+        <Card
+          tool={toolMeta}
+          messageId={message.id}
+          sessionId={sessionId}
+          onUpdated={onCardUpdated}
+        />
       </div>
     );
   }
@@ -91,6 +99,7 @@ export function ChatThread({
   onRetry,
   onConsultationSelected,
   onProjectCreated,
+  onCardUpdated,
 }: ChatThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -122,7 +131,12 @@ export function ChatThread({
       ) : null}
 
       {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} sessionId={sessionId} />
+        <MessageBubble
+          key={message.id}
+          message={message}
+          sessionId={sessionId}
+          onCardUpdated={onCardUpdated}
+        />
       ))}
 
       {isThinking ? <ThinkingIndicator /> : null}

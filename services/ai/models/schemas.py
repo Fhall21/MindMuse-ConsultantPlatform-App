@@ -259,6 +259,20 @@ class ClarificationResponse(BaseModel):
     questions: List[ClarificationQuestion]
 
 
+class TextTranscriptRequest(BaseModel):
+    text: str
+    project_id: Optional[str] = None
+    title: Optional[str] = None
+
+
+class MeetingDraftResponse(BaseModel):
+    title: str
+    date: str
+    participants: List[str]
+    notes_preview: str
+    project_id: Optional[str] = None
+
+
 # --- Audio transcription ---
 
 

@@ -58,6 +58,20 @@ export async function insertChatMessage(params: {
   return message;
 }
 
+export async function updateChatMessageContent(messageId: string, content: string) {
+  await db
+    .update(chatMessages)
+    .set({ content })
+    .where(eq(chatMessages.id, messageId));
+}
+
+export async function loadToolResultsForSession(sessionId: string) {
+  return db
+    .select()
+    .from(chatToolResults)
+    .where(eq(chatToolResults.sessionId, sessionId));
+}
+
 export async function insertToolResult(params: {
   sessionId: string;
   messageId: string;
@@ -78,6 +92,51 @@ export async function insertToolResult(params: {
     })
     .returning();
   return row;
+}
+
+export async function updateToolResult(params: {
+  toolResultId: string;
+  sessionId: string;
+  output?: unknown;
+  status?: ChatToolResultStatus;
+}) {
+  const [row] = await db
+    .update(chatToolResults)
+    .set({
+      ...(params.output !== undefined ? { output: params.output } : {}),
+      ...(params.status ? { status: params.status } : {}),
+    })
+    .where(
+      and(
+        eq(chatToolResults.id, params.toolResultId),
+        eq(chatToolResults.sessionId, params.sessionId)
+      )
+    )
+    .returning();
+
+  return row ?? null;
+}
+
+export async function getToolResultForSession(toolResultId: string, sessionId: string) {
+  const [row] = await db
+    .select()
+    .from(chatToolResults)
+    .where(
+      and(eq(chatToolResults.id, toolResultId), eq(chatToolResults.sessionId, sessionId))
+    )
+    .limit(1);
+
+  return row ?? null;
+}
+
+export async function loadPendingToolResults(sessionId: string) {
+  return db
+    .select()
+    .from(chatToolResults)
+    .where(
+      and(eq(chatToolResults.sessionId, sessionId), eq(chatToolResults.status, "pending"))
+    )
+    .orderBy(asc(chatToolResults.createdAt));
 }
 
 export async function countConsecutiveToolErrors(sessionId: string): Promise<number> {

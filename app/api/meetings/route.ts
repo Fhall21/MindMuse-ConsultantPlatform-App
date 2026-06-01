@@ -1,0 +1,63 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
+import { confirmMeetingFromDraft, linkPeopleToMeeting } from "@/lib/chat/intake-db";
+import { confirmMeetingSchema } from "@/lib/chat/tools/intake";
+import { updateToolResult } from "@/lib/chat/persist";
+
+export async function POST(request: NextRequest) {
+  const auth = await requireAuthenticatedApiUser();
+  if (auth instanceof NextResponse) {
+    return auth;
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ detail: "Invalid JSON payload" }, { status: 422 });
+  }
+
+  const parsed = confirmMeetingSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { detail: parsed.error.issues[0]?.message ?? "Invalid meeting payload" },
+      { status: 422 }
+    );
+  }
+
+  try {
+    const record = await confirmMeetingFromDraft({
+      userId: auth.id,
+      projectId: parsed.data.project_id,
+      meetingDraft: parsed.data.meeting_draft,
+    });
+
+    if (parsed.data.meeting_draft.participants.length > 0) {
+      await linkPeopleToMeeting({
+        userId: auth.id,
+        meetingId: record.id,
+        participantNames: parsed.data.meeting_draft.participants,
+      });
+    }
+
+    if (parsed.data.tool_result_id) {
+      const sessionId = request.headers.get("x-chat-session-id");
+      if (sessionId) {
+        await updateToolResult({
+          toolResultId: parsed.data.tool_result_id,
+          sessionId,
+          output: {
+            meeting_draft: parsed.data.meeting_draft,
+            meeting_record: record,
+          },
+          status: "success",
+        });
+      }
+    }
+
+    return NextResponse.json(record, { status: 201 });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Failed to save meeting";
+    return NextResponse.json({ detail }, { status: 500 });
+  }
+}

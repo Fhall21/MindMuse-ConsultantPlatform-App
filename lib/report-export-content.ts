@@ -29,7 +29,6 @@ import {
 } from "@/lib/report-graph";
 import {
   buildComplianceAuditTrail,
-  hasComplianceAuditTrailContent,
 } from "@/lib/report-audit";
 
 export type ReportTemplate = "standard" | "executive";
@@ -194,13 +193,19 @@ function splitContentIntoSections(content: string): ExportSection[] {
 
 function buildThemeSection(
   allGroups: AllThemeGroupSnapshot[],
-  template: ReportTemplate
+  template: ReportTemplate,
+  draftThemeGroups?: Array<{ id: string; label: string; description: string | null }> | null
 ): ExportSection | null {
   const accepted = allGroups.filter((g) => g.status === "accepted");
   const pending = allGroups.filter((g) => g.status === "draft");
 
   const themesToShow = template === "executive" ? accepted.slice(0, 3) : accepted;
   const showPending = template === "standard";
+
+  const pendingIds = new Set(pending.map((g) => g.id));
+  const ungroupedDraft = showPending
+    ? (draftThemeGroups ?? []).filter((d) => !pendingIds.has(d.id))
+    : [];
 
   const toMembers = (g: AllThemeGroupSnapshot) =>
     [...g.members]
@@ -220,13 +225,22 @@ function buildThemeSection(
       members: toMembers(g),
     })),
     ...(showPending
-      ? pending.map((g) => ({
-          label: g.label,
-          description: g.description,
-          status: "draft" as const,
-          memberCount: g.members.length,
-          members: toMembers(g),
-        }))
+      ? [
+          ...pending.map((g) => ({
+            label: g.label,
+            description: g.description,
+            status: "draft" as const,
+            memberCount: g.members.length,
+            members: toMembers(g),
+          })),
+          ...ungroupedDraft.map((g) => ({
+            label: g.label,
+            description: g.description,
+            status: "draft" as const,
+            memberCount: 0,
+            members: [],
+          })),
+        ]
       : []),
   ];
 
@@ -303,18 +317,15 @@ function buildAuditSection(
     auditSummary: report.auditSummary ?? [],
   });
 
-  if (!hasComplianceAuditTrailContent(trail)) return null;
+  if (trail.milestones.length === 0) return null;
 
   return {
-    heading: "Audit Trail",
+    heading: "Process Record",
     blocks: [],
     isPageBreak: true,
     data: {
       kind: "audit",
-      sessions: trail.sessions.map((session) => ({
-        title: session.title,
-        date: session.date,
-      })),
+      sessions: [],
       milestones: trail.milestones.map((milestone) => ({
         label: milestone.label,
         action: milestone.action,
@@ -413,7 +424,7 @@ export function buildExportSections(
   const allGroups = getAllThemeGroups(report.inputSnapshot);
 
   // 2. Key Themes
-  const themeSection = buildThemeSection(allGroups, template);
+  const themeSection = buildThemeSection(allGroups, template, report.draftThemeGroups);
   if (themeSection) sections.push(themeSection);
 
   // 3. Rejected Themes (standard only)

@@ -313,14 +313,11 @@ describe("buildExportSections — Audit Trail section", () => {
     });
 
     const sections = buildExportSections(report, "standard");
-    const audit = sections.find((section) => section.heading === "Audit Trail");
+    const audit = sections.find((section) => section.heading === "Process Record");
 
     expect(audit?.data?.kind).toBe("audit");
     if (audit?.data?.kind === "audit") {
-      expect(audit.data.sessions.map((session) => session.title)).toEqual([
-        "1-1 with Strategy (2 people)",
-        "Focus group with Operations (2 people)",
-      ]);
+      expect(audit.data.sessions).toEqual([]);
       expect(audit.data.milestones.map((milestone) => milestone.label)).toEqual([
         "Report revised",
         "2 themes validated",

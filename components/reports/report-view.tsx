@@ -464,11 +464,16 @@ export function ThemeHierarchySection({
   const pending = allGroups.filter((g) => g.status === "draft");
   const rejected = allGroups.filter((g) => g.status === "management_rejected");
 
+  const pendingIds = new Set(pending.map((g) => g.id));
+  const ungroupedDraft = (report.draftThemeGroups ?? []).filter(
+    (d) => !pendingIds.has(d.id)
+  );
+
   const acceptedToShow =
     template === "executive" ? accepted.slice(0, 3) : accepted;
   const showNonAccepted = template !== "executive";
 
-  if (allGroups.length === 0) return null;
+  if (allGroups.length === 0 && ungroupedDraft.length === 0) return null;
 
   return (
     <section className="space-y-6">
@@ -484,7 +489,7 @@ export function ThemeHierarchySection({
               key === "accepted"
                 ? accepted.length > 0
                 : key === "draft"
-                  ? pending.length > 0
+                  ? pending.length > 0 || ungroupedDraft.length > 0
                   : rejected.length > 0
             )
             .map(({ key, label }, i) => {
@@ -529,16 +534,24 @@ export function ThemeHierarchySection({
       )}
 
       {/* Pending themes */}
-      {showNonAccepted && pending.length > 0 && (
+      {showNonAccepted && (pending.length > 0 || ungroupedDraft.length > 0) && (
         <div className="space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Pending Review ({pending.length})
+            Pending Review ({pending.length + ungroupedDraft.length})
           </h3>
           <div className="grid gap-3">
             {pending.map((group, i) => (
               <ThemeGroupCard
                 key={group.id ?? i}
                 group={group}
+                defaultOpen={false}
+                showCopy={false}
+              />
+            ))}
+            {ungroupedDraft.map((item) => (
+              <ThemeGroupCard
+                key={item.id}
+                group={{ ...item, status: "draft", origin: "ai_refined", members: [] }}
                 defaultOpen={false}
                 showCopy={false}
               />
@@ -1317,21 +1330,8 @@ export function ReportView({ artifactId }: ReportViewProps) {
                   roundId={displayReport.roundId}
                 />
               )}
-
-              {/* ─── Node degree table (analytics) ─── */}
-              <GraphNodesSection
-                graphModel={graphModel}
-                template={template}
-              />
             </>
           ) : null}
-
-          {displayReport.draftThemeGroups && displayReport.draftThemeGroups.length > 0 && (
-            <>
-              <Separator />
-              <DraftGroupsSection report={displayReport} />
-            </>
-          )}
 
           {template === "standard" && (
             <>

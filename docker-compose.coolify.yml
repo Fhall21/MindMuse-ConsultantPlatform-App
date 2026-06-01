@@ -91,6 +91,8 @@ services:
       DATABASE_USER: ${DATABASE_USER:-postgres}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?}
       AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai:8000}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?}
+      CHAT_MODEL: ${CHAT_MODEL:-gpt-5.4-mini}
     depends_on:
       ai:
         condition: service_healthy

@@ -28,6 +28,7 @@ class _SettingsDotEnvSource(DotEnvSettingsSource):
 class Settings(BaseSettings):
     openai_api_key: str
     edison_api_key: str | None = None
+    better_auth_secret: str | None = None  # chat service token HMAC — same as Next.js BETTER_AUTH_SECRET
     openai_model: str = "gpt-4o-mini"            # text generation (themes, draft, clarification, shorthand)
     openai_vision_model: str = "gpt-4o"           # vision/OCR — gpt-4o required for image input
     openai_audio_model: str = "whisper-1"         # audio transcription

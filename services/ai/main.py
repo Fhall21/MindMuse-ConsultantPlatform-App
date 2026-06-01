@@ -29,6 +29,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
+from middleware.chat_service_token import ChatServiceTokenMiddleware
 from routers import (
     canvas,
     clarification,
@@ -138,6 +139,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(ChatServiceTokenMiddleware)
 
 # Stage 2 endpoints
 app.include_router(themes.router)

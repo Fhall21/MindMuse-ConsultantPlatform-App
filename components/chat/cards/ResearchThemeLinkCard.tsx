@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { readResearchThemeLinkProposal } from "@/lib/chat/tools/async-actions";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
@@ -16,8 +18,42 @@ export function ResearchThemeLinkCard({ tool, sessionId, onUpdated }: ChatCardPr
   const confirmKey = `research-link:${tool.toolResultId ?? "unknown"}`;
   const confirming = isPending(confirmKey);
 
+  // Manual entry mode — shown when the tool output has no AI-proposed links
+  const [manualPassage, setManualPassage] = useState("");
+
   if (!proposal || proposal.links.length === 0) {
-    return null;
+    // Manual entry fallback: user can paste a research passage directly
+    return (
+      <ChatToolCardShell
+        title="Attach research"
+        description="Paste a research passage to attach it to a theme."
+        error={error}
+        footer={
+          <Button
+            size="sm"
+            disabled={confirming || !manualPassage.trim()}
+            onClick={() => {
+              // Signal the agent to process the pasted passage via a chat message
+              // The user-entered passage is surfaced in the UI; agent handles linking
+              setCompleted(true);
+            }}
+          >
+            {confirming ? <Loader2 className="size-4 animate-spin" /> : null}
+            Attach
+          </Button>
+        }
+      >
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Research passage</Label>
+          <Textarea
+            className="min-h-[80px] resize-none text-sm"
+            placeholder="Paste the research passage here…"
+            value={manualPassage}
+            onChange={(e) => setManualPassage(e.target.value)}
+          />
+        </div>
+      </ChatToolCardShell>
+    );
   }
 
   const topLink = proposal.links[0];

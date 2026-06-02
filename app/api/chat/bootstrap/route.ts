@@ -10,8 +10,13 @@ import {
   loadOnboardingAccountState,
   syncUserModeFromAccountState,
 } from "@/lib/chat/onboarding-state";
-import { loadRecentChatMessages, loadToolResultsForSession } from "@/lib/chat/persist";
+import {
+  getPendingSessionItem,
+  loadRecentChatMessages,
+  loadToolResultsForSession,
+} from "@/lib/chat/persist";
 import { dbMessagesToUiMessages } from "@/lib/chat/ui-messages";
+import { buildResumeSuggestion } from "@/lib/chat/resume-suggestion";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuthenticatedApiUser();
@@ -34,10 +39,13 @@ export async function GET(request: NextRequest) {
     session = (await getUnarchivedSessionForUser(auth.id)) ?? (await createChatSession(auth.id));
   }
 
-  const [messages, activeConsultations, toolResults] = await Promise.all([
+  const [messages, activeConsultations, toolResults, pendingItem] = await Promise.all([
     loadRecentChatMessages(session.id),
     countActiveConsultations(auth.id),
     loadToolResultsForSession(session.id),
+    session.consultationId
+      ? getPendingSessionItem(session.consultationId)
+      : Promise.resolve(null),
   ]);
 
   await syncUserModeFromAccountState(session.id, auth.id);
@@ -52,6 +60,7 @@ export async function GET(request: NextRequest) {
       !session.consultationId && activeConsultations >= 2,
     onboardingState: bootstrapFields.onboardingState,
     welcomeVariant: bootstrapFields.welcomeVariant,
+    resumeSuggestion: buildResumeSuggestion(pendingItem),
     messages: dbMessagesToUiMessages(messages, toolResults),
   });
 }

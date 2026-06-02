@@ -52,6 +52,7 @@ describe("lib/chat/ui-messages", () => {
             intake_kind: "transcript",
           },
           status: "pending",
+          seenAt: null,
           createdAt: new Date("2026-06-01T10:00:01.000Z"),
         },
       ]
@@ -137,6 +138,7 @@ describe("lib/chat/ui-messages", () => {
             decisions: {},
           },
           status: "pending",
+          seenAt: null,
           createdAt: new Date("2026-06-01T10:00:01.000Z"),
         },
       ]
@@ -224,6 +226,7 @@ describe("lib/chat/ui-messages", () => {
             },
           },
           status: "success",
+          seenAt: null,
           createdAt: new Date("2026-06-01T10:00:02.000Z"),
         },
       ]

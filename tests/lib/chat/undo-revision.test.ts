@@ -21,8 +21,6 @@ const returningState: OnboardingAccountState = {
 
 const noSessionContext: SessionRuntimeContext = {
   lastAction: null,
-  pendingItem: null,
-  isFirstTurnReturning: false,
 };
 
 describe("undo / revision — system prompt injection", () => {
@@ -41,8 +39,6 @@ describe("undo / revision — system prompt injection", () => {
         createdAt: new Date("2026-06-01T10:00:00.000Z"),
         input: null,
       },
-      pendingItem: null,
-      isFirstTurnReturning: false,
     };
 
     const prompt = buildDynamicSystemPrompt(returningState, null, { sessionContext: ctx });

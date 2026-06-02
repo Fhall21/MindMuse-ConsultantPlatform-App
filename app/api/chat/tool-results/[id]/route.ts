@@ -32,6 +32,7 @@ import {
   readResearchQuestionReviewOutput,
   researchQuestionSchema,
 } from "@/lib/chat/tools/async-actions";
+import { mergeMeetingActionSelection } from "@/lib/chat/tools/meeting-action";
 
 const themeDecisionSchema = z.enum(["accepted", "rejected"]);
 
@@ -106,8 +107,13 @@ export async function PATCH(
       : {};
 
   const existingReview = readThemeReviewOutput(existing.output);
+  const isMeetingActionSelection = existing.toolName === "select_meeting_for_action";
 
   let nextOutput: Record<string, unknown> = { ...existingOutput };
+
+  if (isMeetingActionSelection && parsed.data.meeting_id) {
+    nextOutput = mergeMeetingActionSelection(nextOutput, parsed.data.meeting_id);
+  }
 
   if (parsed.data.meeting_draft !== undefined) {
     nextOutput = {
@@ -116,7 +122,7 @@ export async function PATCH(
     };
   }
 
-  if (existingReview || parsed.data.themes || parsed.data.meeting_id) {
+  if (!isMeetingActionSelection && (existingReview || parsed.data.themes || parsed.data.meeting_id)) {
     const baseReview =
       existingReview ??
       (parsed.data.meeting_id && parsed.data.themes
@@ -145,7 +151,10 @@ export async function PATCH(
   }
 
   const existingQuoteReview = readQuoteReviewOutput(existing.output);
-  if (existingQuoteReview || parsed.data.quotes || parsed.data.meeting_id) {
+  if (
+    !isMeetingActionSelection &&
+    (existingQuoteReview || parsed.data.quotes || parsed.data.meeting_id)
+  ) {
     const baseQuoteReview =
       existingQuoteReview ??
       (parsed.data.meeting_id && parsed.data.quotes
@@ -183,10 +192,11 @@ export async function PATCH(
 
   const existingGrouping = readGroupingReviewOutput(existing.output);
   if (
-    existingGrouping ||
-    parsed.data.group_name ||
-    parsed.data.theme_ids ||
-    parsed.data.available_themes
+    !isMeetingActionSelection &&
+    (existingGrouping ||
+      parsed.data.group_name ||
+      parsed.data.theme_ids ||
+      parsed.data.available_themes)
   ) {
     const base =
       existingGrouping ??

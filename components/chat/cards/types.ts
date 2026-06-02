@@ -20,6 +20,7 @@ export interface ChatCardProps {
   messageId: string;
   sessionId?: string | null;
   onUpdated?: () => void;
+  onSubmitText?: (text: string) => void | Promise<void>;
 }
 
 function readOptionalString(record: Record<string, unknown>, key: string): string | undefined {

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { buildMeetingActionContinuation } from "@/lib/chat/tools/meeting-action";
 import { readMeetingPickerOutput } from "@/lib/chat/tools/meetings-picker";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import type { ChatCardProps } from "./types";
@@ -32,6 +33,7 @@ export function MeetingActionPickerCard({
   messageId,
   sessionId,
   onUpdated,
+  onSubmitText,
 }: ChatCardProps) {
   const picker = useMemo(() => readMeetingPickerOutput(tool.output), [tool.output]);
   const { isPending, setPending } = useCardConfirm();
@@ -52,7 +54,7 @@ export function MeetingActionPickerCard({
       <ChatToolCardShell
         success
         title="Meeting selected"
-        description="Continue in the chat to proceed."
+        description="Continuing your request."
       />
     );
   }
@@ -80,7 +82,12 @@ export function MeetingActionPickerCard({
         throw new Error((json as { detail?: string }).detail ?? "Could not confirm selection");
       }
 
-      onUpdated?.();
+      const selectedMeeting = picker?.meetings.find((meeting) => meeting.id === selectedMeetingId);
+      if (selectedMeeting && onSubmitText) {
+        await onSubmitText(buildMeetingActionContinuation(selectedMeeting.title));
+      } else {
+        onUpdated?.();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not confirm selection");
     } finally {

@@ -13,10 +13,12 @@ import {
   CAPTURE_TRANSCRIPT_ACCEPT_ATTR,
 } from "@/lib/capture/constants";
 import { CHAT_QUICK_ACTION_BUTTON_CLASS } from "@/lib/chat/constants";
+import type { ResumeSuggestion } from "@/lib/chat/resume-suggestion";
 
 interface ChatHomeViewProps {
   displayName: string;
   welcomeVariant: WelcomeVariant;
+  resumeSuggestion?: ResumeSuggestion | null;
   sessions: ChatSessionSummary[];
   sessionsLoading?: boolean;
   sessionsError?: boolean;
@@ -41,6 +43,7 @@ const EXAMPLE_PROMPTS = [
 export function ChatHomeView({
   displayName,
   welcomeVariant,
+  resumeSuggestion,
   sessions,
   sessionsLoading = false,
   sessionsError = false,
@@ -123,6 +126,15 @@ export function ChatHomeView({
       ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-3">
+        {resumeSuggestion ? (
+          <button
+            type="button"
+            onClick={() => onInputChange(resumeSuggestion.prefill)}
+            className="rounded-full border border-border/60 bg-muted/50 px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground"
+          >
+            {resumeSuggestion.label}
+          </button>
+        ) : null}
         <Textarea
           value={input}
           onChange={(e) => onInputChange(e.target.value)}

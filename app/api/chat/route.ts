@@ -1,11 +1,14 @@
 import { openai } from "@ai-sdk/openai";
-import { stepCountIs, streamText, type UIMessage } from "ai";
+import { stepCountIs, streamText } from "ai";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
 import {
   CHAT_CONSECUTIVE_TOOL_ERROR_HINT_THRESHOLD,
+  CHAT_MAX_CLIENT_MESSAGES,
+  CHAT_MAX_MESSAGE_PARTS,
   CHAT_MAX_TOOL_ROUNDTRIPS,
+  CHAT_MAX_USER_MESSAGE_CHARS,
   MANUAL_NAV_HINT,
 } from "@/lib/chat/constants";
 import {
@@ -19,7 +22,6 @@ import {
   checkAutoIntakeSuppressed,
   countConsecutiveToolErrors,
   getLastReversibleAction,
-  getPendingSessionItem,
   insertChatMessage,
   loadRecentChatMessages,
   summarizeOverflowMessages,
@@ -35,6 +37,7 @@ import { loadOnboardingAccountState } from "@/lib/chat/onboarding-state";
 import { sessionTurnIncludesCardTool } from "@/lib/chat/card-tools";
 import { createChatTools } from "@/lib/chat/tools";
 import { composeCanvasState } from "@/lib/data/canvas-state";
+import { sanitizeAssistantOutput } from "@/lib/chat/assistant-output";
 
 export const maxDuration = 60;
 
@@ -46,13 +49,20 @@ function hasCanvasKeyword(text: string): boolean {
 }
 
 import { getChatModel } from "@/lib/chat/model";
+const clientMessageSchema = z
+  .object({
+    role: z.enum(["user", "assistant", "system"]),
+    parts: z.array(z.unknown()).max(CHAT_MAX_MESSAGE_PARTS).optional(),
+  })
+  .passthrough();
+
 const chatRequestSchema = z.object({
   id: z.string().optional(),
-  messages: z.array(z.custom<UIMessage>()),
+  messages: z.array(clientMessageSchema).max(CHAT_MAX_CLIENT_MESSAGES),
   sessionId: z.string().uuid().optional(),
 });
 
-function getLatestUserMessage(messages: UIMessage[]): string | null {
+function getLatestUserMessage(messages: z.infer<typeof clientMessageSchema>[]): string | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message.role !== "user") {
@@ -60,7 +70,15 @@ function getLatestUserMessage(messages: UIMessage[]): string | null {
     }
 
     const text = message.parts
-      ?.filter((part) => part.type === "text")
+      ?.filter(
+        (part): part is { type: "text"; text: string } =>
+          part !== null &&
+          typeof part === "object" &&
+          "type" in part &&
+          part.type === "text" &&
+          "text" in part &&
+          typeof part.text === "string"
+      )
       .map((part) => part.text)
       .join("\n")
       .trim();
@@ -118,6 +136,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const latestUserText = getLatestUserMessage(parsed.data.messages);
+    if (latestUserText && latestUserText.length > CHAT_MAX_USER_MESSAGE_CHARS) {
+      return NextResponse.json(
+        { detail: "Message is too long. Upload the transcript as a file instead." },
+        { status: 422 }
+      );
+    }
     if (latestUserText) {
       const recent = await loadRecentChatMessages(session.id, 1);
       const lastStored = recent[recent.length - 1];
@@ -135,9 +159,6 @@ export async function POST(request: NextRequest) {
     });
 
     const storedMessages = await loadRecentChatMessages(session.id);
-    const isFirstTurn = storedMessages.length === 1;
-    const isFirstTurnReturning =
-      isFirstTurn && session.userMode === "returning" && !!session.consultationId;
 
     const [
       contextSummary,
@@ -146,7 +167,6 @@ export async function POST(request: NextRequest) {
       onboardingState,
       autoIntakeSuppressed,
       lastAction,
-      pendingItem,
     ] = await Promise.all([
       buildProjectContextSummary(auth.id, session.consultationId),
       countConsecutiveToolErrors(session.id),
@@ -154,9 +174,6 @@ export async function POST(request: NextRequest) {
       loadOnboardingAccountState(auth.id),
       checkAutoIntakeSuppressed(session.id),
       getLastReversibleAction(session.id),
-      isFirstTurnReturning && session.consultationId
-        ? getPendingSessionItem(session.consultationId)
-        : Promise.resolve(null),
     ]);
 
     const sessionContext: SessionRuntimeContext = {
@@ -167,13 +184,6 @@ export async function POST(request: NextRequest) {
             input: lastAction.input as Record<string, unknown> | null,
           }
         : null,
-      pendingItem: pendingItem
-        ? {
-            toolName: pendingItem.toolName,
-            input: pendingItem.input as Record<string, unknown> | null,
-          }
-        : null,
-      isFirstTurnReturning,
     };
 
     const proactiveTriggers: ProactiveTriggerFlags = {};
@@ -229,7 +239,7 @@ export async function POST(request: NextRequest) {
             await insertChatMessage({
               sessionId: session.id,
               role: "assistant",
-              content: text,
+              content: sanitizeAssistantOutput(text),
             });
           }
           void summarizeOverflowMessages(session.id).catch((error) => {

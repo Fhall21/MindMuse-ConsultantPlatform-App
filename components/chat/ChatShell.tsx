@@ -22,6 +22,7 @@ interface ChatShellProps {
   onConsultationSelected?: (consultationId: string) => void;
   onProjectCreated?: (consultationId: string) => void;
   onCardUpdated?: () => void;
+  onSubmitText?: (text: string) => void | Promise<void>;
   analysisNotifications?: ChatAnalysisNotification[];
   onDismissAnalysisNotification?: (id: string) => void;
 }
@@ -43,6 +44,7 @@ export function ChatShell({
   onConsultationSelected,
   onProjectCreated,
   onCardUpdated,
+  onSubmitText,
   analysisNotifications = [],
   onDismissAnalysisNotification,
 }: ChatShellProps) {
@@ -74,6 +76,7 @@ export function ChatShell({
             onConsultationSelected={onConsultationSelected}
             onProjectCreated={onProjectCreated}
             onCardUpdated={onCardUpdated}
+            onSubmitText={onSubmitText}
           />
         </div>
       </div>

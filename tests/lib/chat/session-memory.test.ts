@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildDynamicSystemPrompt, type SessionRuntimeContext } from "@/lib/chat/system-prompts";
-import { AGENT_VOICE } from "@/lib/chat/agent-voice";
+import { buildResumeSuggestion } from "@/lib/chat/resume-suggestion";
+import { buildDynamicSystemPrompt } from "@/lib/chat/system-prompts";
 import type { OnboardingAccountState } from "@/lib/chat/onboarding-state";
 
 const returningState: OnboardingAccountState = {
@@ -17,75 +17,31 @@ const returningState: OnboardingAccountState = {
   userMode: "returning",
 };
 
-const onboardingState: OnboardingAccountState = {
-  ...returningState,
-  phase: "needs_meeting",
-  userMode: "onboarding",
-  hasMeeting: false,
-};
-
-describe("session memory callbacks — system prompt injection", () => {
-  it("injects [SESSION MEMORY] with pending item on first turn for returning user", () => {
-    const ctx: SessionRuntimeContext = {
-      lastAction: null,
-      pendingItem: { toolName: "edit_theme", input: { name: "Trust deficit" } },
-      isFirstTurnReturning: true,
-    };
-
-    const prompt = buildDynamicSystemPrompt(returningState, null, { sessionContext: ctx });
-    expect(prompt).toContain("[SESSION MEMORY:");
-    expect(prompt).toContain("edit_theme");
-    expect(prompt).toContain(AGENT_VOICE.WELCOME_BACK_WITH_PENDING("edit theme — \"Trust deficit\""));
+describe("resume suggestion", () => {
+  it("builds optional chip data for pending theme review", () => {
+    expect(buildResumeSuggestion({ toolName: "extract_themes" })).toEqual({
+      toolName: "extract_themes",
+      label: "Resume theme review",
+      prefill: "Continue extract themes",
+    });
   });
 
-  it("injects no-pending greeting on first turn returning with no pending items", () => {
-    const ctx: SessionRuntimeContext = {
-      lastAction: null,
-      pendingItem: null,
-      isFirstTurnReturning: true,
-    };
-
-    const prompt = buildDynamicSystemPrompt(returningState, null, { sessionContext: ctx });
-    expect(prompt).toContain("[SESSION MEMORY:");
-    expect(prompt).toContain(AGENT_VOICE.WELCOME_BACK_NO_PENDING);
+  it("returns null when no pending item exists", () => {
+    expect(buildResumeSuggestion(null)).toBeNull();
   });
 
-  it("does not inject [SESSION MEMORY] when isFirstTurnReturning is false", () => {
-    const ctx: SessionRuntimeContext = {
-      lastAction: null,
-      pendingItem: { toolName: "edit_theme", input: null },
-      isFirstTurnReturning: false,
-    };
-
-    const prompt = buildDynamicSystemPrompt(returningState, null, { sessionContext: ctx });
+  it("never injects stale resume prose into the model prompt", () => {
+    const prompt = buildDynamicSystemPrompt(returningState, null, {
+      sessionContext: { lastAction: null },
+    });
     expect(prompt).not.toContain("[SESSION MEMORY:");
-  });
-
-  it("does not inject [SESSION MEMORY] for onboarding users", () => {
-    const ctx: SessionRuntimeContext = {
-      lastAction: null,
-      pendingItem: null,
-      isFirstTurnReturning: false,
-    };
-
-    const prompt = buildDynamicSystemPrompt(onboardingState, null, { sessionContext: ctx });
-    expect(prompt).not.toContain("[SESSION MEMORY:");
-  });
-
-  it("pending item description falls back to tool name when no name in input", () => {
-    const ctx: SessionRuntimeContext = {
-      lastAction: null,
-      pendingItem: { toolName: "create_insight", input: null },
-      isFirstTurnReturning: true,
-    };
-
-    const prompt = buildDynamicSystemPrompt(returningState, null, { sessionContext: ctx });
-    expect(prompt).toContain("create insight");
+    expect(prompt).not.toContain("Welcome back. extract themes. Want to continue?");
+    expect(prompt).toContain("current request always wins");
   });
 });
 
-describe("getPendingSessionItem — staleness threshold", () => {
-  it("14-day cutoff constant is correct", async () => {
+describe("getPendingSessionItem - staleness threshold", () => {
+  it("14-day cutoff constant is correct", () => {
     const before = Date.now() - 13 * 24 * 60 * 60 * 1000;
     const after = Date.now() - 15 * 24 * 60 * 60 * 1000;
     const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;

@@ -6,6 +6,7 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CardConfirmProvider } from "@/components/chat/card-confirm-context";
+import { stripLeakedToolSyntax } from "@/lib/chat/assistant-output";
 import { ChatPageHeader } from "@/components/chat/chat-page-header";
 import { NotificationBell } from "@/components/chat/notification-bell";
 import { ChatShell } from "@/components/chat/ChatShell";
@@ -22,6 +23,7 @@ import { captureFileForChatIntake } from "@/lib/capture/chat-file-intake";
 import { mergeBootstrapWithStreamingAssistant } from "@/lib/chat/merge-bootstrap-messages";
 import type { CrossAnalysisResults } from "@/lib/chat/analysis-db";
 import type { ChatAnalysisNotification } from "@/components/chat/chat-analysis-notifications";
+import type { ResumeSuggestion } from "@/lib/chat/resume-suggestion";
 
 interface ChatBootstrap {
   sessionId: string;
@@ -30,6 +32,7 @@ interface ChatBootstrap {
   needsConsultationSelection: boolean;
   onboardingState: OnboardingAccountState;
   welcomeVariant: WelcomeVariant;
+  resumeSuggestion: ResumeSuggestion | null;
   messages: UIMessage[];
 }
 
@@ -56,6 +59,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   const [needsConsultationSelection, setNeedsConsultationSelection] = useState(false);
   const [onboardingState, setOnboardingState] = useState<OnboardingAccountState | null>(null);
   const [welcomeVariant, setWelcomeVariant] = useState<WelcomeVariant>("brand_new");
+  const [resumeSuggestion, setResumeSuggestion] = useState<ResumeSuggestion | null>(null);
   const [bootstrapError, setBootstrapError] = useState(false);
   const [bootstrapReady, setBootstrapReady] = useState(false);
   const [isCapturingFile, setIsCapturingFile] = useState(false);
@@ -106,6 +110,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
       setNeedsConsultationSelection(data.needsConsultationSelection);
       setOnboardingState(data.onboardingState);
       setWelcomeVariant(data.welcomeVariant);
+      setResumeSuggestion(data.resumeSuggestion);
       setMessages(data.messages);
       setBootstrapError(false);
     },
@@ -127,6 +132,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
         setNeedsConsultationSelection(data.needsConsultationSelection);
         setOnboardingState(data.onboardingState);
         setWelcomeVariant(data.welcomeVariant);
+        setResumeSuggestion(data.resumeSuggestion);
         setMessages((current) =>
           mergeBootstrapWithStreamingAssistant(current, data.messages)
         );
@@ -279,8 +285,9 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
         .filter((part) => part.type === "text")
         .map((part) => part.text)
         .join("");
-      if (text.trim()) {
-        return text;
+      const visibleText = stripLeakedToolSyntax(text);
+      if (visibleText.trim()) {
+        return visibleText;
       }
     }
     return "";
@@ -504,6 +511,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
               }}
               activeSessionId={sessionId}
               welcomeVariant={welcomeVariant}
+              resumeSuggestion={resumeSuggestion}
               showCreateProject={showCreateProject}
               onProjectCreated={(nextConsultationId) => {
                 setCreateProjectCardPinned(false);
@@ -535,6 +543,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
               setConsultationId(nextConsultationId);
             }}
             onCardUpdated={handleCardUpdated}
+            onSubmitText={sendUserText}
             analysisNotifications={analysisNotifications}
             onDismissAnalysisNotification={handleDismissAnalysisNotification}
           />

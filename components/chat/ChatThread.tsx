@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { createElement, useEffect, useRef } from "react";
 import type { UIMessage } from "ai";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { resolveChatCard } from "@/components/chat/cards/index";
 import { CreateProjectCard } from "@/components/chat/cards/CreateProjectCard";
 import { ProjectSelectionCard } from "@/components/chat/cards/ProjectSelectionCard";
@@ -11,8 +11,12 @@ import {
   ChatAnalysisNotifications,
   type ChatAnalysisNotification,
 } from "@/components/chat/chat-analysis-notifications";
-import { isHiddenThreadToolName } from "@/lib/chat/card-tools";
+import {
+  isHiddenThreadToolName,
+  shouldHideSupersededThemePicker,
+} from "@/lib/chat/card-tools";
 import { collapseDuplicateProse } from "@/lib/chat/dedupe-prose";
+import { stripLeakedToolSyntax } from "@/lib/chat/assistant-output";
 import type { ChatToolMessageMeta } from "@/lib/chat/ui-messages";
 
 interface ChatThreadProps {
@@ -27,6 +31,7 @@ interface ChatThreadProps {
   onConsultationSelected?: (consultationId: string) => void;
   onProjectCreated?: (consultationId: string) => void;
   onCardUpdated?: () => void;
+  onSubmitText?: (text: string) => void | Promise<void>;
 }
 
 function getTextFromMessage(message: UIMessage): string {
@@ -34,7 +39,7 @@ function getTextFromMessage(message: UIMessage): string {
     .filter((part) => part.type === "text")
     .map((part) => part.text)
     .join("\n");
-  return collapseDuplicateProse(text);
+  return collapseDuplicateProse(stripLeakedToolSyntax(text));
 }
 
 function getToolMeta(message: UIMessage): ChatToolMessageMeta | null {
@@ -44,10 +49,11 @@ function getToolMeta(message: UIMessage): ChatToolMessageMeta | null {
 
 function ThinkingIndicator() {
   return (
-    <div className="flex items-center gap-1.5 px-1 py-2" aria-live="polite" aria-label="Assistant is thinking">
-      <span className="size-2 animate-pulse rounded-full bg-muted-foreground/70 [animation-delay:0ms]" />
-      <span className="size-2 animate-pulse rounded-full bg-muted-foreground/70 [animation-delay:150ms]" />
-      <span className="size-2 animate-pulse rounded-full bg-muted-foreground/70 [animation-delay:300ms]" />
+    <div className="flex justify-start py-2" aria-live="polite" role="status">
+      <div className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-muted px-4 py-3 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        <span>MindMuse is thinking…</span>
+      </div>
     </div>
   );
 }
@@ -56,25 +62,27 @@ function MessageBubble({
   message,
   sessionId,
   onCardUpdated,
+  onSubmitText,
 }: {
   message: UIMessage;
   sessionId: string | null;
   onCardUpdated?: () => void;
+  onSubmitText?: (text: string) => void | Promise<void>;
 }) {
   const toolMeta = getToolMeta(message);
   if (toolMeta) {
     if (isHiddenThreadToolName(toolMeta.toolName)) {
       return null;
     }
-    const Card = resolveChatCard(toolMeta.toolName);
     return (
       <div className="py-2">
-        <Card
-          tool={toolMeta}
-          messageId={message.id}
-          sessionId={sessionId}
-          onUpdated={onCardUpdated}
-        />
+        {createElement(resolveChatCard(toolMeta.toolName), {
+          tool: toolMeta,
+          messageId: message.id,
+          sessionId,
+          onUpdated: onCardUpdated,
+          onSubmitText,
+        })}
       </div>
     );
   }
@@ -113,8 +121,17 @@ export function ChatThread({
   onConsultationSelected,
   onProjectCreated,
   onCardUpdated,
+  onSubmitText,
 }: ChatThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const renderMessages = messages.map((message) => {
+    const tool = getToolMeta(message);
+    return {
+      role: message.role,
+      toolName: tool?.toolName,
+      status: tool?.status,
+    };
+  });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -143,13 +160,16 @@ export function ChatThread({
         </div>
       ) : null}
 
-      {messages.map((message) => (
+      {messages.map((message, index) => (
+        shouldHideSupersededThemePicker(renderMessages, index) ? null : (
         <MessageBubble
           key={message.id}
           message={message}
           sessionId={sessionId}
           onCardUpdated={onCardUpdated}
+          onSubmitText={onSubmitText}
         />
+        )
       ))}
 
       <ChatAnalysisNotifications

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { chatSessions, chatToolResults } from "@/db/schema";
+import { chatSessions, chatToolResults, researchSessions } from "@/db/schema";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
 
 export async function PATCH(
@@ -21,14 +21,29 @@ export async function PATCH(
     .where(and(eq(chatToolResults.id, id), eq(chatSessions.userId, auth.id)))
     .limit(1);
 
-  if (!row) {
+  if (row) {
+    await db
+      .update(chatToolResults)
+      .set({ seenAt: new Date() })
+      .where(eq(chatToolResults.id, id));
+
+    return NextResponse.json({ ok: true });
+  }
+
+  const [researchSession] = await db
+    .select({ id: researchSessions.id })
+    .from(researchSessions)
+    .where(and(eq(researchSessions.id, id), eq(researchSessions.userId, auth.id)))
+    .limit(1);
+
+  if (!researchSession) {
     return NextResponse.json({ detail: "Not found" }, { status: 404 });
   }
 
   await db
-    .update(chatToolResults)
+    .update(researchSessions)
     .set({ seenAt: new Date() })
-    .where(eq(chatToolResults.id, id));
+    .where(and(eq(researchSessions.id, id), eq(researchSessions.userId, auth.id)));
 
   return NextResponse.json({ ok: true });
 }

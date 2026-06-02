@@ -954,6 +954,7 @@ export const researchSessions = pgTable(
     resultData: jsonb("result_data").$type<Record<string, unknown>>(),
     fileEntryId: text("file_entry_id"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    seenAt: timestamp("seen_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => ({

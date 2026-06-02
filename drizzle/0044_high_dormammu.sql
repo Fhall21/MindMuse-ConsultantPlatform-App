@@ -1,0 +1,1 @@
+ALTER TABLE "research_sessions" ADD COLUMN "seen_at" timestamp with time zone;

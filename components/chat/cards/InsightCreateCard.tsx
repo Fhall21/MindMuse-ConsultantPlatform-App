@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { readInsightCreateOutput } from "@/lib/chat/tools/insight-create";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
+import { notifyCardConfirmation } from "./notify-card-confirmation";
 import type { ChatCardProps } from "./types";
 
 export function InsightCreateCard({ tool, messageId, sessionId, onUpdated }: ChatCardProps) {
@@ -65,6 +66,7 @@ export function InsightCreateCard({ tool, messageId, sessionId, onUpdated }: Cha
         throw new Error((json as { detail?: string }).detail ?? "Failed to create insight");
       }
 
+      await notifyCardConfirmation(sessionId, "insight_created", tool.toolResultId);
       setCompleted(true);
       onUpdated?.();
     } catch (err) {

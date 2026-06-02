@@ -64,6 +64,12 @@ describe("resolveCardCompletionFollowUp", () => {
   it("returns null for unsupported tools", () => {
     expect(resolveCardCompletionFollowUp("select_meeting_for_themes", {})).toBeNull();
   });
+
+  it("returns confirmation for saved research questions", () => {
+    expect(resolveCardCompletionFollowUp("generate_research_questions", {})).toContain(
+      "Research questions saved"
+    );
+  });
 });
 
 describe("maybeInsertCardCompletionFollowUp", () => {

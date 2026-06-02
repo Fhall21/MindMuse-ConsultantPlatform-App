@@ -13,6 +13,7 @@ import {
 import { readGroupingReviewOutput, type GroupingReviewOutput } from "@/lib/chat/tools/grouping";
 import { ChatThemeGroupingWorkspace } from "./chat-theme-grouping-workspace";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
+import { notifyCardConfirmation } from "./notify-card-confirmation";
 import type { ChatCardProps } from "./types";
 
 export function ThemeGroupingCard({
@@ -150,6 +151,7 @@ export function ThemeGroupingCard({
       }
 
       await persistReviewState(review, "success");
+      await notifyCardConfirmation(sessionId, "theme_group_saved");
       setCompleted(true);
       onUpdated?.();
     } catch (confirmError) {

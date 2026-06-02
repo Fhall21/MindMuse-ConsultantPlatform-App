@@ -14,6 +14,7 @@ import { createRound } from "@/lib/actions/rounds";
 import { fetchJson } from "@/hooks/api";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
+import { notifyCardConfirmation } from "./notify-card-confirmation";
 import type { ChatCardProps } from "./types";
 
 interface CreateProjectCardProps extends ChatCardProps {
@@ -21,7 +22,6 @@ interface CreateProjectCardProps extends ChatCardProps {
 }
 
 export function CreateProjectCard({
-  tool: _tool,
   messageId,
   onProjectCreated,
 }: CreateProjectCardProps) {
@@ -51,6 +51,7 @@ export function CreateProjectCard({
           syncOnboarding: true,
         }),
       });
+      await notifyCardConfirmation(bootstrap.sessionId, "consultation_created");
       queryClient.invalidateQueries({ queryKey: ["consultations"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
       setCreatedLabel(trimmed);

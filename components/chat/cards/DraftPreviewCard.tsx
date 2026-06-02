@@ -12,6 +12,7 @@ import {
 } from "@/lib/chat/onboarding-copy";
 import { readEmailDraftReviewOutput, type EmailDraftReviewOutput } from "@/lib/chat/tools/async-actions";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
+import { notifyCardConfirmation } from "./notify-card-confirmation";
 import type { ChatCardProps } from "./types";
 
 export function DraftPreviewCard({
@@ -105,6 +106,7 @@ export function DraftPreviewCard({
         throw new Error(data?.detail ?? "Could not save email draft");
       }
       await persist(review, "success");
+      await notifyCardConfirmation(sessionId, "email_draft_saved");
       setCompleted(true);
       onUpdated?.();
     } catch (saveError) {

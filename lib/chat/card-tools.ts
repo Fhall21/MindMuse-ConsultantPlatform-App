@@ -26,6 +26,7 @@ export const CHAT_CARD_TOOL_NAMES = new Set<string>([
   "export_report",
   "manipulate_canvas",
   "prepare_literature_review",
+  "attach_meeting_note",
   "unlink_person_from_meeting",
   "bulk_dismiss_pending",
 ]);

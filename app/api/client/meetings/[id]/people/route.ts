@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { listPeopleForMeeting } from "@/lib/data/domain-read";
-import { linkPersonToMeeting } from "@/lib/actions/people";
+import { linkPersonToMeeting, unlinkPersonFromMeeting } from "@/lib/actions/people";
 import { jsonError, requireRouteClient } from "../../../_helpers";
 
 const linkBodySchema = z.object({
@@ -53,5 +53,28 @@ export async function POST(
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Failed to link person");
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const client = await requireRouteClient();
+  if ("response" in client) {
+    return client.response;
+  }
+
+  const parsed = linkBodySchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return jsonError(parsed.error.issues[0]?.message ?? "Invalid payload", 422);
+  }
+
+  try {
+    await unlinkPersonFromMeeting(id, parsed.data.person_id);
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    return jsonError(error instanceof Error ? error.message : "Failed to unlink person");
   }
 }

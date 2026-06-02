@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { readPersonLinkOutput } from "@/lib/chat/tools/people-link";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
+import { notifyCardConfirmation } from "./notify-card-confirmation";
 import type { ChatCardProps } from "./types";
 
 export function PersonLinkCard({ tool, messageId, sessionId, onUpdated }: ChatCardProps) {
@@ -40,7 +41,7 @@ export function PersonLinkCard({ tool, messageId, sessionId, onUpdated }: ChatCa
       <ChatToolCardShell
         success
         title="Person linked"
-        description="The person has been linked to this consultation."
+        description="The person has been linked to this meeting."
       />
     );
   }
@@ -73,6 +74,7 @@ export function PersonLinkCard({ tool, messageId, sessionId, onUpdated }: ChatCa
         throw new Error(text);
       }
 
+      await notifyCardConfirmation(sessionId, "person_linked", tool.toolResultId);
       setCompleted(true);
       onUpdated?.();
     } catch (err) {
@@ -87,7 +89,7 @@ export function PersonLinkCard({ tool, messageId, sessionId, onUpdated }: ChatCa
   return (
     <ChatToolCardShell
       title="Link person"
-      description="No one's linked to this consultation yet. Say 'Link [name]' to add someone."
+      description="Choose a person to link to this meeting."
       error={error}
       footer={
         <Button

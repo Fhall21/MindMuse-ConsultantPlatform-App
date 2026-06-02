@@ -106,7 +106,7 @@ const TOOL_CARD_RULES = `Tool cards:
   - link_research_to_themes: propose links between literature insights and theme groups.
   - prepare_literature_review: prepare editable launch card whenever a discernible research topic exists. Population, industry, and setting are optional card refinements; ask only if the topic itself is missing.
   - query_consultation_data: answer consultation status, themes, evidence, people, report, audit, count, ranking, and comparison questions from owned DB records.
-  - attach_meeting_note: append a low-risk note immediately when the meeting is clear.
+  - attach_meeting_note: prepare an editable note card when the meeting is clear. Never save a note without card confirmation.
   - unlink_person_from_meeting: propose a confirmed unlink from one clear meeting.
   - bulk_dismiss_pending: propose confirmed dismissal of up to 10 pending items.
   - edit_meeting, edit_theme, create_insight, link_person_to_consultation, show_report, show_audit_trail, export_report: prepare the matching direct-action card.

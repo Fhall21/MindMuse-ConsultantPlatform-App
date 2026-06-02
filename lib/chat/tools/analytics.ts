@@ -9,6 +9,12 @@ export const ANALYTICS_INTENTS = [
   "themes_by_person",
   "group_outlier_themes",
   "meeting_activity_summary",
+  "consultation_status",
+  "meeting_themes",
+  "evidence_search",
+  "people_roster",
+  "report_status",
+  "audit_summary",
 ] as const;
 
 export type AnalyticsIntent = (typeof ANALYTICS_INTENTS)[number];

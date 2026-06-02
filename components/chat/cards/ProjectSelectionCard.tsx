@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { CHAT_QUICK_ACTION_BUTTON_CLASS } from "@/lib/chat/constants";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
+import { notifyCardConfirmation } from "./notify-card-confirmation";
 import type { ChatCardProps } from "./types";
 
 interface ProjectSelectionCardProps extends ChatCardProps {
@@ -15,7 +16,6 @@ interface ProjectSelectionCardProps extends ChatCardProps {
 }
 
 export function ProjectSelectionCard({
-  tool: _tool,
   messageId,
   sessionId,
   onConsultationSelected,
@@ -36,6 +36,7 @@ export function ProjectSelectionCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, consultationId }),
       });
+      await notifyCardConfirmation(sessionId, "consultation_selected");
       onConsultationSelected?.(consultationId);
     } catch (error) {
       console.error(error);

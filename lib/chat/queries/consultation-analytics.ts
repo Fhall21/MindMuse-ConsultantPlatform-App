@@ -1,9 +1,14 @@
 import { and, desc, eq, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
+  auditLog,
+  consultations,
+  consultationOutputArtifacts,
   consultationGroupMembers,
+  meetingPeople,
   meetingGroups,
   meetings,
+  people,
   quotes,
   themeMembers,
   themes,
@@ -11,7 +16,6 @@ import {
 import {
   ANALYTICS_INTENTS,
   VALID_INTENTS_LIST,
-  type AnalyticsIntent,
   type ConsultationDataQuery,
 } from "@/lib/chat/tools/analytics";
 
@@ -78,14 +82,189 @@ export function computeLeastSimilarPairs(rows: ThemeRow[], topN: number): Outlie
 // ── Main dispatch ─────────────────────────────────────────────────────────────
 
 export async function executeConsultationQuery(
-  input: ConsultationDataQuery
+  input: ConsultationDataQuery,
+  userId: string
 ): Promise<{ intent: string; summary: Record<string, unknown> } | { error: string }> {
   const validationError = validateAnalyticsIntent(input.intent);
   if (validationError) return { error: validationError };
 
   const { intent, filters } = input;
+  const [ownedConsultation] = await db
+    .select({ id: consultations.id, label: consultations.label })
+    .from(consultations)
+    .where(
+      and(
+        eq(consultations.id, filters.consultation_id),
+        eq(consultations.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (!ownedConsultation) {
+    return { error: "Consultation not found." };
+  }
 
   switch (intent) {
+    case "consultation_status": {
+      const [meetingRows, themeRows, reportRows] = await Promise.all([
+        db
+          .select({ id: meetings.id, status: meetings.status })
+          .from(meetings)
+          .where(
+            and(
+              eq(meetings.consultationId, filters.consultation_id),
+              eq(meetings.userId, userId),
+              eq(meetings.isArchived, false)
+            )
+          ),
+        db
+          .select({ id: themes.id, status: themes.status })
+          .from(themes)
+          .where(
+            and(
+              eq(themes.consultationId, filters.consultation_id),
+              eq(themes.userId, userId)
+            )
+          ),
+        db
+          .select({ id: consultationOutputArtifacts.id })
+          .from(consultationOutputArtifacts)
+          .where(
+            and(
+              eq(consultationOutputArtifacts.consultationId, filters.consultation_id),
+              eq(consultationOutputArtifacts.userId, userId),
+              eq(consultationOutputArtifacts.artifactType, "report")
+            )
+          ),
+      ]);
+      return {
+        intent,
+        summary: {
+          consultation: ownedConsultation.label,
+          meeting_count: meetingRows.length,
+          complete_meeting_count: meetingRows.filter((row) => row.status === "complete").length,
+          theme_count: themeRows.length,
+          accepted_theme_count: themeRows.filter((row) => row.status === "accepted").length,
+          report_count: reportRows.length,
+        },
+      };
+    }
+
+    case "meeting_themes": {
+      const rows = await db
+        .select({
+          theme_label: themes.label,
+          theme_description: themes.description,
+          meeting_title: meetings.title,
+        })
+        .from(themeMembers)
+        .innerJoin(themes, eq(themes.id, themeMembers.themeId))
+        .innerJoin(meetings, eq(meetings.id, themeMembers.sourceMeetingId))
+        .where(
+          and(
+            eq(themeMembers.consultationId, filters.consultation_id),
+            eq(themes.userId, userId),
+            eq(meetings.userId, userId),
+            filters.meeting_id ? eq(meetings.id, filters.meeting_id) : undefined
+          )
+        )
+        .limit(DEFAULT_LIMIT);
+      return { intent, summary: { themes: rows } };
+    }
+
+    case "evidence_search": {
+      const keyword = filters.keyword?.trim();
+      if (!keyword) return { error: "Evidence search needs a keyword." };
+      const rows = await db
+        .select({
+          quote_text: quotes.exactText,
+          speaker: quotes.speakerLabel,
+          meeting_title: meetings.title,
+        })
+        .from(quotes)
+        .innerJoin(meetings, eq(meetings.id, quotes.meetingId))
+        .where(
+          and(
+            eq(meetings.consultationId, filters.consultation_id),
+            eq(meetings.userId, userId),
+            ilike(quotes.exactText, `%${keyword}%`)
+          )
+        )
+        .limit(DEFAULT_LIMIT);
+      return { intent, summary: { keyword, evidence: rows } };
+    }
+
+    case "people_roster": {
+      const rows = await db
+        .select({
+          person_id: people.id,
+          person_name: people.name,
+          meeting_id: meetings.id,
+          meeting_title: meetings.title,
+        })
+        .from(meetingPeople)
+        .innerJoin(meetings, eq(meetings.id, meetingPeople.meetingId))
+        .innerJoin(people, eq(people.id, meetingPeople.personId))
+        .where(
+          and(
+            eq(meetings.consultationId, filters.consultation_id),
+            eq(meetings.userId, userId),
+            eq(people.userId, userId)
+          )
+        )
+        .limit(DEFAULT_LIMIT);
+      return { intent, summary: { people: rows } };
+    }
+
+    case "report_status": {
+      const rows = await db
+        .select({
+          id: consultationOutputArtifacts.id,
+          title: consultationOutputArtifacts.title,
+          status: consultationOutputArtifacts.status,
+          generated_at: consultationOutputArtifacts.generatedAt,
+        })
+        .from(consultationOutputArtifacts)
+        .where(
+          and(
+            eq(consultationOutputArtifacts.consultationId, filters.consultation_id),
+            eq(consultationOutputArtifacts.userId, userId),
+            eq(consultationOutputArtifacts.artifactType, "report")
+          )
+        )
+        .orderBy(desc(consultationOutputArtifacts.generatedAt))
+        .limit(DEFAULT_LIMIT);
+      return { intent, summary: { reports: rows } };
+    }
+
+    case "audit_summary": {
+      const rows = await db
+        .select({
+          action: auditLog.action,
+          entity_type: auditLog.entityType,
+          created_at: auditLog.createdAt,
+        })
+        .from(auditLog)
+        .leftJoin(meetings, eq(meetings.id, auditLog.meetingId))
+        .where(
+          and(
+            eq(auditLog.userId, userId),
+            or(
+              eq(meetings.consultationId, filters.consultation_id),
+              and(
+                eq(auditLog.entityType, "consultation"),
+                eq(auditLog.entityId, filters.consultation_id)
+              ),
+              sql`${auditLog.payload} ->> 'consultation_id' = ${filters.consultation_id}`,
+              sql`${auditLog.payload} ->> 'consultationId' = ${filters.consultation_id}`
+            )
+          )
+        )
+        .orderBy(desc(auditLog.createdAt))
+        .limit(DEFAULT_LIMIT);
+      return { intent, summary: { events: rows } };
+    }
+
     case "count_themes_by_keyword": {
       const kw = filters.keyword ?? "";
       const rows = await db

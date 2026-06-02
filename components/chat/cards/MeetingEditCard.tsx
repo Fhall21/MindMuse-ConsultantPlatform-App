@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { readMeetingEditOutput } from "@/lib/chat/tools/meeting-edit";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
+import { notifyCardConfirmation } from "./notify-card-confirmation";
 import type { ChatCardProps } from "./types";
 
 export function MeetingEditCard({ tool, messageId, sessionId, onUpdated }: ChatCardProps) {
@@ -22,6 +23,9 @@ export function MeetingEditCard({ tool, messageId, sessionId, onUpdated }: ChatC
   );
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  const hasChanges =
+    Boolean(title.trim() && title.trim() !== data?.title) ||
+    Boolean(date && date !== (data?.meeting_date ?? "").slice(0, 10));
 
   if (tool.status === "error") {
     return (
@@ -81,6 +85,7 @@ export function MeetingEditCard({ tool, messageId, sessionId, onUpdated }: ChatC
         throw new Error((json as { detail?: string }).detail ?? "Failed to update meeting");
       }
 
+      await notifyCardConfirmation(sessionId, "meeting_updated", tool.toolResultId);
       setCompleted(true);
       onUpdated?.();
     } catch (err) {
@@ -101,7 +106,7 @@ export function MeetingEditCard({ tool, messageId, sessionId, onUpdated }: ChatC
         <Button
           type="button"
           size="sm"
-          disabled={confirming}
+          disabled={confirming || !hasChanges}
           onClick={handleConfirm}
         >
           {confirming ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : null}

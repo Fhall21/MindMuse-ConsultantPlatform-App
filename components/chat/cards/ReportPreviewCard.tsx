@@ -12,6 +12,7 @@ import {
 } from "@/lib/chat/onboarding-copy";
 import { readReportDraftReviewOutput } from "@/lib/chat/tools/async-actions";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
+import { notifyCardConfirmation } from "./notify-card-confirmation";
 import type { ChatCardProps } from "./types";
 
 export function ReportPreviewCard({
@@ -73,6 +74,7 @@ export function ReportPreviewCard({
         const data = (await response.json().catch(() => null)) as { detail?: string } | null;
         throw new Error(data?.detail ?? "Could not save report");
       }
+      await notifyCardConfirmation(sessionId, "report_saved");
       setCompleted(true);
       onUpdated?.();
     } catch (saveError) {

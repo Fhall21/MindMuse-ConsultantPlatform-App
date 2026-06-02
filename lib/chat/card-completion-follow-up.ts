@@ -5,6 +5,7 @@ import {
 import { insertChatMessage } from "./persist";
 import { readQuoteReviewOutput } from "./tools/quotes";
 import { readThemeReviewOutput } from "./tools/themes";
+import { getCardConfirmationMessage } from "./card-confirmation-copy";
 
 export function resolveCardCompletionFollowUp(
   toolName: string,
@@ -15,6 +16,8 @@ export function resolveCardCompletionFollowUp(
       return readThemeReviewOutput(output) ? THEME_REVIEW_DONE_FOLLOW_UP : null;
     case "identify_quotes":
       return readQuoteReviewOutput(output) ? QUOTE_REVIEW_DONE_FOLLOW_UP : null;
+    case "generate_research_questions":
+      return getCardConfirmationMessage("research_questions_saved");
     default:
       return null;
   }

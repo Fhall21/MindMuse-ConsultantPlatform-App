@@ -7,6 +7,7 @@ import {
 import {
   insertChatMessage,
   insertToolResult,
+  loadToolResultsForSession,
   updateChatMessageContent,
 } from "./persist";
 import { buildMeetingDraftFromExtractedText } from "./intake-draft";
@@ -31,7 +32,7 @@ import {
 } from "./tools/themes";
 import { selectMeetingForThemesSchema } from "./tools/meetings-picker";
 import { identifyQuotesSchema } from "./tools/quotes";
-import { extractAndPersistThemes, finalizeThemeReview } from "./themes-db";
+import { finalizeThemeReview } from "./themes-db";
 import { identifyAndPersistQuotes } from "./quotes-db";
 import { buildCanvasLayoutPreview } from "./canvas-preview";
 import { executeGroupThemesTool, executeLinkInsightsToGroupTool } from "./grouping-db";
@@ -62,6 +63,12 @@ import {
   type CanvasOperationProposal,
 } from "./tools/canvas-manipulate";
 import { queryConsultationDataSchema } from "./tools/analytics";
+import { prepareLiteratureReviewSchema } from "./tools/literature-review";
+import {
+  attachMeetingNoteSchema,
+  bulkDismissPendingSchema,
+  unlinkPersonFromMeetingSchema,
+} from "./tools/nl-actions";
 import { executeConsultationQuery } from "./queries/consultation-analytics";
 import {
   listMeetingsForConsultation,
@@ -72,7 +79,13 @@ import {
 } from "@/lib/data/domain-read";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { insights, consultationOutputArtifacts, meetings as meetingsTable } from "@/db/schema";
+import {
+  insights,
+  consultationOutputArtifacts,
+  meetingPeople,
+  meetings as meetingsTable,
+  people,
+} from "@/db/schema";
 import { getUnarchivedSessionForUser } from "./context";
 import {
   buildMeetingPickerOutput,
@@ -1175,11 +1188,119 @@ export function createChatTools(context: ChatToolRuntimeContext) {
 
     query_consultation_data: tool({
       description:
-        "Answer analytical questions about the consultation using confirmed DB records only. Use for 'how many', 'which group has most', 'what did [person] say about [topic]', 'compare meetings', 'who is mentioned most' queries. Never hallucinate — only report what the query returns.",
+        "Answer factual questions about the owned consultation using confirmed DB records only. Use for status, themes, evidence, people roster, reports, audit, counts, comparisons, and quote queries. Never hallucinate — only report what the query returns.",
       inputSchema: queryConsultationDataSchema,
       execute: async (input) => {
         const parsed = queryConsultationDataSchema.parse(input);
-        return executeConsultationQuery(parsed);
+        return executeConsultationQuery(parsed, context.userId);
+      },
+    }),
+
+    prepare_literature_review: tool({
+      description:
+        "Prepare an editable literature-review launch card whenever the user gives a discernible research topic. Population, industry, and setting are optional card refinements; do not block launch to ask for them. Ask one focused question only when the topic itself is missing.",
+      inputSchema: prepareLiteratureReviewSchema,
+      execute: async (input) => {
+        const parsed = prepareLiteratureReviewSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+        const proposal = {
+          query: parsed.query,
+          industry_ctx: parsed.industry_ctx ?? null,
+        };
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "prepare_literature_review",
+          input: payload,
+          output: proposal,
+          status: "pending",
+        });
+
+        return { ...proposal, tool_result_id: toolResult.id };
+      },
+    }),
+
+    attach_meeting_note: tool({
+      description:
+        "Prepare an editable card to append a short note to an owned meeting. Use only when the meeting is clear.",
+      inputSchema: attachMeetingNoteSchema,
+      execute: async (input) => {
+        const parsed = attachMeetingNoteSchema.parse(input);
+        const meeting = await getMeetingForUser(parsed.meeting_id, context.userId);
+        if (!meeting) return { error: "Meeting not found. Ask which meeting to update." };
+
+        const proposal = {
+          meeting_id: parsed.meeting_id,
+          meeting_title: meeting.title,
+          note: parsed.note,
+        };
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "attach_meeting_note",
+          input: parsed as unknown as Record<string, unknown>,
+          output: proposal,
+          status: "pending",
+        });
+        return { ...proposal, tool_result_id: toolResult.id };
+      },
+    }),
+
+    unlink_person_from_meeting: tool({
+      description:
+        "Prepare a confirmation card to unlink a person from one meeting. If meeting_id is unclear or absent, return the clarification error and ask which meeting before retrying.",
+      inputSchema: unlinkPersonFromMeetingSchema,
+      execute: async (input) => {
+        const parsed = unlinkPersonFromMeetingSchema.parse(input);
+        if (!parsed.meeting_id) {
+          return { error: "Ask which meeting to unlink the person from." };
+        }
+        const meeting = await getMeetingForUser(parsed.meeting_id, context.userId);
+        if (!meeting) return { error: "Meeting not found. Ask which meeting to use." };
+        const linkedPeople = await db
+          .select({ id: people.id, name: people.name })
+          .from(meetingPeople)
+          .innerJoin(people, eq(people.id, meetingPeople.personId))
+          .where(
+            and(
+              eq(meetingPeople.meetingId, parsed.meeting_id),
+              eq(people.userId, context.userId)
+            )
+          );
+        const proposal = {
+          meeting_id: parsed.meeting_id,
+          meeting_title: meeting.title,
+          person_name_hint: parsed.person_name_hint,
+          people: linkedPeople,
+        };
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "unlink_person_from_meeting",
+          input: parsed as unknown as Record<string, unknown>,
+          output: proposal,
+          status: "pending",
+        });
+        return { ...proposal, tool_result_id: toolResult.id };
+      },
+    }),
+
+    bulk_dismiss_pending: tool({
+      description:
+        "Prepare a warning card to dismiss up to 10 pending chat items. This is destructive and requires card confirmation.",
+      inputSchema: bulkDismissPendingSchema,
+      execute: async (input) => {
+        const parsed = bulkDismissPendingSchema.parse(input);
+        const pending = (await loadToolResultsForSession(context.sessionId))
+          .filter((result) => result.status === "pending")
+          .slice(0, parsed.limit ?? 10)
+          .map((result) => ({ id: result.id, tool_name: result.toolName }));
+        const proposal = { items: pending };
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "bulk_dismiss_pending",
+          input: parsed as unknown as Record<string, unknown>,
+          output: proposal,
+          status: "pending",
+        });
+        return { ...proposal, tool_result_id: toolResult.id };
       },
     }),
 

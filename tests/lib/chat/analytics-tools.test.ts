@@ -64,8 +64,8 @@ describe("Query limits", () => {
 // ── ANALYTICS_INTENTS coverage ────────────────────────────────────────────────
 
 describe("ANALYTICS_INTENTS", () => {
-  it("covers all 8 intents", () => {
-    expect(ANALYTICS_INTENTS).toHaveLength(8);
+  it("covers analytical and grounded read intents", () => {
+    expect(ANALYTICS_INTENTS).toHaveLength(14);
   });
 
   it("includes cross_meeting_themes", () => {
@@ -74,6 +74,15 @@ describe("ANALYTICS_INTENTS", () => {
 
   it("includes group_outlier_themes", () => {
     expect(ANALYTICS_INTENTS).toContain("group_outlier_themes");
+  });
+
+  it("includes consultation read intents", () => {
+    expect(ANALYTICS_INTENTS).toContain("consultation_status");
+    expect(ANALYTICS_INTENTS).toContain("meeting_themes");
+    expect(ANALYTICS_INTENTS).toContain("evidence_search");
+    expect(ANALYTICS_INTENTS).toContain("people_roster");
+    expect(ANALYTICS_INTENTS).toContain("report_status");
+    expect(ANALYTICS_INTENTS).toContain("audit_summary");
   });
 });
 
@@ -149,7 +158,7 @@ describe("executeConsultationQuery — invalid intent handling", () => {
     const result = await executeConsultationQuery({
       intent: "totally_unknown" as unknown as AnalyticsIntent,
       filters: { consultation_id: "11111111-1111-4111-8111-111111111111" },
-    });
+    }, "user-1");
     expect(result).toHaveProperty("error");
     expect((result as { error: string }).error).toMatch(/unknown intent: totally_unknown/);
     expect((result as { error: string }).error).toMatch(/valid values are/);
@@ -166,6 +175,21 @@ describe("executeConsultationQuery — output shapes", () => {
     vi.mocked(db.select).mockReturnValue(createChainMock([]));
   });
 
+  it("rejects consultation IDs not owned by the current user", async () => {
+    const { db } = await import("@/db/client");
+    vi.mocked(db.select).mockReturnValue(createChainMock([]));
+
+    await expect(
+      executeConsultationQuery(
+        {
+          intent: "consultation_status",
+          filters: { consultation_id: CONSULTATION_ID },
+        },
+        "user-1"
+      )
+    ).resolves.toEqual({ error: "Consultation not found." });
+  });
+
   it("count_themes_by_keyword returns count + matching_labels", async () => {
     const { db } = await import("@/db/client");
     vi.mocked(db.select).mockReturnValue(
@@ -178,7 +202,7 @@ describe("executeConsultationQuery — output shapes", () => {
     const result = await executeConsultationQuery({
       intent: "count_themes_by_keyword",
       filters: { consultation_id: CONSULTATION_ID, keyword: "power" },
-    });
+    }, "user-1");
 
     expect(result).toHaveProperty("intent", "count_themes_by_keyword");
     expect((result as { summary: Record<string, unknown> }).summary).toMatchObject({
@@ -199,7 +223,7 @@ describe("executeConsultationQuery — output shapes", () => {
     const result = await executeConsultationQuery({
       intent: "group_theme_count",
       filters: { consultation_id: CONSULTATION_ID },
-    });
+    }, "user-1");
 
     const { summary } = result as unknown as { summary: { groups: { name: string; theme_count: number }[] } };
     expect(summary.groups).toHaveLength(2);
@@ -217,7 +241,7 @@ describe("executeConsultationQuery — output shapes", () => {
     const result = await executeConsultationQuery({
       intent: "quotes_by_meeting",
       filters: { consultation_id: CONSULTATION_ID },
-    });
+    }, "user-1");
 
     const { summary } = result as unknown as { summary: { meetings: { title: string; quote_count: number }[] } };
     expect(summary.meetings[0]).toMatchObject({ title: "July session", quote_count: 23 });
@@ -236,7 +260,7 @@ describe("executeConsultationQuery — output shapes", () => {
     const result = await executeConsultationQuery({
       intent: "person_mention_count",
       filters: { consultation_id: CONSULTATION_ID },
-    });
+    }, "user-1");
 
     const { summary } = result as unknown as { summary: { speakers: { name: string; count: number }[] } };
     expect(summary.speakers[0]).toMatchObject({ name: "Felix", count: 12 });
@@ -253,7 +277,7 @@ describe("executeConsultationQuery — output shapes", () => {
     const result = await executeConsultationQuery({
       intent: "themes_by_person",
       filters: { consultation_id: CONSULTATION_ID, keyword: "accountability", person_id: "Felix" },
-    });
+    }, "user-1");
 
     const { summary } = result as unknown as {
       summary: { quotes: { text: string; speaker: string; meeting: string }[] };
@@ -277,7 +301,7 @@ describe("executeConsultationQuery — output shapes", () => {
     const result = await executeConsultationQuery({
       intent: "group_outlier_themes",
       filters: { consultation_id: CONSULTATION_ID },
-    });
+    }, "user-1");
 
     const { summary } = result as unknown as { summary: Record<string, unknown> };
     expect(summary).toHaveProperty("least_similar_pairs");
@@ -302,7 +326,7 @@ describe("executeConsultationQuery — output shapes", () => {
     const result = await executeConsultationQuery({
       intent: "meeting_activity_summary",
       filters: { consultation_id: CONSULTATION_ID },
-    });
+    }, "user-1");
 
     const { summary } = result as unknown as {
       summary: {

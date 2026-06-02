@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { readThemeEditOutput } from "@/lib/chat/tools/theme-edit";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
+import { notifyCardConfirmation } from "./notify-card-confirmation";
 import type { ChatCardProps } from "./types";
 
 export function ThemeEditCard({ tool, messageId, sessionId, onUpdated }: ChatCardProps) {
@@ -69,6 +70,7 @@ export function ThemeEditCard({ tool, messageId, sessionId, onUpdated }: ChatCar
         throw new Error((json as { detail?: string }).detail ?? "Failed to update theme");
       }
 
+      await notifyCardConfirmation(sessionId, "theme_updated", tool.toolResultId);
       setCompleted(true);
       onUpdated?.();
     } catch (err) {

@@ -15,6 +15,7 @@ export const CARD_CONFIRMATION_ACTIONS = [
   "literature_review_started",
   "person_unlinked",
   "pending_items_dismissed",
+  "meeting_note_attached",
 ] as const;
 
 export type CardConfirmationAction = (typeof CARD_CONFIRMATION_ACTIONS)[number];
@@ -37,6 +38,7 @@ const CARD_CONFIRMATION_MESSAGES: Record<CardConfirmationAction, string> = {
     "Literature review started. I'll use the refined question and show progress in research.",
   person_unlinked: "Person unlinked. That meeting connection has been removed.",
   pending_items_dismissed: "Pending items dismissed. I'll leave those out of the next steps.",
+  meeting_note_attached: "Meeting note saved. I'll keep it with the meeting context.",
 };
 
 export function getCardConfirmationMessage(action: CardConfirmationAction): string {

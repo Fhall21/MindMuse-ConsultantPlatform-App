@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { readCanvasOperationProposal } from "@/lib/chat/tools/canvas-manipulate";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
+import { notifyCardConfirmation } from "./notify-card-confirmation";
 import type { ChatCardProps } from "./types";
 
 export function CanvasOperationCard({ tool, messageId, sessionId, onUpdated }: ChatCardProps) {
@@ -112,6 +113,7 @@ export function CanvasOperationCard({ tool, messageId, sessionId, onUpdated }: C
         }
       }
 
+      await notifyCardConfirmation(sessionId, "canvas_updated", tool.toolResultId);
       setCompleted(true);
       onUpdated?.();
     } catch (err) {

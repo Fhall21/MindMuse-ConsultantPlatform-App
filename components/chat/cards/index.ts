@@ -23,6 +23,10 @@ import { AuditTrailCard } from "./AuditTrailCard";
 import { ReportExportCard } from "./ReportExportCard";
 // Sprint 22 Task 04
 import { CanvasOperationCard } from "./CanvasOperationCard";
+import { LiteratureReviewStartCard } from "./LiteratureReviewStartCard";
+import { PersonUnlinkCard } from "./PersonUnlinkCard";
+import { BulkDismissPendingCard } from "./BulkDismissPendingCard";
+import { MeetingNoteCard } from "./MeetingNoteCard";
 import type { ChatCardProps } from "./types";
 
 export type ChatCardComponent = ComponentType<ChatCardProps>;
@@ -54,6 +58,10 @@ export const CHAT_CARD_MAP: Record<string, ChatCardComponent> = {
   export_report: ReportExportCard,
   // Sprint 22 Task 04
   manipulate_canvas: CanvasOperationCard,
+  prepare_literature_review: LiteratureReviewStartCard,
+  attach_meeting_note: MeetingNoteCard,
+  unlink_person_from_meeting: PersonUnlinkCard,
+  bulk_dismiss_pending: BulkDismissPendingCard,
 };
 
 export function resolveChatCard(toolName: string): ChatCardComponent {

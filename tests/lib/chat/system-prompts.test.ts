@@ -39,7 +39,7 @@ describe("lib/chat/system-prompts", () => {
   it("uses minimal returning base without sub-prompt blocks", () => {
     const prompt = buildDynamicSystemPrompt(returningState, null);
     expect(prompt).toContain("Be warm, practical, and concise");
-    expect(prompt).toContain("intake_text_transcript, intake_audio_transcript, intake_notes");
+    expect(prompt).toContain("intake_text_transcript, intake_audio_transcript, or intake_notes");
     expect(prompt).not.toContain("Create consultation");
   });
 
@@ -65,9 +65,12 @@ describe("lib/chat/system-prompts", () => {
     expect(prompt).toContain("intake_text_transcript");
     expect(prompt).toContain("extract_themes");
     expect(prompt).toContain("select_meeting_for_themes");
-    expect(prompt).toContain("Never ask for an existing transcript again");
-    expect(prompt).toContain("Meeting save happens in the card UI");
-    expect(prompt).toContain("never call confirm_meeting or link_people");
+    expect(prompt).toContain("MeetingConfirmationCard");
+    expect(prompt).toContain("MeetingPickerCard");
+    expect(prompt).toContain("NEVER ask the user to re-paste or re-upload a transcript");
+    expect(prompt).toContain("NEVER write meeting fields as markdown");
+    expect(prompt).toContain("NEVER call confirm_meeting or link_people");
+    expect(prompt).toContain("ThemeReviewCard renders from the pending tool result");
   });
 });
 
@@ -87,18 +90,24 @@ describe("lib/chat/system-prompts - conversational grounding", () => {
   });
 
   it("routes representative grounded reads", () => {
-    expect(prompt).toContain("query_consultation_data: meeting_themes");
-    expect(prompt).toContain("query_consultation_data: consultation_status");
-    expect(prompt).toContain("query_consultation_data: evidence_search");
-    expect(prompt).toContain("query_consultation_data: people_roster");
-    expect(prompt).toContain("query_consultation_data: report_status");
-    expect(prompt).toContain("query_consultation_data: audit_summary");
+    expect(prompt).toContain("How many meetings are in this consultation?");
+    expect(prompt).toContain("Remove Felix from this consultation");
+    expect(prompt).toContain("Start a literature review on factors");
+    expect(prompt).toContain("call query_consultation_data with intent meeting_themes");
+    expect(prompt).toContain("call query_consultation_data with intent consultation_status");
+    expect(prompt).toContain("call query_consultation_data with intent evidence_search");
+    expect(prompt).toContain("call query_consultation_data with intent people_roster");
+    expect(prompt).toContain("call query_consultation_data with intent report_status");
+    expect(prompt).toContain("call query_consultation_data with intent audit_summary");
   });
 
   it("routes representative writes by risk", () => {
     expect(prompt).toContain("attach_meeting_note");
+    expect(prompt).toContain("Acknowledge the returned meeting title");
     expect(prompt).toContain("unlink_person_from_meeting");
+    expect(prompt).toContain("PersonUnlinkCard owns confirmation");
     expect(prompt).toContain("bulk_dismiss_pending");
+    expect(prompt).toContain("BulkDismissPendingCard owns confirmation and caps the batch at 10");
     expect(prompt).toContain("confirmation card");
   });
 
@@ -106,6 +115,7 @@ describe("lib/chat/system-prompts - conversational grounding", () => {
     expect(prompt).toContain("bad boss");
     expect(prompt).toContain("prepare_literature_review");
     expect(prompt).toContain("Population, industry, and setting are optional refinements");
+    expect(prompt).toContain("NEVER claim a search started until the user confirms the card");
   });
 });
 

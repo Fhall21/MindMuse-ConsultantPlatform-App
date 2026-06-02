@@ -80,6 +80,7 @@ import {
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
+  auditLog,
   insights,
   consultationOutputArtifacts,
   meetingPeople,
@@ -1221,12 +1222,34 @@ export function createChatTools(context: ChatToolRuntimeContext) {
 
     attach_meeting_note: tool({
       description:
-        "Prepare an editable card to append a short note to an owned meeting. Use only when the meeting is clear.",
+        "Append a short note to an owned meeting immediately. Use only when the meeting is clear.",
       inputSchema: attachMeetingNoteSchema,
       execute: async (input) => {
         const parsed = attachMeetingNoteSchema.parse(input);
         const meeting = await getMeetingForUser(parsed.meeting_id, context.userId);
         if (!meeting) return { error: "Meeting not found. Ask which meeting to update." };
+
+        const existingNotes = meeting.notes?.trim();
+        const notes = existingNotes ? `${existingNotes}\n\n${parsed.note}` : parsed.note;
+
+        await db
+          .update(meetingsTable)
+          .set({ notes, updatedAt: new Date() })
+          .where(
+            and(
+              eq(meetingsTable.id, parsed.meeting_id),
+              eq(meetingsTable.userId, context.userId)
+            )
+          );
+
+        await db.insert(auditLog).values({
+          meetingId: parsed.meeting_id,
+          action: "meeting_note_attached",
+          entityType: "meeting",
+          entityId: parsed.meeting_id,
+          payload: { note: parsed.note },
+          userId: context.userId,
+        });
 
         const proposal = {
           meeting_id: parsed.meeting_id,
@@ -1238,7 +1261,7 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           toolName: "attach_meeting_note",
           input: parsed as unknown as Record<string, unknown>,
           output: proposal,
-          status: "pending",
+          status: "success",
         });
         return { ...proposal, tool_result_id: toolResult.id };
       },

@@ -78,6 +78,8 @@ describe("NodeDetailPanel", () => {
         roundId="round-1"
         onQuickTypeSelect={quickTypeSelect}
         onUngroupInsight={vi.fn()}
+        onSaveThemeGroup={vi.fn()}
+        onDeleteThemeGroup={vi.fn()}
         onClose={vi.fn()}
       />
     );

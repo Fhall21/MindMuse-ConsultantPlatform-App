@@ -67,6 +67,8 @@ function makeGraphRef(
       })),
       applyPositions: vi.fn(),
       getLayoutSavePending: vi.fn(() => false),
+      revertNodes: vi.fn(),
+      cancelPendingLayout: vi.fn(),
       ...overrides,
     },
   };

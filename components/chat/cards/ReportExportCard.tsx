@@ -14,6 +14,7 @@ import {
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { readReportExportOutput } from "@/lib/chat/tools/report-export";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
+import { notifyCardConfirmation } from "./notify-card-confirmation";
 import type { ChatCardProps } from "./types";
 
 type ExportFormat = "pdf" | "docx" | "markdown";
@@ -79,13 +80,7 @@ export function ReportExportCard({ tool, messageId, sessionId, onUpdated }: Chat
         ? `/api/reports/${data.report_id}/export/docx`
         : format === "markdown"
           ? `/api/reports/${data.report_id}/export/markdown`
-          : null;
-
-    if (!endpoint) {
-      setError("PDF export is not available in this version.");
-      setPending(confirmKey, false);
-      return;
-    }
+          : `/api/reports/${data.report_id}/export`;
 
     try {
       const response = await fetch(endpoint, {
@@ -107,6 +102,7 @@ export function ReportExportCard({ tool, messageId, sessionId, onUpdated }: Chat
       a.remove();
       URL.revokeObjectURL(url);
 
+      await notifyCardConfirmation(sessionId, "report_exported", tool.toolResultId);
       setCompleted(true);
       onUpdated?.();
     } catch (err) {

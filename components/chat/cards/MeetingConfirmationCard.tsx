@@ -36,8 +36,23 @@ import {
 } from "@/lib/chat/onboarding-copy";
 import { toDateInputValue, toIsoDate } from "@/lib/meetings/meeting-date";
 import { splitParticipantSuggestions } from "@/lib/meetings/participant-suggestions";
-import type { Person } from "@/types/db";
+import type { Consultation, Person } from "@/types/db";
 import { readMeetingDraft, type ChatCardProps } from "./types";
+
+/** Stable fallbacks while react-query data is undefined (avoids `= []` new ref each render). */
+const EMPTY_CONSULTATIONS: Consultation[] = [];
+const EMPTY_PEOPLE: Person[] = [];
+
+function samePersonIds(left: Person[], right: Person[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((person, index) => person.id === right[index]?.id)
+  );
+}
+
+function sameStringList(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
 
 function buildPersistedDraft(params: {
   title: string;
@@ -68,9 +83,10 @@ export function MeetingConfirmationCard({
   onUpdated,
 }: ChatCardProps) {
   const initialDraft = useMemo(() => readMeetingDraft(tool.output), [tool.output]);
-  const { data: consultations = [], isLoading: consultationsLoading } = useConsultations();
+  const { data: consultations = EMPTY_CONSULTATIONS, isLoading: consultationsLoading } =
+    useConsultations();
   const { data: meetingTypes = [] } = useMeetingTypes();
-  const { data: allPeople = [] } = usePeople();
+  const { data: allPeople = EMPTY_PEOPLE } = usePeople();
   const { isPending, setPending } = useCardConfirm();
   const confirmKey = `confirm-meeting:${messageId}`;
 
@@ -99,17 +115,26 @@ export function MeetingConfirmationCard({
     }
 
     if (initialDraft.project_id) {
-      setProjectId(initialDraft.project_id);
+      setProjectId((current) =>
+        current === initialDraft.project_id ? current : initialDraft.project_id!
+      );
     }
     if (initialDraft.meeting_type_id) {
-      setMeetingTypeId(initialDraft.meeting_type_id);
+      setMeetingTypeId((current) =>
+        current === initialDraft.meeting_type_id ? current : initialDraft.meeting_type_id!
+      );
     }
-    setMeetingDate(toDateInputValue(initialDraft.date));
+    const nextMeetingDate = toDateInputValue(initialDraft.date);
+    setMeetingDate((current) => (current === nextMeetingDate ? current : nextMeetingDate));
 
     const { suggestedExisting, suggestedNewNames: unmatchedNames } =
       splitParticipantSuggestions(initialDraft.participants, allPeople);
-    setSuggestedExistingPeople(suggestedExisting);
-    setSuggestedNewNames(unmatchedNames);
+    setSuggestedExistingPeople((current) =>
+      samePersonIds(current, suggestedExisting) ? current : suggestedExisting
+    );
+    setSuggestedNewNames((current) =>
+      sameStringList(current, unmatchedNames) ? current : unmatchedNames
+    );
 
     if (!autoFilledPeopleRef.current && suggestedExisting.length > 0) {
       autoFilledPeopleRef.current = true;
@@ -147,7 +172,7 @@ export function MeetingConfirmationCard({
 
   useEffect(() => {
     if (!titleManuallyEdited) {
-      setTitle(generatedTitle);
+      setTitle((current) => (current === generatedTitle ? current : generatedTitle));
     }
   }, [generatedTitle, titleManuallyEdited]);
 
@@ -351,7 +376,9 @@ export function MeetingConfirmationCard({
           </p>
           <Select
             value={projectId || undefined}
-            onValueChange={setProjectId}
+            onValueChange={(value) => {
+              setProjectId((current) => (current === value ? current : value));
+            }}
             disabled={consultationsLoading || consultations.length === 0}
           >
             <SelectTrigger id={`meeting-project-${messageId}`} className="h-9">

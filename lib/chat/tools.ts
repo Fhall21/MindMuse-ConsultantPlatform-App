@@ -1377,19 +1377,23 @@ export function createChatTools(context: ChatToolRuntimeContext) {
 
     ask_user_choice: tool({
       description:
-        "Present one or more multiple-choice questions to the user for quick clarification. Use single mode when one answer applies; multi when several may apply. Questions paginate one at a time. Submission acts as a user reply — the model receives the formatted answers.",
+        "In-chat multiple choice or quick confirmation — NOT literature review. Use for: reflective MCQ grounded in this consultation (call query_consultation_data first when needed); yes/no or proceed confirmations; disambiguation (did you mean X or Y). Set context (short label). Per question: purpose confirm|disambiguate|explore; mode single for confirm/disambiguate; 2–8 options. User submission returns as [User choice] — you must synthesize and continue in prose.",
       inputSchema: askUserChoiceSchema,
       execute: async (input) => {
         const parsed = askUserChoiceSchema.parse(input);
         const payload = parsed as unknown as Record<string, unknown>;
+        const output = {
+          questions: parsed.questions,
+          ...(parsed.context ? { context: parsed.context } : {}),
+        };
         const toolResult = await persistToolExecution({
           context,
           toolName: "ask_user_choice",
           input: payload,
-          output: { questions: parsed.questions },
+          output,
           status: "pending",
         });
-        return { questions: parsed.questions, tool_result_id: toolResult.id };
+        return { ...output, tool_result_id: toolResult.id };
       },
     }),
 

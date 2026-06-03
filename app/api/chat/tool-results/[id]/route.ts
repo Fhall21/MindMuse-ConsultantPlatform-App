@@ -33,6 +33,7 @@ import {
   researchQuestionSchema,
 } from "@/lib/chat/tools/async-actions";
 import { mergeMeetingActionSelection } from "@/lib/chat/tools/meeting-action";
+import { readAskChoiceQuestions } from "@/lib/chat/tools/ask-choice";
 
 const themeDecisionSchema = z.enum(["accepted", "rejected"]);
 
@@ -63,6 +64,7 @@ const patchSchema = z.object({
   linked_themes: z.array(z.record(z.string(), z.unknown())).optional(),
   title: z.string().optional(),
   generated_at: z.string().optional(),
+  choice_reply_text: z.string().optional(),
 });
 
 export async function PATCH(
@@ -282,6 +284,15 @@ export async function PATCH(
         ...(parsed.data.generated_at ? { generated_at: parsed.data.generated_at } : {}),
       };
     }
+  }
+
+  if (existing.toolName === "ask_user_choice" && parsed.data.choice_reply_text) {
+    const questions = readAskChoiceQuestions(nextOutput) ?? [];
+    nextOutput = {
+      ...nextOutput,
+      questions,
+      user_reply: parsed.data.choice_reply_text,
+    };
   }
 
   const nextStatus = parsed.data.status ?? existing.status ?? "pending";

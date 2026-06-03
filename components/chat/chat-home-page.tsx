@@ -309,10 +309,14 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   }, [activeProject, messages]);
 
   const sendUserText = useCallback(
-    async (text: string) => {
+    async (text: string): Promise<boolean> => {
       const trimmed = text.trim();
-      if (!trimmed || isBusy) {
-        return;
+      if (!trimmed) {
+        return false;
+      }
+      if (isBusy) {
+        toast.info("Wait for MindMuse to finish responding, then try again.");
+        return false;
       }
 
       setView("chat");
@@ -326,6 +330,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
           },
         }
       );
+      return true;
     },
     [clearError, isBusy, sendMessage]
   );

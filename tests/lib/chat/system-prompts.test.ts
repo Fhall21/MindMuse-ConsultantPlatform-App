@@ -92,7 +92,7 @@ describe("lib/chat/system-prompts - conversational grounding", () => {
   it("routes representative grounded reads", () => {
     expect(prompt).toContain("How many meetings are in this consultation?");
     expect(prompt).toContain("Remove Felix from this consultation");
-    expect(prompt).toContain("Start a literature review on factors");
+    expect(prompt).toContain("Start a literature review on burnout risk factors");
     expect(prompt).toContain("call query_consultation_data with intent meeting_themes");
     expect(prompt).toContain("call query_consultation_data with intent consultation_status");
     expect(prompt).toContain("call query_consultation_data with intent evidence_search");
@@ -116,6 +116,15 @@ describe("lib/chat/system-prompts - conversational grounding", () => {
     expect(prompt).toContain("prepare_literature_review");
     expect(prompt).toContain("Population, industry, and setting are optional refinements");
     expect(prompt).toContain("NEVER claim a search started until the user confirms the card");
+  });
+
+  it("routes structured choice and blocks lit review misfire on self-reflection MCQ", () => {
+    expect(prompt).toContain("ask_user_choice");
+    expect(prompt).toContain("Give me multiple choice");
+    expect(prompt).toContain("Did you mean the July or August meeting");
+    expect(prompt).toContain("Do NOT call prepare_literature_review");
+    expect(prompt).toContain("questions I should ask myself");
+    expect(prompt).toContain("[User choice]");
   });
 });
 

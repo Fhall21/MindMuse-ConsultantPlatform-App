@@ -20,7 +20,8 @@ export interface ChatCardProps {
   messageId: string;
   sessionId?: string | null;
   onUpdated?: () => void;
-  onSubmitText?: (text: string) => void | Promise<void>;
+  /** Returns true when the message was sent to the chat model. */
+  onSubmitText?: (text: string) => boolean | Promise<boolean>;
 }
 
 function readOptionalString(record: Record<string, unknown>, key: string): string | undefined {

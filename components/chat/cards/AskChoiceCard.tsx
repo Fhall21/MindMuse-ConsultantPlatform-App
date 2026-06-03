@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 import { CARD_DISMISSED_COPY } from "@/lib/chat/onboarding-copy";
 import {
   readAskChoiceQuestions,
+  readAskChoiceContext,
   formatChoiceAnswers,
+  askChoiceCardTitle,
   type AskChoiceQuestion,
 } from "@/lib/chat/tools/ask-choice";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
@@ -21,7 +23,9 @@ export function AskChoiceCard({
   onSubmitText,
 }: ChatCardProps) {
   const questions = readAskChoiceQuestions(tool.output);
+  const choiceContext = readAskChoiceContext(tool.output);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Map<string, string[]>>(() => new Map());
   const [otherValues, setOtherValues] = useState<Map<string, string>>(() => new Map());
   const [otherOpen, setOtherOpen] = useState<Map<string, boolean>>(() => new Map());
@@ -127,6 +131,7 @@ export function AskChoiceCard({
   async function handleSubmit() {
     if (!allAnswered() || !sessionId) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const finalAnswers = new Map(answers);
       for (const q of qs) {
@@ -135,18 +140,33 @@ export function AskChoiceCard({
           finalAnswers.set(q.id, [...(finalAnswers.get(q.id) ?? []), otherText]);
         }
       }
-      const text = formatChoiceAnswers(qs, finalAnswers);
+      const text = formatChoiceAnswers(qs, finalAnswers, choiceContext);
+
+      const sent = (await onSubmitText?.(text)) ?? false;
+      if (!sent) {
+        setSubmitError("MindMuse is still responding — wait a moment, then submit again.");
+        return;
+      }
 
       if (toolResultId) {
-        await fetch(`/api/chat/tool-results/${toolResultId}`, {
+        const response = await fetch(`/api/chat/tool-results/${toolResultId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, status: "success" }),
+          body: JSON.stringify({
+            sessionId,
+            status: "success",
+            choice_reply_text: text,
+          }),
         });
+        if (!response.ok) {
+          const json = (await response.json().catch(() => ({}))) as { detail?: string };
+          throw new Error(json.detail ?? "Could not save your response");
+        }
       }
 
       onUpdated?.();
-      await onSubmitText?.(text);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Could not send your response");
     } finally {
       setSubmitting(false);
     }
@@ -165,16 +185,17 @@ export function AskChoiceCard({
   const isOtherOpen = otherOpen.get(current.id) ?? false;
   const selected = selectedFor(current);
 
+  const baseTitle = askChoiceCardTitle(qs);
   const titleNode =
     total > 1 ? (
       <span className="flex items-baseline gap-2">
-        <span>Clarification needed</span>
+        <span>{baseTitle}</span>
         <span className="text-xs font-normal tracking-wide text-muted-foreground">
           {currentIndex + 1}&thinsp;/&thinsp;{total}
         </span>
       </span>
     ) : (
-      "Clarification needed"
+      baseTitle
     );
 
   return (
@@ -182,6 +203,7 @@ export function AskChoiceCard({
       maxWidth="2xl"
       title={titleNode}
       description={current.question}
+      error={submitError}
       onDismiss={handleDismiss}
       dismissDisabled={submitting}
       footer={
@@ -244,6 +266,10 @@ export function AskChoiceCard({
         </div>
       }
     >
+      {choiceContext ? (
+        <p className="text-xs text-muted-foreground">{choiceContext}</p>
+      ) : null}
+
       {/* Mode label */}
       {current.mode === "multi" && (
         <p className="text-xs text-muted-foreground">Select all that apply.</p>

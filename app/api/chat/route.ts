@@ -35,6 +35,7 @@ import {
 } from "@/lib/chat/system-prompts";
 import { loadOnboardingAccountState } from "@/lib/chat/onboarding-state";
 import { sessionTurnIncludesCardTool } from "@/lib/chat/card-tools";
+import { isAskChoiceUserReply } from "@/lib/chat/tools/ask-choice";
 import { createChatTools } from "@/lib/chat/tools";
 import { composeCanvasState } from "@/lib/data/canvas-state";
 import { sanitizeAssistantOutput } from "@/lib/chat/assistant-output";
@@ -234,8 +235,10 @@ export async function POST(request: NextRequest) {
         try {
           const messagesAfterTurn = await loadRecentChatMessages(session.id);
           const cardToolRendered = await sessionTurnIncludesCardTool(messagesAfterTurn);
+          const choiceFollowUp =
+            latestUserText !== null && isAskChoiceUserReply(latestUserText);
 
-          if (text.trim() && !cardToolRendered) {
+          if (text.trim() && (!cardToolRendered || choiceFollowUp)) {
             await insertChatMessage({
               sessionId: session.id,
               role: "assistant",

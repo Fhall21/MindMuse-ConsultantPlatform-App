@@ -31,7 +31,7 @@ interface ChatThreadProps {
   onConsultationSelected?: (consultationId: string) => void;
   onProjectCreated?: (consultationId: string) => void;
   onCardUpdated?: () => void;
-  onSubmitText?: (text: string) => void | Promise<void>;
+  onSubmitText?: (text: string) => boolean | Promise<boolean>;
 }
 
 function getTextFromMessage(message: UIMessage): string {
@@ -67,7 +67,7 @@ function MessageBubble({
   message: UIMessage;
   sessionId: string | null;
   onCardUpdated?: () => void;
-  onSubmitText?: (text: string) => void | Promise<void>;
+  onSubmitText?: (text: string) => boolean | Promise<boolean>;
 }) {
   const toolMeta = getToolMeta(message);
   if (toolMeta) {

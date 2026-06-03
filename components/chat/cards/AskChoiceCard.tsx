@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -16,7 +16,6 @@ import type { ChatCardProps } from "./types";
 
 export function AskChoiceCard({
   tool,
-  messageId,
   sessionId,
   onUpdated,
   onSubmitText,
@@ -31,18 +30,15 @@ export function AskChoiceCard({
   const status = tool.status ?? "pending";
   const toolResultId = tool.toolResultId;
 
-  // suppress unused-variable lint — messageId is passed via ChatCardProps
-  void messageId;
-
   if (!questions) return null;
-  const qs = questions; // narrowed: AskChoiceQuestion[]
+  const qs = questions;
 
   if (status === "success") {
     return (
       <ChatToolCardShell
         success
-        title="Response submitted"
-        description="Your answers were added to the conversation."
+        title="Response recorded"
+        description="Your answer was added to the conversation."
       />
     );
   }
@@ -67,7 +63,10 @@ export function AskChoiceCard({
   }
 
   function hasAnswerFor(q: AskChoiceQuestion): boolean {
-    return selectedFor(q).length > 0 || (otherValues.get(q.id)?.trim() ?? "").length > 0;
+    return (
+      selectedFor(q).length > 0 ||
+      (otherValues.get(q.id)?.trim() ?? "").length > 0
+    );
   }
 
   function allAnswered(): boolean {
@@ -89,19 +88,39 @@ export function AskChoiceCard({
       return next;
     });
     if (mode === "single") {
-      setOtherOpen((prev) => { const n = new Map(prev); n.set(qId, false); return n; });
-      setOtherValues((prev) => { const n = new Map(prev); n.delete(qId); return n; });
+      setOtherOpen((prev) => {
+        const n = new Map(prev);
+        n.set(qId, false);
+        return n;
+      });
+      setOtherValues((prev) => {
+        const n = new Map(prev);
+        n.delete(qId);
+        return n;
+      });
     }
   }
 
   function toggleOther(qId: string, mode: "single" | "multi") {
     const isNowOpen = !(otherOpen.get(qId) ?? false);
-    setOtherOpen((prev) => { const n = new Map(prev); n.set(qId, isNowOpen); return n; });
+    setOtherOpen((prev) => {
+      const n = new Map(prev);
+      n.set(qId, isNowOpen);
+      return n;
+    });
     if (!isNowOpen) {
-      setOtherValues((prev) => { const n = new Map(prev); n.delete(qId); return n; });
+      setOtherValues((prev) => {
+        const n = new Map(prev);
+        n.delete(qId);
+        return n;
+      });
     }
     if (isNowOpen && mode === "single") {
-      setAnswers((prev) => { const n = new Map(prev); n.set(qId, []); return n; });
+      setAnswers((prev) => {
+        const n = new Map(prev);
+        n.set(qId, []);
+        return n;
+      });
     }
   }
 
@@ -144,55 +163,141 @@ export function AskChoiceCard({
   }
 
   const isOtherOpen = otherOpen.get(current.id) ?? false;
+  const selected = selectedFor(current);
+
+  const titleNode =
+    total > 1 ? (
+      <span className="flex items-baseline gap-2">
+        <span>Clarification needed</span>
+        <span className="text-xs font-normal tracking-wide text-muted-foreground">
+          {currentIndex + 1}&thinsp;/&thinsp;{total}
+        </span>
+      </span>
+    ) : (
+      "Clarification needed"
+    );
 
   return (
     <ChatToolCardShell
       maxWidth="2xl"
-      title={total > 1 ? `Question ${currentIndex + 1} of ${total}` : "Quick question"}
+      title={titleNode}
       description={current.question}
+      onDismiss={handleDismiss}
+      dismissDisabled={submitting}
+      footer={
+        <div className="flex w-full items-center justify-between gap-2">
+          {/* Progress dots — only shown when > 1 question */}
+          {total > 1 ? (
+            <div className="flex items-center gap-1.5" aria-hidden>
+              {qs.map((_, i) => (
+                <span
+                  key={i}
+                  className={cn(
+                    "block rounded-full transition-all duration-200",
+                    i === currentIndex
+                      ? "h-1.5 w-4 bg-primary/50"
+                      : i < currentIndex
+                        ? "size-1.5 bg-primary/30"
+                        : "size-1.5 bg-border"
+                  )}
+                />
+              ))}
+            </div>
+          ) : (
+            <span />
+          )}
+
+          <div className="flex items-center gap-2">
+            {!isFirst && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentIndex((i) => i - 1)}
+                disabled={submitting}
+              >
+                <ChevronLeft className="mr-0.5 size-3.5" />
+                Back
+              </Button>
+            )}
+            {isLast ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={!allAnswered() || submitting}
+                onClick={handleSubmit}
+              >
+                {submitting ? "Sending…" : "Submit"}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                disabled={!hasAnswerFor(current)}
+                onClick={() => setCurrentIndex((i) => i + 1)}
+              >
+                Next
+                <ChevronRight className="ml-0.5 size-3.5" />
+              </Button>
+            )}
+          </div>
+        </div>
+      }
     >
-      <div className="flex flex-wrap gap-2 pt-1">
+      {/* Mode label */}
+      {current.mode === "multi" && (
+        <p className="text-xs text-muted-foreground">Select all that apply.</p>
+      )}
+
+      {/* Options */}
+      <div className="flex flex-wrap gap-2">
         {current.options.map((option) => {
-          const isSelected = selectedFor(current).includes(option);
+          const isSelected = selected.includes(option);
           return (
             <button
               key={option}
               type="button"
               onClick={() => toggleOption(current.id, option, current.mode)}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
+                "inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm transition-colors",
                 isSelected
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-background text-foreground hover:bg-muted"
+                  ? "border-primary/40 bg-primary/[0.07] font-medium text-primary hover:bg-primary/10"
+                  : "border-border bg-background text-foreground hover:border-border/80 hover:bg-muted"
               )}
             >
               {current.mode === "multi" && (
                 <span
                   className={cn(
-                    "size-3 shrink-0 rounded-sm border",
-                    isSelected ? "border-primary-foreground bg-primary-foreground/20" : "border-muted-foreground"
+                    "flex size-3.5 shrink-0 items-center justify-center rounded-sm border",
+                    isSelected
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-muted-foreground/40"
                   )}
-                />
+                >
+                  {isSelected && <Check className="size-2.5 stroke-[3]" />}
+                </span>
               )}
               {option}
             </button>
           );
         })}
 
+        {/* Other */}
         <button
           type="button"
           onClick={() => toggleOther(current.id, current.mode)}
           className={cn(
-            "rounded-full border px-3 py-1.5 text-sm transition-colors",
+            "rounded border px-3 py-1.5 text-sm transition-colors",
             isOtherOpen
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-dashed border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+              ? "border-primary/40 bg-primary/[0.07] font-medium text-primary hover:bg-primary/10"
+              : "border-dashed border-border/70 bg-background text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground"
           )}
         >
           Other…
         </button>
       </div>
 
+      {/* Other text input */}
       {isOtherOpen && (
         <Input
           autoFocus
@@ -206,58 +311,8 @@ export function AskChoiceCard({
               return next;
             });
           }}
-          className="mt-3"
         />
       )}
-
-      <div className="mt-4 flex items-center justify-between gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-          onClick={handleDismiss}
-          disabled={submitting}
-        >
-          Dismiss
-        </Button>
-
-        <div className="flex gap-2">
-          {!isFirst && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentIndex((i) => i - 1)}
-              disabled={submitting}
-            >
-              <ChevronLeft className="mr-1 size-3.5" />
-              Back
-            </Button>
-          )}
-
-          {isLast ? (
-            <Button
-              type="button"
-              size="sm"
-              disabled={!allAnswered() || submitting}
-              onClick={handleSubmit}
-            >
-              {submitting ? "Sending…" : "Submit"}
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              disabled={!hasAnswerFor(current)}
-              onClick={() => setCurrentIndex((i) => i + 1)}
-            >
-              Next
-              <ChevronRight className="ml-1 size-3.5" />
-            </Button>
-          )}
-        </div>
-      </div>
     </ChatToolCardShell>
   );
 }

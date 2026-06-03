@@ -29,6 +29,7 @@ export const CHAT_CARD_TOOL_NAMES = new Set<string>([
   "attach_meeting_note",
   "unlink_person_from_meeting",
   "bulk_dismiss_pending",
+  "ask_user_choice",
 ]);
 
 /** Internal agent tools — never render ToolResultFallbackCard in the thread. */

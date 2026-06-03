@@ -27,6 +27,7 @@ import { LiteratureReviewStartCard } from "./LiteratureReviewStartCard";
 import { PersonUnlinkCard } from "./PersonUnlinkCard";
 import { BulkDismissPendingCard } from "./BulkDismissPendingCard";
 import { MeetingNoteCard } from "./MeetingNoteCard";
+import { AskChoiceCard } from "./AskChoiceCard";
 import type { ChatCardProps } from "./types";
 
 export type ChatCardComponent = ComponentType<ChatCardProps>;
@@ -62,6 +63,7 @@ export const CHAT_CARD_MAP: Record<string, ChatCardComponent> = {
   attach_meeting_note: MeetingNoteCard,
   unlink_person_from_meeting: PersonUnlinkCard,
   bulk_dismiss_pending: BulkDismissPendingCard,
+  ask_user_choice: AskChoiceCard,
 };
 
 export function resolveChatCard(toolName: string): ChatCardComponent {

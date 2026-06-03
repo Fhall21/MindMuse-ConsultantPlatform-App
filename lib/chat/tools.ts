@@ -69,6 +69,7 @@ import {
   bulkDismissPendingSchema,
   unlinkPersonFromMeetingSchema,
 } from "./tools/nl-actions";
+import { askUserChoiceSchema } from "./tools/ask-choice";
 import { executeConsultationQuery } from "./queries/consultation-analytics";
 import {
   listMeetingsForConsultation,
@@ -1324,6 +1325,26 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           status: "pending",
         });
         return { ...proposal, tool_result_id: toolResult.id };
+      },
+    }),
+
+    // ── ask_user_choice ───────────────────────────────────────────────────
+
+    ask_user_choice: tool({
+      description:
+        "Present one or more multiple-choice questions to the user for quick clarification. Use single mode when one answer applies; multi when several may apply. Questions paginate one at a time. Submission acts as a user reply — the model receives the formatted answers.",
+      inputSchema: askUserChoiceSchema,
+      execute: async (input) => {
+        const parsed = askUserChoiceSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "ask_user_choice",
+          input: payload,
+          output: { questions: parsed.questions },
+          status: "pending",
+        });
+        return { questions: parsed.questions, tool_result_id: toolResult.id };
       },
     }),
 

@@ -377,10 +377,40 @@ interface LinkQuoteParams {
   linkType?: QuoteLinkType;
 }
 
+async function assertInsightLinkableForQuote(params: {
+  quoteId: string;
+  insightId: string;
+}) {
+  const [row] = await db
+    .select({
+      quoteMeetingId: quotes.meetingId,
+      insightMeetingId: insights.meetingId,
+      accepted: insights.accepted,
+      rejected: insights.rejected,
+    })
+    .from(quotes)
+    .innerJoin(insights, eq(insights.id, params.insightId))
+    .where(eq(quotes.id, params.quoteId))
+    .limit(1);
+
+  if (!row || row.quoteMeetingId !== row.insightMeetingId) {
+    throw new Error("Insight not found for this quote.");
+  }
+
+  if (!row.accepted || row.rejected) {
+    throw new Error("Only accepted insights can be linked to quotes.");
+  }
+}
+
 async function linkQuoteToInsightInternal(params: Required<Omit<LinkQuoteParams, "isPrimary" | "linkType">> & {
   isPrimary: boolean;
   linkType: QuoteLinkType;
 }) {
+  await assertInsightLinkableForQuote({
+    quoteId: params.quoteId,
+    insightId: params.insightId,
+  });
+
   if (params.isPrimary) {
     await db
       .update(quoteInsightLinks)

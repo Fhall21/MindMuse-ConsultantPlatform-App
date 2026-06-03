@@ -1170,7 +1170,7 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
   const insightOptions = useMemo(
     () =>
       themes
-        .filter((theme) => !theme.rejected)
+        .filter((theme) => theme.accepted && !theme.rejected)
         .map((theme) => ({ id: theme.id, label: theme.label })),
     [themes]
   );

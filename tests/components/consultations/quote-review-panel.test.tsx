@@ -8,6 +8,33 @@ import { QuoteReviewPanel } from "@/components/consultations/quote-review-panel"
 const approveQuoteMock = vi.fn();
 const createInsightMock = vi.fn();
 
+const mockThemes = vi.hoisted(() => [
+  {
+    id: "insight-accepted",
+    label: "Accepted theme",
+    accepted: true,
+    rejected: false,
+  },
+  {
+    id: "insight-pending",
+    label: "Pending draft theme",
+    accepted: false,
+    rejected: false,
+  },
+  {
+    id: "insight-rejected",
+    label: "Rejected theme",
+    accepted: false,
+    rejected: true,
+  },
+  {
+    id: "insight-new",
+    label: "Tool handoff friction",
+    accepted: true,
+    rejected: false,
+  },
+]);
+
 const suggestedQuote = {
   id: "quote-1",
   meetingId: "meeting-1",
@@ -53,16 +80,10 @@ vi.mock("@/hooks/use-quotes", () => ({
 
 vi.mock("@/hooks/use-themes", () => ({
   useMeetingThemes: () => ({
-    data: [],
+    data: mockThemes,
     refetch: () =>
       Promise.resolve({
-        data: [
-          {
-            id: "insight-new",
-            label: "Tool handoff friction",
-            rejected: false,
-          },
-        ],
+        data: mockThemes,
       }),
   }),
   useCreateMeetingTheme: () => ({
@@ -90,6 +111,17 @@ describe("QuoteReviewPanel insight linking", () => {
     Element.prototype.scrollIntoView = vi.fn();
     approveQuoteMock.mockReset();
     createInsightMock.mockResolvedValue({ id: "insight-new" });
+  });
+
+  it("shows only accepted insights in the quote link picker", async () => {
+    const user = userEvent.setup();
+    render(<QuoteReviewPanel meetingId="meeting-1" />);
+
+    await user.click(screen.getByRole("button", { name: "Link or create insight (optional)" }));
+
+    expect(screen.getByRole("checkbox", { name: "Link to Accepted theme" })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Link to Pending draft theme" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Link to Rejected theme" })).not.toBeInTheDocument();
   });
 
   it("creates a new insight from quote mode and approves the quote with that primary link", async () => {

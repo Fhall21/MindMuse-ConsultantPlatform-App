@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { inferQuotePendingAction, messageMentionsQuotes } from "./quote-intent";
 
 export const meetingPendingActionSchema = z.enum([
   "identify_quotes",
@@ -27,17 +28,14 @@ export function isMeetingPickerToolName(name: string): name is MeetingPickerTool
 export function defaultPendingActionForPickerTool(
   toolName: MeetingPickerToolName
 ): MeetingPendingAction {
-  return toolName === "select_meeting_for_themes" ? "extract_themes" : "identify_quotes";
+  return toolName === "select_meeting_for_themes" ? "extract_themes" : "show_quotes";
 }
 
 export function inferMeetingPendingAction(userMessage: string): MeetingPendingAction | null {
   const lower = userMessage.toLowerCase();
 
-  if (/\b(show|review|open|highlight|add)\b.*\bquotes?\b|\bquotes?\b.*\b(review|panel|highlight)\b/.test(lower)) {
-    return "show_quotes";
-  }
-  if (/\b(quotes?|key quotes?|extract quotes?|identify quotes?)\b/.test(lower)) {
-    return "identify_quotes";
+  if (messageMentionsQuotes(userMessage)) {
+    return inferQuotePendingAction(userMessage);
   }
   if (/\b(extract|pull|find|identify)\b.*\bthemes?\b|\bthemes?\b.*\b(extract|from)\b/.test(lower)) {
     return "extract_themes";

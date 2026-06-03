@@ -64,7 +64,8 @@ export async function resolveMeetingForConsultationAction(params: {
     return {
       ok: false,
       needsPicker: false,
-      error: "Meeting was already selected. Continue with identify_quotes for that meeting_id.",
+      error:
+        "Meeting was already selected. Continue with show_quotes or identify_quotes using that meeting_id per the user's request.",
     };
   }
 

@@ -7,9 +7,8 @@ import {
 
 describe("meeting pending action", () => {
   it("infers quote and theme intents from user messages", () => {
-    expect(inferMeetingPendingAction("extract key quotes from chat with Jake")).toBe(
-      "identify_quotes"
-    );
+    expect(inferMeetingPendingAction("extract key quotes from chat with Jake")).toBe("show_quotes");
+    expect(inferMeetingPendingAction("identify quotes automatically")).toBe("identify_quotes");
     expect(inferMeetingPendingAction("open the quote review panel")).toBe("show_quotes");
     expect(inferMeetingPendingAction("extract themes from the last session")).toBe(
       "extract_themes"

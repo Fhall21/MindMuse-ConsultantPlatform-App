@@ -37,8 +37,8 @@ From here, give lighter step guidance — do not repeat intake or consultation s
   {
     id: "identify_quotes",
     when: (state) => state.hasInsight && !state.hasQuotes,
-    prompt: `Guide the user to identify supporting quotes for their insights (identify_quotes tool when available).
-Quotes link evidence to insights for downstream reporting.`,
+    prompt: `Guide the user to capture supporting quotes via the manual quote review panel (show_quotes when available — highlight transcript text).
+Use identify_quotes only if they explicitly want AI-suggested quotes.`,
   },
   {
     id: "multi_consultation_grouping",

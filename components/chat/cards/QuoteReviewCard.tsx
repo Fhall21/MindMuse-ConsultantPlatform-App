@@ -1,14 +1,33 @@
 "use client";
 
-import { useMemo } from "react";
-import { Quote } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Loader2, Quote } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { QuoteReviewPanel } from "@/components/consultations/quote-review-panel";
+import {
+  CARD_DISMISSED_COPY,
+  CARD_REOPEN_HELP,
+} from "@/lib/chat/onboarding-copy";
 import { readShowQuotesOutput } from "@/lib/chat/tools/quotes";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
-import type { ChatCardProps } from "./types";
+import { readToolResultId, type ChatCardProps } from "./types";
 
-export function QuoteReviewCard({ tool }: ChatCardProps) {
+export function QuoteReviewCard({
+  tool,
+  messageId,
+  sessionId,
+  onUpdated,
+}: ChatCardProps) {
   const data = useMemo(() => readShowQuotesOutput(tool.output), [tool.output]);
+  const { isPending, setPending } = useCardConfirm();
+  const confirmKey = `quote-review-panel:${messageId}`;
+  const confirming = isPending(confirmKey);
+  const [error, setError] = useState<string | null>(null);
+  const [completed, setCompleted] = useState(false);
+
+  const status = tool.status ?? "pending";
+  const toolResultId = readToolResultId(tool);
 
   if (tool.status === "error" || !data) {
     return (
@@ -24,6 +43,75 @@ export function QuoteReviewCard({ tool }: ChatCardProps) {
     );
   }
 
+  if (status === "success" || completed) {
+    return (
+      <ChatToolCardShell
+        success
+        title={
+          <span className="flex items-center gap-2">
+            <Quote className="size-4" />
+            {`Quotes — ${data.meeting_title}`}
+          </span>
+        }
+        description="Quote review finished. Reopen this card from chat history if you need to add more."
+        successHelp={CARD_REOPEN_HELP}
+      />
+    );
+  }
+
+  if (status === "dismissed") {
+    return (
+      <ChatToolCardShell
+        dismissed
+        title="Quote review dismissed"
+        description={CARD_DISMISSED_COPY}
+      />
+    );
+  }
+
+  async function handleDone() {
+    if (!sessionId || !toolResultId) {
+      setError("Chat session is unavailable. Refresh and try again.");
+      return;
+    }
+
+    setPending(confirmKey, true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/chat/tool-results/${toolResultId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, status: "success" }),
+      });
+
+      if (!response.ok) {
+        const json = await response.json().catch(() => ({}));
+        throw new Error((json as { detail?: string }).detail ?? "Could not finish quote review");
+      }
+
+      setCompleted(true);
+      onUpdated?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not finish quote review");
+    } finally {
+      setPending(confirmKey, false);
+    }
+  }
+
+  async function handleDismiss() {
+    if (!toolResultId || !sessionId) {
+      return;
+    }
+
+    await fetch(`/api/chat/tool-results/${toolResultId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId, status: "dismissed" }),
+    });
+    onUpdated?.();
+  }
+
   return (
     <ChatToolCardShell
       title={
@@ -32,13 +120,35 @@ export function QuoteReviewCard({ tool }: ChatCardProps) {
           {`Quotes — ${data.meeting_title}`}
         </span>
       }
-      description="Highlight transcript text to capture a quote."
+      description="Highlight transcript text to capture a quote. Click Done when finished."
       maxWidth="5xl"
+      error={error}
+      onDismiss={() => void handleDismiss()}
+      dismissLabel="Dismiss quote review"
+      dismissDisabled={confirming}
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void handleDismiss()}
+            disabled={confirming}
+          >
+            Dismiss
+          </Button>
+          <Button type="button" onClick={() => void handleDone()} disabled={confirming}>
+            {confirming ? (
+              <>
+                <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                Finishing…
+              </>
+            ) : (
+              "Done reviewing"
+            )}
+          </Button>
+        </>
+      }
     >
-      {/*
-       * Contain scroll within the panel so text-selection gestures in the
-       * transcript don't propagate to the chat column scroll container.
-       */}
       <div
         className="max-h-[70vh] overflow-y-auto overscroll-contain"
         onPointerDownCapture={(e) => e.stopPropagation()}

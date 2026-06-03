@@ -6,10 +6,10 @@ import { buildMeetingPickerOutput } from "./tools/meetings-picker";
 import { getLatestMeetingActionSelection } from "./meeting-picker-session";
 import {
   attachPendingActionToPickerOutput,
-  inferMeetingPendingAction,
   meetingPendingActionSchema,
   type MeetingPendingAction,
 } from "./meeting-pending-action";
+import { inferQuotePendingAction } from "./quote-intent";
 import { isMeetingActionContinuation } from "./tools/meeting-action";
 import { resolveMeetingForConsultationAction } from "./meeting-resolve";
 import {
@@ -39,8 +39,7 @@ async function persistQuoteMeetingPicker(params: {
       date: m.meeting_date ?? null,
     })),
   });
-  const inferred =
-    inferMeetingPendingAction(params.context.latestUserMessage ?? "") ?? "identify_quotes";
+  const inferred = inferQuotePendingAction(params.context.latestUserMessage ?? "");
   const parsedPending = meetingPendingActionSchema.safeParse(params.input.pending_action);
   const pendingAction: MeetingPendingAction = parsedPending.success
     ? parsedPending.data
@@ -283,7 +282,7 @@ export async function executeShowQuotesTool(params: {
     toolName: "show_quotes",
     input: { ...payload, meeting_id: meeting.id },
     output,
-    status: "success",
+    status: "pending",
   });
 
   if (!toolResult) {

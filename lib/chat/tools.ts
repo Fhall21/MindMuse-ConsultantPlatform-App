@@ -87,6 +87,10 @@ import {
   inferMeetingPendingAction,
   meetingPendingActionSchema,
 } from "./meeting-pending-action";
+import {
+  inferQuotePendingAction,
+  wantsAutomaticQuoteExtraction,
+} from "./quote-intent";
 import { executeConsultationQuery } from "./queries/consultation-analytics";
 import {
   listMeetingsForConsultation,
@@ -447,10 +451,35 @@ export function createChatTools(input: ChatToolRuntimeContext) {
     }),
     identify_quotes: tool({
       description:
-        "Identify key quotes from a meeting transcript linked to confirmed insights. Omit meeting_id when the user names a person or meeting ambiguously — the server shows a meeting picker first.",
+        "AI-suggested quotes only — use when the user explicitly asks for automatic / AI quote extraction to review suggestions. For normal quote work (highlight transcript, add quotes manually), call show_quotes instead. Omit meeting_id when ambiguous — meeting picker first with pending_action identify_quotes.",
       inputSchema: identifyQuotesSchema,
       execute: async (input) => {
         const parsed = identifyQuotesSchema.parse(input);
+        if (
+          context.latestUserMessage &&
+          !wantsAutomaticQuoteExtraction(context.latestUserMessage)
+        ) {
+          const showParsed = showQuotesSchema.parse({
+            meeting_id: parsed.meeting_id,
+            consultation_id: undefined,
+          });
+          try {
+            return await executeShowQuotesTool({
+              context,
+              meetingId: showParsed.meeting_id,
+              consultationId: showParsed.consultation_id,
+              userMessage: context.latestUserMessage,
+              persist: persistToolExecution,
+            });
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : "Could not open quote review";
+            if (message === TURN_CARD_STACK_BLOCKED_MESSAGE) {
+              return { error: message };
+            }
+            throw error;
+          }
+        }
         try {
           return await executeIdentifyQuotesTool({
             context,
@@ -471,7 +500,7 @@ export function createChatTools(input: ChatToolRuntimeContext) {
     }),
     show_quotes: tool({
       description:
-        "Open the quote review panel for a meeting so the user can highlight transcript text to create quotes, and review, approve, or reject existing quotes. Omit meeting_id when unclear — meeting picker shows first.",
+        "Default for quote work: open the manual quote review panel (highlight transcript to capture quotes; approve/link existing quotes). Use for extract key quotes, review quotes, add quotes, Jake's meeting quotes, etc. Only use identify_quotes when the user explicitly wants AI-suggested quotes. Omit meeting_id when unclear — meeting picker with pending_action show_quotes.",
       inputSchema: showQuotesSchema,
       execute: async (input) => {
         const parsed = showQuotesSchema.parse(input);
@@ -793,7 +822,8 @@ export function createChatTools(input: ChatToolRuntimeContext) {
         const pendingParsed = meetingPendingActionSchema.safeParse(parsed.pending_action);
         const pendingAction = pendingParsed.success
           ? pendingParsed.data
-          : inferMeetingPendingAction(context.latestUserMessage ?? "") ?? "identify_quotes";
+          : inferMeetingPendingAction(context.latestUserMessage ?? "") ??
+            inferQuotePendingAction(context.latestUserMessage ?? "");
 
         const basePicker = buildMeetingPickerOutput({
           consultationId,

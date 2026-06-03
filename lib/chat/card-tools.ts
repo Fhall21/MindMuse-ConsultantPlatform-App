@@ -30,6 +30,8 @@ export const CHAT_CARD_TOOL_NAMES = new Set<string>([
   "unlink_person_from_meeting",
   "bulk_dismiss_pending",
   "ask_user_choice",
+  // Sprint 22 — quote review in chat
+  "show_quotes",
 ]);
 
 /** Internal agent tools — never render ToolResultFallbackCard in the thread. */

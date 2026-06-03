@@ -144,3 +144,27 @@ export function readQuoteReviewOutput(output: unknown): QuoteReviewOutput | null
 export function formatTranscriptPosition(spanStart: number, spanEnd: number): string {
   return `chars ${spanStart.toLocaleString()}–${spanEnd.toLocaleString()}`;
 }
+
+export const showQuotesSchema = z.object({
+  meeting_id: z.string().uuid(),
+  consultation_id: z.string().uuid().optional(),
+});
+
+export interface ShowQuotesOutput {
+  meeting_id: string;
+  meeting_title: string;
+}
+
+export function readShowQuotesOutput(output: unknown): ShowQuotesOutput | null {
+  if (!output || typeof output !== "object") {
+    return null;
+  }
+  const record = output as Record<string, unknown>;
+  if (typeof record.meeting_id !== "string" || typeof record.meeting_title !== "string") {
+    return null;
+  }
+  return {
+    meeting_id: record.meeting_id,
+    meeting_title: record.meeting_title,
+  };
+}

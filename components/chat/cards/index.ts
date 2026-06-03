@@ -28,6 +28,7 @@ import { PersonUnlinkCard } from "./PersonUnlinkCard";
 import { BulkDismissPendingCard } from "./BulkDismissPendingCard";
 import { MeetingNoteCard } from "./MeetingNoteCard";
 import { AskChoiceCard } from "./AskChoiceCard";
+import { QuoteReviewCard } from "./QuoteReviewCard";
 import type { ChatCardProps } from "./types";
 
 export type ChatCardComponent = ComponentType<ChatCardProps>;
@@ -64,6 +65,8 @@ export const CHAT_CARD_MAP: Record<string, ChatCardComponent> = {
   unlink_person_from_meeting: PersonUnlinkCard,
   bulk_dismiss_pending: BulkDismissPendingCard,
   ask_user_choice: AskChoiceCard,
+  // Sprint 22 — quote review in chat
+  show_quotes: QuoteReviewCard,
 };
 
 export function resolveChatCard(toolName: string): ChatCardComponent {
@@ -78,6 +81,7 @@ export {
   MeetingConfirmationCard,
   MeetingPickerCard,
   QuoteCard,
+  QuoteReviewCard,
   ReportPreviewCard,
   ResearchQuestionCard,
   ResearchThemeLinkCard,

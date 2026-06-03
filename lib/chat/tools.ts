@@ -31,7 +31,7 @@ import {
   extractThemesSchema,
 } from "./tools/themes";
 import { selectMeetingForThemesSchema } from "./tools/meetings-picker";
-import { identifyQuotesSchema } from "./tools/quotes";
+import { identifyQuotesSchema, showQuotesSchema } from "./tools/quotes";
 import { finalizeThemeReview } from "./themes-db";
 import { identifyAndPersistQuotes } from "./quotes-db";
 import { buildCanvasLayoutPreview } from "./canvas-preview";
@@ -500,6 +500,51 @@ export function createChatTools(context: ChatToolRuntimeContext) {
         };
       },
     }),
+    show_quotes: tool({
+      description:
+        "Open the quote review panel for a meeting so the user can highlight transcript text to create quotes, and review, approve, or reject existing quotes. Use when the user asks to 'show quotes', 'review quotes', 'create a quote', 'highlight a quote', 'add a quote', or asks what quotes exist for a meeting.",
+      inputSchema: showQuotesSchema,
+      execute: async (input) => {
+        const parsed = showQuotesSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+
+        const session = await getUnarchivedSessionForUser(context.userId, context.sessionId);
+        const consultationId = parsed.consultation_id ?? session?.consultationId ?? undefined;
+
+        if (!consultationId) {
+          return { error: "No consultation selected. Choose one first." };
+        }
+
+        const meeting = await getMeetingForUser(parsed.meeting_id, context.userId);
+
+        if (!meeting || meeting.consultation_id !== consultationId) {
+          await persistToolExecution({
+            context,
+            toolName: "show_quotes",
+            input: payload,
+            output: { error: "Meeting not found or access denied." },
+            status: "error",
+          });
+          return { error: "Meeting not found or access denied." };
+        }
+
+        const output = {
+          meeting_id: meeting.id,
+          meeting_title: meeting.title,
+        };
+
+        const toolResult = await persistToolExecution({
+          context,
+          toolName: "show_quotes",
+          input: payload,
+          output,
+          status: "success",
+        });
+
+        return { ...output, tool_result_id: toolResult.id };
+      },
+    }),
+
     group_themes: tool({
       description:
         "Propose a new theme group by clustering relevant insights. Use when the user wants AI-suggested groupings or to create a new group from scratch.",

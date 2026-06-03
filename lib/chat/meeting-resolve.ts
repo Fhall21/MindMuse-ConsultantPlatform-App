@@ -1,6 +1,10 @@
 import { listMeetingsForConsultation, getMeetingForUser } from "@/lib/data/domain-read";
 import { loadMeetingTranscript } from "./themes-db";
 import {
+  isMeetingActionContinuation,
+  parseMeetingTitleFromContinuation,
+} from "./tools/meeting-action";
+import {
   extractMeetingHintFromMessage,
   filterMeetingsByTitleHint,
   titleMatchesMeetingHint,
@@ -44,10 +48,28 @@ export async function resolveMeetingForConsultationAction(params: {
     };
   }
 
+  const userMessage = params.userMessage?.trim() ?? null;
+
+  if (userMessage && isMeetingActionContinuation(userMessage)) {
+    const title = parseMeetingTitleFromContinuation(userMessage);
+    if (title) {
+      const byTitle = pickerMeetings.filter((meeting) => meeting.title === title);
+      if (byTitle.length === 1) {
+        return { ok: true, meetingId: byTitle[0].id };
+      }
+    }
+    if (params.meetingId) {
+      return { ok: true, meetingId: params.meetingId };
+    }
+    return {
+      ok: false,
+      needsPicker: false,
+      error: "Meeting was already selected. Continue with identify_quotes for that meeting_id.",
+    };
+  }
+
   const hint =
-    params.userMessage !== undefined && params.userMessage !== null
-      ? extractMeetingHintFromMessage(params.userMessage)
-      : null;
+    userMessage !== null ? extractMeetingHintFromMessage(userMessage) : null;
 
   if (params.meetingId) {
     const direct = await loadMeetingTranscript(params.userId, params.meetingId);

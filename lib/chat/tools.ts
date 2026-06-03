@@ -71,10 +71,22 @@ import {
 } from "./tools/nl-actions";
 import { askUserChoiceSchema } from "./tools/ask-choice";
 import { TURN_CARD_STACK_BLOCKED_MESSAGE, TurnCardGate } from "./turn-card-gate";
+import type { ChatToolRuntimeContext } from "./tool-context";
+import { persistToolExecution, requirePersistedToolResult } from "./tool-persist";
 import {
   executeIdentifyQuotesTool,
   executeShowQuotesTool,
 } from "./quote-flow";
+import {
+  isMeetingActionContinuation,
+  parseMeetingTitleFromContinuation,
+} from "./tools/meeting-action";
+import { getLatestMeetingActionSelection } from "./meeting-picker-session";
+import {
+  attachPendingActionToPickerOutput,
+  inferMeetingPendingAction,
+  meetingPendingActionSchema,
+} from "./meeting-pending-action";
 import { executeConsultationQuery } from "./queries/consultation-analytics";
 import {
   listMeetingsForConsultation,
@@ -98,67 +110,7 @@ import {
   buildMeetingPickerOutput,
 } from "./tools/meetings-picker";
 
-export interface ChatToolRuntimeContext {
-  userId: string;
-  sessionId: string;
-  turnCardGate?: TurnCardGate;
-  latestUserMessage?: string | null;
-}
-
-async function persistToolExecution(params: {
-  context: ChatToolRuntimeContext;
-  toolName: string;
-  input: Record<string, unknown>;
-  output: unknown;
-  status: "pending" | "success" | "error" | "dismissed";
-}): Promise<{ id: string } | null> {
-  const gate = params.context.turnCardGate ?? new TurnCardGate();
-  const gateCheck = gate.assertCanShowCard(params.toolName);
-  if (!gateCheck.ok) {
-    return null;
-  }
-
-  const toolMessage = await insertChatMessage({
-    sessionId: params.context.sessionId,
-    role: "tool",
-    content: JSON.stringify({
-      tool: params.toolName,
-      input: params.input,
-    }),
-    toolCallId: params.toolName,
-  });
-
-  const row = await insertToolResult({
-    sessionId: params.context.sessionId,
-    messageId: toolMessage.id,
-    toolName: params.toolName,
-    input: params.input,
-    output: params.output,
-    status: params.status,
-  });
-
-  await updateChatMessageContent(
-    toolMessage.id,
-    JSON.stringify({
-      tool: params.toolName,
-      input: params.input,
-      output: params.output,
-      status: params.status,
-      toolResultId: row.id,
-    })
-  );
-
-  gate.markCardShown(params.toolName);
-
-  return row;
-}
-
-function requirePersistedToolResult(row: { id: string } | null): { id: string } {
-  if (!row) {
-    throw new Error(TURN_CARD_STACK_BLOCKED_MESSAGE);
-  }
-  return row;
-}
+export type { ChatToolRuntimeContext } from "./tool-context";
 
 async function buildMeetingDraftFromText(params: {
   context: ChatToolRuntimeContext;
@@ -806,11 +758,25 @@ export function createChatTools(input: ChatToolRuntimeContext) {
 
     select_meeting_for_action: tool({
       description:
-        "Show a meeting picker when an action requires a specific meeting to be chosen. Always shows the picker even when only one meeting exists.",
+        "Show a meeting picker when a follow-up card needs a specific meeting and choice is ambiguous. Set pending_action to the workflow that runs after the user confirms (identify_quotes, show_quotes, extract_themes, draft_evidence_email, create_insight, link_person_to_consultation, edit_meeting, unlink_person_from_meeting). One picker per turn — the UI continues that workflow on confirm.",
       inputSchema: selectMeetingForActionSchema,
       execute: async (input) => {
         const parsed = selectMeetingForActionSchema.parse(input);
-        const payload = parsed as unknown as Record<string, unknown>;
+        const actionParams = parsed.action_params ?? {};
+
+        if (
+          context.latestUserMessage &&
+          isMeetingActionContinuation(context.latestUserMessage)
+        ) {
+          const locked = await getLatestMeetingActionSelection(context.sessionId);
+          if (locked) {
+            return {
+              error:
+                "Meeting already selected on the picker card. Continue the pending_action workflow with meeting_id — do not open another picker.",
+              meeting_id: locked.meetingId,
+            };
+          }
+        }
 
         const session = await getUnarchivedSessionForUser(context.userId, context.sessionId);
         const consultationId = parsed.consultation_id ?? session?.consultationId ?? undefined;
@@ -824,7 +790,12 @@ export function createChatTools(input: ChatToolRuntimeContext) {
           return { error: "No meetings found in this consultation." };
         }
 
-        const pickerOutput = buildMeetingPickerOutput({
+        const pendingParsed = meetingPendingActionSchema.safeParse(parsed.pending_action);
+        const pendingAction = pendingParsed.success
+          ? pendingParsed.data
+          : inferMeetingPendingAction(context.latestUserMessage ?? "") ?? "identify_quotes";
+
+        const basePicker = buildMeetingPickerOutput({
           consultationId,
           meetings: meetings.map((m) => ({
             id: m.id,
@@ -832,11 +803,21 @@ export function createChatTools(input: ChatToolRuntimeContext) {
             date: m.meeting_date ?? null,
           })),
         });
+        const pickerOutput = attachPendingActionToPickerOutput(
+          basePicker,
+          pendingAction,
+          actionParams
+        );
+        const toolInput = {
+          consultation_id: consultationId,
+          pending_action: pendingAction,
+          ...(Object.keys(actionParams).length > 0 ? { action_params: actionParams } : {}),
+        };
 
         const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "select_meeting_for_action",
-          input: payload,
+          input: toolInput,
           output: pickerOutput,
           status: "pending",
         }));

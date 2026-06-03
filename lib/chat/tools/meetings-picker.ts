@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { meetingPendingActionSchema } from "../meeting-pending-action";
 
 export const selectMeetingForThemesSchema = z.object({
   consultation_id: z.string().uuid().optional(),
+  pending_action: meetingPendingActionSchema.optional(),
 });
 
 export interface MeetingPickerItem {
@@ -13,6 +15,9 @@ export interface MeetingPickerItem {
 export interface MeetingPickerOutput {
   consultation_id: string;
   meetings: MeetingPickerItem[];
+  pending_action?: string;
+  action_params?: Record<string, unknown>;
+  meeting_id?: string;
 }
 
 export function readMeetingPickerOutput(output: unknown): MeetingPickerOutput | null {
@@ -52,6 +57,13 @@ export function readMeetingPickerOutput(output: unknown): MeetingPickerOutput | 
   return {
     consultation_id: record.consultation_id,
     meetings,
+    ...(typeof record.pending_action === "string"
+      ? { pending_action: record.pending_action }
+      : {}),
+    ...(record.action_params && typeof record.action_params === "object"
+      ? { action_params: record.action_params as Record<string, unknown> }
+      : {}),
+    ...(typeof record.meeting_id === "string" ? { meeting_id: record.meeting_id } : {}),
   };
 }
 

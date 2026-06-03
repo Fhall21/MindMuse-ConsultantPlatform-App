@@ -11,6 +11,7 @@ import {
 } from "./persist";
 import { extractAndPersistThemes, loadMeetingTranscript } from "./themes-db";
 import type { ChatToolRuntimeContext } from "./tools";
+import { attachPendingActionToPickerOutput } from "./meeting-pending-action";
 import {
   buildMeetingPickerOutput,
   type MeetingPickerItem,
@@ -217,15 +218,16 @@ export async function executeSelectMeetingForThemesTool(params: {
   }
 
   const pickerMeetings = mapMeetingsForPicker(meetings);
-  const output = buildMeetingPickerOutput({
+  const basePicker = buildMeetingPickerOutput({
     consultationId,
     meetings: pickerMeetings,
   });
+  const output = attachPendingActionToPickerOutput(basePicker, "extract_themes");
 
   const toolResult = await persistChatToolResult({
     context: params.context,
     toolName: "select_meeting_for_themes",
-    input: { consultation_id: consultationId },
+    input: { consultation_id: consultationId, pending_action: "extract_themes" },
     output,
     status: "pending",
   });

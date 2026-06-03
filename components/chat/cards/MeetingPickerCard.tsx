@@ -1,6 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { meetingPickerSuccessDescription } from "@/lib/chat/meeting-picker-card-copy";
+import { readMeetingPendingAction } from "@/lib/chat/meeting-pending-action";
+import {
+  confirmMeetingPickerSelection,
+  useMeetingPickerConfirmLock,
+} from "./use-meeting-picker-confirm";
 import { Loader2 } from "lucide-react";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { Button } from "@/components/ui/button";
@@ -44,6 +50,15 @@ export function MeetingPickerCard({
   onUpdated,
 }: ChatCardProps) {
   const picker = useMemo(() => readMeetingPickerOutput(tool.output), [tool.output]);
+  const pendingAction = useMemo(
+    () =>
+      readMeetingPendingAction({
+        output: tool.output,
+        input: tool.input,
+        pickerToolName: "select_meeting_for_themes",
+      }),
+    [tool.output, tool.input]
+  );
   const { isPending, setPending } = useCardConfirm();
   const confirmKey = `select-meeting-themes:${messageId}`;
   const [selectedMeetingId, setSelectedMeetingId] = useState(picker?.meetings[0]?.id ?? "");
@@ -51,6 +66,7 @@ export function MeetingPickerCard({
   const status = tool.status ?? "pending";
   const toolResultId = tool.toolResultId;
   const pending = isPending(confirmKey);
+  const { hasContinued, markContinued } = useMeetingPickerConfirmLock();
 
   if (!picker) {
     return null;
@@ -61,7 +77,7 @@ export function MeetingPickerCard({
       <ChatToolCardShell
         success
         title="Meeting selected"
-        description="Theme extraction is ready for review in the card below."
+        description={meetingPickerSuccessDescription(pendingAction)}
         successHelp={CARD_REOPEN_HELP}
       />
     );
@@ -78,6 +94,10 @@ export function MeetingPickerCard({
   }
 
   async function handleExtract() {
+    if (hasContinued()) {
+      return;
+    }
+
     if (!selectedMeetingId) {
       setError("Choose a meeting to extract themes from.");
       return;
@@ -88,28 +108,30 @@ export function MeetingPickerCard({
       return;
     }
 
+    if (!toolResultId) {
+      setError("Selection is not ready yet. Wait a moment or refresh the page.");
+      return;
+    }
+
     setPending(confirmKey, true);
     setError(null);
 
     try {
-      const response = await fetch("/api/chat/themes/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId,
-          meetingId: selectedMeetingId,
-          pickerToolResultId: toolResultId,
-        }),
+      const result = await confirmMeetingPickerSelection({
+        sessionId,
+        toolResultId,
+        selectedMeetingId,
+        toolOutput: tool.output,
+        toolInput: tool.input,
+        pickerToolName: "select_meeting_for_themes",
       });
 
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as
-          | { detail?: string }
-          | null;
-        throw new Error(data?.detail ?? "Could not extract themes");
+      if (!result.ok) {
+        setError(result.error);
+        return;
       }
 
-      setPending(confirmKey, false);
+      markContinued();
       onUpdated?.();
     } catch (extractError) {
       setError(
@@ -117,6 +139,7 @@ export function MeetingPickerCard({
           ? extractError.message
           : "Could not extract themes"
       );
+    } finally {
       setPending(confirmKey, false);
     }
   }

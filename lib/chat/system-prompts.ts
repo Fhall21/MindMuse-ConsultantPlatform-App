@@ -133,7 +133,8 @@ function buildProactiveTriggerBlock(flags: ProactiveTriggerFlags): string {
 
 const TOOL_CARD_RULES = `Tool cards and grounded actions:
 - Dispatch one primary workflow per user request. Do not call unrelated tools speculatively. When a direct-action card answers the request, do not also render a review picker.
-- One card per turn: never call two card tools in the same assistant turn. If meeting choice is ambiguous, call only select_meeting_for_action (or select_meeting_for_themes) and stop — wait for the user to confirm before identify_quotes, show_quotes, extract_themes, or any other card.
+- One card per turn: never call two card tools in the same assistant turn. If meeting choice is ambiguous, call only select_meeting_for_action (or select_meeting_for_themes) and stop — wait for the user to confirm; the UI runs the follow-up card from pending_action on confirm.
+- Meeting picker sequencing: when showing select_meeting_for_action, always set pending_action to the next workflow (identify_quotes, show_quotes, extract_themes, draft_evidence_email, create_insight, link_person_to_consultation, edit_meeting, unlink_person_from_meeting). Pass action_params when the follow-up needs hints (label_hint, person_name_hint, title_hint). The confirm button runs that workflow server-side — do not rely on the user retyping or a second picker.
 - Meeting intake: ALWAYS call intake_text_transcript, intake_audio_transcript, or intake_notes. NEVER write meeting fields as markdown. MeetingConfirmationCard renders from the pending tool result.
 - Meeting save: the user confirms via MeetingConfirmationCard (POST /api/meetings). NEVER call confirm_meeting or link_people. The UI handles those internal actions.
 - Theme review: call extract_themes (meeting_id optional; it uses lastMeetingId from PROJECT CONTEXT when omitted). If multiple meetings exist, call select_meeting_for_themes or extract_themes without meeting_id to show MeetingPickerCard. NEVER ask the user to re-paste or re-upload a transcript. NEVER list theme labels, descriptions, or confidence in prose. ThemeReviewCard renders from the pending tool result.
@@ -153,7 +154,7 @@ const TOOL_CARD_RULES = `Tool cards and grounded actions:
 - Bulk dismiss: call bulk_dismiss_pending. NEVER dismiss in prose. BulkDismissPendingCard owns confirmation and caps the batch at 10.
 - Clarification (meeting notes only): call generate_clarification when uploaded/pasted meeting notes are ambiguous — not for general consultation decisions; use ask_user_choice for those.
 - Consultation setup: direct the user to CreateProjectCard or ProjectSelectionCard in the UI instead of inventing consultation names in prose.
-- When the user says "Use the selected meeting, [title], for that.", continue their immediately preceding request with that meeting. Do not show another meeting picker when the title matches PROJECT CONTEXT.
+- When the user says "Use the selected meeting, [title], for that.", continue their immediately preceding request with that meeting using the correct tool and meeting_id. Do not show another meeting picker.
 - Cards own consequential confirmation and display. Do not duplicate card content in prose or claim completion before confirmation.
 - After any successful card tool call (except ask_user_choice awaiting answers), stay silent or use one short neutral sentence. Do not duplicate data the card already shows.
 - After the user submits an ask_user_choice card ([User choice] message), always follow with substantive assistant prose as described above — never end the turn with only another card and no text.`;

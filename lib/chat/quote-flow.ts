@@ -1,8 +1,16 @@
 import { getUnarchivedSessionForUser } from "./context";
 import { TURN_CARD_STACK_BLOCKED_MESSAGE } from "./turn-card-gate";
 import { identifyAndPersistQuotes } from "./quotes-db";
-import type { ChatToolRuntimeContext } from "./tools";
+import type { ChatToolRuntimeContext } from "./tool-context";
 import { buildMeetingPickerOutput } from "./tools/meetings-picker";
+import { getLatestMeetingActionSelection } from "./meeting-picker-session";
+import {
+  attachPendingActionToPickerOutput,
+  inferMeetingPendingAction,
+  meetingPendingActionSchema,
+  type MeetingPendingAction,
+} from "./meeting-pending-action";
+import { isMeetingActionContinuation } from "./tools/meeting-action";
 import { resolveMeetingForConsultationAction } from "./meeting-resolve";
 import {
   getMeetingForUser,
@@ -23,7 +31,7 @@ async function persistQuoteMeetingPicker(params: {
   }) => Promise<{ id: string } | null>;
 }) {
   const meetings = await listMeetingsForConsultation(params.consultationId, params.context.userId);
-  const pickerOutput = buildMeetingPickerOutput({
+  const basePicker = buildMeetingPickerOutput({
     consultationId: params.consultationId,
     meetings: meetings.map((m) => ({
       id: m.id,
@@ -31,11 +39,18 @@ async function persistQuoteMeetingPicker(params: {
       date: m.meeting_date ?? null,
     })),
   });
+  const inferred =
+    inferMeetingPendingAction(params.context.latestUserMessage ?? "") ?? "identify_quotes";
+  const parsedPending = meetingPendingActionSchema.safeParse(params.input.pending_action);
+  const pendingAction: MeetingPendingAction = parsedPending.success
+    ? parsedPending.data
+    : inferred;
+  const pickerOutput = attachPendingActionToPickerOutput(basePicker, pendingAction);
 
   const toolResult = await params.persist({
     context: params.context,
     toolName: "select_meeting_for_action",
-    input: params.input,
+    input: { ...params.input, pending_action: pendingAction },
     output: pickerOutput,
     status: "pending",
   });
@@ -65,39 +80,78 @@ export async function executeIdentifyQuotesTool(params: {
     params.context.sessionId
   );
   const consultationId = session?.consultationId ?? null;
-  const payload: Record<string, unknown> = {
-    ...(params.meetingId ? { meeting_id: params.meetingId } : {}),
-    ...(params.themeIds ? { theme_ids: params.themeIds } : {}),
-  };
+  let meetingId = params.meetingId;
 
-  const resolved = await resolveMeetingForConsultationAction({
-    userId: params.context.userId,
-    consultationId,
-    meetingId: params.meetingId,
-    userMessage: params.userMessage,
-  });
+  if (
+    params.userMessage &&
+    isMeetingActionContinuation(params.userMessage) &&
+    !meetingId
+  ) {
+    const locked = await getLatestMeetingActionSelection(params.context.sessionId);
+    if (locked) {
+      meetingId = locked.meetingId;
+    }
+  }
 
-  if (!resolved.ok) {
-    if (resolved.needsPicker && consultationId) {
-      return persistQuoteMeetingPicker({
+  const skipPicker =
+    Boolean(
+      params.userMessage &&
+        isMeetingActionContinuation(params.userMessage) &&
+        meetingId
+    );
+
+  if (!meetingId && !skipPicker) {
+    const resolved = await resolveMeetingForConsultationAction({
+      userId: params.context.userId,
+      consultationId,
+      meetingId: undefined,
+      userMessage: params.userMessage,
+    });
+
+    if (!resolved.ok) {
+      const payload: Record<string, unknown> = {
+        ...(params.themeIds ? { theme_ids: params.themeIds } : {}),
+      };
+
+      if (resolved.needsPicker && consultationId) {
+        return persistQuoteMeetingPicker({
+          context: params.context,
+          consultationId,
+          input: payload,
+          persist: params.persist,
+        });
+      }
+
+      const message = resolved.error ?? "Could not resolve meeting.";
+      await params.persist({
         context: params.context,
-        consultationId,
+        toolName: "identify_quotes",
         input: payload,
-        persist: params.persist,
+        output: { error: message },
+        status: "error",
       });
+      return { error: message };
     }
 
+    meetingId = resolved.meetingId;
+  }
+
+  if (!meetingId) {
+    const message = "Meeting is not locked in yet. Use the meeting picker first.";
     await params.persist({
       context: params.context,
       toolName: "identify_quotes",
-      input: payload,
-      output: { error: resolved.error ?? "Could not resolve meeting." },
+      input: {},
+      output: { error: message },
       status: "error",
     });
-    return { error: resolved.error ?? "Could not resolve meeting." };
+    return { error: message };
   }
 
-  const meetingId = resolved.meetingId;
+  const payload: Record<string, unknown> = {
+    meeting_id: meetingId,
+    ...(params.themeIds ? { theme_ids: params.themeIds } : {}),
+  };
   let themeIds = params.themeIds ?? [];
   if (themeIds.length === 0) {
     const acceptedInsights = await listInsightsForMeeting(meetingId, params.context.userId, {

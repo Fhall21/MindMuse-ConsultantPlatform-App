@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildMeetingActionContinuation,
+  isMeetingActionContinuation,
   mergeMeetingActionSelection,
+  parseMeetingTitleFromContinuation,
 } from "@/lib/chat/tools/meeting-action";
 
 describe("meeting action continuation", () => {
@@ -26,4 +28,11 @@ describe("meeting action continuation", () => {
       `Use the selected meeting, "Chris 'Q2' review", for that.`
     );
   });
+
+  it("detects continuation messages and parses the meeting title", () => {
+    const text = buildMeetingActionContinuation("1-1 — Jake — Apr 2026");
+    expect(isMeetingActionContinuation(text)).toBe(true);
+    expect(parseMeetingTitleFromContinuation(text)).toBe("1-1 — Jake — Apr 2026");
+  });
+
 });

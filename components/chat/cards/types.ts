@@ -24,6 +24,18 @@ export interface ChatCardProps {
   onSubmitText?: (text: string) => boolean | Promise<boolean>;
 }
 
+/** DB-backed cards use toolResultId; streamed tool output may use tool_result_id. */
+export function readToolResultId(tool: ChatToolMessageMeta): string | undefined {
+  if (tool.toolResultId) {
+    return tool.toolResultId;
+  }
+  if (!tool.output || typeof tool.output !== "object") {
+    return undefined;
+  }
+  const fromOutput = (tool.output as Record<string, unknown>).tool_result_id;
+  return typeof fromOutput === "string" ? fromOutput : undefined;
+}
+
 function readOptionalString(record: Record<string, unknown>, key: string): string | undefined {
   return typeof record[key] === "string" ? record[key] : undefined;
 }

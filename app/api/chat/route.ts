@@ -37,6 +37,7 @@ import { loadOnboardingAccountState } from "@/lib/chat/onboarding-state";
 import { sessionTurnIncludesCardTool } from "@/lib/chat/card-tools";
 import { isAskChoiceUserReply } from "@/lib/chat/tools/ask-choice";
 import { createChatTools } from "@/lib/chat/tools";
+import { TurnCardGate } from "@/lib/chat/turn-card-gate";
 import { composeCanvasState } from "@/lib/data/canvas-state";
 import { sanitizeAssistantOutput } from "@/lib/chat/assistant-output";
 
@@ -137,12 +138,47 @@ export async function POST(request: NextRequest) {
 
   try {
     const latestUserText = getLatestUserMessage(parsed.data.messages);
+
     if (latestUserText && latestUserText.length > CHAT_MAX_USER_MESSAGE_CHARS) {
+      await releaseSessionLock(session.id);
       return NextResponse.json(
         { detail: "Message is too long. Upload the transcript as a file instead." },
         { status: 422 }
       );
     }
+
+    const [
+      contextSummary,
+      consecutiveToolErrors,
+      activeConsultations,
+      onboardingState,
+      autoIntakeSuppressed,
+      lastAction,
+    ] = await Promise.all([
+      buildProjectContextSummary(auth.id, session.consultationId),
+      countConsecutiveToolErrors(session.id),
+      countActiveConsultations(auth.id),
+      loadOnboardingAccountState(auth.id),
+      checkAutoIntakeSuppressed(session.id),
+      getLastReversibleAction(session.id),
+    ]);
+
+    if (
+      latestUserText &&
+      !session.consultationId &&
+      activeConsultations >= 2 &&
+      !isAskChoiceUserReply(latestUserText)
+    ) {
+      await releaseSessionLock(session.id);
+      return NextResponse.json(
+        {
+          detail:
+            "Choose a consultation project above before sending a message.",
+        },
+        { status: 422 }
+      );
+    }
+
     if (latestUserText) {
       const recent = await loadRecentChatMessages(session.id, 1);
       const lastStored = recent[recent.length - 1];
@@ -160,22 +196,6 @@ export async function POST(request: NextRequest) {
     });
 
     const storedMessages = await loadRecentChatMessages(session.id);
-
-    const [
-      contextSummary,
-      consecutiveToolErrors,
-      activeConsultations,
-      onboardingState,
-      autoIntakeSuppressed,
-      lastAction,
-    ] = await Promise.all([
-      buildProjectContextSummary(auth.id, session.consultationId),
-      countConsecutiveToolErrors(session.id),
-      countActiveConsultations(auth.id),
-      loadOnboardingAccountState(auth.id),
-      checkAutoIntakeSuppressed(session.id),
-      getLastReversibleAction(session.id),
-    ]);
 
     const sessionContext: SessionRuntimeContext = {
       lastAction: lastAction
@@ -223,7 +243,12 @@ export async function POST(request: NextRequest) {
       sessionContext,
       canvasContext,
     });
-    const tools = createChatTools({ userId: auth.id, sessionId: session.id });
+    const tools = createChatTools({
+      userId: auth.id,
+      sessionId: session.id,
+      turnCardGate: new TurnCardGate(),
+      latestUserMessage: latestUserText,
+    });
 
     const result = streamText({
       model: openai(getChatModel()),

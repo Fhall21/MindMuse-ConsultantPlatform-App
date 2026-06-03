@@ -85,6 +85,35 @@ export function shouldHideSupersededThemePicker(
   return false;
 }
 
+const QUOTE_CARD_TOOL_NAMES = new Set(["identify_quotes", "show_quotes"]);
+
+export function shouldHideSupersededQuoteCard(
+  messages: Array<{ role: string; toolName?: string; status?: string }>,
+  index: number
+): boolean {
+  const candidate = messages[index];
+  if (!candidate?.toolName || !QUOTE_CARD_TOOL_NAMES.has(candidate.toolName)) {
+    return false;
+  }
+
+  let turnStart = index;
+  while (turnStart > 0 && messages[turnStart - 1]?.role !== "user") {
+    turnStart -= 1;
+  }
+
+  let turnEnd = index;
+  while (turnEnd < messages.length - 1 && messages[turnEnd + 1]?.role !== "user") {
+    turnEnd += 1;
+  }
+
+  return messages.slice(turnStart, turnEnd + 1).some(
+    (message) =>
+      message.toolName === "select_meeting_for_action" &&
+      message.status !== "success" &&
+      message.status !== "dismissed"
+  );
+}
+
 export function messageContentIsCardTool(content: string): boolean {
   const meta = parseToolMessageContent(content);
   return meta ? isChatCardToolName(meta.toolName) : false;

@@ -13,6 +13,7 @@ import {
 } from "@/components/chat/chat-analysis-notifications";
 import {
   isHiddenThreadToolName,
+  shouldHideSupersededQuoteCard,
   shouldHideSupersededThemePicker,
 } from "@/lib/chat/card-tools";
 import { collapseDuplicateProse } from "@/lib/chat/dedupe-prose";
@@ -160,8 +161,9 @@ export function ChatThread({
         </div>
       ) : null}
 
-      {messages.map((message, index) => (
-        shouldHideSupersededThemePicker(renderMessages, index) ? null : (
+      {messages.map((message, index) =>
+        shouldHideSupersededThemePicker(renderMessages, index) ||
+        shouldHideSupersededQuoteCard(renderMessages, index) ? null : (
         <MessageBubble
           key={message.id}
           message={message}
@@ -170,7 +172,7 @@ export function ChatThread({
           onSubmitText={onSubmitText}
         />
         )
-      ))}
+      )}
 
       <ChatAnalysisNotifications
         notifications={analysisNotifications}

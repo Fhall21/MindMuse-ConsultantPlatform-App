@@ -14,6 +14,7 @@ interface ChatInputProps {
   onChange: (value: string) => void;
   onSubmit: () => void;
   disabled?: boolean;
+  blockedReason?: string | null;
   placeholder?: string;
   onAttachFile?: (file: File, kind: "transcript" | "notes") => void;
 }
@@ -23,15 +24,19 @@ export function ChatInput({
   onChange,
   onSubmit,
   disabled = false,
+  blockedReason = null,
   placeholder = "Ask MindMuse or describe what you need…",
   onAttachFile,
 }: ChatInputProps) {
+  const inputDisabled = disabled || Boolean(blockedReason);
+  const effectivePlaceholder =
+    blockedReason ?? placeholder;
   const transcriptInputRef = useRef<HTMLInputElement>(null);
   const notesInputRef = useRef<HTMLInputElement>(null);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!value.trim() || disabled) {
+    if (!value.trim() || inputDisabled) {
       return;
     }
     onSubmit();
@@ -40,7 +45,7 @@ export function ChatInput({
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      if (!value.trim() || disabled) {
+      if (!value.trim() || inputDisabled) {
         return;
       }
       onSubmit();
@@ -83,8 +88,8 @@ export function ChatInput({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          disabled={disabled}
+          placeholder={effectivePlaceholder}
+          disabled={inputDisabled}
           rows={2}
           className="min-h-[52px] resize-none"
         />
@@ -95,7 +100,7 @@ export function ChatInput({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={disabled}
+                  disabled={inputDisabled}
                   className={CHAT_QUICK_ACTION_BUTTON_CLASS}
                   onClick={() => transcriptInputRef.current?.click()}
                 >
@@ -104,7 +109,7 @@ export function ChatInput({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={disabled}
+                  disabled={inputDisabled}
                   className={CHAT_QUICK_ACTION_BUTTON_CLASS}
                   onClick={() => notesInputRef.current?.click()}
                 >
@@ -116,7 +121,7 @@ export function ChatInput({
           <Button
             type="submit"
             className="min-h-11 shrink-0"
-            disabled={disabled || !value.trim()}
+            disabled={inputDisabled || !value.trim()}
           >
             Send
           </Button>

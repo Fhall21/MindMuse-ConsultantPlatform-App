@@ -269,6 +269,11 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     return null;
   }, [consultationId, consultationsQuery.data]);
 
+  const consultationInputBlocked =
+    needsConsultationSelection &&
+    !consultationId &&
+    (consultationsQuery.data?.length ?? 0) >= 2;
+
   const isBusy =
     !bootstrapReady ||
     isCapturingFile ||
@@ -318,6 +323,10 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
         toast.info("Wait for MindMuse to finish responding, then try again.");
         return false;
       }
+      if (consultationInputBlocked) {
+        toast.info("Choose a consultation project before you send a message.");
+        return false;
+      }
 
       setView("chat");
       clearError();
@@ -332,7 +341,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
       );
       return true;
     },
-    [clearError, isBusy, sendMessage]
+    [clearError, consultationInputBlocked, isBusy, sendMessage]
   );
 
   const handleSend = useCallback(() => {
@@ -341,7 +350,10 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
 
   const handleAttachFile = useCallback(
     async (file: File, kind: "transcript" | "notes") => {
-      if (isBusy) {
+      if (isBusy || consultationInputBlocked) {
+        if (consultationInputBlocked) {
+          toast.info("Choose a consultation project before you attach a file.");
+        }
         return;
       }
 
@@ -392,7 +404,14 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
         setIsCapturingFile(false);
       }
     },
-    [clearError, consultationId, isBusy, loadBootstrap, onboardingState?.phase]
+    [
+      clearError,
+      consultationId,
+      consultationInputBlocked,
+      isBusy,
+      loadBootstrap,
+      onboardingState?.phase,
+    ]
   );
 
   const handleCardUpdated = useCallback(() => {
@@ -508,6 +527,10 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
               onSend={handleSend}
               onAttachFile={handleAttachFile}
               isBusy={isBusy}
+              consultationInputBlocked={consultationInputBlocked}
+              needsConsultationSelection={needsConsultationSelection}
+              sessionId={sessionId}
+              onConsultationSelected={handleConsultationSelected}
               sessions={listableSessions}
               sessionsLoading={sessionsQuery.isLoading}
               sessionsError={Boolean(sessionsQuery.error)}
@@ -536,6 +559,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
             isUnavailable={bootstrapError}
             sessionId={sessionId}
             needsConsultationSelection={needsConsultationSelection}
+            consultationInputBlocked={consultationInputBlocked}
             showCreateProject={showCreateProject}
             showRetry={Boolean(error)}
             onRetry={() => {

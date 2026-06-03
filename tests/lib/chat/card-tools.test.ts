@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  shouldHideSupersededQuoteCard,
   shouldHideSupersededThemePicker,
   CHAT_CARD_TOOL_NAMES,
   isChatCardToolName,
@@ -66,6 +67,19 @@ describe("lib/chat/card-tools", () => {
     await expect(
       sessionTurnIncludesCardTool([{ role: "assistant", content: "Here are themes..." }])
     ).resolves.toBe(false);
+  });
+
+  it("hides quote cards when a pending meeting picker exists in the same turn", () => {
+    expect(
+      shouldHideSupersededQuoteCard(
+        [
+          { role: "user" },
+          { role: "assistant", toolName: "select_meeting_for_action", status: "pending" },
+          { role: "assistant", toolName: "show_quotes", status: "success" },
+        ],
+        2
+      )
+    ).toBe(true);
   });
 
   it("ignores card tools from prior turns when checking prose suppression", async () => {

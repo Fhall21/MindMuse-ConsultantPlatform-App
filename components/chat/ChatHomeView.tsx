@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChatSessionList } from "@/components/chat/chat-session-list";
 import { CreateProjectCard } from "@/components/chat/cards/CreateProjectCard";
+import { ProjectSelectionCard } from "@/components/chat/cards/ProjectSelectionCard";
 import type { ChatSessionSummary } from "@/hooks/use-chat-sessions";
 import type { WelcomeVariant } from "@/lib/chat/onboarding-copy";
 import { getWelcomeGreeting } from "@/lib/chat/onboarding-copy";
@@ -31,6 +32,10 @@ interface ChatHomeViewProps {
   isBusy: boolean;
   showCreateProject?: boolean;
   onProjectCreated?: (consultationId: string) => void;
+  needsConsultationSelection?: boolean;
+  consultationInputBlocked?: boolean;
+  sessionId?: string | null;
+  onConsultationSelected?: (consultationId: string) => void;
 }
 
 const EXAMPLE_PROMPTS = [
@@ -56,21 +61,29 @@ export function ChatHomeView({
   isBusy,
   showCreateProject = false,
   onProjectCreated,
+  needsConsultationSelection = false,
+  consultationInputBlocked = false,
+  sessionId = null,
+  onConsultationSelected,
 }: ChatHomeViewProps) {
+  const inputDisabled = isBusy || consultationInputBlocked;
+  const inputPlaceholder = consultationInputBlocked
+    ? "Choose a consultation project above before you send a message."
+    : "Describe what you need, or pick a starting point below…";
   const transcriptInputRef = useRef<HTMLInputElement>(null);
   const notesInputRef = useRef<HTMLInputElement>(null);
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      if (!input.trim() || isBusy) return;
+      if (!input.trim() || inputDisabled) return;
       onSend();
     }
   }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!input.trim() || isBusy) return;
+    if (!input.trim() || inputDisabled) return;
     onSend();
   }
 
@@ -125,6 +138,17 @@ export function ChatHomeView({
         </div>
       ) : null}
 
+      {needsConsultationSelection && sessionId ? (
+        <div className="mb-8">
+          <ProjectSelectionCard
+            tool={{ toolName: "select_project", input: {} }}
+            messageId="home-project-selection"
+            sessionId={sessionId}
+            onConsultationSelected={onConsultationSelected}
+          />
+        </div>
+      ) : null}
+
       <form onSubmit={handleSubmit} className="space-y-3">
         {resumeSuggestion ? (
           <button
@@ -139,15 +163,15 @@ export function ChatHomeView({
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Describe what you need, or pick a starting point below…"
-          disabled={isBusy}
+          placeholder={inputPlaceholder}
+          disabled={inputDisabled}
           rows={4}
           className="min-h-[140px] resize-none text-base"
           autoFocus
         />
 
         {/* Example prompts — shown when textarea is empty */}
-        {!input.trim() && !isBusy ? (
+        {!input.trim() && !inputDisabled ? (
           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {EXAMPLE_PROMPTS.map((prompt) => (
               <button
@@ -168,7 +192,7 @@ export function ChatHomeView({
               <Button
                 type="button"
                 variant="outline"
-                disabled={isBusy}
+                disabled={inputDisabled}
                 className={CHAT_QUICK_ACTION_BUTTON_CLASS}
                 onClick={() => transcriptInputRef.current?.click()}
               >
@@ -177,7 +201,7 @@ export function ChatHomeView({
               <Button
                 type="button"
                 variant="outline"
-                disabled={isBusy}
+                disabled={inputDisabled}
                 className={CHAT_QUICK_ACTION_BUTTON_CLASS}
                 onClick={() => notesInputRef.current?.click()}
               >
@@ -189,7 +213,7 @@ export function ChatHomeView({
           )}
           <Button
             type="submit"
-            disabled={isBusy || !input.trim()}
+            disabled={inputDisabled || !input.trim()}
             className="min-h-11 shrink-0"
           >
             Send

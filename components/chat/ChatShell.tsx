@@ -16,13 +16,14 @@ interface ChatShellProps {
   isUnavailable: boolean;
   sessionId: string | null;
   needsConsultationSelection: boolean;
+  consultationInputBlocked?: boolean;
   showCreateProject: boolean;
   showRetry: boolean;
   onRetry?: () => void;
   onConsultationSelected?: (consultationId: string) => void;
   onProjectCreated?: (consultationId: string) => void;
   onCardUpdated?: () => void;
-  onSubmitText?: (text: string) => void | Promise<void>;
+  onSubmitText?: (text: string) => boolean | Promise<boolean>;
   analysisNotifications?: ChatAnalysisNotification[];
   onDismissAnalysisNotification?: (id: string) => void;
 }
@@ -38,6 +39,7 @@ export function ChatShell({
   isUnavailable,
   sessionId,
   needsConsultationSelection,
+  consultationInputBlocked = false,
   showCreateProject,
   showRetry,
   onRetry,
@@ -85,6 +87,11 @@ export function ChatShell({
         onChange={onInputChange}
         onSubmit={onSend}
         disabled={isBusy}
+        blockedReason={
+          consultationInputBlocked
+            ? "Choose a consultation project above before you send a message."
+            : null
+        }
         onAttachFile={onAttachFile}
       />
     </div>

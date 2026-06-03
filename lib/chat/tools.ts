@@ -70,6 +70,11 @@ import {
   unlinkPersonFromMeetingSchema,
 } from "./tools/nl-actions";
 import { askUserChoiceSchema } from "./tools/ask-choice";
+import { TURN_CARD_STACK_BLOCKED_MESSAGE, TurnCardGate } from "./turn-card-gate";
+import {
+  executeIdentifyQuotesTool,
+  executeShowQuotesTool,
+} from "./quote-flow";
 import { executeConsultationQuery } from "./queries/consultation-analytics";
 import {
   listMeetingsForConsultation,
@@ -96,6 +101,8 @@ import {
 export interface ChatToolRuntimeContext {
   userId: string;
   sessionId: string;
+  turnCardGate?: TurnCardGate;
+  latestUserMessage?: string | null;
 }
 
 async function persistToolExecution(params: {
@@ -104,7 +111,13 @@ async function persistToolExecution(params: {
   input: Record<string, unknown>;
   output: unknown;
   status: "pending" | "success" | "error" | "dismissed";
-}) {
+}): Promise<{ id: string } | null> {
+  const gate = params.context.turnCardGate ?? new TurnCardGate();
+  const gateCheck = gate.assertCanShowCard(params.toolName);
+  if (!gateCheck.ok) {
+    return null;
+  }
+
   const toolMessage = await insertChatMessage({
     sessionId: params.context.sessionId,
     role: "tool",
@@ -135,6 +148,15 @@ async function persistToolExecution(params: {
     })
   );
 
+  gate.markCardShown(params.toolName);
+
+  return row;
+}
+
+function requirePersistedToolResult(row: { id: string } | null): { id: string } {
+  if (!row) {
+    throw new Error(TURN_CARD_STACK_BLOCKED_MESSAGE);
+  }
   return row;
 }
 
@@ -179,13 +201,15 @@ export async function executeMeetingIntakeTool(params: {
     return { ok: false as const, error: draftResult.error };
   }
 
-  const toolResult = await persistToolExecution({
-    context: params.context,
-    toolName: params.toolName,
-    input: params.input,
-    output: draftResult.draft,
-    status: "pending",
-  });
+  const toolResult = requirePersistedToolResult(
+    await persistToolExecution({
+      context: params.context,
+      toolName: params.toolName,
+      input: params.input,
+      output: draftResult.draft,
+      status: "pending",
+    })
+  );
 
   return {
     ok: true as const,
@@ -295,8 +319,17 @@ function createFastApiTool(
   });
 }
 
+function withRuntimeContext(context: ChatToolRuntimeContext): ChatToolRuntimeContext {
+  return {
+    ...context,
+    turnCardGate: context.turnCardGate ?? new TurnCardGate(),
+  };
+}
+
 /** Intake + DB-write chat tools for Sprint 21 task 04. */
-export function createChatTools(context: ChatToolRuntimeContext) {
+export function createChatTools(input: ChatToolRuntimeContext) {
+  const context = withRuntimeContext(input);
+
   return {
     intake_text_transcript: createIntakeTool(
       "intake_text_transcript",
@@ -462,86 +495,50 @@ export function createChatTools(context: ChatToolRuntimeContext) {
     }),
     identify_quotes: tool({
       description:
-        "Identify key quotes from a meeting transcript linked to confirmed insights.",
+        "Identify key quotes from a meeting transcript linked to confirmed insights. Omit meeting_id when the user names a person or meeting ambiguously — the server shows a meeting picker first.",
       inputSchema: identifyQuotesSchema,
       execute: async (input) => {
         const parsed = identifyQuotesSchema.parse(input);
-        const payload = parsed as unknown as Record<string, unknown>;
-
-        const result = await identifyAndPersistQuotes({
-          userId: context.userId,
-          sessionId: context.sessionId,
-          meetingId: parsed.meeting_id,
-          themeIds: parsed.theme_ids,
-        });
-
-        if (!result.ok) {
-          await persistToolExecution({
+        try {
+          return await executeIdentifyQuotesTool({
             context,
-            toolName: "identify_quotes",
-            input: payload,
-            output: { error: result.error },
-            status: "error",
+            meetingId: parsed.meeting_id,
+            themeIds: parsed.theme_ids,
+            userMessage: context.latestUserMessage,
+            persist: persistToolExecution,
           });
-          return { error: result.error };
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Quote identification failed";
+          if (message === TURN_CARD_STACK_BLOCKED_MESSAGE) {
+            return { error: message };
+          }
+          throw error;
         }
-
-        const toolResult = await persistToolExecution({
-          context,
-          toolName: "identify_quotes",
-          input: payload,
-          output: result.output,
-          status: "pending",
-        });
-
-        return {
-          ...result.output,
-          tool_result_id: toolResult.id,
-        };
       },
     }),
     show_quotes: tool({
       description:
-        "Open the quote review panel for a meeting so the user can highlight transcript text to create quotes, and review, approve, or reject existing quotes. Use when the user asks to 'show quotes', 'review quotes', 'create a quote', 'highlight a quote', 'add a quote', or asks what quotes exist for a meeting.",
+        "Open the quote review panel for a meeting so the user can highlight transcript text to create quotes, and review, approve, or reject existing quotes. Omit meeting_id when unclear — meeting picker shows first.",
       inputSchema: showQuotesSchema,
       execute: async (input) => {
         const parsed = showQuotesSchema.parse(input);
-        const payload = parsed as unknown as Record<string, unknown>;
-
-        const session = await getUnarchivedSessionForUser(context.userId, context.sessionId);
-        const consultationId = parsed.consultation_id ?? session?.consultationId ?? undefined;
-
-        if (!consultationId) {
-          return { error: "No consultation selected. Choose one first." };
-        }
-
-        const meeting = await getMeetingForUser(parsed.meeting_id, context.userId);
-
-        if (!meeting || meeting.consultation_id !== consultationId) {
-          await persistToolExecution({
+        try {
+          return await executeShowQuotesTool({
             context,
-            toolName: "show_quotes",
-            input: payload,
-            output: { error: "Meeting not found or access denied." },
-            status: "error",
+            meetingId: parsed.meeting_id,
+            consultationId: parsed.consultation_id,
+            userMessage: context.latestUserMessage,
+            persist: persistToolExecution,
           });
-          return { error: "Meeting not found or access denied." };
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Could not open quote review";
+          if (message === TURN_CARD_STACK_BLOCKED_MESSAGE) {
+            return { error: message };
+          }
+          throw error;
         }
-
-        const output = {
-          meeting_id: meeting.id,
-          meeting_title: meeting.title,
-        };
-
-        const toolResult = await persistToolExecution({
-          context,
-          toolName: "show_quotes",
-          input: payload,
-          output,
-          status: "success",
-        });
-
-        return { ...output, tool_result_id: toolResult.id };
       },
     }),
 
@@ -571,13 +568,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           return { error: result.error };
         }
 
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "group_themes",
           input: payload,
           output: result.output,
           status: "pending",
-        });
+        }));
 
         return {
           ...result.output,
@@ -613,13 +610,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           return { error: result.error };
         }
 
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "link_insights_to_group",
           input: payload,
           output: result.output,
           status: "pending",
-        });
+        }));
 
         return {
           ...result.output,
@@ -689,13 +686,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           return { error: result.error };
         }
 
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "generate_research_questions",
           input: payload,
           output: result.output,
           status: "pending",
-        });
+        }));
 
         return { ...result.output, tool_result_id: toolResult.id };
       },
@@ -724,13 +721,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           return { error: result.error };
         }
 
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "draft_evidence_email",
           input: payload,
           output: result.output,
           status: "pending",
-        });
+        }));
 
         return { ...result.output, tool_result_id: toolResult.id };
       },
@@ -758,13 +755,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           return { error: result.error };
         }
 
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "generate_report",
           input: payload,
           output: result.output,
           status: "pending",
-        });
+        }));
 
         return { ...result.output, tool_result_id: toolResult.id };
       },
@@ -793,13 +790,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           return { error: result.error };
         }
 
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "link_research_to_themes",
           input: payload,
           output: result.output,
           status: "pending",
-        });
+        }));
 
         return { ...result.output, tool_result_id: toolResult.id };
       },
@@ -836,13 +833,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           })),
         });
 
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "select_meeting_for_action",
           input: payload,
           output: pickerOutput,
           status: "pending",
-        });
+        }));
 
         return { ...pickerOutput, tool_result_id: toolResult.id };
       },
@@ -882,13 +879,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           person_name_hint: parsed.person_name_hint ?? null,
         };
 
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "link_person_to_consultation",
           input: payload,
           output,
           status: "pending",
-        });
+        }));
 
         return { ...output, tool_result_id: toolResult.id };
       },
@@ -926,13 +923,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           label_hint: parsed.label_hint ?? "",
         };
 
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "create_insight",
           input: payload,
           output,
           status: "pending",
-        });
+        }));
 
         return { ...output, tool_result_id: toolResult.id };
       },
@@ -983,13 +980,15 @@ export function createChatTools(context: ChatToolRuntimeContext) {
             }
           : { no_report: true, consultation_id: consultationId, meeting_name: meetingName };
 
-        const toolResult = await persistToolExecution({
-          context,
-          toolName: "show_report",
-          input: payload,
-          output,
-          status: "success",
-        });
+        const toolResult = requirePersistedToolResult(
+          await persistToolExecution({
+            context,
+            toolName: "show_report",
+            input: payload,
+            output,
+            status: "success",
+          })
+        );
 
         return { ...output, tool_result_id: toolResult.id };
       },
@@ -1034,13 +1033,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           date_hint: parsed.date_hint ?? null,
         };
 
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "edit_meeting",
           input: payload,
           output,
           status: "pending",
-        });
+        }));
 
         return { ...output, tool_result_id: toolResult.id };
       },
@@ -1086,13 +1085,15 @@ export function createChatTools(context: ChatToolRuntimeContext) {
             description: insight.description ?? null,
           };
 
-          const toolResult = await persistToolExecution({
-            context,
-            toolName: "edit_theme",
-            input: payload,
-            output,
-            status: "pending",
-          });
+          const toolResult = requirePersistedToolResult(
+            await persistToolExecution({
+              context,
+              toolName: "edit_theme",
+              input: payload,
+              output,
+              status: "pending",
+            })
+          );
 
           return { ...output, tool_result_id: toolResult.id };
         }
@@ -1116,13 +1117,15 @@ export function createChatTools(context: ChatToolRuntimeContext) {
             all_themes: themes.map((t) => ({ id: t.id, label: t.label })),
           };
 
-          const toolResult = await persistToolExecution({
-            context,
-            toolName: "edit_theme",
-            input: payload,
-            output,
-            status: "pending",
-          });
+          const toolResult = requirePersistedToolResult(
+            await persistToolExecution({
+              context,
+              toolName: "edit_theme",
+              input: payload,
+              output,
+              status: "pending",
+            })
+          );
 
           return { ...output, tool_result_id: toolResult.id };
         }
@@ -1160,13 +1163,15 @@ export function createChatTools(context: ChatToolRuntimeContext) {
 
           const output = { consultation_id: consultationId, events };
 
-          const toolResult = await persistToolExecution({
-            context,
-            toolName: "show_audit_trail",
-            input: payload,
-            output,
-            status: "success",
-          });
+          const toolResult = requirePersistedToolResult(
+            await persistToolExecution({
+              context,
+              toolName: "show_audit_trail",
+              input: payload,
+              output,
+              status: "success",
+            })
+          );
 
           return { ...output, tool_result_id: toolResult.id };
         } catch {
@@ -1219,13 +1224,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
               format: parsed.format,
             };
 
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "export_report",
           input: payload,
           output,
           status: "pending",
-        });
+        }));
 
         return { ...output, tool_result_id: toolResult.id };
       },
@@ -1254,13 +1259,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           query: parsed.query,
           industry_ctx: parsed.industry_ctx ?? null,
         };
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "prepare_literature_review",
           input: payload,
           output: proposal,
           status: "pending",
-        });
+        }));
 
         return { ...proposal, tool_result_id: toolResult.id };
       },
@@ -1302,13 +1307,15 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           meeting_title: meeting.title,
           note: parsed.note,
         };
-        const toolResult = await persistToolExecution({
-          context,
-          toolName: "attach_meeting_note",
-          input: parsed as unknown as Record<string, unknown>,
-          output: proposal,
-          status: "success",
-        });
+        const toolResult = requirePersistedToolResult(
+          await persistToolExecution({
+            context,
+            toolName: "attach_meeting_note",
+            input: parsed as unknown as Record<string, unknown>,
+            output: proposal,
+            status: "success",
+          })
+        );
         return { ...proposal, tool_result_id: toolResult.id };
       },
     }),
@@ -1340,13 +1347,15 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           person_name_hint: parsed.person_name_hint,
           people: linkedPeople,
         };
-        const toolResult = await persistToolExecution({
-          context,
-          toolName: "unlink_person_from_meeting",
-          input: parsed as unknown as Record<string, unknown>,
-          output: proposal,
-          status: "pending",
-        });
+        const toolResult = requirePersistedToolResult(
+          await persistToolExecution({
+            context,
+            toolName: "unlink_person_from_meeting",
+            input: parsed as unknown as Record<string, unknown>,
+            output: proposal,
+            status: "pending",
+          })
+        );
         return { ...proposal, tool_result_id: toolResult.id };
       },
     }),
@@ -1362,13 +1371,15 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           .slice(0, parsed.limit ?? 10)
           .map((result) => ({ id: result.id, tool_name: result.toolName }));
         const proposal = { items: pending };
-        const toolResult = await persistToolExecution({
-          context,
-          toolName: "bulk_dismiss_pending",
-          input: parsed as unknown as Record<string, unknown>,
-          output: proposal,
-          status: "pending",
-        });
+        const toolResult = requirePersistedToolResult(
+          await persistToolExecution({
+            context,
+            toolName: "bulk_dismiss_pending",
+            input: parsed as unknown as Record<string, unknown>,
+            output: proposal,
+            status: "pending",
+          })
+        );
         return { ...proposal, tool_result_id: toolResult.id };
       },
     }),
@@ -1386,13 +1397,15 @@ export function createChatTools(context: ChatToolRuntimeContext) {
           questions: parsed.questions,
           ...(parsed.context ? { context: parsed.context } : {}),
         };
-        const toolResult = await persistToolExecution({
-          context,
-          toolName: "ask_user_choice",
-          input: payload,
-          output,
-          status: "pending",
-        });
+        const toolResult = requirePersistedToolResult(
+          await persistToolExecution({
+            context,
+            toolName: "ask_user_choice",
+            input: payload,
+            output,
+            status: "pending",
+          })
+        );
         return { ...output, tool_result_id: toolResult.id };
       },
     }),
@@ -1435,13 +1448,13 @@ export function createChatTools(context: ChatToolRuntimeContext) {
               }),
         };
 
-        const toolResult = await persistToolExecution({
+        const toolResult = requirePersistedToolResult(await persistToolExecution({
           context,
           toolName: "manipulate_canvas",
           input: payload,
           output: proposal,
           status: "pending",
-        });
+        }));
 
         return { ...proposal, tool_result_id: toolResult.id };
       },

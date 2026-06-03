@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 export const identifyQuotesSchema = z.object({
-  meeting_id: z.string().uuid(),
-  theme_ids: z.array(z.string().uuid()).min(1),
+  meeting_id: z.string().uuid().optional(),
+  theme_ids: z.array(z.string().uuid()).min(1).optional(),
 });
 
 export const quoteReviewItemSchema = z.object({
@@ -146,7 +146,7 @@ export function formatTranscriptPosition(spanStart: number, spanEnd: number): st
 }
 
 export const showQuotesSchema = z.object({
-  meeting_id: z.string().uuid(),
+  meeting_id: z.string().uuid().optional(),
   consultation_id: z.string().uuid().optional(),
 });
 

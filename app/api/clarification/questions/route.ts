@@ -22,5 +22,5 @@ export async function POST(request: NextRequest) {
     return body;
   }
 
-  return forwardJsonToAi(aiServiceUrl, "/clarification/questions", body);
+  return forwardJsonToAi(aiServiceUrl, "/clarification/questions", body, { userId: auth.id });
 }

@@ -39,10 +39,15 @@ export async function POST(request: NextRequest) {
     console.error("Failed to load email personalization context", err);
   }
 
-  return forwardJsonToAi(aiServiceUrl, "/draft/email", {
-    ...(body as Record<string, unknown>),
-    learning_signals: learningSignals,
-    ai_learnings: aiLearnings,
-    user_preferences: userPreferences,
-  });
+  return forwardJsonToAi(
+    aiServiceUrl,
+    "/draft/email",
+    {
+      ...(body as Record<string, unknown>),
+      learning_signals: learningSignals,
+      ai_learnings: aiLearnings,
+      user_preferences: userPreferences,
+    },
+    { userId: auth.id }
+  );
 }

@@ -54,11 +54,16 @@ export async function POST(
     console.error("Failed to load theme personalization context", err);
   }
 
-  return forwardJsonToAi(aiServiceUrl, "/themes/extract", {
-    transcript,
-    meeting_id: flowId,
-    learning_signals: learningSignals,
-    ai_learnings: aiLearnings,
-    user_preferences: userPreferences,
-  });
+  return forwardJsonToAi(
+    aiServiceUrl,
+    "/themes/extract",
+    {
+      transcript,
+      meeting_id: flowId,
+      learning_signals: learningSignals,
+      ai_learnings: aiLearnings,
+      user_preferences: userPreferences,
+    },
+    { userId: auth.id }
+  );
 }

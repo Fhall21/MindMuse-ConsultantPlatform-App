@@ -80,10 +80,12 @@ Deploy this repository as a single Docker Compose application using [docker-comp
 
 Required environment variables:
 - `APP_SITE_URL=https://app.example.com`
-- `BETTER_AUTH_SECRET=<long random secret>`
+- `BETTER_AUTH_SECRET=<long random secret>` — **one value, used by both `app` and `ai`** (Better Auth sessions + FastAPI chat service tokens)
 - `DATABASE_PASSWORD=<postgres password>`
 - `OPENAI_API_KEY=<your key>`
-- `ALLOWED_ORIGINS=https://app.example.com`
+
+Optional:
+- `ALLOWED_ORIGINS=https://app.example.com` — only if the `ai` service is exposed publicly (not needed for internal `http://ai:8000` calls)
 
 Recommended defaults:
 - `APP_PORT=3000`
@@ -100,6 +102,8 @@ Optional database override:
 - `DATABASE_PASSWORD=<password>`
 - To point at a different database, change those values explicitly.
 - If `AI_SERVICE_URL` is unset, the stack falls back to the internal `ai` service URL.
+
+**Theme extraction / meetings page on Coolify:** The Next.js app proxies `POST /api/themes/extract` to FastAPI `/themes/extract`. Production AI requires `Authorization: Bearer <chat-service-token>` signed with `BETTER_AUTH_SECRET`. Local dev can appear to work if the AI container runs without that secret (FastAPI returns 503 instead) or before the middleware shipped. After deploy, ensure `BETTER_AUTH_SECRET` matches on `app` and `ai`; use internal `AI_SERVICE_URL=http://ai:8000`, not localhost.
 
 Notes:
 - The included `db` service runs PostgreSQL inside the stack.

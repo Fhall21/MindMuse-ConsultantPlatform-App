@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { API_PROXY_SESSION_ID } from "@/lib/chat/constants";
+import { isChatProtectedFastApiPath } from "@/lib/chat/protected-paths";
+import { createChatServiceToken } from "@/lib/chat/service-token";
 import { getAiServiceUrl } from "@/lib/env";
 import { getCurrentUserId } from "@/lib/data/auth-context";
+
+export type AiProxyAuth = {
+  userId: string;
+  sessionId?: string;
+};
 
 const AI_PROXY_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -70,6 +78,27 @@ export function enforceUploadSizeLimit(
   return null;
 }
 
+function buildAiProxyAuthHeaders(
+  path: string,
+  auth?: AiProxyAuth
+): Record<string, string> | NextResponse {
+  if (!isChatProtectedFastApiPath(path)) {
+    return {};
+  }
+
+  if (!auth?.userId) {
+    console.error("[ai-proxy] missing auth for protected FastAPI path:", path);
+    return NextResponse.json({ detail: "Internal server error" }, { status: 500 });
+  }
+
+  const token = createChatServiceToken({
+    userId: auth.userId,
+    sessionId: auth.sessionId ?? API_PROXY_SESSION_ID,
+  });
+
+  return { Authorization: `Bearer ${token}` };
+}
+
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
@@ -91,14 +120,23 @@ async function fetchWithTimeout(
 export async function forwardJsonToAi(
   aiServiceUrl: string,
   path: string,
-  payload: unknown
+  payload: unknown,
+  auth?: AiProxyAuth
 ): Promise<NextResponse> {
+  const authHeaders = buildAiProxyAuthHeaders(path, auth);
+  if (authHeaders instanceof NextResponse) {
+    return authHeaders;
+  }
+
   let response: Response;
 
   try {
     response = await fetchWithTimeout(`${aiServiceUrl}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
+      },
       body: JSON.stringify(payload),
     });
   } catch (err) {
@@ -122,13 +160,20 @@ export async function forwardJsonToAi(
 export async function forwardFormDataToAi(
   aiServiceUrl: string,
   path: string,
-  formData: FormData
+  formData: FormData,
+  auth?: AiProxyAuth
 ): Promise<NextResponse> {
+  const authHeaders = buildAiProxyAuthHeaders(path, auth);
+  if (authHeaders instanceof NextResponse) {
+    return authHeaders;
+  }
+
   let response: Response;
 
   try {
     response = await fetchWithTimeout(`${aiServiceUrl}${path}`, {
       method: "POST",
+      headers: authHeaders,
       body: formData,
     });
   } catch (err) {

@@ -28,5 +28,5 @@ export async function POST(request: NextRequest) {
     return uploadTooLarge;
   }
 
-  return forwardFormDataToAi(aiServiceUrl, "/transcribe/audio", formData);
+  return forwardFormDataToAi(aiServiceUrl, "/transcribe/audio", formData, { userId: auth.id });
 }

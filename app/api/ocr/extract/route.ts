@@ -28,5 +28,5 @@ export async function POST(request: NextRequest) {
     return uploadTooLarge;
   }
 
-  return forwardFormDataToAi(aiServiceUrl, "/ocr/extract", formData);
+  return forwardFormDataToAi(aiServiceUrl, "/ocr/extract", formData, { userId: auth.id });
 }

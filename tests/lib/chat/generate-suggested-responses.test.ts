@@ -95,7 +95,7 @@ describe("lib/chat/generate-suggested-responses", () => {
 
     const result = await generateSuggestedResponses({
       assistantText:
-        "Your theme decisions are saved. I can identify supporting quotes from the transcript next — say when you are ready, or ask what you would like to do.",
+        "Your theme decisions are saved. Shall we look at identifying and reviewing supporting quotes from the transcript next — say when you are ready, or ask what you would like to do."
     });
 
     expect(result.options).toHaveLength(1);

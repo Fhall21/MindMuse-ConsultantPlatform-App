@@ -40,7 +40,7 @@ export function getWelcomeGreeting(
 export const CREATE_CONSULTATION_COPY = {
   title: "Create your first consultation",
   description:
-    "A consultation is the engagement container for meetings and analysis. Rename it anytime under Consultations in the sidebar.",
+    "A consultation / project is the engagement container for meetings and analysis. Rename it anytime under Consultations in the sidebar.",
   label: "Consultation name",
   placeholder: "e.g. Leadership round — Q2",
   submit: "Create consultation",
@@ -67,7 +67,7 @@ export const MEETING_SAVED_FOLLOW_UP =
 
 /** Inserted after ThemeReviewCard completes (Done reviewing). */
 export const THEME_REVIEW_DONE_FOLLOW_UP =
-  "Your theme decisions are saved. I can identify supporting quotes from the transcript next — say when you are ready, or ask what you would like to do.";
+  "Your theme decisions are saved. Shall we look at identifying and reviewing supporting quotes from the transcript next — say when you are ready, or ask what you would like to do.";
 
 /** Inserted after QuoteCard completes (Done reviewing). */
 export const QUOTE_REVIEW_DONE_FOLLOW_UP =

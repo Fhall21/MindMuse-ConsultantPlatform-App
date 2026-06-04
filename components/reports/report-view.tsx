@@ -1160,7 +1160,7 @@ export function ReportView({ artifactId }: ReportViewProps) {
     return (
       <ReportEditor
         report={report}
-        anonymousMode={aiPreferences?.anonymousMode ?? false}
+        anonymousMode={aiPreferences?.anonymousMode ?? true}
         onExit={() => setIsEditing(false)}
         onSaved={handleSaved}
       />

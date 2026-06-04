@@ -922,7 +922,7 @@ export const userAIPreferences = pgTable(
       .default(sql`'[]'::jsonb`)
       .notNull(),
     emailGuidance: text("email_guidance").default("").notNull(),
-    anonymousMode: boolean("anonymous_mode").default(false).notNull(),
+    anonymousMode: boolean("anonymous_mode").default(true).notNull(),
     // Debounce: set to now()+60s on each signal. Worker fires when <= now().
     nextLearningAnalysisAt: timestamp("next_learning_analysis_at", {
       withTimezone: true,

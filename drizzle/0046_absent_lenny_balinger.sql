@@ -1,0 +1,1 @@
+ALTER TABLE "user_ai_preferences" ALTER COLUMN "anonymous_mode" SET DEFAULT true;

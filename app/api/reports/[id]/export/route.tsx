@@ -33,7 +33,7 @@ export async function GET(
 
     const renderedReport = applyRenderPolicyToReport(
       report,
-      preferences?.anonymous_mode ?? false
+      preferences?.anonymous_mode ?? true
     );
 
     // Rasterize SVG data URLs to PNG — react-pdf Image doesn't support SVG.

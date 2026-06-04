@@ -28,7 +28,7 @@ export async function GET() {
           industry: "",
           excludedTopics: [],
           emailGuidance: "",
-          anonymousMode: false,
+          anonymousMode: true,
         })
         .returning();
 

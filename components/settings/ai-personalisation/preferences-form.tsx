@@ -106,7 +106,7 @@ export function PreferencesForm() {
   const [industry, setIndustry] = useState("");
   const [excludedTopics, setExcludedTopics] = useState<string[]>([]);
   const [emailGuidance, setEmailGuidance] = useState("");
-  const [anonymousMode, setAnonymousMode] = useState(false);
+  const [anonymousMode, setAnonymousMode] = useState(true);
 
   useEffect(() => {
     if (prefs) {
@@ -115,7 +115,7 @@ export function PreferencesForm() {
       setIndustry(prefs.industry ?? "");
       setExcludedTopics(prefs.excludedTopics ?? []);
       setEmailGuidance(prefs.emailGuidance ?? "");
-      setAnonymousMode(prefs.anonymousMode ?? false);
+      setAnonymousMode(prefs.anonymousMode ?? true);
     }
   }, [prefs]);
 

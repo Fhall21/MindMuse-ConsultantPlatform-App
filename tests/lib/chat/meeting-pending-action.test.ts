@@ -16,6 +16,14 @@ describe("meeting pending action", () => {
     expect(inferMeetingPendingAction("draft an evidence email for the client")).toBe(
       "draft_evidence_email"
     );
+    expect(
+      inferMeetingPendingAction(
+        "I'm ready — draft the evidence email from the accepted insights from this meeting"
+      )
+    ).toBe("draft_evidence_email");
+    expect(inferMeetingPendingAction("draft an evidence email from accepted quotes")).toBe(
+      "draft_evidence_email"
+    );
   });
 
   it("reads pending_action from picker output and defaults for theme picker tool", () => {

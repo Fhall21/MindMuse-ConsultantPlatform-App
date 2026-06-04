@@ -5,6 +5,11 @@ import {
 } from "./persist";
 import { TURN_CARD_STACK_BLOCKED_MESSAGE, TurnCardGate } from "./turn-card-gate";
 import type { ChatToolRuntimeContext } from "./tool-context";
+import {
+  CURRENT_MEETING_CONTEXT_TOOL,
+  extractMeetingIdFromPayload,
+  refreshCurrentMeetingContext,
+} from "./current-meeting-context";
 
 export async function persistToolExecution(params: {
   context: ChatToolRuntimeContext;
@@ -50,6 +55,23 @@ export async function persistToolExecution(params: {
   );
 
   gate.markCardShown(params.toolName);
+
+  const meetingId =
+    params.status !== "error" && params.status !== "dismissed"
+      ? extractMeetingIdFromPayload(params.output) ?? extractMeetingIdFromPayload(params.input)
+      : null;
+  if (meetingId && params.toolName !== CURRENT_MEETING_CONTEXT_TOOL) {
+    try {
+      await refreshCurrentMeetingContext({
+        userId: params.context.userId,
+        sessionId: params.context.sessionId,
+        meetingId,
+        sourceToolName: params.toolName,
+      });
+    } catch (error) {
+      console.error("[chat] failed to refresh current meeting context", error);
+    }
+  }
 
   return row;
 }

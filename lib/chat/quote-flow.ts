@@ -102,6 +102,7 @@ export async function executeIdentifyQuotesTool(params: {
   if (!meetingId && !skipPicker) {
     const resolved = await resolveMeetingForConsultationAction({
       userId: params.context.userId,
+      sessionId: params.context.sessionId,
       consultationId,
       meetingId: undefined,
       userMessage: params.userMessage,
@@ -250,6 +251,7 @@ export async function executeShowQuotesTool(params: {
   if (!resolvedMeetingId) {
     const resolved = await resolveMeetingForConsultationAction({
       userId: params.context.userId,
+      sessionId: params.context.sessionId,
       consultationId,
       meetingId: undefined,
       userMessage: params.userMessage,

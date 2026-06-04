@@ -28,7 +28,6 @@ export function DraftPreviewCard({
   const confirmKey = `email-draft:${messageId}`;
 
   const [review, setReview] = useState<EmailDraftReviewOutput | null>(initialReview);
-  const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
   const [emailGuidance, setEmailGuidance] = useState("");
@@ -121,82 +120,14 @@ export function DraftPreviewCard({
     );
   }
 
-  async function handleSave() {
-    if (!review || !sessionId || !toolResultId) return;
-    setPending(confirmKey, true);
-    setError(null);
-    try {
-      const response = await fetch("/api/email-drafts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-chat-session-id": sessionId,
-        },
-        body: JSON.stringify({
-          meeting_id: review.meeting_id,
-          subject: review.subject,
-          body: review.edited_body ?? review.body,
-          draft_id: review.draft_id,
-          tool_result_id: toolResultId,
-        }),
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { detail?: string } | null;
-        throw new Error(data?.detail ?? "Could not save email draft");
-      }
-      await persist(review, "success");
-      await notifyCardConfirmation(sessionId, "email_draft_saved");
-      setCompleted(true);
-      onUpdated?.();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Could not save email draft");
-    } finally {
-      setPending(confirmKey, false);
-    }
-  }
-
-  return (
-    <ChatToolCardShell
-      maxWidth="2xl"
-      title={review.subject}
-      description="Review and edit the evidence email before saving."
-      error={error}
-      footer={
-        <>
-          <Button variant="outline" onClick={() => setEditing((value) => !value)} disabled={confirming}>
-            {editing ? "Preview" : "Edit"}
-          </Button>
-          <Button onClick={() => void handleSave()} disabled={confirming}>
-            {confirming ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                Saving…
-              </>
-            ) : (
-              "Save draft"
-            )}
-          </Button>
-        </>
-      }
-    >
-      {editing ? (
-        <Textarea
-          value={bodyToRender}
-          rows={12}
-          disabled={confirming}
-          onChange={(event) => {
-            const next = { ...review, edited_body: event.target.value };
-            setReview(next);
-            void persist(next);
-          }}
-        />
-      ) : (
-        <div className="max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed">
-          {bodyToRender}
-        </div>
-      )}
-
-      {showGuidance ? (
+  if (showGuidance) {
+    return (
+      <ChatToolCardShell
+        maxWidth="2xl"
+        title="Evidence email guidance"
+        description="Review the edit instruction before saving it to AI preferences."
+        error={error}
+      >
         <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
           <div className="space-y-2">
             <p className="text-sm font-medium">Evidence email guidance</p>
@@ -238,18 +169,66 @@ export function DraftPreviewCard({
             </div>
           </div>
         </div>
-      ) : null}
+      </ChatToolCardShell>
+    );
+  }
 
-      {review.supporting_quotes.length > 0 ? (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">Supporting quotes</p>
-          {review.supporting_quotes.map((quote) => (
-            <blockquote key={quote.id} className="border-l-2 pl-3 text-sm text-muted-foreground">
-              {quote.text}
-            </blockquote>
-          ))}
-        </div>
-      ) : null}
+  async function handleSave() {
+    if (!review || !sessionId || !toolResultId) return;
+    setPending(confirmKey, true);
+    setError(null);
+    try {
+      const response = await fetch("/api/email-drafts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-chat-session-id": sessionId,
+        },
+        body: JSON.stringify({
+          meeting_id: review.meeting_id,
+          subject: review.subject,
+          body: review.edited_body ?? review.body,
+          draft_id: review.draft_id,
+          tool_result_id: toolResultId,
+        }),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { detail?: string } | null;
+        throw new Error(data?.detail ?? "Could not save email draft");
+      }
+      await persist(review, "success");
+      await notifyCardConfirmation(sessionId, "email_draft_saved");
+      setCompleted(true);
+      onUpdated?.();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Could not save email draft");
+    } finally {
+      setPending(confirmKey, false);
+    }
+  }
+
+  return (
+    <ChatToolCardShell
+      maxWidth="2xl"
+      title={review.subject}
+      description="Review and edit the evidence email before saving."
+      error={error}
+      footer={
+        <Button onClick={() => void handleSave()} disabled={confirming}>
+          {confirming ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            "Save draft"
+          )}
+        </Button>
+      }
+    >
+      <div className="max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed">
+        {bodyToRender}
+      </div>
     </ChatToolCardShell>
   );
 }

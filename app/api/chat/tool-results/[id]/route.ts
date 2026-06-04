@@ -34,6 +34,7 @@ import {
 } from "@/lib/chat/tools/async-actions";
 import { mergeMeetingActionSelection } from "@/lib/chat/tools/meeting-action";
 import { readAskChoiceQuestions } from "@/lib/chat/tools/ask-choice";
+import { refreshCurrentMeetingContext } from "@/lib/chat/current-meeting-context";
 
 const themeDecisionSchema = z.enum(["accepted", "rejected"]);
 
@@ -309,6 +310,15 @@ export async function PATCH(
   });
 
   if (updated) {
+    if (parsed.data.meeting_id && nextStatus !== "dismissed") {
+      await refreshCurrentMeetingContext({
+        userId: auth.id,
+        sessionId: parsed.data.sessionId,
+        meetingId: parsed.data.meeting_id,
+        sourceToolName: existing.toolName,
+      });
+    }
+
     await maybeInsertCardCompletionFollowUp({
       sessionId: parsed.data.sessionId,
       toolName: existing.toolName,

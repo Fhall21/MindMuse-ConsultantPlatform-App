@@ -114,6 +114,7 @@ import { getUnarchivedSessionForUser } from "./context";
 import {
   buildMeetingPickerOutput,
 } from "./tools/meetings-picker";
+import { resolveMeetingForConsultationAction } from "./meeting-resolve";
 
 export type { ChatToolRuntimeContext } from "./tool-context";
 
@@ -281,6 +282,21 @@ function withRuntimeContext(context: ChatToolRuntimeContext): ChatToolRuntimeCon
     ...context,
     turnCardGate: context.turnCardGate ?? new TurnCardGate(),
   };
+}
+
+async function resolveMeetingIdForChatAction(params: {
+  context: ChatToolRuntimeContext;
+  consultationId?: string | null;
+  meetingId?: string;
+}) {
+  const resolved = await resolveMeetingForConsultationAction({
+    userId: params.context.userId,
+    sessionId: params.context.sessionId,
+    consultationId: params.consultationId ?? null,
+    meetingId: params.meetingId,
+    userMessage: params.context.latestUserMessage,
+  });
+  return resolved.ok ? resolved.meetingId : null;
 }
 
 /** Intake + DB-write chat tools for Sprint 21 task 04. */
@@ -871,6 +887,13 @@ export function createChatTools(input: ChatToolRuntimeContext) {
 
         let meetingId = parsed.meeting_id;
         if (!meetingId && consultationId) {
+          meetingId = await resolveMeetingIdForChatAction({
+            context,
+            consultationId,
+            meetingId,
+          }) ?? undefined;
+        }
+        if (!meetingId && consultationId) {
           const meetings = await listMeetingsForConsultation(consultationId, context.userId);
           if (meetings.length === 1) {
             meetingId = meetings[0].id;
@@ -916,6 +939,13 @@ export function createChatTools(input: ChatToolRuntimeContext) {
         const consultationId = parsed.consultation_id ?? session?.consultationId ?? undefined;
 
         let meetingId = parsed.meeting_id;
+        if (!meetingId && consultationId) {
+          meetingId = await resolveMeetingIdForChatAction({
+            context,
+            consultationId,
+            meetingId,
+          }) ?? undefined;
+        }
         if (!meetingId && consultationId) {
           const meetings = await listMeetingsForConsultation(consultationId, context.userId);
           if (meetings.length === 1) {
@@ -1020,6 +1050,13 @@ export function createChatTools(input: ChatToolRuntimeContext) {
 
         let meetingId = parsed.meeting_id;
         if (!meetingId && consultationId) {
+          meetingId = await resolveMeetingIdForChatAction({
+            context,
+            consultationId,
+            meetingId,
+          }) ?? undefined;
+        }
+        if (!meetingId && consultationId) {
           const meetings = await listMeetingsForConsultation(consultationId, context.userId);
           if (meetings.length === 1) {
             meetingId = meetings[0].id;
@@ -1070,6 +1107,13 @@ export function createChatTools(input: ChatToolRuntimeContext) {
         const consultationId = parsed.consultation_id ?? session?.consultationId ?? undefined;
 
         let meetingId = parsed.meeting_id;
+        if (!meetingId && consultationId) {
+          meetingId = await resolveMeetingIdForChatAction({
+            context,
+            consultationId,
+            meetingId,
+          }) ?? undefined;
+        }
         if (!meetingId && consultationId) {
           const meetings = await listMeetingsForConsultation(consultationId, context.userId);
           if (meetings.length === 1) {

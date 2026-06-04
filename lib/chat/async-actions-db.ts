@@ -14,6 +14,7 @@ import { requireOwnedConsultation } from "@/lib/data/ownership";
 import { dispatchToolToFastApi } from "./tool-dispatch";
 import { CHAT_TOOL_ENDPOINTS } from "./tool-allowlist";
 import { extractEvidenceEmailRevisionRequest } from "./email-guidance-prefill";
+import { getCurrentMeetingContextForSession } from "./current-meeting-context";
 import type {
   EmailDraftReviewOutput,
   ReportDraftReviewOutput,
@@ -192,8 +193,18 @@ export async function executeDraftEvidenceEmail(params: {
     return { ok: false, error: "Save a meeting before drafting an evidence email." };
   }
 
+  const currentMeeting =
+    params.meetingIds?.length
+      ? null
+      : await getCurrentMeetingContextForSession({
+          userId: params.userId,
+          sessionId: params.sessionId,
+          consultationId: params.consultationId,
+        });
   const selectedMeeting =
-    meetingRows.find((row) => params.meetingIds?.includes(row.id)) ?? meetingRows[0];
+    meetingRows.find((row) => params.meetingIds?.includes(row.id)) ??
+    meetingRows.find((row) => row.id === currentMeeting?.meeting_id) ??
+    meetingRows[0];
   const transcript =
     selectedMeeting.transcriptRaw?.trim() || selectedMeeting.notes?.trim() || "";
   if (!transcript) {

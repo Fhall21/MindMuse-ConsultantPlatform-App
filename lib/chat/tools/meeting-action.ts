@@ -17,7 +17,21 @@ export function mergeMeetingActionSelection(
     output && typeof output === "object" && !Array.isArray(output)
       ? (output as Record<string, unknown>)
       : {};
-  return { ...existing, meeting_id: meetingId };
+  const selected = Array.isArray(existing.meetings)
+    ? existing.meetings.find(
+        (meeting) =>
+          meeting &&
+          typeof meeting === "object" &&
+          (meeting as { id?: unknown }).id === meetingId
+      )
+    : null;
+  return {
+    ...existing,
+    meeting_id: meetingId,
+    ...(selected && typeof selected === "object"
+      ? { selected_meeting: selected as Record<string, unknown> }
+      : {}),
+  };
 }
 
 export const MEETING_ACTION_CONTINUATION_PREFIX = "Use the selected meeting,";
@@ -27,7 +41,11 @@ export function buildMeetingActionContinuation(meetingTitle: string): string {
 }
 
 export function isMeetingActionContinuation(text: string): boolean {
-  return text.trimStart().startsWith(MEETING_ACTION_CONTINUATION_PREFIX);
+  const trimmed = text.trimStart();
+  return (
+    trimmed.startsWith(MEETING_ACTION_CONTINUATION_PREFIX) ||
+    /\b(this|current|selected)\s+meeting\b/i.test(trimmed)
+  );
 }
 
 export function parseMeetingTitleFromContinuation(text: string): string | null {
@@ -37,4 +55,3 @@ export function parseMeetingTitleFromContinuation(text: string): string | null {
   );
   return match?.[1]?.trim() ?? null;
 }
-

@@ -15,6 +15,9 @@ describe("lib/chat/tools/meetings-picker", () => {
           id: "22222222-2222-4222-8222-222222222222",
           title: "Weekly check-in",
           date: "2026-06-01T12:00:00.000Z",
+          meeting_type_id: "33333333-3333-4333-8333-333333333333",
+          meeting_type_label: "1:1 consultation",
+          people_names: ["Jake"],
         },
       ],
     });
@@ -23,6 +26,8 @@ describe("lib/chat/tools/meetings-picker", () => {
     expect(parsed?.consultation_id).toBe("11111111-1111-4111-8111-111111111111");
     expect(parsed?.meetings).toHaveLength(1);
     expect(parsed?.meetings[0]?.title).toBe("Weekly check-in");
+    expect(parsed?.meetings[0]?.meeting_type_label).toBe("1:1 consultation");
+    expect(parsed?.meetings[0]?.people_names).toEqual(["Jake"]);
   });
 
   it("returns null for invalid picker payloads", () => {

@@ -34,14 +34,14 @@ export function defaultPendingActionForPickerTool(
 export function inferMeetingPendingAction(userMessage: string): MeetingPendingAction | null {
   const lower = userMessage.toLowerCase();
 
+  if (/\b(evidence email|draft email|follow[- ]?up email|email draft)\b/.test(lower)) {
+    return "draft_evidence_email";
+  }
   if (messageMentionsQuotes(userMessage)) {
     return inferQuotePendingAction(userMessage);
   }
   if (/\b(extract|pull|find|identify)\b.*\bthemes?\b|\bthemes?\b.*\b(extract|from)\b/.test(lower)) {
     return "extract_themes";
-  }
-  if (/\b(evidence email|draft email|follow[- ]?up email|email draft)\b/.test(lower)) {
-    return "draft_evidence_email";
   }
   if (/\b(add|create)\b.*\b(insight|theme)\b/.test(lower)) {
     return "create_insight";

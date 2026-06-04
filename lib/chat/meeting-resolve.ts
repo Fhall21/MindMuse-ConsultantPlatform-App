@@ -10,6 +10,11 @@ import {
   titleMatchesMeetingHint,
   type MeetingPickerCandidate,
 } from "./meeting-hints";
+import {
+  getCurrentMeetingContextForSession,
+  shouldReuseCurrentMeetingForMessage,
+  type CurrentMeetingContext,
+} from "./current-meeting-context";
 
 export type { MeetingPickerCandidate } from "./meeting-hints";
 export { extractMeetingHintFromMessage, filterMeetingsByTitleHint } from "./meeting-hints";
@@ -21,9 +26,11 @@ export type MeetingResolveResult =
 
 export async function resolveMeetingForConsultationAction(params: {
   userId: string;
+  sessionId?: string;
   consultationId: string | null;
   meetingId?: string;
   userMessage?: string | null;
+  currentMeeting?: CurrentMeetingContext | null;
 }): Promise<MeetingResolveResult> {
   if (!params.consultationId) {
     return {
@@ -49,6 +56,15 @@ export async function resolveMeetingForConsultationAction(params: {
   }
 
   const userMessage = params.userMessage?.trim() ?? null;
+  const currentMeeting =
+    params.currentMeeting ??
+    (params.sessionId
+      ? await getCurrentMeetingContextForSession({
+          userId: params.userId,
+          sessionId: params.sessionId,
+          consultationId: params.consultationId,
+        })
+      : null);
 
   if (userMessage && isMeetingActionContinuation(userMessage)) {
     const title = parseMeetingTitleFromContinuation(userMessage);
@@ -60,6 +76,9 @@ export async function resolveMeetingForConsultationAction(params: {
     }
     if (params.meetingId) {
       return { ok: true, meetingId: params.meetingId };
+    }
+    if (currentMeeting) {
+      return { ok: true, meetingId: currentMeeting.meeting_id };
     }
     return {
       ok: false,
@@ -90,6 +109,13 @@ export async function resolveMeetingForConsultationAction(params: {
     }
 
     return { ok: true, meetingId: params.meetingId };
+  }
+
+  if (
+    currentMeeting &&
+    shouldReuseCurrentMeetingForMessage(currentMeeting, userMessage)
+  ) {
+    return { ok: true, meetingId: currentMeeting.meeting_id };
   }
 
   if (pickerMeetings.length === 1) {

@@ -49,6 +49,7 @@ import {
   extractGenerativeSuggestedRepliesFromSteps,
   turnIncludesCardToolFromSteps,
 } from "@/lib/chat/tools/emit-suggested-replies";
+import { getCurrentMeetingContextForSession } from "@/lib/chat/current-meeting-context";
 
 export const maxDuration = 60;
 
@@ -163,6 +164,7 @@ export async function POST(request: NextRequest) {
       onboardingState,
       autoIntakeSuppressed,
       lastAction,
+      currentMeeting,
     ] = await Promise.all([
       buildProjectContextSummary(auth.id, session.consultationId),
       countConsecutiveToolErrors(session.id),
@@ -170,7 +172,15 @@ export async function POST(request: NextRequest) {
       loadOnboardingAccountState(auth.id),
       checkAutoIntakeSuppressed(session.id),
       getLastReversibleAction(session.id),
+      getCurrentMeetingContextForSession({
+        userId: auth.id,
+        sessionId: session.id,
+        consultationId: session.consultationId,
+      }),
     ]);
+    const promptContextSummary = contextSummary
+      ? { ...contextSummary, currentMeeting }
+      : contextSummary;
 
     if (
       latestUserText &&
@@ -246,7 +256,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const systemPrompt = buildDynamicSystemPrompt(onboardingState, contextSummary, {
+    const systemPrompt = buildDynamicSystemPrompt(onboardingState, promptContextSummary, {
       proactiveTriggers,
       autoIntakeSuppressed,
       sessionContext,
@@ -257,6 +267,7 @@ export async function POST(request: NextRequest) {
       sessionId: session.id,
       turnCardGate: new TurnCardGate(),
       latestUserMessage: latestUserText,
+      lastMeetingId: currentMeeting?.meeting_id ?? contextSummary?.lastMeetingId ?? null,
     });
 
     const result = streamText({

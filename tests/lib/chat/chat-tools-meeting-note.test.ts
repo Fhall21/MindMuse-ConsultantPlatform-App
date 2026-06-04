@@ -12,6 +12,7 @@ vi.mock("@/db/client", () => ({
   db: {
     update: vi.fn(),
     insert: vi.fn(),
+    select: vi.fn(),
   },
 }));
 
@@ -44,6 +45,11 @@ describe("createChatTools attach_meeting_note", () => {
       id: "tool-result-1",
     } as Awaited<ReturnType<typeof insertToolResult>>);
     vi.mocked(updateChatMessageContent).mockResolvedValue();
+    const limit = vi.fn().mockResolvedValue([]);
+    const whereSelect = vi.fn().mockReturnValue({ limit });
+    const leftJoin = vi.fn().mockReturnValue({ where: whereSelect });
+    const from = vi.fn().mockReturnValue({ leftJoin });
+    vi.mocked(db.select).mockReturnValue({ from } as unknown as ReturnType<typeof db.select>);
   });
 
   it("appends the note immediately and persists a successful tool result", async () => {

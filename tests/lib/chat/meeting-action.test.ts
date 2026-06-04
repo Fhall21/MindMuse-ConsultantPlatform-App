@@ -19,6 +19,7 @@ describe("meeting action continuation", () => {
     ).toEqual({
       consultation_id: "consultation-1",
       meetings: [{ id: "meeting-1", title: "Weekly check-in", date: null }],
+      selected_meeting: { id: "meeting-1", title: "Weekly check-in", date: null },
       meeting_id: "meeting-1",
     });
   });
@@ -35,4 +36,9 @@ describe("meeting action continuation", () => {
     expect(parseMeetingTitleFromContinuation(text)).toBe("1-1 — Jake — Apr 2026");
   });
 
+  it("treats this/current/selected meeting as continuation phrasing", () => {
+    expect(isMeetingActionContinuation("use this meeting for that")).toBe(true);
+    expect(isMeetingActionContinuation("draft an email for the current meeting")).toBe(true);
+    expect(isMeetingActionContinuation("review quotes from the selected meeting")).toBe(true);
+  });
 });

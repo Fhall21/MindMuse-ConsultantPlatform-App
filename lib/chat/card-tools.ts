@@ -39,6 +39,7 @@ export const CHAT_HIDDEN_THREAD_TOOL_NAMES = new Set<string>([
   "confirm_meeting",
   "link_people",
   "emit_suggested_replies",
+  "current_meeting_context",
 ]);
 
 export function isHiddenThreadToolName(toolName: string): boolean {

@@ -10,6 +10,9 @@ export interface MeetingPickerItem {
   id: string;
   title: string;
   date: string | null;
+  meeting_type_id?: string | null;
+  meeting_type_label?: string | null;
+  people_names?: string[];
 }
 
 export interface MeetingPickerOutput {
@@ -47,6 +50,13 @@ export function readMeetingPickerOutput(output: unknown): MeetingPickerOutput | 
       id: row.id,
       title: row.title,
       date: typeof row.date === "string" ? row.date : null,
+      meeting_type_id:
+        typeof row.meeting_type_id === "string" ? row.meeting_type_id : null,
+      meeting_type_label:
+        typeof row.meeting_type_label === "string" ? row.meeting_type_label : null,
+      people_names: Array.isArray(row.people_names)
+        ? row.people_names.filter((name): name is string => typeof name === "string")
+        : [],
     });
   }
 

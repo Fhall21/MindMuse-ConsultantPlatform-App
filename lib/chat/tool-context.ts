@@ -5,4 +5,5 @@ export interface ChatToolRuntimeContext {
   sessionId: string;
   turnCardGate?: TurnCardGate;
   latestUserMessage?: string | null;
+  lastMeetingId?: string | null;
 }

@@ -21,6 +21,11 @@ import {
   formatMeetingPickerToolReturn,
   formatThemeExtractionToolReturn,
 } from "./theme-tool-returns";
+import { resolveMeetingForConsultationAction } from "./meeting-resolve";
+import {
+  extractMeetingIdFromPayload,
+  refreshCurrentMeetingContext,
+} from "./current-meeting-context";
 
 async function persistChatToolResult(params: {
   context: ChatToolRuntimeContext;
@@ -58,6 +63,23 @@ async function persistChatToolResult(params: {
       toolResultId: row.id,
     })
   );
+
+  const meetingId =
+    params.status !== "error" && params.status !== "dismissed"
+      ? extractMeetingIdFromPayload(params.output) ?? extractMeetingIdFromPayload(params.input)
+      : null;
+  if (meetingId) {
+    try {
+      await refreshCurrentMeetingContext({
+        userId: params.context.userId,
+        sessionId: params.context.sessionId,
+        meetingId,
+        sourceToolName: params.toolName,
+      });
+    } catch (error) {
+      console.error("[chat] failed to refresh current meeting context", error);
+    }
+  }
 
   return row;
 }
@@ -310,6 +332,34 @@ export async function executeExtractThemesTool(params: {
       );
     }
 
+    await persistChatToolResult({
+      context: params.context,
+      toolName: "extract_themes",
+      input: payload,
+      output: { error: resolved.error },
+      status: "error",
+    });
+    return { error: resolved.error };
+  }
+
+  const resolved = await resolveMeetingForConsultationAction({
+    userId: params.context.userId,
+    sessionId: params.context.sessionId,
+    consultationId,
+    userMessage: params.context.latestUserMessage,
+  });
+
+  if (resolved.ok) {
+    return formatThemeExtractionToolReturn(
+      await runThemeExtractionForMeeting({
+        context: params.context,
+        meetingId: resolved.meetingId,
+        input: { meeting_id: resolved.meetingId },
+      })
+    );
+  }
+
+  if (!resolved.needsPicker) {
     await persistChatToolResult({
       context: params.context,
       toolName: "extract_themes",

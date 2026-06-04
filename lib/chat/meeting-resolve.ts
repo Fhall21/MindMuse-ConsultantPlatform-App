@@ -73,19 +73,20 @@ export async function resolveMeetingForConsultationAction(params: {
     userMessage !== null ? extractMeetingHintFromMessage(userMessage) : null;
 
   if (params.meetingId) {
+    const meeting = await getMeetingForUser(params.meetingId, params.userId);
+    if (!meeting || meeting.consultation_id !== params.consultationId) {
+      return { ok: false, needsPicker: false, error: "Meeting not found or access denied." };
+    }
+
     const direct = await loadMeetingTranscript(params.userId, params.meetingId);
     if (!direct.ok) {
-      if (pickerMeetings.length > 1) {
-        return { ok: false, needsPicker: true };
-      }
+      // Explicit meeting_id was already chosen — re-picking cannot fix a missing transcript.
       return { ok: false, needsPicker: false, error: direct.error };
     }
 
-    if (hint) {
-      const meeting = await getMeetingForUser(params.meetingId, params.userId);
-      if (meeting && !titleMatchesMeetingHint(meeting.title, hint)) {
-        return { ok: false, needsPicker: true };
-      }
+    if (hint && !titleMatchesMeetingHint(meeting.title, hint)) {
+      // User or picker already locked this meeting — do not loop back to the picker.
+      return { ok: true, meetingId: params.meetingId };
     }
 
     return { ok: true, meetingId: params.meetingId };

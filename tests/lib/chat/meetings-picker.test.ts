@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildMeetingPickerOutput,
+  isMeetingPickerToolResult,
   readMeetingPickerOutput,
 } from "@/lib/chat/tools/meetings-picker";
 import { formatSelectMeetingForThemesToolReturn } from "@/lib/chat/theme-tool-returns";
@@ -27,6 +28,30 @@ describe("lib/chat/tools/meetings-picker", () => {
   it("returns null for invalid picker payloads", () => {
     expect(readMeetingPickerOutput(null)).toBeNull();
     expect(readMeetingPickerOutput({ consultation_id: "x", meetings: [] })).toBeNull();
+  });
+
+  it("detects picker tool results vs confirmed meeting output", () => {
+    const picker = {
+      consultation_id: "c1",
+      meetings: [{ id: "m1", title: "1-1", date: null }],
+      pending_action: "show_quotes",
+      tool_result_id: "tr1",
+    };
+    expect(isMeetingPickerToolResult(picker)).toBe(true);
+    expect(readMeetingPickerOutput(picker)?.meeting_id).toBeUndefined();
+
+    const confirmed = {
+      ...picker,
+      meeting_id: "m1",
+    };
+    expect(isMeetingPickerToolResult(confirmed)).toBe(false);
+
+    const quoteReview = {
+      meeting_id: "m1",
+      meeting_title: "1-1",
+      tool_result_id: "tr2",
+    };
+    expect(isMeetingPickerToolResult(quoteReview)).toBe(false);
   });
 });
 

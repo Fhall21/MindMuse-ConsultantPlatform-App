@@ -76,3 +76,9 @@ export function buildMeetingPickerOutput(params: {
     meetings: params.meetings,
   };
 }
+
+/** True when a tool returned meeting-picker payload instead of a follow-up card. */
+export function isMeetingPickerToolResult(value: unknown): boolean {
+  const picker = readMeetingPickerOutput(value);
+  return Boolean(picker && picker.meetings.length > 0 && !picker.meeting_id);
+}

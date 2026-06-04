@@ -11,6 +11,8 @@ const MEETING_HINT_PATTERNS = [
   /\b([A-Za-z][A-Za-z'-]{1,30})'?s\s+meeting\b/i,
 ];
 
+const MEETING_HINT_STOP_WORDS = new Set(["the", "a", "an", "my", "our", "this", "that"]);
+
 /** Pull a person/name hint from free text (e.g. "chat with Jake"). */
 export function extractMeetingHintFromMessage(message: string): string | null {
   const trimmed = message.trim();
@@ -21,7 +23,11 @@ export function extractMeetingHintFromMessage(message: string): string | null {
   for (const pattern of MEETING_HINT_PATTERNS) {
     const match = trimmed.match(pattern);
     const candidate = match?.[1]?.trim();
-    if (candidate && candidate.length >= 2) {
+    if (
+      candidate &&
+      candidate.length >= 2 &&
+      !MEETING_HINT_STOP_WORDS.has(candidate.toLowerCase())
+    ) {
       return candidate;
     }
   }

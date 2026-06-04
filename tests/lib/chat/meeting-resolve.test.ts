@@ -18,4 +18,11 @@ describe("lib/chat/meeting-resolve", () => {
     ];
     expect(filterMeetingsByTitleHint(meetings, "Jake")).toEqual([meetings[0]]);
   });
+
+  it("skips article words after from/with", () => {
+    expect(extractMeetingHintFromMessage("review quotes from the leadership session")).toBe(
+      null
+    );
+    expect(extractMeetingHintFromMessage("review quotes from chat with Jake")).toBe("Jake");
+  });
 });

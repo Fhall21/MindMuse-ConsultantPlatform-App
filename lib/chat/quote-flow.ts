@@ -223,8 +223,21 @@ export async function executeShowQuotesTool(params: {
   );
   const consultationId =
     params.consultationId ?? session?.consultationId ?? undefined;
+  let meetingId = params.meetingId;
+
+  if (
+    params.userMessage &&
+    isMeetingActionContinuation(params.userMessage) &&
+    !meetingId
+  ) {
+    const locked = await getLatestMeetingActionSelection(params.context.sessionId);
+    if (locked) {
+      meetingId = locked.meetingId;
+    }
+  }
+
   const payload: Record<string, unknown> = {
-    ...(params.meetingId ? { meeting_id: params.meetingId } : {}),
+    ...(meetingId ? { meeting_id: meetingId } : {}),
     ...(consultationId ? { consultation_id: consultationId } : {}),
   };
 
@@ -232,34 +245,40 @@ export async function executeShowQuotesTool(params: {
     return { error: "No consultation selected. Choose one first." };
   }
 
-  const resolved = await resolveMeetingForConsultationAction({
-    userId: params.context.userId,
-    consultationId,
-    meetingId: params.meetingId,
-    userMessage: params.userMessage,
-  });
+  let resolvedMeetingId = meetingId;
 
-  if (!resolved.ok) {
-    if (resolved.needsPicker) {
-      return persistQuoteMeetingPicker({
+  if (!resolvedMeetingId) {
+    const resolved = await resolveMeetingForConsultationAction({
+      userId: params.context.userId,
+      consultationId,
+      meetingId: undefined,
+      userMessage: params.userMessage,
+    });
+
+    if (!resolved.ok) {
+      if (resolved.needsPicker) {
+        return persistQuoteMeetingPicker({
+          context: params.context,
+          consultationId,
+          input: payload,
+          persist: params.persist,
+        });
+      }
+
+      await params.persist({
         context: params.context,
-        consultationId,
+        toolName: "show_quotes",
         input: payload,
-        persist: params.persist,
+        output: { error: resolved.error ?? "Could not resolve meeting." },
+        status: "error",
       });
+      return { error: resolved.error ?? "Could not resolve meeting." };
     }
 
-    await params.persist({
-      context: params.context,
-      toolName: "show_quotes",
-      input: payload,
-      output: { error: resolved.error ?? "Could not resolve meeting." },
-      status: "error",
-    });
-    return { error: resolved.error ?? "Could not resolve meeting." };
+    resolvedMeetingId = resolved.meetingId;
   }
 
-  const meeting = await getMeetingForUser(resolved.meetingId, params.context.userId);
+  const meeting = await getMeetingForUser(resolvedMeetingId, params.context.userId);
   if (!meeting || meeting.consultation_id !== consultationId) {
     const message = "Meeting not found or access denied.";
     await params.persist({

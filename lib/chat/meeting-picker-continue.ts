@@ -22,7 +22,10 @@ import {
   getMeetingForUser,
   listPeopleForUser,
 } from "@/lib/data/domain-read";
-import { readMeetingPickerOutput } from "./tools/meetings-picker";
+import {
+  isMeetingPickerToolResult,
+  readMeetingPickerOutput,
+} from "./tools/meetings-picker";
 
 export type MeetingPickerContinueResult =
   | { ok: true; action: MeetingPendingAction; toolResultId: string }
@@ -315,6 +318,13 @@ export async function runMeetingPickerContinue(params: {
       const error = errorFromReturn(result, "Could not open quote review.");
       if (error) {
         return { ok: false, error };
+      }
+      if (isMeetingPickerToolResult(result)) {
+        return {
+          ok: false,
+          error:
+            "Quote review did not open after meeting selection. Refresh and try again.",
+        };
       }
       const toolResultId = toolResultIdFromReturn(result);
       if (!toolResultId) {

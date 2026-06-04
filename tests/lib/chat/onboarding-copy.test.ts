@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CARD_DISMISSED_COPY,
   CARD_REOPEN_HELP,
+  QUOTE_REVIEW_DONE_FOLLOW_UP,
   getHomeExamplePrompts,
   meetingSavedDescription,
 } from "@/lib/chat/onboarding-copy";
@@ -30,5 +31,10 @@ describe("onboarding-copy card success strings", () => {
     expect(getHomeExamplePrompts("needs_meeting")).toContain(
       "Send a transcript into this project."
     );
+  });
+
+  it("points quote completion toward evidence email drafting", () => {
+    expect(QUOTE_REVIEW_DONE_FOLLOW_UP).toContain("draft the evidence email");
+    expect(QUOTE_REVIEW_DONE_FOLLOW_UP).not.toContain("identifying and reviewing supporting quotes");
   });
 });

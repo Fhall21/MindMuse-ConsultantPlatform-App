@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import userEvent from "@testing-library/user-event";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QuoteReviewPanel } from "@/components/consultations/quote-review-panel";
 
@@ -141,5 +141,39 @@ describe("QuoteReviewPanel insight linking", () => {
         additionalInsightIds: [],
       });
     });
+  });
+
+  it("lets users move the quote editor when floating placement is odd", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<QuoteReviewPanel meetingId="meeting-1" />);
+
+    const highlightedQuote = container.querySelector<HTMLElement>(
+      'mark[data-quote-id="quote-1"]'
+    );
+    expect(highlightedQuote).not.toBeNull();
+    await user.click(highlightedQuote!);
+
+    const dialog = screen.getByRole("dialog", { name: "Edit quote" });
+    vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue({
+      x: 100,
+      y: 80,
+      top: 80,
+      left: 100,
+      right: 420,
+      bottom: 280,
+      width: 320,
+      height: 200,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Move quote editor" }), {
+      button: 0,
+      clientX: 120,
+      clientY: 100,
+    });
+    fireEvent.pointerMove(window, { clientX: 170, clientY: 140 });
+    fireEvent.pointerUp(window);
+
+    expect(dialog).toHaveStyle({ left: "150px", top: "120px" });
   });
 });

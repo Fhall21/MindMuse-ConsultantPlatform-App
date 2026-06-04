@@ -54,18 +54,18 @@ const QUOTE_REVIEW_DONE_TEMPLATE: WorkflowSuggestedResponsesPayload = {
   source: "workflow",
   options: [
     {
-      label: "What's next?",
-      prefill: "What would you like to do next?",
+      label: "Draft email",
+      prefill: "I'm ready — draft the evidence email from the accepted quotes",
       role: "primary",
     },
     {
       label: "Not yet",
-      prefill: "Not yet — I'll pick this up later",
+      prefill: "Not yet — I'll come back to the evidence email later",
       role: "defer",
     },
     {
-      label: "Open meetings",
-      prefill: "I'll review everything under Meetings in the sidebar",
+      label: "Adjust quotes",
+      prefill: "I want to adjust the saved quotes before drafting the email",
       role: "alternate",
     },
   ],

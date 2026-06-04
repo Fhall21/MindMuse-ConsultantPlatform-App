@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { UIMessage } from "ai";
 import {
   MEETING_SAVED_FOLLOW_UP,
+  QUOTE_REVIEW_DONE_FOLLOW_UP,
   THEME_REVIEW_DONE_FOLLOW_UP,
 } from "@/lib/chat/onboarding-copy";
 import { getWorkflowSuggestedResponsesForContent } from "@/lib/chat/suggested-response-templates";
@@ -58,6 +59,12 @@ describe("lib/chat/suggested-responses", () => {
     );
     expect(getWorkflowSuggestedResponsesForContent(THEME_REVIEW_DONE_FOLLOW_UP)?.options[0]?.label).toBe(
       "Identify quotes"
+    );
+    expect(getWorkflowSuggestedResponsesForContent(QUOTE_REVIEW_DONE_FOLLOW_UP)?.options[0]).toEqual(
+      expect.objectContaining({
+        label: "Draft email",
+        prefill: expect.stringContaining("draft the evidence email"),
+      })
     );
   });
 

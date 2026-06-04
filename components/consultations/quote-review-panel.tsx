@@ -8,8 +8,9 @@ import {
   useRef,
   useState,
 } from "react";
+import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { toast } from "sonner";
-import { Columns2, Rows3 } from "lucide-react";
+import { Columns2, GripHorizontal, Rows3 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,52 @@ type Selection = {
   text: string;
   rect: { top: number; left: number; bottom: number; width: number };
 };
+
+function clampPanelPosition(value: number, size: number, viewportSize: number) {
+  const margin = 12;
+  return Math.max(margin, Math.min(value, viewportSize - size - margin));
+}
+
+function useFloatingPanelDrag(ref: RefObject<HTMLDivElement | null>) {
+  return useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.button !== 0) return;
+      const node = ref.current;
+      if (!node) return;
+
+      event.preventDefault();
+      const rect = node.getBoundingClientRect();
+      const originX = event.clientX;
+      const originY = event.clientY;
+      const originLeft = rect.left;
+      const originTop = rect.top;
+
+      function handleMove(moveEvent: PointerEvent) {
+        if (!node) return;
+        node.style.left = `${clampPanelPosition(
+          originLeft + moveEvent.clientX - originX,
+          rect.width,
+          window.innerWidth
+        )}px`;
+        node.style.top = `${clampPanelPosition(
+          originTop + moveEvent.clientY - originY,
+          rect.height,
+          window.innerHeight
+        )}px`;
+        node.style.transform = "none";
+        node.style.visibility = "visible";
+      }
+
+      function handleUp() {
+        window.removeEventListener("pointermove", handleMove);
+      }
+
+      window.addEventListener("pointermove", handleMove);
+      window.addEventListener("pointerup", handleUp, { once: true });
+    },
+    [ref]
+  );
+}
 
 type ViewMode = "workspace" | "compact";
 
@@ -289,6 +336,7 @@ function SelectionTooltip({
   const [checkedInsightIds, setCheckedInsightIds] = useState<Set<string>>(new Set());
   const [primaryInsightId, setPrimaryInsightId] = useState<string | null>(null);
   const [newInsightLabel, setNewInsightLabel] = useState("");
+  const handleDragStart = useFloatingPanelDrag(tooltipRef);
 
   // Position once the tooltip has rendered and we know its size. Applied
   // directly to the DOM rather than via state to avoid setState-in-effect.
@@ -316,6 +364,7 @@ function SelectionTooltip({
 
     node.style.top = `${top}px`;
     node.style.left = `${left}px`;
+    node.style.transform = "none";
     node.style.visibility = "visible";
     node.style.pointerEvents = "auto";
   }, [selection.rect]);
@@ -350,17 +399,27 @@ function SelectionTooltip({
         position: "fixed",
         top: "50%",
         left: "50%",
-        transform: "translate(-50%, -50%)",
+        transform: "none",
         zIndex: 40,
-        visibility: "visible",
+        visibility: "hidden",
         pointerEvents: "auto"
       }}
       className="w-[min(28rem,calc(100vw-1.5rem))] space-y-3 rounded-lg border border-border/60 bg-popover p-3 text-popover-foreground shadow-md"
     >
       <div className="space-y-1">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground">
-          Selection · {selection.text.length} chars
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
+            Selection · {selection.text.length} chars
+          </p>
+          <button
+            type="button"
+            aria-label="Move quote capture panel"
+            onPointerDown={handleDragStart}
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <GripHorizontal className="size-4" aria-hidden="true" />
+          </button>
+        </div>
         <p className="line-clamp-2 text-sm italic leading-snug text-foreground">
           “{selection.text.length > 180 ? `${selection.text.slice(0, 180)}…` : selection.text}”
         </p>
@@ -537,6 +596,7 @@ function EditQuoteTooltip({
   const [showReject, setShowReject] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [newInsightLabel, setNewInsightLabel] = useState("");
+  const handleDragStart = useFloatingPanelDrag(tooltipRef);
 
   // Position once the tooltip has rendered and we know its size. Applied
   // directly to the DOM rather than via state to avoid setState-in-effect.
@@ -567,6 +627,7 @@ function EditQuoteTooltip({
 
     node.style.top = `${top}px`;
     node.style.left = `${left}px`;
+    node.style.transform = "none";
     node.style.visibility = "visible";
     node.style.pointerEvents = "auto";
   }, [anchorRect]);
@@ -604,9 +665,9 @@ function EditQuoteTooltip({
         position: "fixed",
         top: "50%",
         left: "50%",
-        transform: "translate(-50%, -50%)",
+        transform: "none",
         zIndex: 40,
-        visibility: "visible",
+        visibility: "hidden",
         pointerEvents: "auto"
       }}
       className="w-[min(26rem,calc(100vw-1.5rem))] space-y-3 rounded-lg border border-border/60 bg-popover p-3 text-popover-foreground shadow-md"
@@ -616,14 +677,24 @@ function EditQuoteTooltip({
           <span className="text-xs uppercase tracking-widest text-muted-foreground">
             {STATUS_LABEL[quote.status]}
           </span>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="text-sm leading-none text-muted-foreground hover:text-foreground"
-          >
-            ×
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label="Move quote editor"
+              onPointerDown={handleDragStart}
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <GripHorizontal className="size-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="text-sm leading-none text-muted-foreground hover:text-foreground"
+            >
+              ×
+            </button>
+          </div>
         </div>
         <p className="line-clamp-3 text-sm italic leading-snug text-foreground">
           “{quote.exactText.length > 220 ? `${quote.exactText.slice(0, 220)}…` : quote.exactText}”

@@ -5,7 +5,6 @@ import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -134,23 +133,20 @@ export function GroupConfirmPanel({
                 className="resize-none text-sm"
               />
             </div>
-            <div className="flex items-center gap-2.5 rounded-lg border border-dashed border-border/60 bg-muted/20 px-3 py-2.5">
+            <label
+              className={cn(
+                "flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors",
+                isBrainstorming ? "border-foreground/30 bg-muted/40" : "border-border/60",
+                isConfirming && "pointer-events-none opacity-60"
+              )}
+            >
               <Checkbox
-                id="brainstorming-toggle"
                 checked={isBrainstorming}
                 onCheckedChange={(v) => setIsBrainstorming(Boolean(v))}
                 disabled={isConfirming}
               />
-              <Label
-                htmlFor="brainstorming-toggle"
-                className="cursor-pointer text-sm font-normal text-foreground/80"
-              >
-                Brainstorming
-                <span className="ml-1.5 text-xs text-muted-foreground">
-                  (exploratory — uncheck for accepted)
-                </span>
-              </Label>
-            </div>
+              <span className="text-sm leading-snug">Mark as brainstorming</span>
+            </label>
           </div>
         )}
       </div>

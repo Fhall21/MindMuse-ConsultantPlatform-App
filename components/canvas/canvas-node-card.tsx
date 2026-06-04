@@ -561,7 +561,7 @@ function ThemeCard({
 
             <div className="flex shrink-0 items-start gap-1">
               {node.isBrainstorming ? (
-                <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                <span className="inline-flex items-center rounded-full border border-border/70 bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">
                   Brainstorming
                 </span>
               ) : null}

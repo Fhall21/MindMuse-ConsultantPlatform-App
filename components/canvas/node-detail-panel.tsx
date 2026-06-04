@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -251,21 +250,20 @@ function ThemeGroupEditor({
       />
 
       {/* Brainstorming toggle */}
-      <div className="flex items-center gap-2.5">
+      <label
+        className={cn(
+          "flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors",
+          draftIsBrainstorming ? "border-foreground/30 bg-muted/40" : "border-border/60",
+          isSavingTheme && "pointer-events-none opacity-60"
+        )}
+      >
         <Checkbox
-          id="detail-brainstorming"
           checked={draftIsBrainstorming}
           onCheckedChange={(v) => onChangeIsBrainstorming(Boolean(v))}
           disabled={isSavingTheme}
         />
-        <Label
-          htmlFor="detail-brainstorming"
-          className="cursor-pointer text-sm font-normal text-foreground/80"
-        >
-          Brainstorming
-          <span className="ml-1.5 text-xs text-muted-foreground">(exploratory)</span>
-        </Label>
-      </div>
+        <span className="text-sm leading-snug">Mark as brainstorming</span>
+      </label>
 
       <Separator />
 

@@ -13,6 +13,7 @@ import {
 import { requireOwnedConsultation } from "@/lib/data/ownership";
 import { dispatchToolToFastApi } from "./tool-dispatch";
 import { CHAT_TOOL_ENDPOINTS } from "./tool-allowlist";
+import { extractEvidenceEmailRevisionRequest } from "./email-guidance-prefill";
 import type {
   EmailDraftReviewOutput,
   ReportDraftReviewOutput,
@@ -203,7 +204,10 @@ export async function executeDraftEvidenceEmail(params: {
     params.userId,
     params.consultationId
   );
-  const latestDraft = await loadLatestEvidenceEmailDraft(selectedMeeting.id);
+  const revisionRequest = extractEvidenceEmailRevisionRequest(params.revisionRequest);
+  const latestDraft = revisionRequest
+    ? await loadLatestEvidenceEmailDraft(selectedMeeting.id)
+    : null;
 
   const result = await dispatchToolToFastApi({
     userId: params.userId,
@@ -217,7 +221,7 @@ export async function executeDraftEvidenceEmail(params: {
       transcript,
       previous_draft_subject: latestDraft?.subject,
       previous_draft_body: latestDraft?.body,
-      revision_request: params.revisionRequest?.trim() || undefined,
+      revision_request: revisionRequest || undefined,
     },
   });
 
@@ -264,7 +268,7 @@ export async function executeDraftEvidenceEmail(params: {
         id: theme.id,
         label: theme.label,
       })),
-      revision_request: params.revisionRequest?.trim() || undefined,
+      revision_request: revisionRequest || undefined,
     },
   };
 }

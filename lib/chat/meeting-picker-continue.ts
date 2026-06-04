@@ -5,6 +5,7 @@ import {
   executeDraftEvidenceEmail,
 } from "./async-actions-db";
 import { getUnarchivedSessionForUser } from "./context";
+import { extractEvidenceEmailRevisionRequest } from "./email-guidance-prefill";
 import { findPriorUserRequestMessage } from "./meeting-picker-session";
 import {
   inferMeetingPendingAction,
@@ -355,7 +356,9 @@ export async function runMeetingPickerContinue(params: {
       const revisionRequest =
         typeof resolved.actionParams.revision_request === "string"
           ? resolved.actionParams.revision_request
-          : (await findPriorUserRequestMessage(params.sessionId)) ?? undefined;
+          : extractEvidenceEmailRevisionRequest(
+              await findPriorUserRequestMessage(params.sessionId)
+            ) || undefined;
       const result = await runDraftEvidenceEmail({
         context,
         meetingId: params.meetingId,

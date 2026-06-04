@@ -60,6 +60,7 @@ const patchSchema = z.object({
   subject: z.string().optional(),
   body: z.string().optional(),
   edited_body: z.string().optional(),
+  revision_request: z.string().optional(),
   supporting_quotes: z.array(z.record(z.string(), z.unknown())).optional(),
   linked_themes: z.array(z.record(z.string(), z.unknown())).optional(),
   title: z.string().optional(),
@@ -266,6 +267,9 @@ export async function PATCH(
         ...(parsed.data.subject !== undefined ? { subject: parsed.data.subject } : {}),
         ...(parsed.data.body !== undefined ? { body: parsed.data.body } : {}),
         ...(parsed.data.edited_body !== undefined ? { edited_body: parsed.data.edited_body } : {}),
+        ...(parsed.data.revision_request !== undefined
+          ? { revision_request: parsed.data.revision_request }
+          : {}),
         ...(parsed.data.supporting_quotes
           ? { supporting_quotes: parsed.data.supporting_quotes }
           : {}),

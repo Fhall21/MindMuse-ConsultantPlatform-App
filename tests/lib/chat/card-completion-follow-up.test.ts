@@ -48,6 +48,11 @@ const quoteReviewOutput = {
   db_quote_ids: {},
 };
 
+const showQuotesOutput = {
+  meeting_id: "11111111-1111-4111-8111-111111111111",
+  meeting_title: "Chris follow-up",
+};
+
 describe("resolveCardCompletionFollowUp", () => {
   it("returns theme follow-up for completed extract_themes cards", () => {
     expect(resolveCardCompletionFollowUp("extract_themes", themeReviewOutput)).toBe(
@@ -57,6 +62,12 @@ describe("resolveCardCompletionFollowUp", () => {
 
   it("returns quote follow-up for completed identify_quotes cards", () => {
     expect(resolveCardCompletionFollowUp("identify_quotes", quoteReviewOutput)).toBe(
+      QUOTE_REVIEW_DONE_FOLLOW_UP
+    );
+  });
+
+  it("returns quote follow-up for completed manual show_quotes cards", () => {
+    expect(resolveCardCompletionFollowUp("show_quotes", showQuotesOutput)).toBe(
       QUOTE_REVIEW_DONE_FOLLOW_UP
     );
   });
@@ -90,6 +101,22 @@ describe("maybeInsertCardCompletionFollowUp", () => {
       sessionId: "44444444-4444-4444-8444-444444444444",
       role: "assistant",
       content: THEME_REVIEW_DONE_FOLLOW_UP,
+    });
+  });
+
+  it("inserts assistant follow-up when manual quote review is done", async () => {
+    await maybeInsertCardCompletionFollowUp({
+      sessionId: "44444444-4444-4444-8444-444444444444",
+      toolName: "show_quotes",
+      previousStatus: "pending",
+      nextStatus: "success",
+      output: showQuotesOutput,
+    });
+
+    expect(insertChatMessage).toHaveBeenCalledWith({
+      sessionId: "44444444-4444-4444-8444-444444444444",
+      role: "assistant",
+      content: QUOTE_REVIEW_DONE_FOLLOW_UP,
     });
   });
 

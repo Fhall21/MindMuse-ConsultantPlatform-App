@@ -7,6 +7,7 @@
   opacity: 1;
   width: 20px;
   height: 20px;
+  cursor: crosshair;
   transition: box-shadow 150ms ease, transform 150ms ease;
 }
 
@@ -20,6 +21,31 @@
   height: 32px;
   transform: translate(-50%, -50%);
   border-radius: 9999px;
+}
+
+/* Group theme handles — larger hit target (40px) + prominent cursor */
+.evidence-canvas .react-flow__handle.canvas-group-handle {
+  opacity: 1;
+  width: 24px;
+  height: 24px;
+  cursor: crosshair;
+  transition: box-shadow 150ms ease, transform 150ms ease;
+}
+
+.evidence-canvas .react-flow__handle.canvas-group-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+}
+
+.evidence-canvas .react-flow__handle.canvas-group-handle.connectingto.valid {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.25);
 }
 
 .evidence-canvas .react-flow__handle.canvas-connection-handle.connectingto.valid {

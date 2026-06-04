@@ -1,0 +1,1 @@
+ALTER TABLE "themes" ADD COLUMN "is_brainstorming" boolean DEFAULT false NOT NULL;

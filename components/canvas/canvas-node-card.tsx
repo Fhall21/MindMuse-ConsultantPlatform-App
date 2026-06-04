@@ -16,6 +16,10 @@ import type { CanvasNode } from "@/types/canvas";
 const CANVAS_HANDLE_BASE =
   "canvas-connection-handle !h-5 !w-5 !border-2 !border-background";
 
+/** 24px visual dot + canvas-handles.css 40px hit target for group theme nodes. */
+const CANVAS_GROUP_HANDLE_BASE =
+  "canvas-group-handle !h-6 !w-6 !border-2 !border-background";
+
 /** Matches canvas-handles.css hover expand duration. */
 export const HOVER_EXPAND_MS = 240;
 
@@ -308,7 +312,7 @@ function InsightCard({
         id="target"
         type="target"
         position={Position.Left}
-        className={cn(CANVAS_HANDLE_BASE, "!bg-primary")}
+        className={cn(CANVAS_HANDLE_BASE, "!top-6 !bg-primary")}
       />
 
       <div {...contentProps}>
@@ -380,7 +384,7 @@ function InsightCard({
         id="source"
         type="source"
         position={Position.Right}
-        className={cn(CANVAS_HANDLE_BASE, "!bg-primary")}
+        className={cn(CANVAS_HANDLE_BASE, "!top-6 !bg-primary")}
       />
     </div>
   );
@@ -462,7 +466,7 @@ function ThemeCard({
         id="target"
         type="target"
         position={Position.Left}
-        className={cn(CANVAS_HANDLE_BASE, "!top-12 !left-3 !bg-emerald-500")}
+        className={cn(CANVAS_GROUP_HANDLE_BASE, "!top-12 !left-3 !bg-emerald-500")}
       />
 
       <div className="relative flex h-full flex-col">
@@ -556,6 +560,11 @@ function ThemeCard({
             </div>
 
             <div className="flex shrink-0 items-start gap-1">
+              {node.isBrainstorming ? (
+                <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                  Brainstorming
+                </span>
+              ) : null}
               {aiGenerated ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-200">
                   <Sparkles className="h-3 w-3" />
@@ -578,7 +587,7 @@ function ThemeCard({
         id="source"
         type="source"
         position={Position.Right}
-        className={cn(CANVAS_HANDLE_BASE, "!top-12 !bg-emerald-500")}
+        className={cn(CANVAS_GROUP_HANDLE_BASE, "!top-12 !bg-emerald-500")}
       />
     </div>
   );

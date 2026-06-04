@@ -75,7 +75,7 @@ export function ThemeRejectionDialog({
             You are rejecting{" "}
             <span className="font-medium text-foreground">&ldquo;{themeLabel}&rdquo;</span>.
             {requiresRationale
-              ? " A rationale note is required because this consultation is locked."
+              ? " A rationale note is required because this project is locked."
               : " You can add an optional note to help future theme extraction better match your preferences."}
           </DialogDescription>
         </DialogHeader>

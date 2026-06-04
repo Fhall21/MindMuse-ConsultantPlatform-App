@@ -199,7 +199,7 @@ export function AccessibilitySettingsPanel() {
                 <p className="font-medium">Preview</p>
                 <div className="mt-3 space-y-3">
                   <div>
-                    <p className="font-medium">Consultation summary</p>
+                    <p className="font-medium">Project summary</p>
                     <p className="text-sm text-muted-foreground">
                       Stronger contrast, larger type, and reduced motion are all reflected here
                       immediately so you can feel the difference before leaving this page.

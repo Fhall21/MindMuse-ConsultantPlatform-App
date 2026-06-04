@@ -69,7 +69,7 @@ function buildEventLabel(event: AuditLogEntry) {
       return "Meeting marked complete";
     case "meeting.consultation_assigned":
     case "consultation.round_assigned":
-      return "Assigned to consultation";
+      return "Assigned to project";
     case "meeting.archived":
       return "Meeting archived";
     case "meeting.restored":
@@ -139,11 +139,11 @@ function buildEventLabel(event: AuditLogEntry) {
 
     // Round lifecycle
     case "round.created":
-      return "Consultation created";
+      return "Project created";
     case "round.updated":
-      return "Consultation updated";
+      return "Project updated";
     case "round.deleted":
-      return "Consultation deleted";
+      return "Project deleted";
 
     // Round theme group events
     case "round.theme_group_created":
@@ -181,7 +181,7 @@ function buildEventLabel(event: AuditLogEntry) {
 
     // Round output
     case "round.output_generated":
-      return "Consultation output generated";
+      return "Project output generated";
 
     default:
       return humanizeAction(event.action);

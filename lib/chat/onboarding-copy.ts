@@ -118,7 +118,7 @@ export const THEME_REVIEW_DONE_FOLLOW_UP =
 
 /** Inserted after QuoteCard completes (Done reviewing). */
 export const QUOTE_REVIEW_DONE_FOLLOW_UP =
-  "Quote review is done. I can draft the evidence email from the accepted quotes next — say when you are ready, or ask what you would like to adjust.";
+  "Quote review is done. I can draft the evidence email from the accepted insights next — say when you are ready, or ask what you would like to adjust.";
 
 export function meetingSavedDescription(title: string) {
   const trimmed = title.trim();

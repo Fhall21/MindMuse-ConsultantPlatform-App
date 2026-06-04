@@ -30,8 +30,8 @@ interface RoundOutputsSectionProps {
 }
 
 const outputTypeLabels: Record<string, string> = {
-  summary: "Consultation Summary",
-  report: "Consultation Report",
+  summary: "Project Summary",
+  report: "Project Report",
   email: "Evidence Email",
 };
 
@@ -75,9 +75,9 @@ export function RoundOutputsSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Consultation Outputs</CardTitle>
+        <CardTitle className="text-base">Project Outputs</CardTitle>
         <CardDescription>
-          Generate summaries, reports, and emails from this consultation&apos;s accepted themes and groups.
+          Generate summaries, reports, and emails from this project&apos;s accepted themes and groups.
           Outputs are generated manually, not automatically.
         </CardDescription>
       </CardHeader>

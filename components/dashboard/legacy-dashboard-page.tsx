@@ -174,9 +174,9 @@ function RecentConsultationsSkeleton() {
 function RecentConsultationEmptyState() {
   return (
     <div className="py-10 text-center">
-      <p className="text-sm text-muted-foreground">No consultation projects yet.</p>
+      <p className="text-sm text-muted-foreground">No projects yet.</p>
       <Button asChild size="sm" className="mt-4">
-        <Link href="/consultations">Open Consultations</Link>
+        <Link href="/consultations">Open Projects</Link>
       </Button>
     </div>
   );
@@ -236,9 +236,9 @@ export default function LegacyDashboardPage() {
 
       <dl className="grid gap-5 border-y py-5 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:py-4">
         <StatCard
-          label="Consultation Projects"
+          label="Projects"
           value={statsQuery.data?.totalConsultations ?? 0}
-          description="Recorded consultation projects"
+          description="Recorded projects"
           isLoading={statsQuery.isLoading}
           isError={statsQuery.isError}
         />

@@ -18,7 +18,7 @@ export function ConsultationsSectionShell({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Consultations</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
 
       <ConsultationsNav />
 

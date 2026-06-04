@@ -221,7 +221,7 @@ export function ConsultationGroupingSection({
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Linked Meetings</CardTitle>
-              <CardDescription>No meetings assigned to this consultation yet.</CardDescription>
+              <CardDescription>No meetings assigned to this project yet.</CardDescription>
             </CardHeader>
           </Card>
         )}

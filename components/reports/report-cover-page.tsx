@@ -43,12 +43,12 @@ export function ReportCoverPage({
       <div className="flex flex-1 flex-col justify-center px-10 py-16 print:px-16 print:py-24">
         {/* Document type label */}
         <p className="mb-6 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          Psychosocial Consultation Report
+          Psychosocial Project Report
         </p>
 
         {/* Title */}
         <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl print:text-5xl">
-          {title ?? "Consultation Report"}
+          {title ?? "Project Report"}
         </h1>
 
         {/* Round label */}

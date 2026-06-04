@@ -87,9 +87,9 @@ export function RoundsManager() {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">
-            <CardTitle>Consultation rounds</CardTitle>
+            <CardTitle>Project rounds</CardTitle>
             <CardDescription>
-              Keep recurring consultation cycles clearly labeled so records stay organised.
+              Keep recurring project cycles clearly labeled so records stay organised.
             </CardDescription>
           </div>
           <Button
@@ -126,7 +126,7 @@ export function RoundsManager() {
                     id="round-label"
                     value={newLabel}
                     onChange={(event) => setNewLabel(event.target.value)}
-                    placeholder="Initial consultation"
+                    placeholder="Initial project"
                     disabled={createMutation.isPending}
                   />
                 </div>
@@ -163,7 +163,7 @@ export function RoundsManager() {
             </form>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Rounds are a reusable labels for stages of consultation work.
+              Rounds are a reusable labels for stages of project work.
             </p>
           )}
         </CardContent>
@@ -172,7 +172,7 @@ export function RoundsManager() {
       <Card>
         <CardHeader>
           <CardTitle>All rounds</CardTitle>
-          <CardDescription>Manage existing consultation rounds.</CardDescription>
+          <CardDescription>Manage existing project rounds.</CardDescription>
         </CardHeader>
         <CardContent>
           {roundsQuery.isLoading ? (
@@ -180,7 +180,7 @@ export function RoundsManager() {
           ) : hasNoRounds ? (
             <div className="rounded-xl border border-dashed p-8 text-center">
               <p className="mb-4 text-sm text-muted-foreground">
-                No consultation rounds yet.
+                No project rounds yet.
               </p>
               <Button
                 type="button"
@@ -265,7 +265,7 @@ export function RoundsManager() {
                               <p className="text-sm text-muted-foreground">{round.description}</p>
                             ) : null}
                             <p className="text-xs text-muted-foreground">
-                              {linkedCount} consultation{linkedCount !== 1 ? "s" : ""} linked
+                              {linkedCount} project{linkedCount !== 1 ? "s" : ""} linked
                             </p>
                           </div>
                           <div className="flex shrink-0 gap-1">
@@ -293,7 +293,7 @@ export function RoundsManager() {
                               onClick={async () => {
                                 const confirmed = window.confirm(
                                   linkedCount > 0
-                                    ? `Delete "${round.label}"? This round is linked to ${linkedCount} consultation(s) and cannot be deleted until unlinked.`
+                                    ? `Delete "${round.label}"? This round is linked to ${linkedCount} project(s) and cannot be deleted until unlinked.`
                                     : `Delete "${round.label}"?`
                                 );
                                 if (!confirmed) return;

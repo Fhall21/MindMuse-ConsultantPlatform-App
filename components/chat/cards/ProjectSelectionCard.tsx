@@ -46,7 +46,7 @@ export function ProjectSelectionCard({
 
   if (consultationsQuery.isLoading) {
     return (
-      <ChatToolCardShell title="Choose a consultation" description="Loading your consultations…">
+      <ChatToolCardShell title="Choose a project" description="Loading your projects…">
         <div className="space-y-2">
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-full" />
@@ -60,8 +60,8 @@ export function ProjectSelectionCard({
   if (consultations.length === 0) {
     return (
       <ChatToolCardShell
-        title="Choose a consultation"
-        description="No consultation projects yet. Create one above to continue."
+        title="Choose a project"
+        description="No projects yet. Create one above to continue."
       />
     );
   }
@@ -69,7 +69,7 @@ export function ProjectSelectionCard({
   return (
     <ChatToolCardShell
       title="Which project should we work on?"
-      description="Select a consultation to scope this conversation."
+      description="Select a project to scope this conversation."
     >
       <div className="flex flex-wrap gap-2">
         {consultations.map((consultation) => {

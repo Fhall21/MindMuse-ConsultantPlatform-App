@@ -24,7 +24,7 @@ export function RoundSummaryCard({ summary }: RoundSummaryCardProps) {
     <Card className="border-border/70 bg-muted/10">
       <CardHeader>
         <div>
-          <CardTitle>Consultation Summary</CardTitle>
+          <CardTitle>Project Summary</CardTitle>
           <CardDescription>
             Accepted consultation-level themes that can feed summaries, evidence emails,
             and consultation reports.

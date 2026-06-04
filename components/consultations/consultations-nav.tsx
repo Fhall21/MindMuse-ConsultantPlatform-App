@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const consultationSections = [
   { title: "Meetings", href: "/meetings" },
   { title: "Digital Interviews", href: "/digital-interviews" },
-  { title: "Consultations", href: "/consultations" },
+  { title: "Projects", href: "/consultations" },
 ];
 
 export function ConsultationsNav() {
@@ -15,7 +15,7 @@ export function ConsultationsNav() {
 
   return (
     <nav
-      aria-label="Consultation sections"
+      aria-label="Project sections"
       className="overflow-x-auto"
     >
       <ul className="flex min-w-max items-center gap-5 border-b border-border/80">

@@ -594,7 +594,7 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>Replace current themes?</DialogTitle>
-            <DialogDescription>This will replace active themes for this consultation with a new extraction. Previously rejected themes are preserved.</DialogDescription>
+            <DialogDescription>This will replace active themes for this project with a new extraction. Previously rejected themes are preserved.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmReextractOpen(false)}>

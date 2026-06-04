@@ -80,7 +80,7 @@ export function TranscriptEditor({
           placeholder={
             readOnly
               ? "No transcript recorded."
-              : "Paste or type the consultation transcript here…"
+              : "Paste or type the project transcript here…"
           }
           className="max-h-[60vh] min-h-[300px] resize-y font-mono text-sm leading-relaxed"
         />

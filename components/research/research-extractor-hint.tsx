@@ -47,13 +47,13 @@ export function ResearchExtractorHint({
     sessionType === "analysis" ? (
       <>
         Select any passage in the summary or artifact previews to{" "}
-        <em>Add as insight</em>. The quote lands on a consultation canvas with
+        <em>Add as insight</em>. The quote lands on a project canvas with
         the analysis session attached.
       </>
     ) : (
       <>
         Select any passage in the answer to <em>Add as insight</em>. The
-        extracted quote lands on a consultation canvas with the source citation
+        extracted quote lands on a project canvas with the source citation
         attached, and appears in your report&rsquo;s References section.
       </>
     );

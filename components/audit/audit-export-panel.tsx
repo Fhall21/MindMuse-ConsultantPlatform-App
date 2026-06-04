@@ -126,7 +126,7 @@ export function AuditExportPanel() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="audit-export-consultation">Consultation</Label>
+            <Label htmlFor="audit-export-consultation">Project</Label>
             <select
               id="audit-export-consultation"
               className={SELECT_CLASS_NAME}
@@ -140,7 +140,7 @@ export function AuditExportPanel() {
               }}
               disabled={isPending || consultationsQuery.isLoading}
             >
-              <option value="">All consultations</option>
+              <option value="">All projects</option>
               {consultations.map((consultation) => (
                 <option key={consultation.id} value={consultation.id}>
                   {consultation.label}
@@ -180,7 +180,7 @@ export function AuditExportPanel() {
             Date range: {filters.dateFrom ?? "Any"} to {filters.dateTo ?? "Any"}
           </p>
           <p className="text-muted-foreground">
-            Consultation: {selectedConsultation?.label ?? "All consultations"}
+            Consultation: {selectedConsultation?.label ?? "All projects"}
           </p>
           <p className="text-muted-foreground">
             User: {selectedUser?.label ?? "All visible users"}

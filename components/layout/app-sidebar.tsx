@@ -23,7 +23,7 @@ import { useDigitalInterviewUnreadCount } from "@/hooks/use-digital-interviews";
 
 const mainNavItems = [
   { title: "All Meetings", href: "/meetings" },
-  { title: "Consultations", href: "/consultations" },
+  { title: "Projects", href: "/consultations" },
 ];
 
 const settingsSubItems = [
@@ -39,7 +39,7 @@ export function AppSidebar() {
   const unreadCountQuery = useDigitalInterviewUnreadCount();
   const unreadCount = unreadCountQuery.data ?? 0;
   const isInMeetings = pathname.startsWith("/meetings");
-  const isInConsultations = pathname.startsWith("/consultations");
+  const isInProjects = pathname.startsWith("/consultations");
   const isInSettings = pathname.startsWith("/settings");
 
   return (
@@ -61,8 +61,8 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isInConsultations}>
-                  <Link href="/consultations">Consultations</Link>
+                <SidebarMenuButton asChild isActive={isInProjects}>
+                  <Link href="/consultations">Projects</Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 

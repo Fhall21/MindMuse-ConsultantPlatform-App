@@ -25,7 +25,7 @@ import { formatDate, estimateReadTime } from "@/lib/report-formatting";
 import type { PublicReportShareMetadata } from "@/types/report-share";
 
 const artifactTypeLabels: Record<string, string> = {
-  summary: "Consultation Summary",
+  summary: "Project Summary",
   report: "Board-Pack Report",
   email: "Evidence Email",
 };

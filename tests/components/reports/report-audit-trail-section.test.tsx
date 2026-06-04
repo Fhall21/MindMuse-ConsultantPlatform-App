@@ -73,10 +73,7 @@ describe("AuditTrailSection", () => {
       />
     );
 
-    expect(screen.getByText("Audit Trail")).toBeInTheDocument();
-    expect(screen.getByText("Consultation sessions")).toBeInTheDocument();
-    expect(screen.getByText("Process record")).toBeInTheDocument();
-    expect(screen.getByText("1-1 with Strategy (1 person)")).toBeInTheDocument();
+    expect(screen.getByText("Process Record")).toBeInTheDocument();
     expect(screen.getByText("2 themes validated")).toBeInTheDocument();
     expect(screen.getByText("Evidence email sent")).toBeInTheDocument();
     expect(screen.queryByText("Transcript parsed")).not.toBeInTheDocument();

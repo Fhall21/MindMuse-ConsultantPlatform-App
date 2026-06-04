@@ -72,7 +72,7 @@ export function PersonTable({ data, onEdit, onDelete, onRowClick }: PersonTableP
       },
       {
         accessorKey: "consultationCount",
-        header: "Consultations",
+        header: "Projects",
         cell: ({ row }) => {
           const count = row.original.consultationCount;
           if (count === 0) {

@@ -161,8 +161,8 @@ export function PreferencesForm() {
       </CardHeader>
       <CardContent className="space-y-5">
         <TagInput
-          label="Consultation types"
-          description="What types of consultations do you primarily conduct? This helps the AI understand your context."
+          label="Project types"
+          description="What types of projects do you primarily conduct? This helps the AI understand your context."
           tags={consultationTypes}
           onChange={setConsultationTypes}
           max={5}

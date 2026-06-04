@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { createRound } from "@/lib/actions/rounds";
 
 const newConsultationSchema = z.object({
-  label: z.string().min(1, "Consultation title is required").max(255),
+  label: z.string().min(1, "Project title is required").max(255),
   description: z.string().max(2000).optional(),
 });
 
@@ -44,7 +44,7 @@ export default function NewConsultationPage() {
       router.push(`/consultations/rounds/${id}`);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to create consultation. Please try again.");
+      toast.error("Failed to create project. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -53,15 +53,15 @@ export default function NewConsultationPage() {
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">New Consultation</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">New Project</h1>
         <p className="text-sm text-muted-foreground">
-          A consultation is the project or round that groups related meetings.
+          A project groups related meetings.
         </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="label">Consultation title</Label>
+          <Label htmlFor="label">Project title</Label>
           <Input
             id="label"
             placeholder="e.g. R2 Wellbeing Follow-up"
@@ -76,7 +76,7 @@ export default function NewConsultationPage() {
           <Label htmlFor="description">Description (optional)</Label>
           <Input
             id="description"
-            placeholder="Short note about what this consultation groups together"
+            placeholder="Short note about what this project groups together"
             {...register("description")}
           />
           {errors.description && (
@@ -86,7 +86,7 @@ export default function NewConsultationPage() {
 
         <div className="flex gap-3 pt-2">
           <Button type="submit" disabled={submitting}>
-            {submitting ? "Creating…" : "Create consultation"}
+            {submitting ? "Creating…" : "Create project"}
           </Button>
           <Button
             type="button"

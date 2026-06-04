@@ -70,7 +70,7 @@ import { ChevronDown, Loader2 } from "lucide-react";
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const artifactTypeLabels: Record<string, string> = {
-  summary: "Consultation Summary",
+  summary: "Project Summary",
   report: "Board-Pack Report",
   email: "Evidence Email",
 };

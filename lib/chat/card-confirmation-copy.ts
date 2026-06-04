@@ -21,16 +21,16 @@ export const CARD_CONFIRMATION_ACTIONS = [
 export type CardConfirmationAction = (typeof CARD_CONFIRMATION_ACTIONS)[number];
 
 const CARD_CONFIRMATION_MESSAGES: Record<CardConfirmationAction, string> = {
-  consultation_created: "Consultation created. We can start adding meeting material when you're ready.",
-  consultation_selected: "Consultation selected. I'll keep the next steps scoped to this work.",
+  consultation_created: "Project created. We can start adding meeting material when you're ready.",
+  consultation_selected: "Project selected. I'll keep the next steps scoped to this work.",
   meeting_updated: "Meeting updated. I'll use the revised details from here.",
-  person_linked: "Person linked. I'll include that connection in this consultation.",
+  person_linked: "Person linked. I'll include that connection in this project.",
   insight_created: "Insight added. It's now available with the meeting's other themes.",
   theme_updated: "Theme updated. I'll use the revised label from here.",
   canvas_updated: "Canvas updated. The change is now reflected in the workspace.",
   research_questions_saved: "Research questions saved. They're ready for the next pass.",
   research_linked: "Research linked. It's now attached to the selected themes.",
-  theme_group_saved: "Theme group saved. The canvas and consultation view now share that grouping.",
+  theme_group_saved: "Theme group saved. The canvas and project view now share that grouping.",
   email_draft_saved: "Draft saved. You can return to it from the meeting when you're ready.",
   report_saved: "Report saved. It's available from the reports page.",
   report_exported: "Export prepared. Your download should start now.",

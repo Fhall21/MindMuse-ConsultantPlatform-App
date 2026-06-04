@@ -257,7 +257,7 @@ export function MeetingConfirmationCard({
 
   async function handleConfirm() {
     if (!projectId) {
-      setError("Select a consultation before confirming.");
+      setError("Select a project before confirming.");
       return;
     }
 
@@ -344,7 +344,7 @@ export function MeetingConfirmationCard({
           <div className="space-y-1">
             <CardTitle>Confirm meeting</CardTitle>
             <CardDescription>
-              Review extracted details before saving to your consultation.
+              Review extracted details before saving to your project.
             </CardDescription>
           </div>
           <Button
@@ -371,9 +371,9 @@ export function MeetingConfirmationCard({
         ) : null}
 
         <div className="space-y-2">
-          <Label htmlFor={`meeting-project-${messageId}`}>Consultation</Label>
+          <Label htmlFor={`meeting-project-${messageId}`}>Project</Label>
           <p className="text-xs text-muted-foreground">
-            Choose the consultation project this meeting belongs to.
+            Choose the project this meeting belongs to.
           </p>
           <Select
             value={projectId || undefined}
@@ -383,7 +383,7 @@ export function MeetingConfirmationCard({
             disabled={consultationsLoading || consultations.length === 0}
           >
             <SelectTrigger id={`meeting-project-${messageId}`} className="h-9">
-              <SelectValue placeholder="Select consultation" />
+              <SelectValue placeholder="Select project" />
             </SelectTrigger>
             <SelectContent>
               {consultations.map((consultation) => (

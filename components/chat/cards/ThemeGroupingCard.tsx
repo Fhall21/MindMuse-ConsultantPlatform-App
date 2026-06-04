@@ -188,7 +188,7 @@ export function ThemeGroupingCard({
       description={
         isLinkMode
           ? "Select insights on the left, then link them to the group on the right."
-          : "Use the same grouping workspace as the consultation canvas — select themes, create or refine groups, then confirm."
+          : "Use the same grouping workspace as the project canvas — select themes, create or refine groups, then confirm."
       }
       error={error}
       onDismiss={() => void handleDismiss()}

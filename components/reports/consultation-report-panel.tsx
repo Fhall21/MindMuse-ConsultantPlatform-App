@@ -27,7 +27,7 @@ function formatProvenance(theme: ReportThemeReference | IncludedThemeSelection) 
     )
   );
 
-  return titles.length > 0 ? titles.join(", ") : "Current consultation";
+  return titles.length > 0 ? titles.join(", ") : "Current project";
 }
 
 function ThemeSection(props: {
@@ -50,7 +50,7 @@ function ThemeSection(props: {
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm font-medium">{theme.label}</p>
                 <Badge variant="outline">
-                  {theme.sourceKind === "round" ? "Round theme" : "Consultation theme"}
+                  {theme.sourceKind === "round" ? "Round theme" : "Project theme"}
                 </Badge>
                 {theme.provenance.some((entry) => entry.isUserAdded) ? (
                   <Badge variant="outline">User added</Badge>
@@ -77,7 +77,7 @@ export function ConsultationReportPanel({
   return (
     <Card className="border-border/60 bg-muted/5">
       <CardHeader>
-        <CardTitle>Consultation Report Context</CardTitle>
+        <CardTitle>Project Report Context</CardTitle>
         <CardDescription>
           Provenance-aware theme context used for consultation summaries, evidence
           emails, and report surfaces.
@@ -102,7 +102,7 @@ export function ConsultationReportPanel({
                       <Badge variant="outline">Meeting</Badge>
                     ) : null}
                     {theme.sourceKinds.includes("round") ? (
-                      <Badge variant="outline">Consultation</Badge>
+                      <Badge variant="outline">Project</Badge>
                     ) : null}
                     {theme.provenance.some((entry) => entry.isUserAdded) ? (
                       <Badge variant="outline">User added</Badge>
@@ -128,8 +128,8 @@ export function ConsultationReportPanel({
         />
 
         <ThemeSection
-          title={report.roundLabel ? `Consultation themes from ${report.roundLabel}` : "Consultation themes"}
-          empty="No accepted consultation themes are available yet."
+          title={report.roundLabel ? `Project themes from ${report.roundLabel}` : "Project themes"}
+          empty="No accepted project themes are available yet."
           themes={report.roundThemes}
         />
 

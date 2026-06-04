@@ -315,7 +315,7 @@ describe("serializeToMarkdown — structured data", () => {
         ],
       })
     );
-    expect(md).toContain("## Consultation sessions");
+    expect(md).toContain("## Project sessions");
     expect(md).toContain("- **1-1 with Strategy (1 person)**");
     expect(md).toContain("## Process record");
     expect(md).toContain("- **Report generated**");

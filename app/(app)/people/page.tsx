@@ -202,7 +202,7 @@ export default function PeoplePage() {
           }}
           onDelete={(person) => {
             const confirmed = window.confirm(
-              `Delete ${person.name}? This will remove them from all consultations.`
+              `Delete ${person.name}? This will remove them from all projects.`
             );
 
             if (confirmed) {

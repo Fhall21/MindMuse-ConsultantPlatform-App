@@ -29,7 +29,7 @@ function makeReport(
           {
             nodeType: "insight",
             nodeId: "insight-1",
-            label: "Repeated schedule disruption across multiple consultations",
+            label: "Repeated schedule disruption across multiple projects",
             meta: {
               description: "Supporting theme from operational interviews",
               consultationTitle: "Weekly team consultation",
@@ -79,7 +79,7 @@ function makeReport(
           members: [
             {
               insightId: "insight-1",
-              label: "Repeated schedule disruption across multiple consultations",
+              label: "Repeated schedule disruption across multiple projects",
               description: "Supporting theme from operational interviews",
               sourceConsultationTitle: "Weekly team consultation",
               isUserAdded: false,
@@ -200,7 +200,7 @@ describe("ReportPrintLayout", () => {
 
     const auditText = normalizeText(auditTrail!.element);
     expect(auditText).toContain("Audit Trail");
-    expect(auditText).toContain("Consultation sessions");
+    expect(auditText).toContain("Project sessions");
     expect(auditText).toContain("Process record");
     expect(auditText).toContain("Focus group with Operations (3 people)");
     expect(auditText).toContain("Evidence email sent");

@@ -32,7 +32,7 @@ export function RoundDetailHeader({ round }: RoundDetailHeaderProps) {
 
         <div className="flex shrink-0 items-center gap-2">
           <Badge variant="secondary">
-            {round.linkedConsultationCount} consultation
+            {round.linkedConsultationCount} project
             {round.linkedConsultationCount !== 1 ? "s" : ""}
           </Badge>
         </div>

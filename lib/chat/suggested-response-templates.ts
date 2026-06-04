@@ -55,7 +55,7 @@ const QUOTE_REVIEW_DONE_TEMPLATE: WorkflowSuggestedResponsesPayload = {
   options: [
     {
       label: "Draft email",
-      prefill: "I'm ready — draft the evidence email from the accepted quotes",
+      prefill: "I'm ready — draft the evidence email from the accepted insights from this meeting",
       role: "primary",
     },
     {

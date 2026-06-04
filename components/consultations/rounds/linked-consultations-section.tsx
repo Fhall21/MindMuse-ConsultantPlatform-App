@@ -37,7 +37,7 @@ export function LinkedConsultationsSection({
         <CardHeader>
           <CardTitle className="text-base">Linked Meetings</CardTitle>
           <CardDescription>
-            No meetings assigned to this consultation yet.
+            No meetings assigned to this project yet.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -49,7 +49,7 @@ export function LinkedConsultationsSection({
       <CardHeader>
         <CardTitle className="text-base">Linked Meetings</CardTitle>
         <CardDescription>
-          {meetings.length} meeting{meetings.length !== 1 ? "s" : ""} in this consultation
+          {meetings.length} meeting{meetings.length !== 1 ? "s" : ""} in this project
         </CardDescription>
       </CardHeader>
       <CardContent className="divide-y divide-border/60">

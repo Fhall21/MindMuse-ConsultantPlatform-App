@@ -87,7 +87,7 @@ export default function LoginPage() {
           <CardDescription>
             {isSignUp
               ? "Create your account"
-              : "Sign in to manage your consultation evidence"}
+              : "Sign in to manage your project evidence"}
           </CardDescription>
         </CardHeader>
         <CardContent>

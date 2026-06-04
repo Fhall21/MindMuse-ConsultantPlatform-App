@@ -52,7 +52,7 @@ import type { Consultation } from "@/types/db";
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const STEPS = [
-  { label: "Consultation & title", hint: "Link to a project and name this round." },
+  { label: "Project & title", hint: "Link to a project and name this round." },
   { label: "Framework", hint: "Choose how the AI interviewer will approach the conversation." },
   { label: "Topics & depth", hint: "Define what to cover and how deeply to probe." },
   { label: "Boundaries", hint: "Review fixed rules and add project-specific limits." },
@@ -404,7 +404,7 @@ function StepTracker({ step }: { step: number }) {
   );
 }
 
-// ─── Step 1: Consultation & title ─────────────────────────────────────────────
+// ─── Step 1: Project & title ─────────────────────────────────────────────
 
 interface Step1Props {
   register: ReturnType<typeof useForm<FormData>>["register"];
@@ -450,13 +450,13 @@ function Step1({
       <Separator />
 
       <SectionHeading
-        title="Consultation project"
-        description="Linking to a consultation lets you combine these interview responses with in-person meeting data on the Evidence Canvas."
+        title="Project"
+        description="Linking to a project lets you combine these interview responses with in-person meeting data on the Evidence Canvas."
         optional
       />
 
       <div className="space-y-2">
-        <Label>Consultation</Label>
+        <Label>Project</Label>
         <Popover open={consultationOpen} onOpenChange={setConsultationOpen}>
           <PopoverTrigger asChild>
             <Button
@@ -467,19 +467,19 @@ function Step1({
               className="w-full max-w-lg justify-between font-normal"
             >
               <span className={cn(!selectedConsultation && "text-muted-foreground")}>
-                {selectedConsultation ? selectedConsultation.label : "No consultation selected"}
+                {selectedConsultation ? selectedConsultation.label : "No project selected"}
               </span>
               <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-40" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
             <Command>
-              <CommandInput placeholder="Search consultations…" />
+              <CommandInput placeholder="Search projects…" />
               <CommandList>
                 <CommandEmpty>
                   {consultations.length === 0 ? (
                     <span className="text-sm">
-                      No consultations yet.{" "}
+                      No projects yet.{" "}
                       <Link href="/consultations/new" className="underline underline-offset-2">
                         Create one
                       </Link>
@@ -1025,7 +1025,7 @@ function Step5({ values, selectedConsultation }: Step5Props) {
       <div className="rounded-md border">
         <ReviewRow label="Title" value={values.title} />
         <ReviewRow
-          label="Consultation"
+          label="Project"
           value={selectedConsultation?.label ?? "None"}
           muted={!selectedConsultation}
         />

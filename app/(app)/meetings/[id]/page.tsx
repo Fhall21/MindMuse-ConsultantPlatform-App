@@ -376,7 +376,7 @@ export default function MeetingDetailPage({
             <div className="space-y-5">
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Consultation
+                  Project
                 </p>
                 <RoundsPanel
                   meetingId={id}
@@ -446,7 +446,7 @@ export default function MeetingDetailPage({
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" asChild>
                   <Link href={`/consultations/rounds/${meeting.consultation_id}`}>
-                    Open consultation workspace &rarr;
+                    Open project workspace &rarr;
                   </Link>
                 </Button>
                 <Button variant="outline" size="sm" asChild>
@@ -455,7 +455,7 @@ export default function MeetingDetailPage({
                   </Link>
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  View theme grouping, synthesis, and consultation outputs
+                  View theme grouping, synthesis, and project outputs
                 </span>
               </div>
             ) : null}

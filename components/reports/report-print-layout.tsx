@@ -707,7 +707,7 @@ const s = StyleSheet.create({
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const artifactTypeLabels: Record<string, string> = {
-  summary: "Consultation Summary",
+  summary: "Project Summary",
   report: "Board-Pack Report",
   email: "Evidence Email",
 };
@@ -1469,7 +1469,7 @@ function AuditTrailContent({ report }: { report: ReportArtifactDetail }) {
       {hasSessions && (
         <View style={{ marginBottom: 10 }}>
           <View style={s.railDayRow}>
-            <Text style={s.railDayLabel}>Consultation sessions</Text>
+            <Text style={s.railDayLabel}>Project sessions</Text>
             <View style={s.railDayLine} />
           </View>
           {trail.sessions.map((c, i) => (

@@ -49,7 +49,7 @@ export function PersonSheet({ personId, open, onClose }: PersonSheetProps) {
         <SheetHeader>
           <SheetTitle>{data?.person.name ?? "Person details"}</SheetTitle>
           <SheetDescription>
-            Review person details and linked consultations.
+            Review person details and linked projects.
           </SheetDescription>
         </SheetHeader>
 
@@ -91,9 +91,9 @@ export function PersonSheet({ personId, open, onClose }: PersonSheetProps) {
               </section>
 
               <section className="space-y-3">
-                <h3 className="text-sm font-medium">Linked Consultations</h3>
+                <h3 className="text-sm font-medium">Linked Projects</h3>
                 {data.consultations.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No linked consultations.</p>
+                  <p className="text-sm text-muted-foreground">No linked projects.</p>
                 ) : (
                   <ul className="space-y-2">
                     {data.consultations.map((consultation) => (

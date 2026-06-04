@@ -48,7 +48,7 @@ export function AuditTrailCard({ tool, sessionId }: ChatCardProps) {
     return (
       <ChatToolCardShell
         title="Audit trail"
-        description="No activity recorded yet. Actions taken in this consultation will appear here."
+        description="No activity recorded yet. Actions taken in this project will appear here."
         footer={
           auditPageUrl ? (
             <Button variant="outline" size="sm" asChild>

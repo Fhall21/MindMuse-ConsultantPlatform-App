@@ -223,7 +223,7 @@ export function ChatThemeGroupingWorkspace({
     async (suggestion: SuggestedThemeGroup) => {
       const validIds = suggestion.theme_ids.filter((id) => themeById.has(id));
       if (validIds.length < 1) {
-        toast.error("Suggestion has no valid themes for this consultation");
+        toast.error("Suggestion has no valid themes for this project");
         return;
       }
 

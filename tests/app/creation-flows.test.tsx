@@ -61,7 +61,7 @@ describe("creation flows", () => {
     render(<NewMeetingPage />);
 
     expect(
-      screen.getByText("Choose the consultation project this meeting belongs to.")
+      screen.getByText("Choose the project this meeting belongs to.")
     ).toBeInTheDocument();
   });
 

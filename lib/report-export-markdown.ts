@@ -21,7 +21,7 @@ import type {
 import { formatDate } from "@/lib/report-formatting";
 
 const artifactTypeLabels: Record<string, string> = {
-  summary: "Consultation Summary",
+  summary: "Project Summary",
   report: "Board-Pack Report",
   email: "Evidence Email",
 };
@@ -119,7 +119,7 @@ function serializeAuditTrail(
   const lines: string[] = [];
 
   if (sessions.length > 0) {
-    lines.push("## Consultation sessions");
+    lines.push("## Project sessions");
     lines.push("");
     for (const session of sessions) {
       const dateStr = new Date(session.date).toLocaleDateString("en-GB", {

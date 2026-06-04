@@ -49,7 +49,7 @@ export function RoundsPanel({
   return (
     <div className="flex flex-wrap items-center gap-4">
       <span className="text-sm text-muted-foreground">
-        {currentRoundLabel ?? "No consultation linked"}
+        {currentRoundLabel ?? "No project linked"}
       </span>
 
       <Button
@@ -57,13 +57,13 @@ export function RoundsPanel({
         variant="outline"
         onClick={() => setDialogOpen(true)}
       >
-        {currentRoundId ? "Change consultation" : "Link consultation"}
+        {currentRoundId ? "Change project" : "Link project"}
       </Button>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Link consultation</DialogTitle>
+            <DialogTitle>Link project</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-1">
@@ -72,7 +72,7 @@ export function RoundsPanel({
               disabled={assigning === "__clear__"}
               className="flex w-full items-center justify-between rounded px-3 py-2 text-sm hover:bg-accent disabled:opacity-50"
             >
-              <span className="text-muted-foreground">No consultation</span>
+              <span className="text-muted-foreground">No project</span>
               {currentRoundId === null && (
                 <span className="text-xs text-muted-foreground">current</span>
               )}

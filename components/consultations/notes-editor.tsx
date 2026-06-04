@@ -72,7 +72,7 @@ export function NotesEditor({
         placeholder={
           readOnly
             ? "No notes recorded."
-            : "Add any notes, context, or follow-up items from this consultation…"
+            : "Add any notes, context, or follow-up items from this project…"
         }
         className="min-h-[160px] resize-y text-sm leading-relaxed"
       />

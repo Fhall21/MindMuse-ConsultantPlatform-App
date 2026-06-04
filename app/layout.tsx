@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono"
 
 export const metadata: Metadata = {
   title: "ConsultantPlatform",
-  description: "Psychosocial consultation evidence platform",
+  description: "Psychosocial project evidence platform",
 };
 
 export default function RootLayout({

@@ -154,7 +154,7 @@ export function InterviewChatPage({ shareToken }: { shareToken: string }) {
       <header className="border-b border-border/40 bg-background px-6 py-4">
         <div className="mx-auto flex max-w-2xl items-baseline justify-between gap-6">
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground/60">Consultation interview</p>
+            <p className="text-xs text-muted-foreground/60">Project interview</p>
             <h1 className="mt-0.5 truncate text-sm font-medium text-foreground">{flowTitle}</h1>
           </div>
           <div className="shrink-0 text-right">

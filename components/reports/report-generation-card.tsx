@@ -44,7 +44,7 @@ export function ReportGenerationCard() {
 
   const handleGenerate = useCallback(async () => {
     if (!selectedRoundId) {
-      toast.error("Please select a consultation round");
+      toast.error("Please select a project");
       return;
     }
 

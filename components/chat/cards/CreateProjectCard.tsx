@@ -71,7 +71,7 @@ export function CreateProjectCard({
     return (
       <ChatToolCardShell
         success
-        title="Consultation created"
+        title="Project created"
         description={`${createdLabel} is ready.`}
         successLink={successLink}
       />

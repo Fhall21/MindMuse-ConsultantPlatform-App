@@ -42,8 +42,8 @@ export interface ResearchExtractionDialogProps {
   /** Optional pre-selected reference (when quote sits next to a citation chip). */
   initialReferenceId?: string | null;
   /**
-   * Optional consultation to pre-select. If absent, the user picks from their
-   * consultations in the dialog.
+   * Optional project to pre-select. If absent, the user picks from their
+   * projects in the dialog.
    */
   initialConsultationId?: string | null;
   onSuccess?: (insightId: string) => void;
@@ -158,8 +158,8 @@ export function ResearchExtractionDialog({
           <DialogTitle>Add as research insight</DialogTitle>
           <DialogDescription>
             {sessionType === "analysis"
-              ? "Lift this passage onto a consultation canvas as a research-sourced insight from your data analysis."
-              : "Lift this passage onto a consultation canvas as a research-sourced insight. The full quote and reference are kept for the audit trail."}
+              ? "Lift this passage onto a project canvas as a research-sourced insight from your data analysis."
+              : "Lift this passage onto a project canvas as a research-sourced insight. The full quote and reference are kept for the audit trail."}
           </DialogDescription>
         </DialogHeader>
 
@@ -210,7 +210,7 @@ export function ResearchExtractionDialog({
               value={description}
               maxLength={4000}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Why does this passage matter? How does it connect to consultation insights?"
+              placeholder="Why does this passage matter? How does it connect to project insights?"
               className="min-h-[72px]"
               aria-invalid={!descriptionValid}
               required
@@ -236,10 +236,10 @@ export function ResearchExtractionDialog({
                 <SelectValue
                   placeholder={
                     consultations.isLoading
-                      ? "Loading consultations…"
+                      ? "Loading projects…"
                       : consultationOptions.length === 0
-                      ? "No consultations available"
-                      : "Choose a consultation"
+                      ? "No projects available"
+                      : "Choose a project"
                   }
                 />
               </SelectTrigger>
@@ -253,7 +253,7 @@ export function ResearchExtractionDialog({
             </Select>
             {!consultationValid ? (
               <p className="text-[11px] text-destructive">
-                Pick which consultation&rsquo;s canvas this insight belongs on.
+                Pick which project&rsquo;s canvas this insight belongs on.
               </p>
             ) : null}
           </div>

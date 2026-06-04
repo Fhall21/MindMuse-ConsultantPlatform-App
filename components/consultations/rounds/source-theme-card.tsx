@@ -86,7 +86,7 @@ export function SourceThemeCard({
             <Badge
               variant="outline"
               className="h-5 border-amber-200 bg-amber-50 px-1.5 text-[10px] text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
-              title="This theme was accepted at the consultation level and is locked. It must remain represented in the round."
+              title="This theme was accepted at the project level and is locked. It must remain represented in the round."
             >
               Locked
             </Badge>

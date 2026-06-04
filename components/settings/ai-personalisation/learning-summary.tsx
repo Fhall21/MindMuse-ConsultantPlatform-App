@@ -20,7 +20,7 @@ const LEARNING_TYPE_META: Record<
   },
   trend: {
     title: "Accepted trends",
-    summary: "Topics landing reliably across consultations",
+    summary: "Topics landing reliably across projects",
     dot: "bg-emerald-500",
   },
   rejection_signal: {

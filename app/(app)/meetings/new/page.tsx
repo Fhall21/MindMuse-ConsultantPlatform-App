@@ -47,7 +47,7 @@ function ConsultationField({
         <Input
           value={newLabel}
           onChange={(e) => onNewLabelChange(e.target.value)}
-          placeholder="Consultation project name"
+          placeholder="Project name"
           className="h-9 flex-1 text-sm"
           autoFocus
           onKeyDown={(e) => {
@@ -92,7 +92,7 @@ function ConsultationField({
           onChange={(e) => onChange(e.target.value)}
           className="flex h-9 w-full appearance-none rounded-md border border-input bg-transparent px-3 py-1 pr-8 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
-          <option value="">No consultation</option>
+          <option value="">No project</option>
           {consultations.map((c) => (
             <option key={c.id} value={c.id}>
               {c.label}
@@ -420,9 +420,9 @@ export default function NewMeetingPage() {
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Consultation */}
         <div className="space-y-2">
-          <Label>Consultation</Label>
+          <Label>Project</Label>
           <p className="text-xs text-muted-foreground">
-            Choose the consultation project this meeting belongs to.
+            Choose the project this meeting belongs to.
           </p>
           <ConsultationField
             value={consultationId}
@@ -432,7 +432,7 @@ export default function NewMeetingPage() {
           />
           {newConsultationLabel && (
             <p className="text-xs text-muted-foreground">
-              A new consultation &ldquo;{newConsultationLabel}&rdquo; will be created.
+              A new project &ldquo;{newConsultationLabel}&rdquo; will be created.
             </p>
           )}
         </div>

@@ -121,7 +121,7 @@ function buildMeetingGroups(rows: MeetingListRow[], groupBy: MeetingGroupBy) {
 
     if (groupBy === "consultation") {
       const key = row.consultation_id ?? "__no_consultation__";
-      const label = consultationLabel || "No consultation linked";
+      const label = consultationLabel || "No project linked";
       const existing = groups.get(key);
 
       if (existing) {
@@ -155,8 +155,8 @@ function buildMeetingGroups(rows: MeetingListRow[], groupBy: MeetingGroupBy) {
       label,
       description:
         consultationLabel || row.consultation_id
-          ? `Consultation: ${consultationLabel || "Unlabeled consultation"}`
-          : "No consultation linked",
+          ? `Project: ${consultationLabel || "Unlabeled project"}`
+          : "No project linked",
       rows: [row],
     });
   });
@@ -181,8 +181,8 @@ function formatGroupDescription(group: MeetingGroup, groupBy: MeetingGroupBy) {
     );
 
     return consultationSummary
-      ? `${countLabel} · Consultations: ${consultationSummary}`
-      : `${countLabel} · No consultation linked`;
+      ? `${countLabel} · Projects: ${consultationSummary}`
+      : `${countLabel} · No project linked`;
   }
 
   return countLabel;
@@ -410,7 +410,7 @@ export default function MeetingsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No grouping</SelectItem>
-                  <SelectItem value="consultation">Consultation round</SelectItem>
+                  <SelectItem value="consultation">Project</SelectItem>
                   <SelectItem value="people">People involved</SelectItem>
                 </SelectContent>
               </Select>
@@ -470,7 +470,7 @@ export default function MeetingsPage() {
             <TableRow>
               <TableHead>Title</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Consultation</TableHead>
+              <TableHead>Project</TableHead>
               <TableHead>People</TableHead>
               <TableHead>Created</TableHead>
               <TableHead>Actions</TableHead>

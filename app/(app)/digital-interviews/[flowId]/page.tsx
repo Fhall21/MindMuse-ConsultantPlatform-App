@@ -342,7 +342,7 @@ function FeaturePlaceholders() {
       <FeaturePlaceholderCard
         featureKey="polis_voting"
         title="Statement voting"
-        description="Send extracted themes back to participants as statements to vote on. Useful for round 2 consultations to surface consensus and divergence across the group."
+        description="Send extracted themes back to participants as statements to vote on. Useful for round 2 projects to surface consensus and divergence across the group."
         icon={<BarChart2 className="size-4 text-muted-foreground" />}
         interest={interests.polis_voting}
         saving={savingKey === "polis_voting"}

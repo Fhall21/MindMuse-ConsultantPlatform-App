@@ -38,6 +38,7 @@ export const CHAT_CARD_TOOL_NAMES = new Set<string>([
 export const CHAT_HIDDEN_THREAD_TOOL_NAMES = new Set<string>([
   "confirm_meeting",
   "link_people",
+  "emit_suggested_replies",
 ]);
 
 export function isHiddenThreadToolName(toolName: string): boolean {
@@ -119,6 +120,15 @@ export function messageContentIsCardTool(content: string): boolean {
   return meta ? isChatCardToolName(meta.toolName) : false;
 }
 
+export function messageContentIsPendingCardTool(content: string): boolean {
+  const meta = parseToolMessageContent(content);
+  if (!meta || !isChatCardToolName(meta.toolName)) {
+    return false;
+  }
+  const status = meta.status ?? "pending";
+  return status !== "success" && status !== "dismissed" && status !== "error";
+}
+
 export function currentTurnMessages(
   messages: Array<{ role: string; content: string }>,
   lookback = 12
@@ -139,6 +149,6 @@ export async function sessionTurnIncludesCardTool(
   lookback = 12
 ): Promise<boolean> {
   return currentTurnMessages(messages, lookback).some(
-    (message) => message.role === "tool" && messageContentIsCardTool(message.content)
+    (message) => message.role === "tool" && messageContentIsPendingCardTool(message.content)
   );
 }

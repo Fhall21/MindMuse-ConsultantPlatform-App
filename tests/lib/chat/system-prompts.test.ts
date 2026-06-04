@@ -126,6 +126,16 @@ describe("lib/chat/system-prompts - conversational grounding", () => {
     expect(prompt).toContain("questions I should ask myself");
     expect(prompt).toContain("[User choice]");
   });
+
+  it("routes composer chips vs AskChoiceCard vs confirmation cards", () => {
+    expect(prompt).toContain("Composer reply suggestions");
+    expect(prompt).toContain("ask_user_choice → AskChoiceCard");
+    expect(prompt).toContain("emit_suggested_replies");
+    expect(prompt).toContain("Server inserts workflow chips");
+    expect(prompt).toContain("Consequential confirm");
+    expect(prompt).toContain("never rely on composer chips alone");
+    expect(prompt).toContain("Never call emit_suggested_replies in the same turn as any card tool");
+  });
 });
 
 describe("lib/chat/system-prompts — proactive triggers", () => {

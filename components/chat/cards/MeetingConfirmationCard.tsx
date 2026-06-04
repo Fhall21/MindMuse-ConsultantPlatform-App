@@ -29,11 +29,8 @@ import { useMeetingTypes } from "@/hooks/use-meeting-types";
 import { usePeople } from "@/hooks/use-people";
 import type { MeetingDraft } from "@/lib/chat/tools/intake";
 import { buildMeetingTitle } from "@/lib/meeting-title";
-import {
-  CARD_DISMISSED_COPY,
-  CARD_REOPEN_HELP,
-  meetingSavedDescription,
-} from "@/lib/chat/onboarding-copy";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
+import { CARD_DISMISSED_COPY, meetingSavedDescription } from "@/lib/chat/onboarding-copy";
 import { toDateInputValue, toIsoDate } from "@/lib/meetings/meeting-date";
 import { splitParticipantSuggestions } from "@/lib/meetings/participant-suggestions";
 import type { Consultation, Person } from "@/types/db";
@@ -233,13 +230,17 @@ export function MeetingConfirmationCard({
 
   if (status === "success" || savedMeetingId) {
     const displayTitle = title || initialDraft.title;
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      meetingId: savedMeetingId,
+    });
 
     return (
       <ChatToolCardShell
         success
         title="Meeting saved"
         description={meetingSavedDescription(displayTitle)}
-        successHelp={CARD_REOPEN_HELP}
+        successLink={successLink}
       />
     );
   }

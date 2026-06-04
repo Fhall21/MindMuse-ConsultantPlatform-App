@@ -2,6 +2,38 @@ import { describe, expect, it } from "vitest";
 import { dbMessagesToUiMessages } from "@/lib/chat/ui-messages";
 
 describe("lib/chat/ui-messages", () => {
+  it("maps assistant metadata suggestedResponses onto UI messages", () => {
+    const ui = dbMessagesToUiMessages([
+      {
+        id: "msg-assistant-1",
+        sessionId: "session-1",
+        role: "assistant",
+        content: "Want to extract themes from the transcript?",
+        toolCallId: null,
+        metadata: {
+          suggestedResponses: {
+            source: "generative",
+            overallConfidence: 0.85,
+            options: [
+              {
+                label: "Yes, extract",
+                prefill: "Yes, extract themes",
+                confidence: 0.9,
+              },
+            ],
+          },
+        },
+        createdAt: new Date("2026-06-01T10:05:00.000Z"),
+      },
+    ]);
+
+    expect(ui).toHaveLength(1);
+    const metadata = ui[0]?.metadata as {
+      suggestedResponses?: { options: Array<{ label: string }> };
+    };
+    expect(metadata?.suggestedResponses?.options[0]?.label).toBe("Yes, extract");
+  });
+
   it("maps persisted tool rows to MeetingConfirmationCard metadata", () => {
     const toolMessageId = "msg-tool-1";
     const toolResultId = "result-1";
@@ -14,6 +46,7 @@ describe("lib/chat/ui-messages", () => {
           role: "user",
           content: "I uploaded a consultation transcript file (`session.vtt`).",
           toolCallId: null,
+          metadata: null,
           createdAt: new Date("2026-06-01T10:00:00.000Z"),
         },
         {
@@ -34,6 +67,7 @@ describe("lib/chat/ui-messages", () => {
             toolResultId,
           }),
           toolCallId: "intake_text_transcript",
+          metadata: null,
           createdAt: new Date("2026-06-01T10:00:01.000Z"),
         },
       ],
@@ -114,6 +148,7 @@ describe("lib/chat/ui-messages", () => {
             toolResultId,
           }),
           toolCallId: "extract_themes",
+          metadata: null,
           createdAt: new Date("2026-06-01T10:00:01.000Z"),
         },
       ],
@@ -177,6 +212,7 @@ describe("lib/chat/ui-messages", () => {
           status: "pending",
         }),
         toolCallId: "generate_clarification",
+        metadata: null,
         createdAt: new Date("2026-06-01T10:00:01.000Z"),
       },
     ]);
@@ -203,6 +239,7 @@ describe("lib/chat/ui-messages", () => {
             toolResultId,
           }),
           toolCallId: "intake_text_transcript",
+          metadata: null,
           createdAt: new Date("2026-06-01T10:00:01.000Z"),
         },
       ],

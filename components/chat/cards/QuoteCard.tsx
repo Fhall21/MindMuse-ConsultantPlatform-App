@@ -5,11 +5,8 @@ import { Loader2, Quote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { ChatQuoteReviewRow } from "@/components/quotes/chat-quote-review-row";
-import {
-  CARD_DISMISSED_COPY,
-  CARD_REOPEN_HELP,
-  QUOTE_REVIEW_COMPLETE_COPY,
-} from "@/lib/chat/onboarding-copy";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
+import { CARD_DISMISSED_COPY, QUOTE_REVIEW_COMPLETE_COPY } from "@/lib/chat/onboarding-copy";
 import {
   formatTranscriptPosition,
   type QuoteDecision,
@@ -164,6 +161,10 @@ export function QuoteCard({
     const acceptedCount = Object.values(review.decisions).filter(
       (value) => value === "accepted"
     ).length;
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      meetingId: review.meeting_id,
+    });
 
     return (
       <ChatToolCardShell
@@ -179,7 +180,7 @@ export function QuoteCard({
             ? QUOTE_REVIEW_COMPLETE_COPY(acceptedCount)
             : "Review finished with no quotes saved."
         }
-        successHelp={CARD_REOPEN_HELP}
+        successLink={successLink}
       />
     );
   }

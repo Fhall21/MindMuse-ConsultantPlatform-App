@@ -6,12 +6,15 @@ import {
   chatMessages,
   chatSessions,
   chatToolResults,
+  type ChatMessageMetadata,
   type ChatMessageRole,
   type ChatToolResultStatus,
 } from "@/db/schema";
 import type { ModelMessage } from "ai";
 import { CHAT_MESSAGE_HISTORY_LIMIT } from "./constants";
 import { getChatModel } from "./model";
+import { buildChatMessageMetadata, shouldDisplaySuggestedResponses } from "./suggested-responses";
+import { getWorkflowSuggestedResponsesForContent } from "./suggested-response-templates";
 
 const SUMMARY_MARKER = "[CHAT_HISTORY_SUMMARY]";
 
@@ -34,11 +37,22 @@ export async function countSessionMessages(sessionId: string): Promise<number> {
   return row?.count ?? 0;
 }
 
+export async function getChatMessageForSession(messageId: string, sessionId: string) {
+  const [message] = await db
+    .select()
+    .from(chatMessages)
+    .where(and(eq(chatMessages.id, messageId), eq(chatMessages.sessionId, sessionId)))
+    .limit(1);
+
+  return message ?? null;
+}
+
 export async function insertChatMessage(params: {
   sessionId: string;
   role: ChatMessageRole;
   content: string;
   toolCallId?: string | null;
+  metadata?: ChatMessageMetadata | null;
 }) {
   const [message] = await db
     .insert(chatMessages)
@@ -47,6 +61,7 @@ export async function insertChatMessage(params: {
       role: params.role,
       content: params.content,
       toolCallId: params.toolCallId ?? null,
+      metadata: params.metadata ?? null,
     })
     .returning();
 
@@ -55,6 +70,16 @@ export async function insertChatMessage(params: {
     .set({ updatedAt: new Date() })
     .where(eq(chatSessions.id, params.sessionId));
 
+  if (message.role === "assistant" && !params.metadata?.suggestedResponses) {
+    const workflow = getWorkflowSuggestedResponsesForContent(message.content);
+    if (workflow && shouldDisplaySuggestedResponses(workflow)) {
+      await updateChatMessageMetadata(
+        message.id,
+        buildChatMessageMetadata(workflow)
+      );
+    }
+  }
+
   return message;
 }
 
@@ -62,6 +87,16 @@ export async function updateChatMessageContent(messageId: string, content: strin
   await db
     .update(chatMessages)
     .set({ content })
+    .where(eq(chatMessages.id, messageId));
+}
+
+export async function updateChatMessageMetadata(
+  messageId: string,
+  metadata: ChatMessageMetadata
+) {
+  await db
+    .update(chatMessages)
+    .set({ metadata })
     .where(eq(chatMessages.id, messageId));
 }
 
@@ -144,6 +179,42 @@ export async function updateToolResult(params: {
       )
     )
     .returning();
+
+  if (!row?.messageId || (params.output === undefined && !params.status)) {
+    return row ?? null;
+  }
+
+  const [toolMessage] = await db
+    .select()
+    .from(chatMessages)
+    .where(eq(chatMessages.id, row.messageId))
+    .limit(1);
+
+  if (toolMessage?.role === "tool") {
+    try {
+      const parsed = JSON.parse(toolMessage.content) as {
+        tool?: string;
+        input?: Record<string, unknown>;
+        output?: unknown;
+        status?: ChatToolResultStatus;
+        toolResultId?: string;
+      };
+      if (parsed.tool) {
+        await updateChatMessageContent(
+          toolMessage.id,
+          JSON.stringify({
+            tool: parsed.tool,
+            input: parsed.input ?? {},
+            output: params.output !== undefined ? params.output : parsed.output,
+            status: params.status ?? parsed.status ?? row.status,
+            toolResultId: row.id,
+          })
+        );
+      }
+    } catch {
+      // Leave message content unchanged if it is not valid tool JSON.
+    }
+  }
 
   return row ?? null;
 }

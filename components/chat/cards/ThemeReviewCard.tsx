@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { AddThemeForm } from "@/components/insights/add-theme-form";
 import { ThemeReviewRow } from "@/components/insights/theme-review-row";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
 import {
   CARD_DISMISSED_COPY,
-  CARD_REOPEN_HELP,
   INSIGHT_ACCEPT_COPY,
   INSIGHT_REVIEW_DONE_COPY,
 } from "@/lib/chat/onboarding-copy";
@@ -149,12 +149,17 @@ export function ThemeReviewCard({
       (value) => value === "accepted"
     ).length;
 
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      meetingId: review.meeting_id,
+    });
+
     return (
       <ChatToolCardShell
         success
         title="Theme review complete"
         description={INSIGHT_REVIEW_DONE_COPY(acceptedCount)}
-        successHelp={CARD_REOPEN_HELP}
+        successLink={successLink}
       />
     );
   }

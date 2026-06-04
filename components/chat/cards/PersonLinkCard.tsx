@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
 import { readPersonLinkOutput } from "@/lib/chat/tools/people-link";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { notifyCardConfirmation } from "./notify-card-confirmation";
@@ -37,11 +38,17 @@ export function PersonLinkCard({ tool, messageId, sessionId, onUpdated }: ChatCa
   }
 
   if (completed || tool.status === "success") {
+    const meetingId = data?.meeting_id ?? readPersonLinkOutput(tool.output)?.meeting_id;
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      meetingId,
+    });
     return (
       <ChatToolCardShell
         success
         title="Person linked"
         description="The person has been linked to this meeting."
+        successLink={successLink}
       />
     );
   }

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
 import { readReportExportOutput } from "@/lib/chat/tools/report-export";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { notifyCardConfirmation } from "./notify-card-confirmation";
@@ -61,11 +62,16 @@ export function ReportExportCard({ tool, messageId, sessionId, onUpdated }: Chat
   if (!data) return null;
 
   if (completed || tool.status === "success") {
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      reportId: data.report_id,
+    });
     return (
       <ChatToolCardShell
         success
         title="Export started"
         description={`${data.consultation_title} — ${FORMAT_LABELS[format]} download triggered.`}
+        successLink={successLink}
       />
     );
   }

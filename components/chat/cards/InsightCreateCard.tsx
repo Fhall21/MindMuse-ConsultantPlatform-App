@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
 import { readInsightCreateOutput } from "@/lib/chat/tools/insight-create";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { notifyCardConfirmation } from "./notify-card-confirmation";
@@ -32,11 +33,16 @@ export function InsightCreateCard({ tool, messageId, sessionId, onUpdated }: Cha
   }
 
   if (completed || tool.status === "success") {
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      meetingId: data?.meeting_id,
+    });
     return (
       <ChatToolCardShell
         success
         title="Insight added"
         description={label || "New insight added to the canvas."}
+        successLink={successLink}
       />
     );
   }

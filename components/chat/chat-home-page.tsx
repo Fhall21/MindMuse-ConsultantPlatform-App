@@ -24,6 +24,16 @@ import { mergeBootstrapWithStreamingAssistant } from "@/lib/chat/merge-bootstrap
 import type { CrossAnalysisResults } from "@/lib/chat/analysis-db";
 import type { ChatAnalysisNotification } from "@/components/chat/chat-analysis-notifications";
 import type { ResumeSuggestion } from "@/lib/chat/resume-suggestion";
+import {
+  areSuggestedResponsesStale,
+  getSuggestedResponsesAnchorMessageId,
+  getSuggestedResponsesFromUiMessages,
+  getVisibleSuggestedResponseOptions,
+  shouldHideSuggestedResponses,
+  threadHasPendingInteractiveCard,
+  type BoundSuggestedResponses,
+  type SuggestedResponseOption,
+} from "@/lib/chat/suggested-responses";
 
 interface ChatBootstrap {
   sessionId: string;
@@ -70,6 +80,15 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   );
   const seenAnalysisTaskIdsRef = useRef<Set<string>>(new Set());
   const sessionIdRef = useRef<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [suggestedResponses, setSuggestedResponses] =
+    useState<BoundSuggestedResponses | null>(null);
+  const suggestionsFetchIdRef = useRef(0);
+
+  const clearSuggestedResponses = useCallback(() => {
+    suggestionsFetchIdRef.current += 1;
+    setSuggestedResponses(null);
+  }, []);
   const queryClient = useQueryClient();
   const consultationsQuery = useConsultations();
   const sessionsQuery = useChatSessions();
@@ -189,6 +208,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
       setIsSwitchingSession(true);
       clearError();
       setInput("");
+      clearSuggestedResponses();
       setCreateProjectCardPinned(false);
       try {
         await loadBootstrap({ sessionId: nextSessionId });
@@ -200,7 +220,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
         setIsSwitchingSession(false);
       }
     },
-    [clearError, isSwitchingSession, loadBootstrap, sessionId]
+    [clearError, clearSuggestedResponses, isSwitchingSession, loadBootstrap, sessionId]
   );
 
   const handleBackToHome = useCallback(async () => {
@@ -212,6 +232,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     setIsSwitchingSession(true);
     clearError();
     setInput("");
+    clearSuggestedResponses();
     setCreateProjectCardPinned(false);
     try {
       await loadBootstrap({ createNew: true });
@@ -220,7 +241,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     } finally {
       setIsSwitchingSession(false);
     }
-  }, [clearError, isSwitchingSession, loadBootstrap]);
+  }, [clearError, clearSuggestedResponses, isSwitchingSession, loadBootstrap]);
 
   useEffect(() => {
     if (status === "ready" && messages.length > 0) {
@@ -280,6 +301,109 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     isSwitchingSession ||
     status === "submitted" ||
     status === "streaming";
+
+  const suggestionsAnchorMessageId = useMemo(
+    () => getSuggestedResponsesAnchorMessageId(messages),
+    [messages]
+  );
+
+  const hideSuggestedResponses = shouldHideSuggestedResponses({
+    view,
+    hasSession: Boolean(sessionId),
+    status,
+    isBusy,
+    inputTrimmed: input.trim(),
+    hasPendingCard: threadHasPendingInteractiveCard(messages),
+  });
+
+  const visibleSuggestedResponses = useMemo(
+    () =>
+      getVisibleSuggestedResponseOptions(
+        suggestedResponses,
+        suggestionsAnchorMessageId,
+        hideSuggestedResponses
+      ),
+    [
+      hideSuggestedResponses,
+      suggestionsAnchorMessageId,
+      suggestedResponses,
+    ]
+  );
+
+  useEffect(() => {
+    setSuggestedResponses((current) => {
+      if (!current) {
+        return current;
+      }
+      if (
+        hideSuggestedResponses ||
+        areSuggestedResponsesStale(current, suggestionsAnchorMessageId)
+      ) {
+        suggestionsFetchIdRef.current += 1;
+        return null;
+      }
+      return current;
+    });
+  }, [hideSuggestedResponses, suggestionsAnchorMessageId]);
+
+  useEffect(() => {
+    if (hideSuggestedResponses || !sessionId || !suggestionsAnchorMessageId) {
+      return;
+    }
+
+    const fromMessages = getSuggestedResponsesFromUiMessages(messages);
+    if (fromMessages) {
+      setSuggestedResponses({
+        messageId: suggestionsAnchorMessageId,
+        options: fromMessages.options,
+      });
+      return;
+    }
+
+    const fetchId = suggestionsFetchIdRef.current + 1;
+    suggestionsFetchIdRef.current = fetchId;
+    const fetchForMessageId = suggestionsAnchorMessageId;
+
+    void (async () => {
+      try {
+        const data = await fetchJson<{
+          messageId: string | null;
+          suggestedResponses: { options: SuggestedResponseOption[] } | null;
+        }>(
+          `/api/chat/sessions/${sessionId}/suggested-responses?messageId=${encodeURIComponent(fetchForMessageId)}`
+        );
+        if (suggestionsFetchIdRef.current !== fetchId) {
+          return;
+        }
+        if (!data.messageId) {
+          return;
+        }
+        const options = data.suggestedResponses?.options ?? [];
+        if (options.length === 0) {
+          return;
+        }
+        setSuggestedResponses({ messageId: data.messageId, options });
+      } catch (fetchError) {
+        console.warn("[chat-home] suggested responses fetch failed", fetchError);
+      }
+    })();
+  }, [
+    hideSuggestedResponses,
+    messages,
+    sessionId,
+    suggestionsAnchorMessageId,
+  ]);
+
+  const handleInputChange = useCallback(
+    (value: string) => {
+      setInput(value);
+      if (value.length > 0) {
+        clearSuggestedResponses();
+      }
+    },
+    [clearSuggestedResponses]
+  );
+
   const lastAssistantText = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
@@ -331,6 +455,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
       setView("chat");
       clearError();
       setInput("");
+      clearSuggestedResponses();
       await sendMessage(
         { text: trimmed },
         {
@@ -341,12 +466,24 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
       );
       return true;
     },
-    [clearError, consultationInputBlocked, isBusy, sendMessage]
+    [clearError, clearSuggestedResponses, consultationInputBlocked, isBusy, sendMessage]
   );
 
   const handleSend = useCallback(() => {
+    clearSuggestedResponses();
     void sendUserText(input);
-  }, [input, sendUserText]);
+  }, [clearSuggestedResponses, input, sendUserText]);
+
+  const handleSelectSuggestion = useCallback(
+    (prefill: string) => {
+      clearSuggestedResponses();
+      setInput(prefill);
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+    },
+    [clearSuggestedResponses]
+  );
 
   const handleAttachFile = useCallback(
     async (file: File, kind: "transcript" | "notes") => {
@@ -371,6 +508,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
 
         clearError();
         setInput("");
+        clearSuggestedResponses();
 
         const response = await fetch("/api/chat/intake", {
           method: "POST",
@@ -406,6 +544,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     },
     [
       clearError,
+      clearSuggestedResponses,
       consultationId,
       consultationInputBlocked,
       isBusy,
@@ -523,7 +662,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
             <ChatHomeView
               displayName={displayName}
               input={input}
-              onInputChange={setInput}
+              onInputChange={handleInputChange}
               onSend={handleSend}
               onAttachFile={handleAttachFile}
               isBusy={isBusy}
@@ -551,7 +690,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
           <ChatShell
             messages={messages}
             input={input}
-            onInputChange={setInput}
+            onInputChange={handleInputChange}
             onSend={handleSend}
             onAttachFile={handleAttachFile}
             isBusy={isBusy}
@@ -575,6 +714,9 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
             onSubmitText={sendUserText}
             analysisNotifications={analysisNotifications}
             onDismissAnalysisNotification={handleDismissAnalysisNotification}
+            textareaRef={textareaRef}
+            suggestedResponses={visibleSuggestedResponses}
+            onSelectSuggestion={handleSelectSuggestion}
           />
         )}
       </div>

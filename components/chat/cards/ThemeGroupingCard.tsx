@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
 import {
   CARD_DISMISSED_COPY,
-  CARD_REOPEN_HELP,
   GROUPING_CONFIRMED_COPY,
   GROUPING_LINKED_COPY,
 } from "@/lib/chat/onboarding-copy";
@@ -72,6 +72,11 @@ export function ThemeGroupingCard({
   }
 
   if (status === "success" || completed) {
+    const toolName = isLinkMode ? "link_insights_to_group" : "group_themes";
+    const { successLink } = getCardSuccessShellProps(toolName, {
+      output: tool.output,
+      consultationId: review.consultation_id,
+    });
     return (
       <ChatToolCardShell
         success
@@ -81,7 +86,7 @@ export function ThemeGroupingCard({
             ? GROUPING_LINKED_COPY(review.group_name, review.theme_ids.length)
             : GROUPING_CONFIRMED_COPY(review.group_name)
         }
-        successHelp={CARD_REOPEN_HELP}
+        successLink={successLink}
       />
     );
   }

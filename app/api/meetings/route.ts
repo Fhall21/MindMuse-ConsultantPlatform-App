@@ -3,7 +3,11 @@ import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
 import { getUnarchivedSessionForUser } from "@/lib/chat/context";
 import { confirmMeetingFromDraft, linkPeopleByIdsToMeeting, linkPeopleToMeeting } from "@/lib/chat/intake-db";
 import { MEETING_SAVED_FOLLOW_UP } from "@/lib/chat/onboarding-copy";
-import { getToolResultForSession, insertChatMessage, updateToolResult } from "@/lib/chat/persist";
+import {
+  getToolResultForSession,
+  insertChatMessage,
+  updateToolResult,
+} from "@/lib/chat/persist";
 import { bindChatSessionConsultation } from "@/lib/chat/theme-extract-flow";
 import { startCrossAnalysisJob } from "@/lib/chat/analysis-db";
 import { confirmMeetingSchema } from "@/lib/chat/tools/intake";
@@ -83,6 +87,7 @@ export async function POST(request: NextRequest) {
         output: {
           meeting_draft: parsed.data.meeting_draft,
           meeting_record: record,
+          meeting_id: record.id,
         },
         status: "success",
       });

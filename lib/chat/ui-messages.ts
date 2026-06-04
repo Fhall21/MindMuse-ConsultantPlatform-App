@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
-import type { ChatToolResultStatus } from "@/db/schema";
+import type { ChatMessageMetadata, ChatToolResultStatus } from "@/db/schema";
+import { getSuggestedResponsesFromMetadata } from "@/lib/chat/suggested-responses";
 import type { loadRecentChatMessages, loadToolResultsForSession } from "@/lib/chat/persist";
 
 const SUMMARY_PREFIX = "[CHAT_HISTORY_SUMMARY]";
@@ -79,10 +80,20 @@ export function dbMessagesToUiMessages(
       continue;
     }
 
+    const suggestedResponses = getSuggestedResponsesFromMetadata(
+      message.metadata as ChatMessageMetadata | null
+    );
     uiMessages.push({
       id: message.id,
       role: message.role,
       parts: [{ type: "text", text: message.content }],
+      ...(suggestedResponses
+        ? {
+            metadata: {
+              suggestedResponses,
+            } satisfies ChatMessageMetadata,
+          }
+        : {}),
     });
   }
 

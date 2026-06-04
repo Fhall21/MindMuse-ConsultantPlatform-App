@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowRight, Loader2, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
 import { readCanvasOperationProposal } from "@/lib/chat/tools/canvas-manipulate";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { notifyCardConfirmation } from "./notify-card-confirmation";
@@ -42,11 +43,16 @@ export function CanvasOperationCard({ tool, messageId, sessionId, onUpdated }: C
       proposal.operation === "connect"
         ? `"${proposal.source_node_label}" → "${proposal.target_node_label}"`
         : `"${proposal.node_label}" renamed to "${proposal.new_label}"`;
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      consultationId: proposal.consultation_id,
+    });
     return (
       <ChatToolCardShell
         success
         title={proposal.operation === "connect" ? "Nodes connected" : "Frame renamed"}
         description={successDesc}
+        successLink={successLink}
       />
     );
   }

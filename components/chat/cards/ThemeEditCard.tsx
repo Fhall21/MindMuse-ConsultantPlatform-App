@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import {
+  getCardSuccessShellProps,
+  readMeetingIdFromToolInput,
+} from "@/lib/chat/card-success-destinations";
 import { readThemeEditOutput } from "@/lib/chat/tools/theme-edit";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { notifyCardConfirmation } from "./notify-card-confirmation";
@@ -41,11 +45,16 @@ export function ThemeEditCard({ tool, messageId, sessionId, onUpdated }: ChatCar
   }
 
   if (completed || tool.status === "success") {
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      meetingId: readMeetingIdFromToolInput(tool.input),
+    });
     return (
       <ChatToolCardShell
         success
         title="Theme updated"
         description={label || data.label}
+        successLink={successLink}
       />
     );
   }

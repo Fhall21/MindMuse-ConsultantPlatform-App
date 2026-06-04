@@ -70,6 +70,7 @@ import {
   unlinkPersonFromMeetingSchema,
 } from "./tools/nl-actions";
 import { askUserChoiceSchema } from "./tools/ask-choice";
+import { emitSuggestedRepliesSchema } from "./tools/emit-suggested-replies";
 import { TURN_CARD_STACK_BLOCKED_MESSAGE, TurnCardGate } from "./turn-card-gate";
 import type { ChatToolRuntimeContext } from "./tool-context";
 import { persistToolExecution, requirePersistedToolResult } from "./tool-persist";
@@ -1419,6 +1420,13 @@ export function createChatTools(input: ChatToolRuntimeContext) {
         );
         return { ...output, tool_result_id: toolResult.id };
       },
+    }),
+
+    emit_suggested_replies: tool({
+      description:
+        "Optional composer reply chips when your final assistant message invites a simple reply (yes/no/proceed) and you did NOT call any card tool this turn. Max 3 options with distinct roles (primary/defer/alternate). Each needs label, prefill, confidence 0–1. Omit or pass empty options to abstain. Do NOT use for meeting-saved / theme-done / quote-done follow-ups — the server inserts those chips. Never duplicate ask_user_choice options.",
+      inputSchema: emitSuggestedRepliesSchema,
+      execute: async (input) => emitSuggestedRepliesSchema.parse(input),
     }),
 
     // ── Sprint 22 Task 04 — Canvas NL ─────────────────────────────────────

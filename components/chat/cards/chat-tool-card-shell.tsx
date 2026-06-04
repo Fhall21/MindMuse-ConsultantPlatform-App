@@ -12,6 +12,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { buildSuccessHelp } from "./card-success-link";
+import type { CardSuccessLink } from "@/lib/chat/card-success-destinations";
 
 interface ChatToolCardShellProps {
   title: ReactNode;
@@ -23,7 +25,9 @@ interface ChatToolCardShellProps {
   dismissLabel?: string;
   dismissDisabled?: boolean;
   success?: boolean;
+  successLink?: CardSuccessLink | null;
   successHelp?: ReactNode;
+  successHelpIncludeReopen?: boolean;
   dismissed?: boolean;
   maxWidth?: "xl" | "2xl" | "5xl";
   className?: string;
@@ -39,12 +43,22 @@ export function ChatToolCardShell({
   dismissLabel = "Dismiss card",
   dismissDisabled = false,
   success = false,
+  successLink,
   successHelp,
+  successHelpIncludeReopen = true,
   dismissed = false,
   maxWidth = "xl",
   className,
 }: ChatToolCardShellProps) {
   if (success) {
+    const resolvedSuccessHelp =
+      successHelp ??
+      (successLink !== undefined
+        ? buildSuccessHelp(successLink, { includeReopenHelp: successHelpIncludeReopen })
+        : successHelpIncludeReopen
+          ? buildSuccessHelp(null, { includeReopenHelp: true })
+          : null);
+
     return (
       <Card size="sm" className={cn("border-emerald-500/30 bg-emerald-500/5", className)}>
         <CardHeader>
@@ -56,8 +70,10 @@ export function ChatToolCardShell({
             <div className="min-w-0 space-y-1">
               <CardTitle>{title}</CardTitle>
               {description ? <CardDescription>{description}</CardDescription> : null}
-              {successHelp ? (
-                <p className="pt-1 text-xs leading-relaxed text-muted-foreground">{successHelp}</p>
+              {resolvedSuccessHelp ? (
+                <div className="pt-1 text-xs leading-relaxed text-muted-foreground">
+                  {resolvedSuccessHelp}
+                </div>
               ) : null}
             </div>
           </div>

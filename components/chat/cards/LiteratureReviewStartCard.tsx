@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
 import { readLiteratureReviewProposal } from "@/lib/chat/tools/literature-review";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import type { ChatCardProps } from "./types";
@@ -27,18 +27,17 @@ export function LiteratureReviewStartCard({ tool, sessionId, onUpdated }: ChatCa
 
   if (researchSessionId || proposal.research_session_id || tool.status === "success") {
     const id = researchSessionId ?? proposal.research_session_id;
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      researchSessionId: id,
+    });
     return (
       <ChatToolCardShell
         success
         title="Literature review started"
         description="Your refined question is queued for research."
-        successHelp={
-          id ? (
-            <Link href={`/research/${id}`} className="font-medium underline underline-offset-4">
-              Open literature review
-            </Link>
-          ) : null
-        }
+        successLink={successLink}
+        successHelpIncludeReopen={false}
       />
     );
   }

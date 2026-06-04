@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
 import { readMeetingEditOutput } from "@/lib/chat/tools/meeting-edit";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { notifyCardConfirmation } from "./notify-card-confirmation";
@@ -47,11 +48,16 @@ export function MeetingEditCard({ tool, messageId, sessionId, onUpdated }: ChatC
   }
 
   if (completed || tool.status === "success") {
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      meetingId: data.meeting_id,
+    });
     return (
       <ChatToolCardShell
         success
         title="Meeting updated"
         description={title || data.title}
+        successLink={successLink}
       />
     );
   }

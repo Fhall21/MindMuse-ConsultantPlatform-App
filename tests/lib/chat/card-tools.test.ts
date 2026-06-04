@@ -50,7 +50,7 @@ describe("lib/chat/card-tools", () => {
     expect(isHiddenThreadToolName("extract_themes")).toBe(false);
   });
 
-  it("detects card tool messages in a turn", async () => {
+  it("detects pending card tool messages in a turn", async () => {
     const content = JSON.stringify({
       tool: "extract_themes",
       input: { meeting_id: "11111111-1111-4111-8111-111111111111" },
@@ -66,6 +66,26 @@ describe("lib/chat/card-tools", () => {
     ).resolves.toBe(true);
     await expect(
       sessionTurnIncludesCardTool([{ role: "assistant", content: "Here are themes..." }])
+    ).resolves.toBe(false);
+  });
+
+  it("ignores success intake card when follow-up prose is in the same turn", async () => {
+    const intakeCard = JSON.stringify({
+      tool: "intake_text_transcript",
+      input: { title: "Leadership session" },
+      status: "success",
+    });
+
+    await expect(
+      sessionTurnIncludesCardTool([
+        { role: "user", content: "Attached transcript" },
+        { role: "tool", content: intakeCard },
+        {
+          role: "assistant",
+          content:
+            "Your meeting is saved. I can extract themes from the transcript next — say when you are ready, or ask what you would like to do.",
+        },
+      ])
     ).resolves.toBe(false);
   });
 

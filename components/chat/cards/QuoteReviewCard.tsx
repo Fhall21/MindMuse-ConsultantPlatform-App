@@ -5,10 +5,8 @@ import { Loader2, Quote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
 import { QuoteReviewPanel } from "@/components/consultations/quote-review-panel";
-import {
-  CARD_DISMISSED_COPY,
-  CARD_REOPEN_HELP,
-} from "@/lib/chat/onboarding-copy";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
+import { CARD_DISMISSED_COPY } from "@/lib/chat/onboarding-copy";
 import { readShowQuotesOutput } from "@/lib/chat/tools/quotes";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { readToolResultId, type ChatCardProps } from "./types";
@@ -44,6 +42,10 @@ export function QuoteReviewCard({
   }
 
   if (status === "success" || completed) {
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      meetingId: data.meeting_id,
+    });
     return (
       <ChatToolCardShell
         success
@@ -54,7 +56,7 @@ export function QuoteReviewCard({
           </span>
         }
         description="Quote review finished. Reopen this card from chat history if you need to add more."
-        successHelp={CARD_REOPEN_HELP}
+        successLink={successLink}
       />
     );
   }

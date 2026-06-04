@@ -1,5 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { stepCountIs, streamText } from "ai";
+import type { ChatMessageMetadata } from "@/db/schema/chat";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
@@ -40,6 +41,14 @@ import { createChatTools } from "@/lib/chat/tools";
 import { TurnCardGate } from "@/lib/chat/turn-card-gate";
 import { composeCanvasState } from "@/lib/data/canvas-state";
 import { sanitizeAssistantOutput } from "@/lib/chat/assistant-output";
+import {
+  buildChatMessageMetadata,
+  shouldDisplaySuggestedResponses,
+} from "@/lib/chat/suggested-responses";
+import {
+  extractGenerativeSuggestedRepliesFromSteps,
+  turnIncludesCardToolFromSteps,
+} from "@/lib/chat/tools/emit-suggested-replies";
 
 export const maxDuration = 60;
 
@@ -256,18 +265,31 @@ export async function POST(request: NextRequest) {
       messages: toModelMessages(storedMessages),
       tools,
       stopWhen: stepCountIs(CHAT_MAX_TOOL_ROUNDTRIPS + 1),
-      onFinish: async ({ text }) => {
+      onFinish: async (event) => {
         try {
           const messagesAfterTurn = await loadRecentChatMessages(session.id);
-          const cardToolRendered = await sessionTurnIncludesCardTool(messagesAfterTurn);
+          const cardToolRendered =
+            turnIncludesCardToolFromSteps(event.steps) ||
+            (await sessionTurnIncludesCardTool(messagesAfterTurn));
           const choiceFollowUp =
             latestUserText !== null && isAskChoiceUserReply(latestUserText);
 
-          if (text.trim() && (!cardToolRendered || choiceFollowUp)) {
+          if (event.text.trim() && (!cardToolRendered || choiceFollowUp)) {
+            const assistantContent = sanitizeAssistantOutput(event.text);
+            let metadata: ChatMessageMetadata | null = null;
+
+            if (!cardToolRendered) {
+              const generative = extractGenerativeSuggestedRepliesFromSteps(event.steps);
+              if (generative && shouldDisplaySuggestedResponses(generative)) {
+                metadata = buildChatMessageMetadata(generative);
+              }
+            }
+
             await insertChatMessage({
               sessionId: session.id,
               role: "assistant",
-              content: sanitizeAssistantOutput(text),
+              content: assistantContent,
+              metadata,
             });
           }
           void summarizeOverflowMessages(session.id).catch((error) => {

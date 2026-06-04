@@ -5,11 +5,8 @@ import Link from "next/link";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
-import {
-  CARD_DISMISSED_COPY,
-  CARD_REOPEN_HELP,
-  REPORT_DRAFT_SAVED_COPY,
-} from "@/lib/chat/onboarding-copy";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
+import { CARD_DISMISSED_COPY, REPORT_DRAFT_SAVED_COPY } from "@/lib/chat/onboarding-copy";
 import { readReportDraftReviewOutput } from "@/lib/chat/tools/async-actions";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { notifyCardConfirmation } from "./notify-card-confirmation";
@@ -35,12 +32,16 @@ export function ReportPreviewCard({
   if (!review) return null;
 
   if (status === "success" || completed) {
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      consultationId: review?.consultation_id,
+    });
     return (
       <ChatToolCardShell
         success
         title="Report saved"
         description={REPORT_DRAFT_SAVED_COPY}
-        successHelp={CARD_REOPEN_HELP}
+        successLink={successLink}
       />
     );
   }

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
 import { readPersonUnlinkProposal } from "@/lib/chat/tools/nl-actions";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { notifyCardConfirmation } from "./notify-card-confirmation";
@@ -26,11 +27,16 @@ export function PersonUnlinkCard({ tool, sessionId, onUpdated }: ChatCardProps) 
 
   if (!proposal) return null;
   if (completed || tool.status === "success") {
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      meetingId: proposal.meeting_id,
+    });
     return (
       <ChatToolCardShell
         success
         title="Person unlinked"
         description={`Removed the meeting connection from ${proposal.meeting_title}.`}
+        successLink={successLink}
       />
     );
   }

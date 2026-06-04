@@ -8,6 +8,19 @@ export type ChatMessageRole = "user" | "assistant" | "tool" | "system";
 export type ChatToolResultStatus = "pending" | "success" | "error" | "dismissed";
 export type CrossAnalysisJobStatus = "queued" | "running" | "complete" | "error";
 
+export type ChatMessageMetadata = {
+  suggestedResponses?: {
+    source: "workflow" | "generative";
+    overallConfidence?: number;
+    options: Array<{
+      label: string;
+      prefill: string;
+      confidence?: number;
+      role?: "primary" | "defer" | "alternate";
+    }>;
+  };
+};
+
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -47,6 +60,7 @@ export const chatMessages = pgTable(
     role: text("role").$type<ChatMessageRole>().notNull(),
     content: text("content").notNull(),
     toolCallId: text("tool_call_id"),
+    metadata: jsonb("metadata").$type<ChatMessageMetadata | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({

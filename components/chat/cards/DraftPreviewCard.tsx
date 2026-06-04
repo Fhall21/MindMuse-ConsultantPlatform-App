@@ -5,11 +5,8 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
-import {
-  CARD_DISMISSED_COPY,
-  CARD_REOPEN_HELP,
-  EMAIL_DRAFT_SAVED_COPY,
-} from "@/lib/chat/onboarding-copy";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
+import { CARD_DISMISSED_COPY, EMAIL_DRAFT_SAVED_COPY } from "@/lib/chat/onboarding-copy";
 import { readEmailDraftReviewOutput, type EmailDraftReviewOutput } from "@/lib/chat/tools/async-actions";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { notifyCardConfirmation } from "./notify-card-confirmation";
@@ -66,12 +63,16 @@ export function DraftPreviewCard({
   const bodyToRender = review.edited_body ?? review.body;
 
   if (status === "success" || completed) {
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      meetingId: review?.meeting_id,
+    });
     return (
       <ChatToolCardShell
         success
         title="Evidence email saved"
         description={EMAIL_DRAFT_SAVED_COPY}
-        successHelp={CARD_REOPEN_HELP}
+        successLink={successLink}
       />
     );
   }

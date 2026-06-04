@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
 import { readResearchThemeLinkProposal } from "@/lib/chat/tools/async-actions";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import { notifyCardConfirmation } from "./notify-card-confirmation";
@@ -30,11 +31,16 @@ export function ResearchThemeLinkCard({ tool, sessionId, onUpdated }: ChatCardPr
   const topLink = proposal.links[0];
 
   if (completed || tool.status === "success") {
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      consultationId: proposal.consultation_id,
+    });
     return (
       <ChatToolCardShell
         success
         title="Research linked"
         description={`Linked to ${topLink.theme_group_label}.`}
+        successLink={successLink}
       />
     );
   }

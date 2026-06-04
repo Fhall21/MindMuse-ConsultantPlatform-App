@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
 import { readMeetingNoteProposal } from "@/lib/chat/tools/nl-actions";
 import { ChatToolCardShell } from "./chat-tool-card-shell";
 import type { ChatCardProps } from "./types";
@@ -21,11 +22,16 @@ export function MeetingNoteCard({ tool, sessionId, onUpdated }: ChatCardProps) {
   if (!proposal) return null;
 
   if (completed || tool.status === "success") {
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      meetingId: proposal.meeting_id,
+    });
     return (
       <ChatToolCardShell
         success
         title="Meeting note saved"
         description={`Added the note to ${proposal.meeting_title}.`}
+        successLink={successLink}
       />
     );
   }

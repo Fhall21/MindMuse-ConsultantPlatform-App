@@ -6,10 +6,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  CARD_REOPEN_HELP,
-  CREATE_CONSULTATION_COPY,
-} from "@/lib/chat/onboarding-copy";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
+import { CREATE_CONSULTATION_COPY } from "@/lib/chat/onboarding-copy";
 import { createRound } from "@/lib/actions/rounds";
 import { fetchJson } from "@/hooks/api";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
@@ -30,6 +28,7 @@ export function CreateProjectCard({
   const queryClient = useQueryClient();
   const [label, setLabel] = useState("");
   const [createdLabel, setCreatedLabel] = useState<string | null>(null);
+  const [createdConsultationId, setCreatedConsultationId] = useState<string | null>(null);
   const pending = isPending(confirmKey);
 
   async function handleCreate() {
@@ -55,6 +54,7 @@ export function CreateProjectCard({
       queryClient.invalidateQueries({ queryKey: ["consultations"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
       setCreatedLabel(trimmed);
+      setCreatedConsultationId(consultationId);
       setPending(confirmKey, false);
       onProjectCreated?.(consultationId);
     } catch (error) {
@@ -65,12 +65,15 @@ export function CreateProjectCard({
   }
 
   if (createdLabel) {
+    const { successLink } = getCardSuccessShellProps("create_project", {
+      consultationId: createdConsultationId,
+    });
     return (
       <ChatToolCardShell
         success
         title="Consultation created"
         description={`${createdLabel} is ready.`}
-        successHelp={CARD_REOPEN_HELP}
+        successLink={successLink}
       />
     );
   }

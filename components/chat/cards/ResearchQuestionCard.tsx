@@ -5,7 +5,8 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCardConfirm } from "@/components/chat/card-confirm-context";
-import { CARD_DISMISSED_COPY, CARD_REOPEN_HELP } from "@/lib/chat/onboarding-copy";
+import { getCardSuccessShellProps } from "@/lib/chat/card-success-destinations";
+import { CARD_DISMISSED_COPY } from "@/lib/chat/onboarding-copy";
 import {
   readResearchQuestionReviewOutput,
   type ResearchQuestionReviewOutput,
@@ -61,12 +62,16 @@ export function ResearchQuestionCard({
   );
 
   if (status === "success" || completed) {
+    const { successLink } = getCardSuccessShellProps(tool.toolName, {
+      output: tool.output,
+      consultationId: review.consultation_id,
+    });
     return (
       <ChatToolCardShell
         success
         title="Research questions saved"
         description={`${activeQuestions.length} question${activeQuestions.length === 1 ? "" : "s"} kept for follow-up.`}
-        successHelp={CARD_REOPEN_HELP}
+        successLink={successLink}
       />
     );
   }

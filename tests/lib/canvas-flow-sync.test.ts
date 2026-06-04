@@ -15,6 +15,7 @@ function insightNode(id: string, groupId: string | null, x: number, y: number): 
         label: id,
         description: null,
         accepted: false,
+        isBrainstorming: false,
         subgroup: null,
         sourceConsultationId: null,
         sourceConsultationTitle: null,

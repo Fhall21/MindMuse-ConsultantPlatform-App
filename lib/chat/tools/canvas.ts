@@ -75,6 +75,7 @@ function parseCanvasNode(item: unknown): CanvasNode | null {
       typeof node.researchQuotePreview === "string" ? node.researchQuotePreview : null,
     groupId: typeof node.groupId === "string" ? node.groupId : null,
     memberIds,
+    isBrainstorming: node.isBrainstorming === true,
     isUserAdded: node.isUserAdded === true,
     lockedFromSource: node.lockedFromSource === true,
     position,

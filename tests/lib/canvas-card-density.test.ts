@@ -13,6 +13,7 @@ function makeNode(overrides: Partial<CanvasNode> = {}): CanvasNode {
     label: "Short",
     description: null,
     accepted: false,
+    isBrainstorming: false,
     subgroup: null,
     sourceConsultationId: null,
     sourceConsultationTitle: null,

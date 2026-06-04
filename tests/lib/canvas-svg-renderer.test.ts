@@ -5,6 +5,7 @@ import type { CanvasEdge, CanvasNode } from "@/types/canvas";
 function node(id: string, x: number, y: number): CanvasNode {
   return {
     accepted: true,
+    isBrainstorming: false,
     description: "Description",
     groupId: null,
     id,

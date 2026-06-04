@@ -21,6 +21,7 @@ function flowNode(
         label: id,
         description: null,
         accepted: false,
+        isBrainstorming: false,
         subgroup: null,
         sourceConsultationId: null,
         sourceConsultationTitle: null,

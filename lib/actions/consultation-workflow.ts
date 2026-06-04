@@ -1890,7 +1890,7 @@ export async function splitTheme(
 
 export async function updateTheme(
   groupId: string,
-  patch: { label?: string; description?: string | null }
+  patch: { label?: string; description?: string | null; isBrainstorming?: boolean }
 ) {
   const { userId } = await requireAuthenticatedContext();
   const context = await loadGroupWithRoundContext({ userId, groupId });
@@ -1905,6 +1905,7 @@ export async function updateTheme(
     .set({
       label: nextLabel,
       description: nextDescription,
+      ...(patch.isBrainstorming !== undefined && { isBrainstorming: patch.isBrainstorming }),
       updatedAt: new Date(),
     })
     .where(eq(themes.id, groupId));

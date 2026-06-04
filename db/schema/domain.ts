@@ -543,6 +543,7 @@ export const themes = pgTable(
     label: text("label").notNull(),
     description: text("description"),
     status: text("status").default("draft").notNull(),
+    isBrainstorming: boolean("is_brainstorming").default(false).notNull(),
     origin: text("origin").default("manual").notNull(),
     aiDraftLabel: text("ai_draft_label"),
     aiDraftDescription: text("ai_draft_description"),

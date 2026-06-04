@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +13,7 @@ interface GroupConfirmPanelProps {
   isLoading: boolean;
   isConfirming: boolean;
   suggestion: { name: string; description: string } | null;
-  onConfirm: (name: string, description: string) => void;
+  onConfirm: (name: string, description: string, isBrainstorming: boolean) => void;
   onCancel: () => void;
 }
 
@@ -24,6 +26,7 @@ export function GroupConfirmPanel({
 }: GroupConfirmPanelProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [isBrainstorming, setIsBrainstorming] = useState(false);
   const [nameError, setNameError] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -58,7 +61,7 @@ export function GroupConfirmPanel({
       nameInputRef.current?.focus();
       return;
     }
-    onConfirm(name.trim(), description.trim());
+    onConfirm(name.trim(), description.trim(), isBrainstorming);
   }
 
   return (
@@ -130,6 +133,23 @@ export function GroupConfirmPanel({
                 disabled={isConfirming}
                 className="resize-none text-sm"
               />
+            </div>
+            <div className="flex items-center gap-2.5 rounded-lg border border-dashed border-border/60 bg-muted/20 px-3 py-2.5">
+              <Checkbox
+                id="brainstorming-toggle"
+                checked={isBrainstorming}
+                onCheckedChange={(v) => setIsBrainstorming(Boolean(v))}
+                disabled={isConfirming}
+              />
+              <Label
+                htmlFor="brainstorming-toggle"
+                className="cursor-pointer text-sm font-normal text-foreground/80"
+              >
+                Brainstorming
+                <span className="ml-1.5 text-xs text-muted-foreground">
+                  (exploratory — uncheck for accepted)
+                </span>
+              </Label>
             </div>
           </div>
         )}

@@ -616,7 +616,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
   const INSIGHT_WIDTH = 258;
   const INSIGHT_HEIGHT = 110;
 
-  async function handleGroupConfirm(name: string, description: string) {
+  async function handleGroupConfirm(name: string, description: string, isBrainstorming: boolean) {
     if (!groupPopover) return;
     const { insightIds, suggestion } = groupPopover;
 
@@ -627,7 +627,7 @@ export const CanvasShell = forwardRef<CanvasShellHandle, CanvasShellProps>(funct
     try {
       // skipDraft=true: user provides their own name/description, skip AI draft write
       const { groupId } = await createTheme(roundId, insightIds, true);
-      await updateTheme(groupId, { label: name, description: description || null });
+      await updateTheme(groupId, { label: name, description: description || null, isBrainstorming });
       if (suggestion?.name === name) {
         setAiGeneratedGroupIds((prev) => new Set([...prev, groupId]));
       }

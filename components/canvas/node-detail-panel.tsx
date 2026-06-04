@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2, Pencil, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -21,7 +23,7 @@ interface NodeDetailPanelProps {
   onUngroupInsight: (nodeId: string) => Promise<void>;
   onSaveThemeGroup: (
     groupId: string,
-    patch: { label: string; description: string | null }
+    patch: { label: string; description: string | null; isBrainstorming?: boolean }
   ) => Promise<boolean>;
   onDeleteThemeGroup: (groupId: string) => Promise<boolean>;
   onClose: () => void;
@@ -49,6 +51,7 @@ export function NodeDetailPanel({
 
   const [draftLabel, setDraftLabel] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
+  const [draftIsBrainstorming, setDraftIsBrainstorming] = useState(false);
   const [editingField, setEditingField] = useState<"label" | "description" | null>(null);
   const [isSavingTheme, setIsSavingTheme] = useState(false);
   const [isDeletingTheme, setIsDeletingTheme] = useState(false);
@@ -58,13 +61,15 @@ export function NodeDetailPanel({
     if (isThemeNode && selectedNode) {
       setDraftLabel(selectedNode.label);
       setDraftDescription(selectedNode.description ?? "");
+      setDraftIsBrainstorming(selectedNode.isBrainstorming ?? false);
     } else {
       setDraftLabel("");
       setDraftDescription("");
+      setDraftIsBrainstorming(false);
     }
     setEditingField(null);
     setConfirmDelete(false);
-  }, [isThemeNode, selectedNode?.description, selectedNode?.id, selectedNode?.label]);
+  }, [isThemeNode, selectedNode?.description, selectedNode?.id, selectedNode?.isBrainstorming, selectedNode?.label]);
 
   const themeChildren = useMemo(() => {
     if (!isThemeNode || !selectedNode) {
@@ -82,7 +87,8 @@ export function NodeDetailPanel({
     isThemeNode &&
     selectedNode
       ? draftLabel.trim() !== selectedNode.label ||
-        draftDescription.trim() !== (selectedNode.description ?? "")
+        draftDescription.trim() !== (selectedNode.description ?? "") ||
+        draftIsBrainstorming !== (selectedNode.isBrainstorming ?? false)
       : false;
 
   async function handleSaveThemeGroup() {
@@ -100,6 +106,7 @@ export function NodeDetailPanel({
       const saved = await onSaveThemeGroup(selectedNode.id, {
         label: nextLabel,
         description: draftDescription.trim() || null,
+        isBrainstorming: draftIsBrainstorming,
       });
       if (saved) {
         setEditingField(null);
@@ -149,6 +156,7 @@ export function NodeDetailPanel({
             node={selectedNode}
             draftLabel={draftLabel}
             draftDescription={draftDescription}
+            draftIsBrainstorming={draftIsBrainstorming}
             editingField={editingField}
             themeChildren={themeChildren}
             hasThemeChanges={hasThemeChanges}
@@ -157,6 +165,7 @@ export function NodeDetailPanel({
             confirmDelete={confirmDelete}
             onChangeLabel={setDraftLabel}
             onChangeDescription={setDraftDescription}
+            onChangeIsBrainstorming={setDraftIsBrainstorming}
             onEditField={setEditingField}
             onSave={handleSaveThemeGroup}
             onDelete={handleDeleteThemeGroup}
@@ -183,6 +192,7 @@ function ThemeGroupEditor({
   node,
   draftLabel,
   draftDescription,
+  draftIsBrainstorming,
   editingField,
   themeChildren,
   hasThemeChanges,
@@ -191,6 +201,7 @@ function ThemeGroupEditor({
   confirmDelete,
   onChangeLabel,
   onChangeDescription,
+  onChangeIsBrainstorming,
   onEditField,
   onSave,
   onDelete,
@@ -198,6 +209,7 @@ function ThemeGroupEditor({
   node: CanvasNode;
   draftLabel: string;
   draftDescription: string;
+  draftIsBrainstorming: boolean;
   editingField: "label" | "description" | null;
   themeChildren: CanvasNode[];
   hasThemeChanges: boolean;
@@ -206,6 +218,7 @@ function ThemeGroupEditor({
   confirmDelete: boolean;
   onChangeLabel: (value: string) => void;
   onChangeDescription: (value: string) => void;
+  onChangeIsBrainstorming: (value: boolean) => void;
   onEditField: (field: "label" | "description" | null) => void;
   onSave: () => Promise<boolean>;
   onDelete: () => Promise<boolean>;
@@ -236,6 +249,23 @@ function ThemeGroupEditor({
         placeholder="Add a short description"
         minHeightClassName="min-h-[6.5rem]"
       />
+
+      {/* Brainstorming toggle */}
+      <div className="flex items-center gap-2.5">
+        <Checkbox
+          id="detail-brainstorming"
+          checked={draftIsBrainstorming}
+          onCheckedChange={(v) => onChangeIsBrainstorming(Boolean(v))}
+          disabled={isSavingTheme}
+        />
+        <Label
+          htmlFor="detail-brainstorming"
+          className="cursor-pointer text-sm font-normal text-foreground/80"
+        >
+          Brainstorming
+          <span className="ml-1.5 text-xs text-muted-foreground">(exploratory)</span>
+        </Label>
+      </div>
 
       <Separator />
 

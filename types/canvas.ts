@@ -32,6 +32,8 @@ export interface CanvasNode {
   description: string | null;
   /** Whether the theme/insight has been accepted in the round workflow. */
   accepted: boolean;
+  /** Canvas group theme state: true = brainstorming/exploratory, false = accepted. */
+  isBrainstorming: boolean;
   /** Free-text subgroup tag applied by the consultant. */
   subgroup: string | null;
   /** Source consultation metadata for continuity with round grouping. */

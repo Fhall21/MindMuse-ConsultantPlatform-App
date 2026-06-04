@@ -47,12 +47,12 @@ export function intakeToolNameForKind(intakeKind: ResolvedIntakeKind): string {
 
 function sourceLabelForKind(intakeKind: ResolvedIntakeKind): string {
   if (intakeKind === "notes") {
-    return "consultation notes photo";
+    return "project notes photo";
   }
   if (intakeKind === "audio") {
-    return "consultation recording";
+    return "project recording";
   }
-  return "consultation transcript file";
+  return "project transcript file";
 }
 
 /** Short user-visible ack stored in chat history; intake text stays server-side. */
@@ -73,7 +73,7 @@ export function buildChatIntakeUserMessage(params: {
 
   const projectHint = params.projectId
     ? `\nUse consultation/project_id \`${params.projectId}\` when calling the intake tool.`
-    : "\nIf no consultation is selected yet, ask the user to create or choose one before confirming the meeting.";
+    : "\nIf no project is selected yet, ask the user to create or choose one before confirming the meeting.";
 
   return [
     buildUploadAckUserMessage(params),

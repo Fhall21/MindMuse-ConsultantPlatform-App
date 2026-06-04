@@ -638,6 +638,35 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     [queryClient]
   );
 
+  const handleProjectCreated = useCallback(
+    (nextConsultationId: string) => {
+      setCreateProjectCardPinned(false);
+      setConsultationId(nextConsultationId);
+      setNeedsConsultationSelection(false);
+      setWelcomeVariant((current) =>
+        current === "brand_new" ? "resume_onboarding" : current
+      );
+      setOnboardingState((current) =>
+        current
+          ? {
+              ...current,
+              hasConsultation: true,
+              activeConsultations: Math.max(current.activeConsultations, 1),
+              phase:
+                current.phase === "needs_consultation"
+                  ? "needs_meeting"
+                  : current.phase,
+            }
+          : current
+      );
+      queryClient.invalidateQueries({ queryKey: ["consultations"] });
+      void loadBootstrap({ sessionId: sessionIdRef.current }).catch((reloadError) => {
+        console.error(reloadError);
+      });
+    },
+    [loadBootstrap, queryClient]
+  );
+
   return (
     <CardConfirmProvider>
       <div
@@ -681,10 +710,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
               onboardingPhase={onboardingState?.phase ?? "needs_consultation"}
               resumeSuggestion={resumeSuggestion}
               showCreateProject={showCreateProject}
-              onProjectCreated={(nextConsultationId) => {
-                setCreateProjectCardPinned(false);
-                setConsultationId(nextConsultationId);
-              }}
+              onProjectCreated={handleProjectCreated}
             />
           </div>
         ) : (
@@ -708,10 +734,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
               void regenerate();
             }}
             onConsultationSelected={handleConsultationSelected}
-            onProjectCreated={(nextConsultationId) => {
-              setCreateProjectCardPinned(false);
-              setConsultationId(nextConsultationId);
-            }}
+            onProjectCreated={handleProjectCreated}
             onCardUpdated={handleCardUpdated}
             onSubmitText={sendUserText}
             analysisNotifications={analysisNotifications}

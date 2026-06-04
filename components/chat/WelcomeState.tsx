@@ -93,14 +93,14 @@ export function WelcomeState({
 
   if (chipPriority.showUploadTranscript) {
     chips.push({
-      label: "Upload consultation transcript",
+      label: "Send transcript",
       action: { type: "file", accept: CAPTURE_TRANSCRIPT_ACCEPT_ATTR, label: "transcript" },
     });
   }
 
   if (chipPriority.showUploadNotes) {
     chips.push({
-      label: "Upload consultation notes",
+      label: "Send notes",
       action: { type: "file", accept: CAPTURE_NOTES_ACCEPT_ATTR, label: "notes" },
     });
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChatSessionList } from "@/components/chat/chat-session-list";
@@ -73,6 +73,7 @@ export function ChatHomeView({
   const examplePrompts = getHomeExamplePrompts(onboardingPhase);
   const transcriptInputRef = useRef<HTMLInputElement>(null);
   const notesInputRef = useRef<HTMLInputElement>(null);
+  const [isDraggingTranscript, setIsDraggingTranscript] = useState(false);
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -86,6 +87,35 @@ export function ChatHomeView({
     event.preventDefault();
     if (!input.trim() || inputDisabled) return;
     onSend();
+  }
+
+  function handleDragOver(event: React.DragEvent<HTMLFormElement>) {
+    if (!onAttachFile || inputDisabled || !event.dataTransfer.types.includes("Files")) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDraggingTranscript(true);
+  }
+
+  function handleDragLeave(event: React.DragEvent<HTMLFormElement>) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      return;
+    }
+    setIsDraggingTranscript(false);
+  }
+
+  function handleDrop(event: React.DragEvent<HTMLFormElement>) {
+    if (!onAttachFile || inputDisabled) {
+      return;
+    }
+    event.preventDefault();
+    setIsDraggingTranscript(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) {
+      onAttachFile(file, "transcript");
+    }
   }
 
   return (
@@ -151,7 +181,15 @@ export function ChatHomeView({
       ) : null}
 
       {showComposer ? (
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form
+          onSubmit={handleSubmit}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`space-y-3 transition-colors ${
+            isDraggingTranscript ? "bg-muted/60 ring-1 ring-border" : ""
+          }`}
+        >
           {resumeSuggestion ? (
             <button
               type="button"
@@ -198,7 +236,7 @@ export function ChatHomeView({
                   className={CHAT_QUICK_ACTION_BUTTON_CLASS}
                   onClick={() => transcriptInputRef.current?.click()}
                 >
-                  Attach transcript
+                  Send transcript
                 </Button>
                 <Button
                   type="button"
@@ -207,7 +245,7 @@ export function ChatHomeView({
                   className={CHAT_QUICK_ACTION_BUTTON_CLASS}
                   onClick={() => notesInputRef.current?.click()}
                 >
-                  Attach notes
+                  Send notes
                 </Button>
               </div>
             ) : (

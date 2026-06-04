@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type FormEvent, type RefObject } from "react";
+import { useRef, useState, type FormEvent, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -42,6 +42,7 @@ export function ChatInput({
   const notesInputRef = useRef<HTMLInputElement>(null);
   const localTextareaRef = useRef<HTMLTextAreaElement>(null);
   const textareaRef = textareaRefProp ?? localTextareaRef;
+  const [isDraggingTranscript, setIsDraggingTranscript] = useState(false);
 
   const showSuggestions =
     Boolean(suggestedResponses?.length) &&
@@ -67,9 +68,46 @@ export function ChatInput({
     }
   }
 
+  function handleDragOver(event: React.DragEvent<HTMLFormElement>) {
+    if (!onAttachFile || inputDisabled || !event.dataTransfer.types.includes("Files")) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDraggingTranscript(true);
+  }
+
+  function handleDragLeave(event: React.DragEvent<HTMLFormElement>) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      return;
+    }
+    setIsDraggingTranscript(false);
+  }
+
+  function handleDrop(event: React.DragEvent<HTMLFormElement>) {
+    if (!onAttachFile || inputDisabled) {
+      return;
+    }
+    event.preventDefault();
+    setIsDraggingTranscript(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) {
+      onAttachFile(file, "transcript");
+    }
+  }
+
   return (
     <div className="shrink-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <form onSubmit={handleSubmit} className="px-4 py-4 sm:px-6">
+      <form
+        onSubmit={handleSubmit}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`px-4 py-4 transition-colors sm:px-6 ${
+          isDraggingTranscript ? "bg-muted/60 ring-1 ring-border" : ""
+        }`}
+      >
         <input
           ref={transcriptInputRef}
           type="file"
@@ -125,7 +163,7 @@ export function ChatInput({
                     className={CHAT_QUICK_ACTION_BUTTON_CLASS}
                     onClick={() => transcriptInputRef.current?.click()}
                   >
-                    Attach consultation transcript
+                    Send transcript
                   </Button>
                   <Button
                     type="button"
@@ -134,7 +172,7 @@ export function ChatInput({
                     className={CHAT_QUICK_ACTION_BUTTON_CLASS}
                     onClick={() => notesInputRef.current?.click()}
                   >
-                    Attach consultation notes
+                    Send notes
                   </Button>
                 </>
               ) : null}

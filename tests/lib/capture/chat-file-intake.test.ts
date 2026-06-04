@@ -10,7 +10,7 @@ describe("lib/capture/chat-file-intake", () => {
       fileName: "session.vtt",
     });
 
-    expect(message).toContain("consultation transcript file");
+    expect(message).toContain("project transcript file");
     expect(message).toContain("session.vtt");
     expect(message).not.toContain("---");
   });
@@ -23,13 +23,13 @@ describe("lib/capture/chat-file-intake", () => {
       projectId: "11111111-1111-4111-8111-111111111111",
     });
 
-    expect(message).toContain("consultation transcript file");
+    expect(message).toContain("project transcript file");
     expect(message).toContain("intake_text_transcript");
     expect(message).toContain("11111111-1111-4111-8111-111111111111");
     expect(message).toContain("Speaker one said hello.");
   });
 
-  it("prompts for consultation when project id missing", () => {
+  it("prompts for project selection when project id missing", () => {
     const message = buildChatIntakeUserMessage({
       intakeKind: "notes",
       fileName: "notes.jpg",

@@ -690,6 +690,7 @@ export function createChatTools(input: ChatToolRuntimeContext) {
           sessionId: context.sessionId,
           consultationId: parsed.consultation_id,
           meetingIds: parsed.meeting_ids,
+          revisionRequest: parsed.revision_request,
         });
 
         if (!result.ok) {

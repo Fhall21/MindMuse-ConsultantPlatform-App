@@ -84,12 +84,32 @@ async def draft_email(request: EmailDraftRequest):
             f"{email_guidance}"
         )
 
+    previous_draft_body = (request.previous_draft_body or "").strip()
+    previous_draft_subject = (request.previous_draft_subject or "").strip()
+    revision_request = (request.revision_request or "").strip()
+    if previous_draft_body:
+        system_prompt += (
+            "\n\n--- Current draft revision context ---\n"
+            "The consultant may be asking for edits to the existing evidence email. "
+            "Use the current draft below as the base draft and revise it in place. "
+            "Do not ask the consultant to paste the draft back in. Preserve useful "
+            "substance unless the request or evidence clearly changes it."
+        )
+
     user_content = (
         f"Consultation: {title}\n"
         f"Date: {request.consultation_date or 'not specified'}\n"
         f"People involved: {people_str}\n"
         f"Key themes to cover: {themes_str}\n\n"
-        f"Transcript:\n{request.transcript}"
+        + (f"User's requested email change:\n{revision_request}\n\n" if revision_request else "")
+        + (
+            "Current draft email to revise:\n"
+            f"Subject: {previous_draft_subject or 'not specified'}\n"
+            f"Body:\n{previous_draft_body}\n\n"
+            if previous_draft_body
+            else ""
+        )
+        + f"Transcript:\n{request.transcript}"
     )
 
     completion = client.chat.completions.create(

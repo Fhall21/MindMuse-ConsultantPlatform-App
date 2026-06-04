@@ -118,7 +118,7 @@ def test_draft_email_includes_personalization_and_saved_guidance(monkeypatch):
     system_prompt = call["messages"][0]["content"]
     assert "Saved user preferences" in system_prompt
     assert '"workload"' in system_prompt
-    assert "Saved email drafting guidance" in system_prompt
+    assert "MANDATORY consultant requirements" in system_prompt
     assert "Keep the draft concise and action-led." in system_prompt
 
 
@@ -153,4 +153,38 @@ def test_draft_email_omits_saved_guidance_section_when_empty(monkeypatch):
 
     call = fake_client.chat.completions.calls[0]
     system_prompt = call["messages"][0]["content"]
-    assert "Saved email drafting guidance" not in system_prompt
+    assert "MANDATORY consultant requirements" not in system_prompt
+
+
+def test_draft_email_reuses_previous_draft_for_revision(monkeypatch):
+    draft_module = _load_draft_module()
+
+    fake_client = FakeClient(
+        _mock_completion(
+            {
+                "subject": "Revised follow-up",
+                "body": "Shorter revised body.",
+            }
+        )
+    )
+    monkeypatch.setattr(draft_module, "get_client", lambda: fake_client)
+
+    _run(
+        draft_module.draft_email(
+            EmailDraftRequest(
+                transcript="Alex asked for concise next steps.",
+                themes=["Follow-up actions"],
+                people=["Alex"],
+                previous_draft_subject="Long follow-up",
+                previous_draft_body="This current draft is too long and repeats the transcript.",
+            )
+        )
+    )
+
+    call = fake_client.chat.completions.calls[0]
+    system_prompt = call["messages"][0]["content"]
+    user_content = call["messages"][1]["content"]
+    assert "Use the current draft below as the base draft" in system_prompt
+    assert "Do not ask the consultant to paste the draft back in" in system_prompt
+    assert "Subject: Long follow-up" in user_content
+    assert "This current draft is too long" in user_content

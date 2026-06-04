@@ -41,6 +41,28 @@ async function loadConsultationMeetings(userId: string, consultationId: string) 
     .orderBy(desc(meetings.updatedAt));
 }
 
+async function loadLatestEvidenceEmailDraft(meetingId: string) {
+  const rows = await db
+    .select({
+      subject: evidenceEmails.subject,
+      bodyDraft: evidenceEmails.bodyDraft,
+    })
+    .from(evidenceEmails)
+    .where(eq(evidenceEmails.meetingId, meetingId))
+    .orderBy(desc(evidenceEmails.createdAt))
+    .limit(1);
+
+  const latest = rows[0];
+  if (!latest?.bodyDraft?.trim()) {
+    return null;
+  }
+
+  return {
+    subject: latest.subject ?? "",
+    body: latest.bodyDraft,
+  };
+}
+
 async function loadAcceptedInsightLabels(
   userId: string,
   consultationId: string,
@@ -137,7 +159,7 @@ export async function executeGenerateResearchQuestions(params: {
       ...themesForPrompt.slice(0, 3).map((theme) => ({
         id: randomUUID(),
         question: `What evidence supports the theme "${theme.label}" across other consultations?`,
-        rationale: "Cross-consultation validation for an accepted theme.",
+        rationale: "Cross-project validation for an accepted theme.",
         linked_theme_id: theme.id,
       }))
     );
@@ -158,6 +180,7 @@ export async function executeDraftEvidenceEmail(params: {
   sessionId: string;
   consultationId: string;
   meetingIds?: string[];
+  revisionRequest?: string;
 }): Promise<
   | { ok: true; output: EmailDraftReviewOutput }
   | { ok: false; error: string }
@@ -180,6 +203,7 @@ export async function executeDraftEvidenceEmail(params: {
     params.userId,
     params.consultationId
   );
+  const latestDraft = await loadLatestEvidenceEmailDraft(selectedMeeting.id);
 
   const result = await dispatchToolToFastApi({
     userId: params.userId,
@@ -191,6 +215,9 @@ export async function executeDraftEvidenceEmail(params: {
       people: [],
       themes: acceptedThemes.map((theme) => theme.label),
       transcript,
+      previous_draft_subject: latestDraft?.subject,
+      previous_draft_body: latestDraft?.body,
+      revision_request: params.revisionRequest?.trim() || undefined,
     },
   });
 
@@ -237,6 +264,7 @@ export async function executeDraftEvidenceEmail(params: {
         id: theme.id,
         label: theme.label,
       })),
+      revision_request: params.revisionRequest?.trim() || undefined,
     },
   };
 }
@@ -272,7 +300,7 @@ export async function executeGenerateReport(params: {
     sessionId: params.sessionId,
     endpoint: CHAT_TOOL_ENDPOINTS.generate_report,
     body: {
-      round_label: consultation?.label ?? "Consultation report",
+      round_label: consultation?.label ?? "Project report",
       accepted_round_themes: acceptedThemes.map((theme) => ({
         label: theme.label,
         description: theme.description,
@@ -290,7 +318,7 @@ export async function executeGenerateReport(params: {
       ? (result.data as Record<string, unknown>)
       : {};
   const title =
-    typeof payload.title === "string" ? payload.title : "Consultation report draft";
+    typeof payload.title === "string" ? payload.title : "Project report draft";
   const body =
     typeof payload.content === "string"
       ? payload.content

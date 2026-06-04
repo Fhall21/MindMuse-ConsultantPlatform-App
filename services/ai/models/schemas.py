@@ -134,6 +134,9 @@ class EmailDraftRequest(BaseModel):
     people: List[str]
     consultation_title: Optional[str] = None
     consultation_date: Optional[str] = None  # ISO date, e.g. "2026-03-18"
+    previous_draft_subject: Optional[str] = None
+    previous_draft_body: Optional[str] = None
+    revision_request: Optional[str] = None
     learning_signals: List[LearningSignal] = []
     ai_learnings: List[AIInsightLearning] = []
     user_preferences: Optional[UserPreferences] = None

@@ -224,12 +224,14 @@ async function runDraftEvidenceEmail(params: {
   context: ChatToolRuntimeContext;
   meetingId: string;
   consultationId: string;
+  revisionRequest?: string;
 }) {
   const result = await executeDraftEvidenceEmail({
     userId: params.context.userId,
     sessionId: params.context.sessionId,
     consultationId: params.consultationId,
     meetingIds: [params.meetingId],
+    revisionRequest: params.revisionRequest,
   });
 
   if (!result.ok) {
@@ -350,10 +352,15 @@ export async function runMeetingPickerContinue(params: {
       if (!consultationId) {
         return { ok: false, error: "Choose a consultation before drafting an evidence email." };
       }
+      const revisionRequest =
+        typeof resolved.actionParams.revision_request === "string"
+          ? resolved.actionParams.revision_request
+          : (await findPriorUserRequestMessage(params.sessionId)) ?? undefined;
       const result = await runDraftEvidenceEmail({
         context,
         meetingId: params.meetingId,
         consultationId,
+        revisionRequest,
       });
       if (!result.ok) {
         return { ok: false, error: result.error };

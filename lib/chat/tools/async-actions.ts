@@ -8,6 +8,7 @@ export const generateResearchQuestionsSchema = z.object({
 export const draftEvidenceEmailSchema = z.object({
   consultation_id: z.string().uuid(),
   meeting_ids: z.array(z.string().uuid()).optional(),
+  revision_request: z.string().max(600).optional(),
 });
 
 export const generateReportSchema = z.object({
@@ -43,6 +44,7 @@ export interface EmailDraftReviewOutput {
   supporting_quotes: Array<{ id: string; text: string; speaker?: string | null }>;
   linked_themes: Array<{ id: string; label: string }>;
   edited_body?: string;
+  revision_request?: string;
 }
 
 export interface ReportDraftReviewOutput {
@@ -109,6 +111,8 @@ export function readEmailDraftReviewOutput(output: unknown): EmailDraftReviewOut
     body: record.body,
     edited_body:
       typeof record.edited_body === "string" ? record.edited_body : undefined,
+    revision_request:
+      typeof record.revision_request === "string" ? record.revision_request : undefined,
     supporting_quotes: Array.isArray(record.supporting_quotes)
       ? record.supporting_quotes.filter(
           (item): item is { id: string; text: string; speaker?: string | null } =>

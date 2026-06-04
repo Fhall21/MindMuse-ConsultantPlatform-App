@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import posthog from "posthog-js";
 
-import { useAIPreferences } from "@/hooks/use-ai-preferences";
+import { useAIPreferences, useUpdateAIPreferences } from "@/hooks/use-ai-preferences";
 import { useMeeting } from "@/hooks/use-meetings";
 import { useMeetingEvidenceEmails } from "@/hooks/use-evidence-email";
 import { useMeetingPeople } from "@/hooks/use-people";
@@ -100,6 +100,8 @@ async function generateEmailDraft(payload: {
   people: string[];
   consultation_title?: string;
   consultation_date?: string;
+  previous_draft_subject?: string;
+  previous_draft_body?: string;
 }) {
   const response = await fetch("/api/draft/email", {
     method: "POST",
@@ -178,6 +180,7 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
   const resolvedMeetingId = meetingId ?? consultationId;
   const queryClient = useQueryClient();
   const aiPreferencesQuery = useAIPreferences();
+  const updateAIPreferences = useUpdateAIPreferences();
   const meetingQuery = useMeeting(resolvedMeetingId ?? "");
   const evidenceEmailsQuery = useMeetingEvidenceEmails(resolvedMeetingId ?? "");
   const peopleQuery = useMeetingPeople(resolvedMeetingId ?? "");
@@ -197,6 +200,7 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
   const [isSaving, setIsSaving] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [emailGuidanceDraft, setEmailGuidanceDraft] = useState("");
 
   const acceptedThemeLabels = useMemo(
     () =>
@@ -230,6 +234,7 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
     [includedThemes]
   );
   const emailGuidance = aiPreferencesQuery.data?.emailGuidance?.trim() ?? "";
+  const emailGuidanceDirty = emailGuidanceDraft !== emailGuidance;
 
   const drafts = evidenceEmailsQuery.data ?? [];
   const currentDraft = drafts[0] ?? null;
@@ -264,6 +269,10 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
     setBody(currentDraftBody);
   }, [currentDraftBody, currentDraftSubject, currentDraft?.id]);
 
+  useEffect(() => {
+    setEmailGuidanceDraft(aiPreferencesQuery.data?.emailGuidance ?? "");
+  }, [aiPreferencesQuery.data?.emailGuidance]);
+
   async function refreshPanelData() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["meetings", resolvedMeetingId] }),
@@ -294,10 +303,12 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
         consultation_date: formatConsultationDate(
           meetingQuery.data?.meeting.created_at
         ),
+        previous_draft_subject: subject.trim() || undefined,
+        previous_draft_body: body.trim() || undefined,
       });
 
       const nextSubject =
-        generatedDraft.subject?.trim() || "Consultation follow-up evidence";
+        generatedDraft.subject?.trim() || "Project follow-up evidence";
       const nextBody =
         generatedDraft.body?.trim() || generatedDraft.body_draft?.trim() || "";
 
@@ -347,6 +358,28 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function handleSaveEmailGuidance() {
+    const prefs = aiPreferencesQuery.data;
+    if (!prefs || !emailGuidanceDirty) {
+      return;
+    }
+
+    setErrorMessage(null);
+    updateAIPreferences.mutate(
+      {
+        consultationTypes: prefs.consultationTypes ?? [],
+        focusAreas: prefs.focusAreas ?? [],
+        industry: prefs.industry ?? "",
+        excludedTopics: prefs.excludedTopics ?? [],
+        emailGuidance: emailGuidanceDraft,
+        anonymousMode: prefs.anonymousMode ?? true,
+      },
+      {
+        onError: (error) => setErrorMessage(getErrorMessage(error)),
+      }
+    );
   }
 
   async function handleAcceptDraft() {
@@ -431,20 +464,48 @@ export function EmailDraftPanel({ meetingId, consultationId }: EmailDraftPanelPr
             </p>
           ) : null}
 
-          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-            {emailGuidance ? (
-              <span className="truncate max-w-[70%]" title={emailGuidance}>
-                Guidance active: <span className="italic">{emailGuidance}</span>
-              </span>
-            ) : (
-              <span>No email guidance set.</span>
-            )}
-            <Link
-              href="/settings/ai-personalisation"
-              className="shrink-0 underline-offset-4 hover:underline hover:text-foreground"
-            >
-              {emailGuidance ? "Edit" : "Add guidance"}
-            </Link>
+          <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Evidence email guidance</p>
+              <p className="text-sm text-muted-foreground">
+                Add one short note about how generated evidence emails should read.
+                Use this for output shape, tone, or level of directness.
+              </p>
+            </div>
+            <Textarea
+              className="mt-3 min-h-24"
+              maxLength={600}
+              placeholder="e.g., Keep emails brief, lead with actions, and avoid repeating transcript wording."
+              value={emailGuidanceDraft}
+              onChange={(event) => setEmailGuidanceDraft(event.target.value)}
+              disabled={aiPreferencesQuery.isPending || updateAIPreferences.isPending}
+            />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                {emailGuidanceDraft.length}/600 used
+              </p>
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/settings/ai-personalisation"
+                  className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  Open settings
+                </Link>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveEmailGuidance}
+                  disabled={
+                    !emailGuidanceDirty ||
+                    aiPreferencesQuery.isPending ||
+                    updateAIPreferences.isPending
+                  }
+                >
+                  {updateAIPreferences.isPending ? "Saving…" : "Save guidance"}
+                </Button>
+              </div>
+            </div>
           </div>
 
           {!meetingQuery.isPending &&

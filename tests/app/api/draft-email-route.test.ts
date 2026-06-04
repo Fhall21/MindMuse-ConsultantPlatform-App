@@ -73,6 +73,8 @@ describe("POST /api/draft/email", () => {
         transcript: "The consultant discussed workload and follow-up actions.",
         themes: ["Workload pressure"],
         people: ["Alex"],
+        previous_draft_subject: "Earlier follow-up",
+        previous_draft_body: "Earlier body with too much detail.",
       })
     )) as Response;
 
@@ -96,7 +98,10 @@ describe("POST /api/draft/email", () => {
           consultation_types: ["return to work assessment"],
           email_guidance: "Keep the draft concise and action-led.",
         }),
-      })
+        previous_draft_subject: "Earlier follow-up",
+        previous_draft_body: "Earlier body with too much detail.",
+      }),
+      { userId: "user-1" }
     );
   });
 
@@ -122,7 +127,8 @@ describe("POST /api/draft/email", () => {
         learning_signals: [],
         ai_learnings: [],
         user_preferences: null,
-      })
+      }),
+      { userId: "user-1" }
     );
 
     errorSpy.mockRestore();

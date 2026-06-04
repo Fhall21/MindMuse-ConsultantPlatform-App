@@ -19,6 +19,7 @@ interface ChatShellProps {
   sessionId: string | null;
   needsConsultationSelection: boolean;
   consultationInputBlocked?: boolean;
+  hideInput?: boolean;
   showCreateProject: boolean;
   showRetry: boolean;
   onRetry?: () => void;
@@ -45,6 +46,7 @@ export function ChatShell({
   sessionId,
   needsConsultationSelection,
   consultationInputBlocked = false,
+  hideInput = false,
   showCreateProject,
   showRetry,
   onRetry,
@@ -90,21 +92,23 @@ export function ChatShell({
           />
         </div>
       </div>
-      <ChatInput
-        value={input}
-        onChange={onInputChange}
-        onSubmit={onSend}
-        disabled={isBusy}
-        blockedReason={
-          consultationInputBlocked
-            ? "Choose a consultation project above before you send a message."
-            : null
-        }
-        onAttachFile={onAttachFile}
-        textareaRef={textareaRef}
-        suggestedResponses={suggestedResponses}
-        onSelectSuggestion={onSelectSuggestion}
-      />
+      {hideInput ? null : (
+        <ChatInput
+          value={input}
+          onChange={onInputChange}
+          onSubmit={onSend}
+          disabled={isBusy}
+          blockedReason={
+            consultationInputBlocked
+              ? "Choose a project above before you send a message."
+              : null
+          }
+          onAttachFile={onAttachFile}
+          textareaRef={textareaRef}
+          suggestedResponses={suggestedResponses}
+          onSelectSuggestion={onSelectSuggestion}
+        />
+      )}
     </div>
   );
 }

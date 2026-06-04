@@ -448,7 +448,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
         return false;
       }
       if (consultationInputBlocked) {
-        toast.info("Choose a consultation project before you send a message.");
+        toast.info("Choose a project before you send a message.");
         return false;
       }
 
@@ -489,7 +489,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     async (file: File, kind: "transcript" | "notes") => {
       if (isBusy || consultationInputBlocked) {
         if (consultationInputBlocked) {
-          toast.info("Choose a consultation project before you attach a file.");
+          toast.info("Choose a project before you attach a file.");
         }
         return;
       }
@@ -678,6 +678,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
               }}
               activeSessionId={sessionId}
               welcomeVariant={welcomeVariant}
+              onboardingPhase={onboardingState?.phase ?? "needs_consultation"}
               resumeSuggestion={resumeSuggestion}
               showCreateProject={showCreateProject}
               onProjectCreated={(nextConsultationId) => {
@@ -699,6 +700,7 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
             sessionId={sessionId}
             needsConsultationSelection={needsConsultationSelection}
             consultationInputBlocked={consultationInputBlocked}
+            hideInput={showCreateProject || consultationInputBlocked}
             showCreateProject={showCreateProject}
             showRetry={Boolean(error)}
             onRetry={() => {

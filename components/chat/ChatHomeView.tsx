@@ -8,7 +8,11 @@ import { CreateProjectCard } from "@/components/chat/cards/CreateProjectCard";
 import { ProjectSelectionCard } from "@/components/chat/cards/ProjectSelectionCard";
 import type { ChatSessionSummary } from "@/hooks/use-chat-sessions";
 import type { WelcomeVariant } from "@/lib/chat/onboarding-copy";
-import { getWelcomeGreeting } from "@/lib/chat/onboarding-copy";
+import {
+  getHomeExamplePrompts,
+  getWelcomeGreeting,
+} from "@/lib/chat/onboarding-copy";
+import type { OnboardingPhase } from "@/lib/chat/onboarding-state";
 import {
   CAPTURE_NOTES_ACCEPT_ATTR,
   CAPTURE_TRANSCRIPT_ACCEPT_ATTR,
@@ -19,6 +23,7 @@ import type { ResumeSuggestion } from "@/lib/chat/resume-suggestion";
 interface ChatHomeViewProps {
   displayName: string;
   welcomeVariant: WelcomeVariant;
+  onboardingPhase: OnboardingPhase;
   resumeSuggestion?: ResumeSuggestion | null;
   sessions: ChatSessionSummary[];
   sessionsLoading?: boolean;
@@ -38,16 +43,10 @@ interface ChatHomeViewProps {
   onConsultationSelected?: (consultationId: string) => void;
 }
 
-const EXAMPLE_PROMPTS = [
-  "Extract themes from my most recent meeting transcript.",
-  "Draft an evidence summary email from my last meeting.",
-  "Help create common themes across the meetings of my project.",
-  "Walk me through my pending insights and next steps",
-];
-
 export function ChatHomeView({
   displayName,
   welcomeVariant,
+  onboardingPhase,
   resumeSuggestion,
   sessions,
   sessionsLoading = false,
@@ -68,8 +67,10 @@ export function ChatHomeView({
 }: ChatHomeViewProps) {
   const inputDisabled = isBusy || consultationInputBlocked;
   const inputPlaceholder = consultationInputBlocked
-    ? "Choose a consultation project above before you send a message."
+    ? "Choose a project above before you send a message."
     : "Describe what you need, or pick a starting point below…";
+  const showComposer = !showCreateProject && !consultationInputBlocked;
+  const examplePrompts = getHomeExamplePrompts(onboardingPhase);
   const transcriptInputRef = useRef<HTMLInputElement>(null);
   const notesInputRef = useRef<HTMLInputElement>(null);
 
@@ -149,77 +150,79 @@ export function ChatHomeView({
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-3">
-        {resumeSuggestion ? (
-          <button
-            type="button"
-            onClick={() => onInputChange(resumeSuggestion.prefill)}
-            className="rounded-full border border-border/60 bg-muted/50 px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground"
-          >
-            {resumeSuggestion.label}
-          </button>
-        ) : null}
-        <Textarea
-          value={input}
-          onChange={(e) => onInputChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={inputPlaceholder}
-          disabled={inputDisabled}
-          rows={4}
-          className="min-h-[140px] resize-none text-base"
-          autoFocus
-        />
+      {showComposer ? (
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {resumeSuggestion ? (
+            <button
+              type="button"
+              onClick={() => onInputChange(resumeSuggestion.prefill)}
+              className="rounded-full border border-border/60 bg-muted/50 px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground"
+            >
+              {resumeSuggestion.label}
+            </button>
+          ) : null}
+          <Textarea
+            value={input}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={inputPlaceholder}
+            disabled={inputDisabled}
+            rows={4}
+            className="min-h-[140px] resize-none text-base"
+            autoFocus
+          />
 
-        {/* Example prompts — shown when textarea is empty */}
-        {!input.trim() && !inputDisabled ? (
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {EXAMPLE_PROMPTS.map((prompt) => (
-              <button
-                key={prompt}
-                type="button"
-                onClick={() => onInputChange(prompt)}
-                className="rounded-md border border-border/60 bg-background px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {onAttachFile ? (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={inputDisabled}
-                className={CHAT_QUICK_ACTION_BUTTON_CLASS}
-                onClick={() => transcriptInputRef.current?.click()}
-              >
-                Attach transcript
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={inputDisabled}
-                className={CHAT_QUICK_ACTION_BUTTON_CLASS}
-                onClick={() => notesInputRef.current?.click()}
-              >
-                Attach notes
-              </Button>
+          {/* Example prompts — shown when textarea is empty */}
+          {!input.trim() && !inputDisabled ? (
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {examplePrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => onInputChange(prompt)}
+                  className="rounded-md border border-border/60 bg-background px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground"
+                >
+                  {prompt}
+                </button>
+              ))}
             </div>
-          ) : (
-            <div />
-          )}
-          <Button
-            type="submit"
-            disabled={inputDisabled || !input.trim()}
-            className="min-h-11 shrink-0"
-          >
-            Send
-          </Button>
-        </div>
-      </form>
+          ) : null}
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {onAttachFile ? (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={inputDisabled}
+                  className={CHAT_QUICK_ACTION_BUTTON_CLASS}
+                  onClick={() => transcriptInputRef.current?.click()}
+                >
+                  Attach transcript
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={inputDisabled}
+                  className={CHAT_QUICK_ACTION_BUTTON_CLASS}
+                  onClick={() => notesInputRef.current?.click()}
+                >
+                  Attach notes
+                </Button>
+              </div>
+            ) : (
+              <div />
+            )}
+            <Button
+              type="submit"
+              disabled={inputDisabled || !input.trim()}
+              className="min-h-11 shrink-0"
+            >
+              Send
+            </Button>
+          </div>
+        </form>
+      ) : null}
 
       {/* Previous conversations */}
       {sessions.length > 0 || sessionsLoading ? (

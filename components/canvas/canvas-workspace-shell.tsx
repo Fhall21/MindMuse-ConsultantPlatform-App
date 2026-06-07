@@ -231,7 +231,13 @@ export function CanvasWorkspaceShell({ roundId, roundLabel }: CanvasWorkspaceShe
 
         {everActivated.grid && (
           <div hidden={activeTab !== "grid"} className="h-full">
-            <GridShell roundId={roundId} columns={[]} />
+            <GridShell
+              roundId={roundId}
+              meetings={(data?.consultations ?? []).map((meeting) => ({
+                id: meeting.id,
+                title: meeting.title,
+              }))}
+            />
           </div>
         )}
 

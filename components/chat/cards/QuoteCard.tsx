@@ -52,6 +52,10 @@ function QuoteReviewRowContainer({
             span_start: quote.span_start,
             span_end: quote.span_end,
             speaker: quote.speaker,
+            justification: quote.justification,
+            context_before: quote.context_before,
+            context_after: quote.context_after,
+            relevance_strength: quote.relevance_strength,
             session_id: sessionId,
             tool_result_id: toolResultId,
           }),
@@ -98,6 +102,9 @@ function QuoteReviewRowContainer({
       speaker={quote.speaker}
       positionLabel={formatTranscriptPosition(quote.span_start, quote.span_end)}
       themeLabel={quote.theme_label}
+      justification={quote.justification}
+      contextBefore={quote.context_before}
+      contextAfter={quote.context_after}
       decision={decision}
       isBusy={disabled || rowPending}
       error={rowError}

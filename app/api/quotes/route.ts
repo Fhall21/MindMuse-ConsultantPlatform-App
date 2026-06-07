@@ -19,6 +19,10 @@ const postSchema = z.object({
   span_start: z.number().int().nonnegative(),
   span_end: z.number().int().positive(),
   speaker: z.string().optional(),
+  justification: z.string().optional(),
+  context_before: z.string().optional(),
+  context_after: z.string().optional(),
+  relevance_strength: z.enum(["strong_match", "partial_support", "context", "weak"]).optional(),
   session_id: z.string().uuid().optional(),
   tool_result_id: z.string().uuid().optional(),
 });
@@ -52,6 +56,10 @@ export async function POST(request: NextRequest) {
     span_start,
     span_end,
     speaker,
+    justification,
+    context_before,
+    context_after,
+    relevance_strength,
     session_id,
     tool_result_id,
   } = parsed.data;
@@ -81,6 +89,10 @@ export async function POST(request: NextRequest) {
       spanStart: span_start,
       spanEnd: span_end,
       speaker,
+      justification,
+      contextBefore: context_before,
+      contextAfter: context_after,
+      relevanceStrength: relevance_strength,
       toolResultId: tool_result_id,
     });
 

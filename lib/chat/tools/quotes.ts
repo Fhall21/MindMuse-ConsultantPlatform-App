@@ -13,6 +13,10 @@ export const quoteReviewItemSchema = z.object({
   theme_label: z.string(),
   span_start: z.number().int().nonnegative(),
   span_end: z.number().int().positive(),
+  justification: z.string().optional(),
+  context_before: z.string().optional(),
+  context_after: z.string().optional(),
+  relevance_strength: z.enum(["strong_match", "partial_support", "context", "weak"]).optional(),
 });
 
 export type QuoteReviewItem = z.infer<typeof quoteReviewItemSchema>;
@@ -34,6 +38,10 @@ export interface IdentifiedQuoteDraft {
   theme_id: string;
   span_start?: number | null;
   span_end?: number | null;
+  justification?: string | null;
+  context_before?: string | null;
+  context_after?: string | null;
+  relevance_strength?: "strong_match" | "partial_support" | "context" | "weak" | null;
 }
 
 export function normalizeIdentifiedQuotes(raw: unknown): IdentifiedQuoteDraft[] {
@@ -67,6 +75,10 @@ export function normalizeIdentifiedQuotes(raw: unknown): IdentifiedQuoteDraft[] 
         span_start:
           typeof record.span_start === "number" ? record.span_start : null,
         span_end: typeof record.span_end === "number" ? record.span_end : null,
+        justification: typeof record.justification === "string" ? record.justification.trim() : null,
+        context_before: typeof record.context_before === "string" ? record.context_before.trim() : null,
+        context_after: typeof record.context_after === "string" ? record.context_after.trim() : null,
+        relevance_strength: typeof record.relevance_strength === "string" ? (record.relevance_strength as any) : null,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);

@@ -10,13 +10,15 @@ import {
 } from "react";
 import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { toast } from "sonner";
-import { Columns2, GripHorizontal, Rows3 } from "lucide-react";
+import { Columns2, GripHorizontal, Rows3, Pencil, Trash2, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMeeting } from "@/hooks/use-meetings";
 import { useCreateMeetingTheme, useMeetingThemes } from "@/hooks/use-themes";
+import { useMeetingPeople } from "@/hooks/use-people";
+import type { Person } from "@/types/db";
 import {
   useApproveQuote,
   useCreateQuote,
@@ -24,6 +26,8 @@ import {
   useMeetingQuotes,
   useRejectQuote,
   useUnlinkQuoteInsight,
+  useUpdateQuoteSpeaker,
+  useUpdateQuoteSpan,
 } from "@/hooks/use-quotes";
 import type { QuoteRecord, QuoteStatus } from "@/lib/actions/quotes";
 import { cn } from "@/lib/utils";
@@ -146,7 +150,7 @@ function useViewMode(): [ViewMode, (mode: ViewMode) => void] {
   const [mode, setMode] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "compact";
     const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
-    return stored === "workspace" || stored === "compact" ? stored : "compact";
+    return stored === "workspace" || stored === "compact" ? stored : "workspace";
   });
 
   const update = useCallback((next: ViewMode) => {
@@ -188,7 +192,6 @@ function TranscriptReadout({
       return [{ text: "", quote: null as QuoteRecord | null, key: "empty" }];
     }
     const ordered = quotes
-      .filter((quote) => quote.status !== "rejected")
       .slice()
       .sort((a, b) => a.spanStart - b.spanStart);
 
@@ -257,7 +260,7 @@ function TranscriptReadout({
   useEffect(() => {
     if (!focusedQuoteId) return;
     const node = containerRef.current?.querySelector<HTMLElement>(
-      `mark[data-quote-id="${focusedQuoteId}"]`
+      `span[data-quote-id="${focusedQuoteId}"]`
     );
     if (node) {
       node.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -273,7 +276,7 @@ function TranscriptReadout({
     >
       {segments.map((segment) =>
         segment.quote ? (
-          <mark
+          <span
             key={segment.key}
             data-quote-id={segment.quote.id}
             data-quote-status={segment.quote.status}
@@ -284,16 +287,18 @@ function TranscriptReadout({
               )
             }
             className={cn(
-              "cursor-pointer rounded-sm px-0.5 transition-shadow",
+              "qspan cursor-pointer rounded-sm px-0.5 transition-colors border-b-[1.5px] border-dashed",
               segment.quote.status === "approved"
-                ? "bg-primary/10 text-foreground"
-                : "bg-amber-200/60 text-foreground dark:bg-amber-300/20",
+                ? "bg-green-200/40 border-green-700/40 hover:bg-green-300/50"
+                : segment.quote.status === "suggested"
+                ? "bg-amber-200/50 border-amber-600/50 hover:bg-amber-300/60"
+                : "bg-transparent border-muted-foreground/30 opacity-50 hover:bg-muted/20 hover:opacity-80",
               focusedQuoteId === segment.quote.id &&
-                "ring-2 ring-foreground/40 ring-offset-1 ring-offset-card"
+                "ring-2 ring-ring ring-offset-1 ring-offset-background opacity-100"
             )}
           >
             {segment.text}
-          </mark>
+          </span>
         ) : (
           <span key={segment.key}>{segment.text}</span>
         )
@@ -304,42 +309,19 @@ function TranscriptReadout({
 
 interface SelectionTooltipProps {
   selection: Selection;
-  insightOptions: InsightOption[];
-  onCapture: (params: {
-    speakerHint: string;
-    riskFlag: boolean;
-    insightIds: string[];
-    primaryInsightId: string | null;
-  }) => Promise<void>;
-  onCreateInsight: (label: string) => Promise<InsightOption | null>;
+  onCapture: () => void;
   onDismiss: () => void;
   busy: boolean;
 }
 
-/**
- * Floating capture form anchored to the user's selection. The form lives in
- * a fixed-position popover so the action is always next to the highlighted
- * text — no scrolling to find a save button. Clicks outside dismiss; the
- * speaker / risk / insight controls live inside one row.
- */
 function SelectionTooltip({
   selection,
-  insightOptions,
   onCapture,
-  onCreateInsight,
   onDismiss,
   busy,
 }: SelectionTooltipProps) {
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const [speakerHint, setSpeakerHint] = useState("");
-  const [riskFlag, setRiskFlag] = useState(false);
-  const [checkedInsightIds, setCheckedInsightIds] = useState<Set<string>>(new Set());
-  const [primaryInsightId, setPrimaryInsightId] = useState<string | null>(null);
-  const [newInsightLabel, setNewInsightLabel] = useState("");
-  const handleDragStart = useFloatingPanelDrag(tooltipRef);
 
-  // Position once the tooltip has rendered and we know its size. Applied
-  // directly to the DOM rather than via state to avoid setState-in-effect.
   useLayoutEffect(() => {
     const node = tooltipRef.current;
     if (!node) return;
@@ -348,14 +330,9 @@ function SelectionTooltip({
     const viewportHeight = window.innerHeight;
     const margin = 12;
 
-    // Horizontal: centre under selection, clamp to viewport.
     const desiredLeft = selection.rect.left + selection.rect.width / 2 - tooltipRect.width / 2;
-    const left = Math.max(
-      margin,
-      Math.min(desiredLeft, viewportWidth - tooltipRect.width - margin)
-    );
+    const left = Math.max(margin, Math.min(desiredLeft, viewportWidth - tooltipRect.width - margin));
 
-    // Vertical: prefer below; flip above if it would overflow.
     let top = selection.rect.bottom + 8;
     if (top + tooltipRect.height + margin > viewportHeight) {
       top = selection.rect.top - tooltipRect.height - 8;
@@ -369,7 +346,6 @@ function SelectionTooltip({
     node.style.pointerEvents = "auto";
   }, [selection.rect]);
 
-  // Dismiss on Escape, scroll, or outside click.
   useEffect(() => {
     function handleKey(event: KeyboardEvent) {
       if (event.key === "Escape") onDismiss();
@@ -377,7 +353,6 @@ function SelectionTooltip({
     function handlePointer(event: MouseEvent) {
       if (!tooltipRef.current) return;
       if (tooltipRef.current.contains(event.target as Node)) return;
-      // Don't dismiss while the user is still selecting more text.
       const sel = window.getSelection();
       if (sel && !sel.isCollapsed) return;
       onDismiss();
@@ -395,474 +370,355 @@ function SelectionTooltip({
       ref={tooltipRef}
       role="dialog"
       aria-label="Capture quote"
+      onClick={busy ? undefined : onCapture}
       style={{
         position: "fixed",
         top: "50%",
         left: "50%",
         transform: "none",
-        zIndex: 40,
+        zIndex: 50,
         visibility: "hidden",
         pointerEvents: "auto"
       }}
-      className="w-[min(28rem,calc(100vw-1.5rem))] space-y-3 rounded-lg border border-border/60 bg-popover p-3 text-popover-foreground shadow-md"
+      className={cn(
+        "flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-popover px-3 py-1.5 text-xs font-medium text-popover-foreground shadow-sm transition-colors hover:bg-muted",
+        busy && "opacity-50 cursor-not-allowed"
+      )}
     >
-      <div className="space-y-1">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">
-            Selection · {selection.text.length} chars
-          </p>
-          <button
-            type="button"
-            aria-label="Move quote capture panel"
-            onPointerDown={handleDragStart}
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <GripHorizontal className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-        <p className="line-clamp-2 text-sm italic leading-snug text-foreground">
-          “{selection.text.length > 180 ? `${selection.text.slice(0, 180)}…` : selection.text}”
-        </p>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2">
-        <Input
-          value={speakerHint}
-          onChange={(event) => setSpeakerHint(event.target.value)}
-          placeholder="Speaker (optional)"
-          className="h-8 text-sm"
-        />
-      </div>
-
-      <fieldset className="space-y-2 border-t border-border/60 pt-3">
-        <legend className="text-xs uppercase tracking-widest text-muted-foreground">
-          Link to insights (optional)
-        </legend>
-        {insightOptions.length > 0 && (
-          <ul className="max-h-40 space-y-0.5 overflow-y-auto pr-1">
-          {insightOptions.map((option) => {
-            const isChecked = checkedInsightIds.has(option.id);
-            const isPrimary = primaryInsightId === option.id;
-            return (
-              <li
-                key={option.id}
-                className="flex items-center gap-2 rounded px-1 py-1 hover:bg-muted/50"
-              >
-                <input
-                  type="checkbox"
-                  checked={isChecked}
-                  onChange={(event) => {
-                    const next = new Set(checkedInsightIds);
-                    if (event.target.checked) {
-                      next.add(option.id);
-                    } else {
-                      next.delete(option.id);
-                      if (isPrimary) setPrimaryInsightId(null);
-                    }
-                    setCheckedInsightIds(next);
-                  }}
-                  disabled={busy}
-                  aria-label={`Link to ${option.label}`}
-                  className="h-3.5 w-3.5 accent-primary"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isChecked) return;
-                    setPrimaryInsightId(isPrimary ? null : option.id);
-                  }}
-                  disabled={busy || !isChecked}
-                  aria-pressed={isPrimary}
-                  title={
-                    !isChecked
-                      ? "Check this insight first to mark it primary"
-                      : isPrimary
-                        ? "Primary insight"
-                        : "Set as primary"
-                  }
-                  className={cn(
-                    "rounded text-sm leading-none transition-colors",
-                    isPrimary
-                      ? "text-primary"
-                      : isChecked
-                        ? "text-muted-foreground hover:text-foreground"
-                        : "text-muted-foreground/30"
-                  )}
-                >
-                  {isPrimary ? "★" : "☆"}
-                </button>
-                <span
-                  className={cn(
-                    "flex-1 text-sm",
-                    !isChecked && "text-muted-foreground"
-                  )}
-                >
-                  {option.label}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-        )}
-        <InlineNewInsight
-          value={newInsightLabel}
-          onChange={setNewInsightLabel}
-          busy={busy}
-          onCreate={() => {
-            void (async () => {
-              const created = await onCreateInsight(newInsightLabel);
-              if (!created) return;
-              setNewInsightLabel("");
-              setCheckedInsightIds((current) => new Set(current).add(created.id));
-              setPrimaryInsightId((current) => current ?? created.id);
-            })();
-          }}
-        />
-      </fieldset>
-
-      <div className="flex items-center justify-between gap-2">
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={riskFlag}
-            onChange={(event) => setRiskFlag(event.target.checked)}
-            className="h-3.5 w-3.5 accent-primary"
-          />
-          Identifying-content risk
-        </label>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onDismiss}
-            disabled={busy}
-            className="text-muted-foreground"
-          >
-            Dismiss
-          </Button>
-          <Button
-            size="sm"
-            onClick={() =>
-              onCapture({
-                speakerHint,
-                riskFlag,
-                insightIds: Array.from(checkedInsightIds),
-                primaryInsightId,
-              })
-            }
-            disabled={busy}
-          >
-            Capture
-          </Button>
-        </div>
-      </div>
+      <span className="text-muted-foreground text-sm leading-none">+</span> Capture quote
     </div>
   );
 }
 
-interface EditQuoteTooltipProps {
+interface DetailViewPaneProps {
   quote: QuoteRecord;
   insightOptions: InsightOption[];
-  anchorRect: DOMRect;
   busy: boolean;
   onClose: () => void;
-  onApprove: (primaryInsightId: string | null, additionalInsightIds: string[]) => Promise<void>;
+  onApprove: (primaryInsightId: string | null, additionalInsightIds: string[], relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null) => Promise<void>;
   onReject: (rejectionReason: string) => Promise<void>;
-  onLink: (insightId: string, isPrimary: boolean) => Promise<void>;
+  onLink: (insightId: string, isPrimary: boolean, relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null) => Promise<void>;
   onUnlink: (insightId: string) => Promise<void>;
+  onChangeSpeaker: (speakerLabel: string | null) => Promise<void>;
   onCreateInsight: (label: string) => Promise<InsightOption | null>;
+  people: Person[];
+  isEditingSpanMode: boolean;
+  onSetEditingSpanMode: (mode: boolean) => void;
+  currentSelection: Selection | null;
+  onUpdateSpan: (selection: Selection) => Promise<void>;
 }
 
-/**
- * Floating editor for an existing quote. Anchored to the click target so it
- * always sits next to the row or transcript span the user picked. Linking is
- * a multi-select picker — checkbox toggles link, star marks primary. Suggested
- * quotes also get inline approve / reject in the same surface so the user
- * doesn't bounce between buttons and the picker.
- */
-function EditQuoteTooltip({
+function DetailViewPane({
   quote,
   insightOptions,
-  anchorRect,
   busy,
   onClose,
   onApprove,
   onReject,
   onLink,
   onUnlink,
+  onChangeSpeaker,
   onCreateInsight,
-}: EditQuoteTooltipProps) {
-  const tooltipRef = useRef<HTMLDivElement>(null);
+  people,
+  isEditingSpanMode,
+  onSetEditingSpanMode,
+  currentSelection,
+  onUpdateSpan,
+}: DetailViewPaneProps) {
   const [showReject, setShowReject] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [newInsightLabel, setNewInsightLabel] = useState("");
-  const handleDragStart = useFloatingPanelDrag(tooltipRef);
-
-  // Position once the tooltip has rendered and we know its size. Applied
-  // directly to the DOM rather than via state to avoid setState-in-effect.
-  useLayoutEffect(() => {
-    const node = tooltipRef.current;
-    if (!node) return;
-    const tooltipRect = node.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const margin = 12;
-
-    // Prefer left of anchor (rows live on the right side of the workspace);
-    // fall back to right, then clamp to viewport.
-    let left = anchorRect.left - tooltipRect.width - 8;
-    if (left < margin) {
-      const rightOf = anchorRect.right + 8;
-      if (rightOf + tooltipRect.width + margin <= viewportWidth) {
-        left = rightOf;
-      } else {
-        left = Math.max(margin, viewportWidth - tooltipRect.width - margin);
-      }
-    }
-
-    let top = anchorRect.top;
-    if (top + tooltipRect.height + margin > viewportHeight) {
-      top = Math.max(margin, viewportHeight - tooltipRect.height - margin);
-    }
-
-    node.style.top = `${top}px`;
-    node.style.left = `${left}px`;
-    node.style.transform = "none";
-    node.style.visibility = "visible";
-    node.style.pointerEvents = "auto";
-  }, [anchorRect]);
-
-  useEffect(() => {
-    function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    function handlePointer(event: MouseEvent) {
-      if (!tooltipRef.current) return;
-      if (tooltipRef.current.contains(event.target as Node)) return;
-      onClose();
-    }
-    window.addEventListener("keydown", handleKey);
-    document.addEventListener("mousedown", handlePointer);
-    return () => {
-      window.removeEventListener("keydown", handleKey);
-      document.removeEventListener("mousedown", handlePointer);
-    };
-  }, [onClose]);
+  const [approvalRelevanceStrength, setApprovalRelevanceStrength] = useState<"strong_match" | "partial_support" | "context" | "weak" | null>(null);
 
   const hasPrimary = quote.links.some((link) => link.isPrimary);
   const metadataParts: string[] = [];
-  if (quote.speakerLabel) metadataParts.push(quote.speakerLabel);
   if (quote.workGroupLabel) metadataParts.push(quote.workGroupLabel);
   metadataParts.push(quote.source === "ai" ? "AI suggested" : "Manual");
   if (quote.riskFlag) metadataParts.push("Identifying-risk");
 
   return (
-    <div
-      ref={tooltipRef}
-      role="dialog"
-      aria-label="Edit quote"
-      style={{
-        position: "fixed",
-        top: "50%",
-        left: "50%",
-        transform: "none",
-        zIndex: 40,
-        visibility: "hidden",
-        pointerEvents: "auto"
-      }}
-      className="w-[min(26rem,calc(100vw-1.5rem))] space-y-3 rounded-lg border border-border/60 bg-popover p-3 text-popover-foreground shadow-md"
-    >
-      <div className="space-y-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs uppercase tracking-widest text-muted-foreground">
+    <div className="flex h-full flex-col">
+      <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border/60 p-4">
+        <div>
+          <span className={cn(
+            "text-xs uppercase tracking-widest font-semibold",
+            quote.status === "approved" ? "text-green-700" :
+            quote.status === "suggested" ? "text-amber-700" : "text-muted-foreground"
+          )}>
             {STATUS_LABEL[quote.status]}
           </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label="Move quote editor"
-              onPointerDown={handleDragStart}
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <GripHorizontal className="size-4" aria-hidden="true" />
-            </button>
+        </div>
+        <div className="flex items-center gap-1">
+          {quote.status === "approved" && (
+            <>
+              <button
+                type="button"
+                onClick={() => onSetEditingSpanMode(!isEditingSpanMode)}
+                title="Edit quote region"
+                className="text-muted-foreground hover:text-foreground p-1 leading-none transition-colors"
+                disabled={busy}
+              >
+                <Pencil className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await onReject("Deleted by user");
+                  toast.success("Moved to rejected tab, you can undo this later.");
+                  onClose();
+                }}
+                title="Delete quote"
+                className="text-muted-foreground hover:text-red-600 p-1 leading-none transition-colors"
+                disabled={busy}
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                title="Done"
+                className="text-muted-foreground hover:text-green-600 p-1 leading-none transition-colors ml-1"
+              >
+                <Check className="size-4" />
+              </button>
+            </>
+          )}
+          {quote.status !== "approved" && (
             <button
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="text-sm leading-none text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground p-1 leading-none ml-1"
             >
               ×
             </button>
+          )}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <select
+              value={quote.speakerLabel ?? ""}
+              onChange={(e) => onChangeSpeaker(e.target.value || null)}
+              className="h-7 w-40 rounded-md border border-input bg-background px-2 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={busy}
+            >
+              <option value="" disabled>Select a speaker...</option>
+              {people.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+              <option value="Anonymous">Anonymous</option>
+              <option value="Moderator/Facilitator">Moderator/Facilitator</option>
+            </select>
+            <div className="text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground text-right">
+              {metadataParts.join(" · ")}
+            </div>
+          </div>
+          <div className="space-y-3">
+            {isEditingSpanMode && (
+              <div className="rounded-md bg-amber-500/10 border border-amber-500/20 p-3 mb-2 space-y-2">
+                <p className="text-xs text-amber-700 font-medium">Highlight the new region in the transcript to update this quote.</p>
+                {currentSelection && onUpdateSpan && (
+                  <div className="space-y-2">
+                    <p className="text-sm italic opacity-80 border-l-2 border-amber-500/50 pl-2">"{currentSelection.text}"</p>
+                    <Button size="sm" onClick={() => onUpdateSpan(currentSelection)} disabled={busy} className="w-full">
+                      Confirm new region
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+            <p className={cn("text-sm italic leading-relaxed text-foreground", isEditingSpanMode && "opacity-50 line-through")}>
+              {quote.contextBefore}
+              <span className={cn("px-0.5 rounded-sm bg-opacity-60", quote.status === "approved" ? "bg-green-200" : quote.status === "suggested" ? "bg-amber-200" : "bg-muted")}>
+                {quote.exactText}
+              </span>
+              {quote.contextAfter}
+            </p>
+            {quote.justification && (
+              <p className="mt-3 border-t border-border/60 pt-3 text-xs italic text-muted-foreground">
+                {quote.justification}
+              </p>
+            )}
           </div>
         </div>
-        <p className="line-clamp-3 text-sm italic leading-snug text-foreground">
-          “{quote.exactText.length > 220 ? `${quote.exactText.slice(0, 220)}…` : quote.exactText}”
-        </p>
-        <p className="text-xs text-muted-foreground">{metadataParts.join(" · ")}</p>
-      </div>
 
-      {quote.status !== "rejected" && (
-        <fieldset className="space-y-2 border-t border-border/60 pt-3">
-          <legend className="text-xs uppercase tracking-widest text-muted-foreground">
-            Linked insights
-          </legend>
-          {insightOptions.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              No insights yet. Create one here to link this quote.
-            </p>
-          ) : (
-            <ul className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
-              {insightOptions.map((option) => {
-                const link = quote.links.find((l) => l.insightId === option.id);
-                const isLinked = Boolean(link);
-                const isPrimary = link?.isPrimary ?? false;
-                return (
-                  <li
-                    key={option.id}
-                    className="flex items-center gap-2 rounded px-1 py-1 hover:bg-muted/50"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isLinked}
-                      onChange={(event) => {
-                        if (event.target.checked) {
-                          // First link auto-becomes primary; subsequent links don't.
-                          onLink(option.id, !hasPrimary);
-                        } else {
-                          onUnlink(option.id);
-                        }
-                      }}
-                      disabled={busy}
-                      aria-label={`${isLinked ? "Unlink" : "Link"} ${option.label}`}
-                      className="h-3.5 w-3.5 accent-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!isLinked || isPrimary) return;
-                        onLink(option.id, true);
-                      }}
-                      disabled={busy || !isLinked}
-                      aria-pressed={isPrimary}
-                      title={
-                        !isLinked
-                          ? "Link this insight first to mark it primary"
-                          : isPrimary
-                            ? "Primary insight"
-                            : "Set as primary"
-                      }
-                      className={cn(
-                        "rounded text-sm leading-none transition-colors",
-                        isPrimary
-                          ? "text-primary"
-                          : isLinked
-                            ? "text-muted-foreground hover:text-foreground"
-                            : "text-muted-foreground/30"
-                      )}
+        {quote.status !== "rejected" && (
+          <fieldset className="space-y-2 border-t border-border/60 pt-4">
+            <legend className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+              Link to insight
+            </legend>
+            {insightOptions.length === 0 ? (
+              <p className="text-xs italic text-muted-foreground">
+                No insights yet. Create one here to link this quote.
+              </p>
+            ) : (
+              <ul className="max-h-60 space-y-0.5 overflow-y-auto pr-1">
+                {insightOptions.map((option) => {
+                  const link = quote.links.find((l) => l.insightId === option.id);
+                  const isLinked = Boolean(link);
+                  const isPrimary = link?.isPrimary ?? false;
+                  return (
+                    <li
+                      key={option.id}
+                      className="flex flex-col gap-1 rounded px-1.5 py-1.5 hover:bg-muted/50 transition-colors"
                     >
-                      {isPrimary ? "★" : "☆"}
-                    </button>
-                    <span
-                      className={cn(
-                        "flex-1 text-sm",
-                        !isLinked && "text-muted-foreground"
-                      )}
-                    >
-                      {option.label}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <InlineNewInsight
-            value={newInsightLabel}
-            onChange={setNewInsightLabel}
-            busy={busy}
-            onCreate={() => {
-              void (async () => {
-                const created = await onCreateInsight(newInsightLabel);
-                if (!created) return;
-                setNewInsightLabel("");
-                await onLink(created.id, !quote.links.some((link) => link.isPrimary));
-              })();
-            }}
-          />
-        </fieldset>
-      )}
-
-      {quote.status === "suggested" && (
-        <div className="space-y-2 border-t border-border/60 pt-3">
-          {showReject ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                value={rejectionReason}
-                onChange={(event) => setRejectionReason(event.target.value)}
-                placeholder="Why reject? (audit trail)"
-                className="h-8 min-w-0 flex-1 text-sm"
-                autoFocus
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={isLinked}
+                          onChange={(event) => {
+                            if (event.target.checked) {
+                              onLink(option.id, !hasPrimary);
+                            } else {
+                              onUnlink(option.id);
+                            }
+                          }}
+                          disabled={busy}
+                          className="h-3.5 w-3.5 accent-primary"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isLinked || isPrimary) return;
+                            onLink(option.id, true);
+                          }}
+                          disabled={busy || !isLinked}
+                          className={cn(
+                            "rounded text-sm leading-none transition-colors",
+                            isPrimary ? "text-amber-500" : isLinked ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/30"
+                          )}
+                        >
+                          {isPrimary ? "★" : "☆"}
+                        </button>
+                        <span className={cn("flex-1 text-sm cursor-pointer", !isLinked && "text-muted-foreground")} onClick={() => {
+                          if (isLinked) onUnlink(option.id);
+                          else onLink(option.id, !hasPrimary);
+                        }}>
+                          {option.label}
+                        </span>
+                      </div>
+                      <div className={cn(
+                        "grid transition-all duration-200 ease-in-out",
+                        isLinked ? "grid-rows-[1fr] opacity-100 mt-1" : "grid-rows-[0fr] opacity-0 mt-0"
+                      )}>
+                        <div className="overflow-hidden">
+                          <div className="flex flex-wrap gap-1.5 pl-8 pb-1">
+                            {[
+                              { v: "strong_match", label: "Strong" },
+                              { v: "partial_support", label: "Partial" },
+                              { v: "context", label: "Context" },
+                              { v: "weak", label: "Weak" }
+                            ].map(opt => (
+                              <button
+                                key={opt.v}
+                                type="button"
+                                onClick={() => onLink(option.id, isPrimary, link?.relevanceStrength === opt.v ? null : opt.v as any)}
+                                className={cn(
+                                  "px-2 py-0.5 text-[0.65rem] rounded-md border transition-colors",
+                                  link?.relevanceStrength === opt.v
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-background text-muted-foreground border-border hover:bg-muted"
+                                )}
+                                disabled={busy}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <div className="mt-2">
+              <InlineNewInsight
+                value={newInsightLabel}
+                onChange={setNewInsightLabel}
+                busy={busy}
+                onCreate={() => {
+                  void (async () => {
+                    const created = await onCreateInsight(newInsightLabel);
+                    if (!created) return;
+                    setNewInsightLabel("");
+                    await onLink(created.id, !quote.links.some((link) => link.isPrimary));
+                  })();
+                }}
               />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  await onReject(rejectionReason);
-                  setShowReject(false);
-                  setRejectionReason("");
-                  onClose();
-                }}
-                disabled={busy || rejectionReason.trim().length === 0}
-              >
-                Confirm
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setShowReject(false);
-                  setRejectionReason("");
-                }}
-                disabled={busy}
-                className="text-muted-foreground"
-              >
-                Cancel
-              </Button>
             </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={async () => {
-                  // Approve preserves existing links; primary stays whatever
-                  // the user already starred, otherwise null.
-                  const primary = quote.links.find((l) => l.isPrimary);
-                  await onApprove(primary?.insightId ?? null, []);
-                  onClose();
-                }}
-                disabled={busy}
-              >
-                Approve
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setShowReject(true)}
-                disabled={busy}
-                className="text-muted-foreground"
-              >
-                Reject
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
+          </fieldset>
+        )}
 
-      {quote.status === "rejected" && quote.rejectionReason && (
-        <p className="border-t border-border/60 pt-3 text-xs text-muted-foreground">
-          Reason: <span className="text-foreground/80">{quote.rejectionReason}</span>
-        </p>
-      )}
+        {quote.status === "suggested" && (
+          <div className="space-y-3 border-t border-border/60 pt-4">
+            {showReject ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={rejectionReason}
+                  onChange={(event) => setRejectionReason(event.target.value)}
+                  placeholder="Why reject? (audit trail)"
+                  className="h-8 min-w-0 flex-1 text-sm"
+                  autoFocus
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    await onReject(rejectionReason);
+                    setShowReject(false);
+                    setRejectionReason("");
+                    onClose();
+                  }}
+                  disabled={busy || rejectionReason.trim().length === 0}
+                >
+                  Confirm
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowReject(false)} disabled={busy} className="text-muted-foreground">
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { value: "strong_match", label: "Strong" },
+                    { value: "partial_support", label: "Partial" },
+                    { value: "context", label: "Context" },
+                    { value: "weak", label: "Weak" },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setApprovalRelevanceStrength(approvalRelevanceStrength === opt.value ? null : opt.value as any)}
+                      className={cn(
+                        "px-2 py-1 text-[0.65rem] rounded-md border transition-colors",
+                        approvalRelevanceStrength === opt.value
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background text-muted-foreground border-border hover:bg-muted"
+                      )}
+                      disabled={busy}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <Button size="sm" onClick={async () => {
+                  const primary = quote.links.find((l) => l.isPrimary);
+                  await onApprove(primary?.insightId ?? null, [], approvalRelevanceStrength);
+                }} disabled={busy}>Approve</Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowReject(true)} disabled={busy} className="text-muted-foreground">Reject</Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {quote.status === "rejected" && quote.rejectionReason && (
+          <p className="border-t border-border/60 pt-3 text-xs text-muted-foreground">
+            Reason: <span className="text-foreground/80">{quote.rejectionReason}</span>
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -871,9 +727,9 @@ interface QuoteRowProps {
   quote: QuoteRecord;
   insightOptions: InsightOption[];
   isFocused: boolean;
-  onApprove: (primaryInsightId: string | null, additionalInsightIds: string[]) => Promise<void>;
+  onApprove: (primaryInsightId: string | null, additionalInsightIds: string[], relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null) => Promise<void>;
   onReject: (rejectionReason: string) => Promise<void>;
-  onLink: (insightId: string, isPrimary: boolean) => Promise<void>;
+  onLink: (insightId: string, isPrimary: boolean, relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null) => Promise<void>;
   onUnlink: (insightId: string) => Promise<void>;
   onCreateInsight: (label: string) => Promise<InsightOption | null>;
   onFocus: (anchorRect: DOMRect | null) => void;
@@ -901,268 +757,58 @@ function QuoteRow({
   onFocus,
   busy,
 }: QuoteRowProps) {
-  const [checkedInsightIds, setCheckedInsightIds] = useState<Set<string>>(new Set());
-  const [primaryInsightId, setPrimaryInsightId] = useState<string | null>(null);
-  const [newInsightLabel, setNewInsightLabel] = useState("");
-  const [rejectionReason, setRejectionReason] = useState("");
   const [showReject, setShowReject] = useState(false);
-  const [showLinkInsights, setShowLinkInsights] = useState(false);
-
-  const primaryLink = quote.links.find((link) => link.isPrimary);
-  const otherLinks = quote.links.filter((link) => !link.isPrimary);
-
-  // Insights that aren't yet linked to this quote — what the user could add.
-  const linkableInsights = useMemo(
-    () => insightOptions.filter((option) => !quote.links.some((link) => link.insightId === option.id)),
-    [insightOptions, quote.links]
-  );
+  const [rejectionReason, setRejectionReason] = useState("");
 
   return (
-    <article
+    <div
       onClick={(event) => onFocus(event.currentTarget.getBoundingClientRect())}
       className={cn(
-        "group cursor-pointer space-y-3 border-t border-border/60 px-4 py-4 transition-colors first:border-t-0",
-        isFocused ? "bg-muted/40" : "hover:bg-muted/20"
+        "cursor-pointer rounded-md border border-border bg-card p-3 transition-colors hover:border-border-s hover:bg-muted",
+        isFocused && "ring-2 ring-ring"
       )}
     >
-      <blockquote className="text-[0.9375rem] italic leading-relaxed text-foreground">
-        “{quote.exactText}”
-      </blockquote>
-
-      <MetadataLine quote={quote} />
-
-      {/* Linked insights as chips */}
-      {quote.links.length > 0 && (
-        <ul className="flex flex-wrap items-center gap-1.5">
-          {primaryLink && (
-            <li
-              key={primaryLink.insightId}
-              className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-xs text-foreground"
-              title="Primary insight"
-            >
-              <span aria-hidden="true" className="size-1.5 rounded-full bg-primary/70" />
-              {primaryLink.insightLabel}
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onUnlink(primaryLink.insightId);
-                }}
-                disabled={busy}
-                aria-label={`Unlink ${primaryLink.insightLabel}`}
-                className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-              >
-                ×
-              </button>
-            </li>
-          )}
-          {otherLinks.map((link) => (
-            <li
-              key={link.insightId}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background px-2 py-0.5 text-xs text-foreground"
-            >
-              {link.insightLabel}
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onUnlink(link.insightId);
-                }}
-                disabled={busy}
-                aria-label={`Unlink ${link.insightLabel}`}
-                className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
+      <div className="mb-1.5 text-[0.6125rem] font-semibold uppercase tracking-widest text-muted-foreground">
+        {quote.speakerLabel || "Unknown"}
+      </div>
+      <div className="mb-2 line-clamp-4 text-[0.8125rem] leading-relaxed text-muted-foreground">
+        {quote.contextBefore}
+        <span className={cn("px-0.5 rounded-sm bg-opacity-60 text-foreground", quote.status === "approved" ? "bg-green-200" : quote.status === "suggested" ? "bg-amber-200" : "bg-muted")}>
+          {quote.exactText}
+        </span>
+        {quote.contextAfter}
+      </div>
+      {quote.justification && (
+        <div className="mb-2 border-t border-border pt-1.5 text-xs italic text-muted-foreground">
+          {quote.justification}
+        </div>
       )}
-
-      {/* Suggested actions: Approve / Reject (audit-required rationale). */}
-      {quote.status === "suggested" && !showReject && (
-        <div className="space-y-2 border-t border-border/60 pt-2">
-          <div
-            className="flex items-center gap-2"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => setShowLinkInsights(!showLinkInsights)}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              {showLinkInsights ? "Hide" : "Link or create insight (optional)"}
-            </button>
-          </div>
-
-          {showLinkInsights && (
-            <fieldset className="space-y-2 border-t border-border/60 pt-2" onClick={(event) => event.stopPropagation()}>
-              {linkableInsights.length > 0 && (
-              <ul className="max-h-32 space-y-0.5 overflow-y-auto pr-1">
-                {linkableInsights.map((option) => {
-                  const isChecked = checkedInsightIds.has(option.id);
-                  const isPrimary = primaryInsightId === option.id;
-                  return (
-                    <li
-                      key={option.id}
-                      className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-muted/50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(event) => {
-                          const next = new Set(checkedInsightIds);
-                          if (event.target.checked) {
-                            next.add(option.id);
-                          } else {
-                            next.delete(option.id);
-                            if (isPrimary) setPrimaryInsightId(null);
-                          }
-                          setCheckedInsightIds(next);
-                        }}
-                        disabled={busy}
-                        aria-label={`Link to ${option.label}`}
-                        className="h-3 w-3 accent-primary"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!isChecked) return;
-                          setPrimaryInsightId(isPrimary ? null : option.id);
-                        }}
-                        disabled={busy || !isChecked}
-                        aria-pressed={isPrimary}
-                        title={
-                          !isChecked
-                            ? "Check this insight first to mark it primary"
-                            : isPrimary
-                              ? "Primary insight"
-                              : "Set as primary"
-                        }
-                        className={cn(
-                          "text-xs leading-none transition-colors",
-                          isPrimary
-                            ? "text-primary"
-                            : isChecked
-                              ? "text-muted-foreground hover:text-foreground"
-                              : "text-muted-foreground/30"
-                        )}
-                      >
-                        {isPrimary ? "★" : "☆"}
-                      </button>
-                      <span
-                        className={cn(
-                          "flex-1 text-xs",
-                          !isChecked && "text-muted-foreground"
-                        )}
-                      >
-                        {option.label}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-              )}
-              <InlineNewInsight
-                value={newInsightLabel}
-                onChange={setNewInsightLabel}
-                busy={busy}
-                onCreate={() => {
-                  void (async () => {
-                    const created = await onCreateInsight(newInsightLabel);
-                    if (!created) return;
-                    setNewInsightLabel("");
-                    setCheckedInsightIds((current) => new Set(current).add(created.id));
-                    setPrimaryInsightId((current) => current ?? created.id);
-                    setShowLinkInsights(true);
-                  })();
-                }}
+      {quote.status === "suggested" && (
+        <div className="flex gap-1.5 mt-2" onClick={(e) => e.stopPropagation()}>
+          {showReject ? (
+            <div className="flex w-full items-center gap-1">
+              <Input
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Reason..."
+                className="h-7 text-xs flex-1"
+                autoFocus
               />
-            </fieldset>
+              <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => {
+                onReject(rejectionReason);
+                setShowReject(false);
+              }}>✓</Button>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setShowReject(false)}>✕</Button>
+            </div>
+          ) : (
+            <>
+              <Button size="sm" className="h-7 px-2.5 text-xs" onClick={() => onApprove(null, [], null)} disabled={busy}>Approve</Button>
+              <Button size="sm" variant="ghost" className="h-7 px-2.5 text-xs" onClick={() => setShowReject(true)} disabled={busy}>Reject</Button>
+            </>
           )}
-
-          <div
-            className="flex flex-wrap items-center gap-2"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                const additional = Array.from(checkedInsightIds).filter(id => id !== primaryInsightId);
-                onApprove(primaryInsightId || null, additional);
-                setCheckedInsightIds(new Set());
-                setPrimaryInsightId(null);
-                setShowLinkInsights(false);
-              }}
-              disabled={busy}
-            >
-              Approve
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowReject(true)}
-              disabled={busy}
-              className="text-muted-foreground"
-            >
-              Reject
-            </Button>
-          </div>
         </div>
       )}
-
-      {quote.status === "suggested" && showReject && (
-        <div
-          className="flex flex-wrap items-center gap-2"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <Input
-            value={rejectionReason}
-            onChange={(event) => setRejectionReason(event.target.value)}
-            placeholder="Why reject this quote? (audit trail)"
-            className="h-8 max-w-md text-sm"
-            autoFocus
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={async () => {
-              await onReject(rejectionReason);
-              setRejectionReason("");
-              setShowReject(false);
-            }}
-            disabled={busy || rejectionReason.trim().length === 0}
-          >
-            Confirm reject
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setShowReject(false);
-              setRejectionReason("");
-            }}
-            disabled={busy}
-            className="text-muted-foreground"
-          >
-            Cancel
-          </Button>
-        </div>
-      )}
-
-      {quote.status === "approved" && quote.links.length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          Click to link insights.
-        </p>
-      )}
-
-      {quote.status === "rejected" && quote.rejectionReason && (
-        <p className="text-xs text-muted-foreground">
-          Reason: <span className="text-foreground/80">{quote.rejectionReason}</span>
-        </p>
-      )}
-    </article>
+    </div>
   );
 }
 
@@ -1218,14 +864,18 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
   const meetingQuery = useMeeting(meetingId);
   const themesQuery = useMeetingThemes(meetingId);
   const quotesQuery = useMeetingQuotes(meetingId);
+  const peopleQuery = useMeetingPeople(meetingId);
 
-  const [viewMode, setViewMode] = useViewMode();
+      const [viewMode, setViewMode] = useViewMode();
   const [tab, setTab] = useState<QuoteStatus>("suggested");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [draftSelection, setDraftSelection] = useState<Selection | null>(null);
   const [focusedQuoteId, setFocusedQuoteId] = useState<string | null>(null);
   const [editingTarget, setEditingTarget] = useState<
     { quoteId: string; rect: DOMRect } | null
   >(null);
+  const [isEditingSpanMode, setIsEditingSpanMode] = useState(false);
 
   const createQuote = useCreateQuote(meetingId);
   const createInsight = useCreateMeetingTheme(meetingId);
@@ -1233,10 +883,13 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
   const rejectQuote = useRejectQuote(meetingId);
   const linkInsight = useLinkQuoteInsight(meetingId);
   const unlinkInsight = useUnlinkQuoteInsight(meetingId);
+  const updateSpeaker = useUpdateQuoteSpeaker(meetingId);
+  const updateQuoteSpan = useUpdateQuoteSpan(meetingId);
 
   const transcript = meetingQuery.data?.meeting.transcript_raw ?? "";
   const quotes = useMemo(() => quotesQuery.data ?? [], [quotesQuery.data]);
   const themes = useMemo(() => themesQuery.data ?? [], [themesQuery.data]);
+  const people = useMemo(() => peopleQuery.data ?? [], [peopleQuery.data]);
 
   const insightOptions = useMemo(
     () =>
@@ -1268,7 +921,8 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
     approveQuote.isPending ||
     rejectQuote.isPending ||
     linkInsight.isPending ||
-    unlinkInsight.isPending;
+    unlinkInsight.isPending ||
+    updateQuoteSpan.isPending;
 
   // Drop focus if the quote disappears (status change, deletion). Derived,
   // not state-synced — avoids the setState-in-effect anti-pattern.
@@ -1287,7 +941,9 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
 
   const handleSelectQuote = useCallback(
     (quoteId: string, anchorRect: DOMRect | null) => {
+      setDraftSelection(null);
       setFocusedQuoteId(quoteId);
+      setIsEditingSpanMode(false);
       // Only open the editor when the click came with an anchor rect (a real
       // click on the row or transcript span). null is used for programmatic
       // focus — e.g., setting focus after approve/capture.
@@ -1298,58 +954,61 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
     []
   );
 
-  const handleCapture = useCallback(
+    const handleInitDraft = useCallback(() => {
+    if (!selection) return;
+    setDraftSelection(selection);
+    setSelection(null);
+    setFocusedQuoteId(null);
+  }, [selection]);
+
+  const handleSaveDraft = useCallback(
     async ({
-      speakerHint,
-      riskFlag,
-      insightIds,
+      speakerLabel,
       primaryInsightId,
+      additionalInsightIds,
+      relevanceStrengths,
     }: {
-      speakerHint: string;
-      riskFlag: boolean;
-      insightIds: string[];
+      speakerLabel: string;
       primaryInsightId: string | null;
+      additionalInsightIds: string[];
+      relevanceStrengths?: Record<string, "strong_match" | "partial_support" | "context" | "weak" | null>;
     }) => {
-      if (!selection) return;
+      if (!draftSelection) return;
       try {
         const created = await createQuote.mutateAsync({
           meetingId,
-          spanStart: selection.spanStart,
-          spanEnd: selection.spanEnd,
-          exactText: selection.text,
-          speakerLabel: speakerHint.trim() || null,
+          spanStart: draftSelection.spanStart,
+          spanEnd: draftSelection.spanEnd,
+          exactText: draftSelection.text,
+          speakerLabel: speakerLabel.trim() || null,
           source: "manual",
-          riskFlag,
+          riskFlag: false,
         });
 
-        // Link insights: primary first, then additional
         if (primaryInsightId) {
-          await linkInsight.mutateAsync({
-            quoteId: created.id,
-            insightId: primaryInsightId,
-            isPrimary: true,
-          });
+          await linkInsight.mutateAsync({ quoteId: created.id, insightId: primaryInsightId, isPrimary: true, relevanceStrength: relevanceStrengths?.[primaryInsightId] ?? null });
         }
-
-        for (const insightId of insightIds) {
-          if (insightId !== primaryInsightId) {
-            await linkInsight.mutateAsync({
-              quoteId: created.id,
-              insightId,
-              isPrimary: false,
-            });
+        for (const iid of additionalInsightIds) {
+          if (iid !== primaryInsightId) {
+            await linkInsight.mutateAsync({ quoteId: created.id, insightId: iid, isPrimary: false, relevanceStrength: relevanceStrengths?.[iid] ?? null });
           }
         }
 
-        const linkedCount = insightIds.length;
-        toast.success(linkedCount > 0 ? `Quote captured and linked to ${linkedCount} insight${linkedCount === 1 ? "" : "s"}` : "Quote captured");
-        setSelection(null);
+        toast.success("Quote saved");
+        setDraftSelection(null);
         setFocusedQuoteId(created.id);
+        
+        setTimeout(() => {
+          const span = document.querySelector(`span[data-quote-id="${created.id}"]`);
+          if (span) {
+            setEditingTarget({ quoteId: created.id, rect: span.getBoundingClientRect() });
+          }
+        }, 100);
       } catch (error) {
         toast.error(getErrorMessage(error));
       }
     },
-    [createQuote, linkInsight, meetingId, selection]
+    [createQuote, linkInsight, meetingId, draftSelection]
   );
 
   const handleCreateInsight = useCallback(
@@ -1370,9 +1029,9 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
   );
 
   const onApprove = useCallback(
-    async (quoteId: string, primaryInsightId: string | null, additionalInsightIds: string[] = []) => {
+    async (quoteId: string, primaryInsightId: string | null, additionalInsightIds: string[] = [], relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null) => {
       try {
-        await approveQuote.mutateAsync({ quoteId, primaryInsightId, additionalInsightIds });
+        await approveQuote.mutateAsync({ quoteId, primaryInsightId, additionalInsightIds, relevanceStrength: relevanceStrength ?? null });
         toast.success("Quote approved");
         setFocusedQuoteId(quoteId);
       } catch (error) {
@@ -1395,9 +1054,9 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
   );
 
   const onLink = useCallback(
-    async (quoteId: string, insightId: string, isPrimary: boolean) => {
+    async (quoteId: string, insightId: string, isPrimary: boolean, relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null) => {
       try {
-        await linkInsight.mutateAsync({ quoteId, insightId, isPrimary });
+        await linkInsight.mutateAsync({ quoteId, insightId, isPrimary, relevanceStrength: relevanceStrength ?? null });
         toast.success("Insight linked");
       } catch (error) {
         toast.error(getErrorMessage(error));
@@ -1405,6 +1064,23 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
     },
     [linkInsight]
   );
+
+  const handleUpdateSpan = useCallback(async (newSelection: Selection) => {
+    if (!editingTarget) return;
+    try {
+      await updateQuoteSpan.mutateAsync({
+        quoteId: editingTarget.quoteId,
+        spanStart: newSelection.spanStart,
+        spanEnd: newSelection.spanEnd,
+        exactText: newSelection.text,
+      });
+      toast.success("Quote region updated");
+      setSelection(null);
+      setIsEditingSpanMode(false);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  }, [updateQuoteSpan, editingTarget]);
 
   const onUnlink = useCallback(
     async (quoteId: string, insightId: string) => {
@@ -1418,7 +1094,19 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
     [unlinkInsight]
   );
 
-  if (meetingQuery.isLoading) {
+  const onChangeSpeaker = useCallback(
+    async (quoteId: string, speakerLabel: string | null) => {
+      try {
+        await updateSpeaker.mutateAsync({ quoteId, speakerLabel });
+        toast.success("Speaker updated");
+      } catch (error) {
+        toast.error(getErrorMessage(error));
+      }
+    },
+    [updateSpeaker]
+  );
+
+  if (meetingQuery.isPending || quotesQuery.isPending) {
     return (
       <div className="space-y-3">
         <Skeleton className="h-32 w-full" />
@@ -1464,7 +1152,22 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
           onReject={onReject}
           onLink={onLink}
           onUnlink={onUnlink}
+          onChangeSpeaker={onChangeSpeaker}
           onCreateInsight={handleCreateInsight}
+          tab={tab}
+          onTabChange={setTab}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+                    onCloseDetail={() => setFocusedQuoteId(null)}
+          editingQuote={editingQuote}
+          draftSelection={draftSelection}
+          onCloseDraft={() => setDraftSelection(null)}
+          onSaveDraft={handleSaveDraft}
+          people={people}
+          isEditingSpanMode={isEditingSpanMode}
+          onSetEditingSpanMode={setIsEditingSpanMode}
+          currentSelection={selection}
+          onUpdateSpan={handleUpdateSpan}
         />
       ) : (
         <CompactLayout
@@ -1482,36 +1185,22 @@ export function QuoteReviewPanel({ meetingId }: QuoteReviewPanelProps) {
           onReject={onReject}
           onLink={onLink}
           onUnlink={onUnlink}
+          onChangeSpeaker={onChangeSpeaker}
           onCreateInsight={handleCreateInsight}
           quotesByStatus={quotesByStatus}
+          people={people}
         />
       )}
 
-      {selection && (
+      {selection && !isEditingSpanMode && (
         <SelectionTooltip
           selection={selection}
-          insightOptions={insightOptions}
-          onCapture={handleCapture}
-          onCreateInsight={handleCreateInsight}
+          onCapture={handleInitDraft}
           onDismiss={() => setSelection(null)}
           busy={busy}
         />
       )}
 
-      {editingTarget && editingQuote && (
-        <EditQuoteTooltip
-          quote={editingQuote}
-          insightOptions={insightOptions}
-          anchorRect={editingTarget.rect}
-          busy={busy}
-          onClose={() => setEditingTarget(null)}
-          onApprove={(primaryInsightId, additionalIds) => onApprove(editingQuote.id, primaryInsightId, additionalIds)}
-          onReject={(rejectionReason) => onReject(editingQuote.id, rejectionReason)}
-          onLink={(insightId, isPrimary) => onLink(editingQuote.id, insightId, isPrimary)}
-          onUnlink={(insightId) => onUnlink(editingQuote.id, insightId)}
-          onCreateInsight={handleCreateInsight}
-        />
-      )}
     </div>
   );
 }
@@ -1563,6 +1252,190 @@ function ViewModeToggle({
   );
 }
 
+function CreateDraftPane({
+  selection,
+  transcript,
+  people,
+  insightOptions,
+  busy,
+  onClose,
+  onSave,
+  onCreateInsight,
+}: {
+  selection: Selection;
+  insightOptions: InsightOption[];
+  busy: boolean;
+  onClose: () => void;
+  onSave: (params: { speakerLabel: string; primaryInsightId: string | null; additionalInsightIds: string[]; relevanceStrengths?: Record<string, "strong_match" | "partial_support" | "context" | "weak" | null>; }) => Promise<void>;
+  onCreateInsight: (label: string) => Promise<InsightOption | null>;
+  transcript: string;
+  people: Person[];
+}) {
+  const [speakerLabel, setSpeakerLabel] = useState("");
+  const [checkedInsightIds, setCheckedInsightIds] = useState<Set<string>>(new Set());
+  const [primaryInsightId, setPrimaryInsightId] = useState<string | null>(null);
+  const [newInsightLabel, setNewInsightLabel] = useState("");
+  const [relevanceStrengths, setRelevanceStrengths] = useState<Record<string, "strong_match" | "partial_support" | "context" | "weak" | null>>({});
+
+  const contextBefore = transcript.slice(Math.max(0, selection.spanStart - 80), selection.spanStart);
+  const contextAfter = transcript.slice(selection.spanEnd, selection.spanEnd + 80);
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border/60 p-4">
+        <div>
+          <span className="text-xs uppercase tracking-widest font-semibold text-foreground">
+            New Quote
+          </span>
+        </div>
+        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground p-1 leading-none">×</button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div>
+          <p className="text-sm italic leading-relaxed text-foreground">
+            <span className="opacity-50">{contextBefore}</span>
+            <span className="px-0.5 rounded-sm bg-muted bg-opacity-60">
+              {selection.text}
+            </span>
+            <span className="opacity-50">{contextAfter}</span>
+          </p>
+        </div>
+
+        <div className="space-y-1 pt-2">
+          <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Speaker</label>
+          <select 
+            value={speakerLabel} 
+            onChange={(e) => setSpeakerLabel(e.target.value)} 
+            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={busy}
+          >
+            <option value="" disabled>Select a speaker...</option>
+            {people.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+            <option value="Anonymous">Anonymous</option>
+            <option value="Moderator/Facilitator">Moderator/Facilitator</option>
+          </select>
+          <p className="text-[0.65rem] text-muted-foreground mt-1">If the person is missing, add them to the meeting details at the top of the page.</p>
+        </div>
+
+        <fieldset className="space-y-2 border-t border-border/60 pt-4">
+          <legend className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+            Link to insight
+          </legend>
+          {insightOptions.length === 0 ? (
+            <p className="text-xs italic text-muted-foreground">No insights yet. Create one here to link this quote.</p>
+          ) : (
+            <ul className="max-h-60 space-y-0.5 overflow-y-auto pr-1">
+              {insightOptions.map((option) => {
+                const isChecked = checkedInsightIds.has(option.id);
+                const isPrimary = primaryInsightId === option.id;
+                return (
+                  <li key={option.id} className="flex flex-col gap-1 rounded px-1.5 py-1.5 hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(event) => {
+                          const next = new Set(checkedInsightIds);
+                          if (event.target.checked) {
+                            next.add(option.id);
+                          } else {
+                            next.delete(option.id);
+                            if (isPrimary) setPrimaryInsightId(null);
+                          }
+                          setCheckedInsightIds(next);
+                        }}
+                        disabled={busy}
+                        className="h-3.5 w-3.5 accent-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isChecked) return;
+                          setPrimaryInsightId(isPrimary ? null : option.id);
+                        }}
+                        disabled={busy || !isChecked}
+                        className={cn(
+                          "rounded text-sm leading-none transition-colors",
+                          isPrimary ? "text-primary" : isChecked ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/30"
+                        )}
+                      >
+                        {isPrimary ? "★" : "☆"}
+                      </button>
+                      <span className={cn("flex-1 text-sm cursor-pointer", !isChecked && "text-muted-foreground")} onClick={() => {
+                        const next = new Set(checkedInsightIds);
+                        if (isChecked) {
+                          next.delete(option.id);
+                          if (isPrimary) setPrimaryInsightId(null);
+                        } else {
+                          next.add(option.id);
+                        }
+                        setCheckedInsightIds(next);
+                      }}>
+                        {option.label}
+                      </span>
+                    </div>
+                    <div className={cn(
+                      "grid transition-all duration-200 ease-in-out",
+                      isChecked ? "grid-rows-[1fr] opacity-100 mt-1" : "grid-rows-[0fr] opacity-0 mt-0"
+                    )}>
+                      <div className="overflow-hidden">
+                        <div className="flex flex-wrap gap-1.5 pl-8 pb-1">
+                          {[
+                            { v: "strong_match", label: "Strong" },
+                            { v: "partial_support", label: "Partial" },
+                            { v: "context", label: "Context" },
+                            { v: "weak", label: "Weak" }
+                          ].map(opt => (
+                            <button
+                              key={opt.v}
+                              type="button"
+                              onClick={() => setRelevanceStrengths(prev => ({ ...prev, [option.id]: prev[option.id] === opt.v ? null : opt.v as any }))}
+                              className={cn(
+                                "px-2 py-0.5 text-[0.65rem] rounded-md border transition-colors",
+                                relevanceStrengths[option.id] === opt.v
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : "bg-background text-muted-foreground border-border hover:bg-muted"
+                              )}
+                              disabled={busy}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <div className="mt-2">
+            <InlineNewInsight
+              value={newInsightLabel}
+              onChange={setNewInsightLabel}
+              busy={busy}
+              onCreate={() => {
+                void (async () => {
+                  const created = await onCreateInsight(newInsightLabel);
+                  if (!created) return;
+                  setNewInsightLabel("");
+                  setCheckedInsightIds((current) => new Set(current).add(created.id));
+                  setPrimaryInsightId((current) => current ?? created.id);
+                })();
+              }}
+            />
+          </div>
+        </fieldset>
+
+        <div className="flex items-center gap-2 pt-4 border-t border-border/60">
+          <Button size="sm" onClick={() => onSave({ speakerLabel, primaryInsightId, additionalInsightIds: Array.from(checkedInsightIds).filter(id => id !== primaryInsightId), relevanceStrengths })} disabled={busy || speakerLabel.trim().length === 0}>Save</Button>
+          <Button size="sm" variant="ghost" onClick={onClose} disabled={busy} className="text-muted-foreground">Cancel</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface LayoutBaseProps {
   transcript: string;
   quotes: QuoteRecord[];
@@ -1572,17 +1445,39 @@ interface LayoutBaseProps {
   busy: boolean;
   onSelection: (selection: Selection | null) => void;
   onSpanFocus: (quoteId: string, anchorRect: DOMRect | null) => void;
-  onApprove: (quoteId: string, primaryInsightId: string | null, additionalInsightIds: string[]) => Promise<void>;
+  onApprove: (quoteId: string, primaryInsightId: string | null, additionalInsightIds: string[], relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null) => Promise<void>;
   onReject: (quoteId: string, rejectionReason: string) => Promise<void>;
-  onLink: (quoteId: string, insightId: string, isPrimary: boolean) => Promise<void>;
+  onLink: (quoteId: string, insightId: string, isPrimary: boolean, relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null) => Promise<void>;
   onUnlink: (quoteId: string, insightId: string) => Promise<void>;
+  onChangeSpeaker: (quoteId: string, speakerLabel: string | null) => Promise<void>;
   onCreateInsight: (label: string) => Promise<InsightOption | null>;
   quotesByStatus: Record<QuoteStatus, QuoteRecord[]>;
+  people: Person[];
 }
 
-function WorkspaceLayout(props: LayoutBaseProps) {
+function WorkspaceLayout(props: LayoutBaseProps & {
+  tab: QuoteStatus;
+  onTabChange: (tab: QuoteStatus) => void;
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
+  onCloseDetail: () => void;
+  editingQuote: QuoteRecord | null;
+  draftSelection: Selection | null;
+  onCloseDraft: () => void;
+  onSaveDraft: (params: { speakerLabel: string; primaryInsightId: string | null; additionalInsightIds: string[]; relevanceStrengths?: Record<string, "strong_match" | "partial_support" | "context" | "weak" | null> }) => Promise<void>;
+  isEditingSpanMode: boolean;
+  onSetEditingSpanMode: (mode: boolean) => void;
+  currentSelection: Selection | null;
+  onUpdateSpan: (selection: Selection) => Promise<void>;
+}) {
+  const visibleQuotes = props.quotesByStatus[props.tab].filter(q => 
+    !props.searchQuery || 
+    q.exactText.toLowerCase().includes(props.searchQuery.toLowerCase()) || 
+    q.speakerLabel?.toLowerCase().includes(props.searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="grid min-h-[520px] grid-cols-1 gap-4 overflow-hidden lg:h-[calc(100vh-14rem)] lg:min-h-0 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+    <div className="grid min-h-[520px] grid-cols-1 gap-4 overflow-hidden lg:h-[calc(100vh-14rem)] lg:min-h-0 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)]">
       <TranscriptPane
         transcript={props.transcript}
         quotes={props.quotes}
@@ -1590,44 +1485,107 @@ function WorkspaceLayout(props: LayoutBaseProps) {
         onSelection={props.onSelection}
         onSpanFocus={props.onSpanFocus}
       />
-      <div className="flex min-h-0 flex-col gap-4">
-        <ListPane
-          title="Suggested"
-          count={props.counts.suggested}
-          status="suggested"
-          quotes={props.quotesByStatus.suggested}
-          insightOptions={props.insightOptions}
-          focusedQuoteId={props.focusedQuoteId}
-          busy={props.busy}
-          onFocus={props.onSpanFocus}
-          onApprove={props.onApprove}
-          onReject={props.onReject}
-          onLink={props.onLink}
-          onUnlink={props.onUnlink}
-          onCreateInsight={props.onCreateInsight}
-          outerClassName="lg:max-h-[40%]"
-        />
-        <ListPane
-          title="Approved"
-          count={props.counts.approved}
-          status="approved"
-          quotes={props.quotesByStatus.approved}
-          insightOptions={props.insightOptions}
-          focusedQuoteId={props.focusedQuoteId}
-          busy={props.busy}
-          onFocus={props.onSpanFocus}
-          onApprove={props.onApprove}
-          onReject={props.onReject}
-          onLink={props.onLink}
-          onUnlink={props.onUnlink}
-          onCreateInsight={props.onCreateInsight}
-          rejectedCount={props.counts.rejected}
-          outerClassName="lg:flex-1"
-        />
+      <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-card">
+        {props.draftSelection ? (
+          <CreateDraftPane
+            selection={props.draftSelection}
+            transcript={props.transcript}
+            people={props.people}
+            insightOptions={props.insightOptions}
+            busy={props.busy}
+            onClose={props.onCloseDraft}
+            onSave={props.onSaveDraft}
+            onCreateInsight={props.onCreateInsight}
+          />
+        ) : props.focusedQuoteId && props.editingQuote ? (
+          <DetailViewPane
+            quote={props.editingQuote}
+            insightOptions={props.insightOptions}
+            busy={props.busy}
+            onClose={props.onCloseDetail}
+            onApprove={(pid, aids, rs) => props.onApprove(props.editingQuote!.id, pid, aids, rs)}
+            onReject={(reason) => props.onReject(props.editingQuote!.id, reason)}
+            onLink={(iid, isPri, rs) => props.onLink(props.editingQuote!.id, iid, isPri, rs)}
+            onUnlink={(iid) => props.onUnlink(props.editingQuote!.id, iid)}
+            onChangeSpeaker={(speakerLabel) => props.onChangeSpeaker(props.editingQuote!.id, speakerLabel)}
+            onCreateInsight={props.onCreateInsight}
+            people={props.people}
+            isEditingSpanMode={props.isEditingSpanMode}
+            onSetEditingSpanMode={props.onSetEditingSpanMode}
+            currentSelection={props.currentSelection}
+            onUpdateSpan={props.onUpdateSpan}
+          />
+        ) : (
+          <div className="flex h-full flex-col">
+            <div className="border-b border-border/60 px-2 pt-2">
+              <nav className="flex items-end gap-1 overflow-x-auto">
+                {STATUS_ORDER.map((value) => {
+                  const isActive = props.tab === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => props.onTabChange(value)}
+                      className={cn(
+                        "flex items-center gap-1.5 border-b-2 px-3 pb-2 text-xs font-medium transition-colors",
+                        isActive
+                          ? "border-primary text-foreground"
+                          : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
+                      )}
+                    >
+                      {STATUS_LABEL[value]}
+                      <span className={cn("rounded px-1.5 py-0.5 text-[0.6875rem] leading-none", 
+                        value === "suggested" && props.counts[value] > 0 ? "bg-amber-200/40 text-amber-900" :
+                        value === "approved" && props.counts[value] > 0 ? "bg-green-200/40 text-green-900" :
+                        value === "rejected" && props.counts[value] > 0 ? "bg-muted text-muted-foreground" :
+                        "bg-muted text-muted-foreground"
+                      )}>
+                        {props.counts[value]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+            <div className="border-b border-border/60 px-3 py-2">
+              <input
+                type="search"
+                value={props.searchQuery}
+                onChange={(e) => props.onSearchChange(e.target.value)}
+                placeholder="Filter by speaker or quote text..."
+                className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground focus:outline-none"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto p-3">
+              <div className="flex flex-col gap-2">
+                {visibleQuotes.length === 0 ? (
+                  <p className="text-xs italic text-muted-foreground py-2">No quotes found.</p>
+                ) : (
+                  visibleQuotes.map(quote => (
+                    <QuoteRow
+                      key={quote.id}
+                      quote={quote}
+                      insightOptions={props.insightOptions}
+                      isFocused={props.focusedQuoteId === quote.id}
+                      busy={props.busy}
+                      onFocus={(rect) => props.onSpanFocus(quote.id, rect)}
+                      onApprove={(pid, aids, rs) => props.onApprove(quote.id, pid, aids, rs)}
+                      onReject={(reason) => props.onReject(quote.id, reason)}
+                      onLink={(iid, isPri, rs) => props.onLink(quote.id, iid, isPri, rs)}
+                      onUnlink={(iid) => props.onUnlink(quote.id, iid)}
+                      onCreateInsight={props.onCreateInsight}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
 
 interface CompactLayoutProps extends LayoutBaseProps {
   tab: QuoteStatus;

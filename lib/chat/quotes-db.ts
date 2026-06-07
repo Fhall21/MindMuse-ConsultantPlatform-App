@@ -107,6 +107,10 @@ function buildReviewItems(params: {
       theme_label: themeLabel,
       span_start: span.spanStart,
       span_end: span.spanEnd,
+      justification: draft.justification ?? undefined,
+      context_before: draft.context_before ?? undefined,
+      context_after: draft.context_after ?? undefined,
+      relevance_strength: draft.relevance_strength ?? undefined,
     });
   }
 
@@ -229,6 +233,10 @@ export async function acceptQuoteForMeeting(params: {
   spanStart: number;
   spanEnd: number;
   speaker?: string | null;
+  justification?: string | null;
+  contextBefore?: string | null;
+  contextAfter?: string | null;
+  relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null;
   toolResultId?: string;
 }): Promise<{ quoteId: string; hadPriorAccept: boolean }> {
   await requireOwnedTheme(params.themeId, params.meetingId, params.userId);
@@ -251,12 +259,16 @@ export async function acceptQuoteForMeeting(params: {
     spanEnd: params.spanEnd,
     exactText: params.text,
     speakerLabel: params.speaker ?? null,
+    justification: params.justification ?? null,
+    contextBefore: params.contextBefore ?? null,
+    contextAfter: params.contextAfter ?? null,
     source: "ai",
   });
 
   const approved = await approveQuote({
     quoteId: created.id,
     primaryInsightId: params.themeId,
+    relevanceStrength: params.relevanceStrength,
   });
 
   if (params.sessionId && !hadPriorAccept) {

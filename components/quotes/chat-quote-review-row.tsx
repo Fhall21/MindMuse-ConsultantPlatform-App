@@ -10,6 +10,9 @@ export interface ChatQuoteReviewRowProps {
   speaker?: string | null;
   positionLabel: string;
   themeLabel: string;
+  justification?: string;
+  contextBefore?: string;
+  contextAfter?: string;
   decision?: "accepted" | "dismissed";
   isBusy?: boolean;
   error?: string | null;
@@ -23,6 +26,9 @@ export function ChatQuoteReviewRow({
   speaker,
   positionLabel,
   themeLabel,
+  justification,
+  contextBefore,
+  contextAfter,
   decision,
   isBusy = false,
   error,
@@ -45,8 +51,18 @@ export function ChatQuoteReviewRow({
       )}
     >
       <blockquote className="text-[0.9375rem] italic leading-relaxed text-foreground">
-        &ldquo;{text}&rdquo;
+        {contextBefore && <span className="text-muted-foreground">{contextBefore}</span>}
+        <span className="bg-amber-200/50 dark:bg-amber-500/20 px-1 rounded-sm mx-1 text-foreground">
+          &ldquo;{text}&rdquo;
+        </span>
+        {contextAfter && <span className="text-muted-foreground">{contextAfter}</span>}
       </blockquote>
+
+      {justification && (
+        <div className="border-l-2 border-border/60 pl-3 text-xs italic text-muted-foreground">
+          {justification}
+        </div>
+      )}
 
       <p className="text-xs text-muted-foreground">
         {[speaker, positionLabel, "AI suggested"].filter(Boolean).join(" · ")}

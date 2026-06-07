@@ -17,11 +17,14 @@ export type RelevanceStrength =
   | "context"
   | "weak";
 
+export type CellConfidence = "high" | "medium" | "low";
+
 export interface GridColumn {
   id: string;
   consultationId: string;
   question: string;
   position: number;
+  createdAt: string;
 }
 
 export interface GridCell {
@@ -29,9 +32,20 @@ export interface GridCell {
   meetingId: string;
   columnId: string;
   status: CellStatus;
-  confidence: "high" | "medium" | "low" | null;
+  confidence: CellConfidence | null;
   insightCount: number;
   quoteCount: number;
+  generatedAt: string | null;
+}
+
+export interface GridData {
+  columns: GridColumn[];
+  cells: GridCell[];
+}
+
+export interface MeetingGenerateResult {
+  meetingId: string;
+  cells: { cellId: string; status: CellStatus; insightCount: number }[];
 }
 
 export interface QuoteLink {

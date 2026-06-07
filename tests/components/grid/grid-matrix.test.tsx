@@ -23,12 +23,14 @@ const columns: GridColumn[] = [
     consultationId: "round-1",
     question: "Where is support breaking down?",
     position: 1,
+    createdAt: "2026-01-01T00:00:00Z",
   },
   {
     id: "column-a",
     consultationId: "round-1",
     question: "How safe do people feel to speak up?",
     position: 0,
+    createdAt: "2026-01-01T00:00:00Z",
   },
 ];
 
@@ -40,6 +42,7 @@ const completeCell: GridCellData = {
   confidence: "high",
   insightCount: 1,
   quoteCount: 3,
+  generatedAt: "2026-01-01T00:00:00Z",
 };
 
 const insight: InsightWithLinks = {

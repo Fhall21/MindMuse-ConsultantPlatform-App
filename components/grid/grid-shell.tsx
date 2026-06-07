@@ -229,9 +229,21 @@ function WiredGridWorkspace({
     selectedCellId
   );
 
-  const columns = gridData?.columns ?? [];
-  const cells = cellsData?.cells ?? gridData?.cells ?? [];
+  const columns = useMemo(() => gridData?.columns ?? [], [gridData?.columns]);
+  const cells = useMemo(
+    () => cellsData?.cells ?? gridData?.cells ?? [],
+    [cellsData?.cells, gridData?.cells]
+  );
   const { data: gridInsightsData } = useGridInsights(roundId, columns.length > 0);
+  const completedCellIds = useMemo(
+    () =>
+      new Set(
+        cells
+          .filter((cell) => cell.status === "complete")
+          .map((cell) => cell.id)
+      ),
+    [cells]
+  );
 
   const insightsByCellId = useMemo(() => {
     const map = new Map<string, InsightWithLinks[]>();
@@ -385,7 +397,11 @@ function WiredGridWorkspace({
 
   return (
     <>
-      <GridToolbar onAddColumn={openAddColumnPanel} onExport={onExport} />
+      <GridToolbar
+        onAddColumn={openAddColumnPanel}
+        onExport={onExport}
+        bulkActions={{ roundId, completedCellIds }}
+      />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto xl:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)] xl:overflow-hidden">
         <div className="flex min-h-[28rem] min-w-0 flex-col overflow-x-auto xl:min-h-0">

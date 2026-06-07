@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import {
+  CheckCheck,
   ChevronDown,
   Download,
   Filter,
@@ -10,18 +12,30 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { BulkAcceptDialog } from "@/components/grid/bulk-accept-dialog";
 
 interface GridToolbarProps {
   onAddColumn: () => void;
   onExport?: () => void;
+  bulkActions?: {
+    roundId: string;
+    completedCellIds: ReadonlySet<string>;
+  };
 }
 
-export function GridToolbar({ onAddColumn, onExport }: GridToolbarProps) {
+export function GridToolbar({
+  onAddColumn,
+  onExport,
+  bulkActions,
+}: GridToolbarProps) {
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+
   return (
-    <div
-      className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b bg-background px-3 py-2"
-      aria-label="Analysis grid toolbar"
-    >
+    <>
+      <div
+        className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b bg-background px-3 py-2"
+        aria-label="Analysis grid toolbar"
+      >
       <Button
         type="button"
         variant="outline"
@@ -91,6 +105,42 @@ export function GridToolbar({ onAddColumn, onExport }: GridToolbarProps) {
         <Download aria-hidden="true" />
         Export
       </Button>
-    </div>
+
+        {bulkActions ? (
+          <>
+            <div
+              className="mx-1 hidden h-6 w-px bg-border sm:block"
+              aria-hidden="true"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setBulkDialogOpen(true)}
+            >
+              <CheckCheck aria-hidden="true" />
+              Accept reviewed
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setBulkDialogOpen(true)}
+            >
+              <CheckCheck aria-hidden="true" />
+              Accept all visible
+            </Button>
+          </>
+        ) : null}
+      </div>
+
+      {bulkActions ? (
+        <BulkAcceptDialog
+          roundId={bulkActions.roundId}
+          completedCellIds={bulkActions.completedCellIds}
+          open={bulkDialogOpen}
+          onOpenChange={setBulkDialogOpen}
+        />
+      ) : null}
+    </>
   );
 }

@@ -37,6 +37,7 @@ interface GridShellProps {
   columns: GridShellColumn[];
   isLoading?: boolean;
   matrix?: ReactNode;
+  matrixOwnsHeaders?: boolean;
   evidencePanel?: ReactNode;
   onAddColumn?: (question: string) => void | Promise<void>;
   onExport?: () => void;
@@ -193,6 +194,7 @@ export function GridShell({
   columns,
   isLoading = false,
   matrix,
+  matrixOwnsHeaders = false,
   evidencePanel,
   onAddColumn,
   onExport,
@@ -255,34 +257,39 @@ export function GridShell({
             <EmptyGrid onAddColumn={() => setIsAddDialogOpen(true)} />
           ) : (
             <DndContext
+              id={`analysis-grid-${roundId}`}
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragEnd={handleDragEnd}
             >
-              <div className="min-w-max">
-                <div className="flex border-b">
-                  <div className="flex h-16 w-44 shrink-0 items-center border-r px-3 text-sm font-medium">
-                    Meeting
-                  </div>
-                  <SortableContext
-                    items={columnIds}
-                    strategy={horizontalListSortingStrategy}
-                  >
-                    {orderedColumns.map((column, index) => (
-                      <SortableColumnHeader
-                        key={column.id}
-                        column={column}
-                        index={index}
-                      />
-                    ))}
-                  </SortableContext>
-                </div>
-                {matrix ?? (
-                  <div className="grid min-h-72 place-items-center text-sm text-muted-foreground">
-                    Meeting evidence will appear here.
+              <SortableContext
+                items={columnIds}
+                strategy={horizontalListSortingStrategy}
+              >
+                {matrixOwnsHeaders && matrix ? (
+                  matrix
+                ) : (
+                  <div className="min-w-max">
+                    <div className="flex border-b">
+                      <div className="flex h-16 w-44 shrink-0 items-center border-r px-3 text-sm font-medium">
+                        Meeting
+                      </div>
+                      {orderedColumns.map((column, index) => (
+                        <SortableColumnHeader
+                          key={column.id}
+                          column={column}
+                          index={index}
+                        />
+                      ))}
+                    </div>
+                    {matrix ?? (
+                      <div className="grid min-h-72 place-items-center text-sm text-muted-foreground">
+                        Meeting evidence will appear here.
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </SortableContext>
             </DndContext>
           )}
         </div>

@@ -1,8 +1,10 @@
 "use server";
 
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
+  gridCellInsights,
+  gridCells,
   insights,
   meetings,
   people,
@@ -11,6 +13,10 @@ import {
 } from "@/db/schema";
 import { requireCurrentUserId } from "@/lib/data/auth-context";
 import { requireOwnedMeeting } from "@/lib/data/ownership";
+import {
+  computeCellConfidence,
+  computeInsightConfidence,
+} from "@/lib/quotes/insight-confidence";
 import { AUDIT_ACTIONS } from "./audit-actions";
 import { emitAuditEvent } from "./audit";
 
@@ -34,6 +40,9 @@ export interface QuoteRecord {
   riskFlag: boolean;
   riskReason: string | null;
   rejectionReason: string | null;
+  justification: string | null;
+  contextBefore: string | null;
+  contextAfter: string | null;
   approvedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +51,7 @@ export interface QuoteRecord {
     insightLabel: string;
     isPrimary: boolean;
     linkType: QuoteLinkType;
+    relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null;
   }>;
 }
 
@@ -57,6 +67,9 @@ interface CreateQuoteParams {
   riskFlag?: boolean;
   riskReason?: string | null;
   anonymousMaskRule?: QuoteMaskRule;
+  justification?: string | null;
+  contextBefore?: string | null;
+  contextAfter?: string | null;
 }
 
 function trimToNull(value?: string | null) {
@@ -80,6 +93,7 @@ async function loadQuoteWithLinks(quoteId: string): Promise<QuoteRecord | null> 
       insightLabel: insights.label,
       isPrimary: quoteInsightLinks.isPrimary,
       linkType: quoteInsightLinks.linkType,
+      relevanceStrength: quoteInsightLinks.relevanceStrength,
     })
     .from(quoteInsightLinks)
     .innerJoin(insights, eq(insights.id, quoteInsightLinks.insightId))
@@ -101,6 +115,9 @@ async function loadQuoteWithLinks(quoteId: string): Promise<QuoteRecord | null> 
     riskFlag: quote.riskFlag,
     riskReason: quote.riskReason,
     rejectionReason: quote.rejectionReason,
+    justification: quote.justification,
+    contextBefore: quote.contextBefore,
+    contextAfter: quote.contextAfter,
     approvedAt: quote.approvedAt,
     createdAt: quote.createdAt,
     updatedAt: quote.updatedAt,
@@ -109,6 +126,7 @@ async function loadQuoteWithLinks(quoteId: string): Promise<QuoteRecord | null> 
       insightLabel: link.insightLabel,
       isPrimary: link.isPrimary,
       linkType: link.linkType as QuoteLinkType,
+      relevanceStrength: link.relevanceStrength as any,
     })),
   };
 }
@@ -182,8 +200,8 @@ async function validateSpan(
     .where(eq(meetings.id, meetingId))
     .limit(1);
 
-  if (!meeting) return;
-  if (meeting.transcriptRaw == null) return;
+  if (!meeting) return { transcriptRaw: null };
+  if (meeting.transcriptRaw == null) return { transcriptRaw: null };
 
   if (spanEnd > meeting.transcriptRaw.length) {
     throw new Error("Quote span exceeds transcript length.");
@@ -193,18 +211,26 @@ async function validateSpan(
   if (slice !== exactText) {
     throw new Error("Quote exactText does not match the transcript span.");
   }
+  return { transcriptRaw: meeting.transcriptRaw };
 }
 
 export async function createQuote(params: CreateQuoteParams): Promise<QuoteRecord> {
   const userId = await requireCurrentUserId();
   await requireOwnedMeeting(params.meetingId, userId);
 
-  await validateSpan(
+  const { transcriptRaw } = await validateSpan(
     params.meetingId,
     params.spanStart,
     params.spanEnd,
     params.exactText
   );
+
+  let contextBefore = null;
+  let contextAfter = null;
+  if (transcriptRaw) {
+    contextBefore = transcriptRaw.slice(Math.max(0, params.spanStart - 50), params.spanStart);
+    contextAfter = transcriptRaw.slice(params.spanEnd, Math.min(transcriptRaw.length, params.spanEnd + 50));
+  }
 
   const personId = trimToNull(params.personId ?? null);
   const speakerCtx = await captureSpeakerContext(params.meetingId, personId);
@@ -228,6 +254,9 @@ export async function createQuote(params: CreateQuoteParams): Promise<QuoteRecor
       anonymousMaskRule: params.anonymousMaskRule ?? "role_workgroup",
       riskFlag: params.riskFlag ?? false,
       riskReason: trimToNull(params.riskReason ?? null),
+      justification: trimToNull(params.justification ?? null),
+      contextBefore: params.contextBefore ?? contextBefore,
+      contextAfter: params.contextAfter ?? contextAfter,
       approvedAt: initialStatus === "approved" ? new Date() : null,
       approvedBy: initialStatus === "approved" ? userId : null,
     })
@@ -263,12 +292,97 @@ export async function createQuote(params: CreateQuoteParams): Promise<QuoteRecor
   return record;
 }
 
+interface UpdateQuoteSpeakerParams {
+  quoteId: string;
+  speakerLabel: string | null;
+}
+
+export async function updateQuoteSpeaker(params: UpdateQuoteSpeakerParams): Promise<QuoteRecord> {
+  const userId = await requireCurrentUserId();
+
+  const [quote] = await db
+    .update(quotes)
+    .set({
+      speakerLabel: params.speakerLabel,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(quotes.id, params.quoteId))
+    .returning({ id: quotes.id });
+
+  if (!quote) throw new Error("Quote not found");
+
+  const record = await loadQuoteWithLinks(quote.id);
+  if (!record) throw new Error("Failed to load updated quote.");
+  return record;
+}
+
+interface UpdateQuoteSpanParams {
+  quoteId: string;
+  spanStart: number;
+  spanEnd: number;
+  exactText: string;
+}
+
+export async function updateQuoteSpan(params: UpdateQuoteSpanParams): Promise<QuoteRecord> {
+  const userId = await requireCurrentUserId();
+
+  const [quote] = await db
+    .select()
+    .from(quotes)
+    .where(and(eq(quotes.id, params.quoteId), eq(quotes.userId, userId)))
+    .limit(1);
+
+  if (!quote) throw new Error("Quote not found");
+
+  const { transcriptRaw } = await validateSpan(
+    quote.meetingId,
+    params.spanStart,
+    params.spanEnd,
+    params.exactText
+  );
+
+  let contextBefore = null;
+  let contextAfter = null;
+  if (transcriptRaw) {
+    contextBefore = transcriptRaw.slice(Math.max(0, params.spanStart - 50), params.spanStart);
+    contextAfter = transcriptRaw.slice(params.spanEnd, Math.min(transcriptRaw.length, params.spanEnd + 50));
+  }
+
+  await db
+    .update(quotes)
+    .set({
+      spanStart: params.spanStart,
+      spanEnd: params.spanEnd,
+      exactText: params.exactText,
+      contextBefore: quote.contextBefore ?? contextBefore,
+      contextAfter: quote.contextAfter ?? contextAfter,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(quotes.id, params.quoteId));
+
+  await emitAuditEvent({
+    consultationId: null,
+    action: "quote.updated" as any,
+    entityType: "quote",
+    entityId: quote.id,
+    metadata: {
+      meetingId: quote.meetingId,
+      updatedFields: ["spanStart", "spanEnd", "exactText"]
+    },
+  });
+
+  const record = await loadQuoteWithLinks(quote.id);
+  if (!record) throw new Error("Failed to load updated quote.");
+  return record;
+}
+
 interface ApproveQuoteParams {
   quoteId: string;
   /** Optional insightId to link as the primary insight at approval time. */
   primaryInsightId?: string | null;
   /** Optional set of additional insightIds to link (durable). */
   additionalInsightIds?: string[];
+  relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null;
 }
 
 export async function approveQuote(params: ApproveQuoteParams): Promise<QuoteRecord> {
@@ -299,6 +413,7 @@ export async function approveQuote(params: ApproveQuoteParams): Promise<QuoteRec
       insightId: params.primaryInsightId,
       isPrimary: true,
       linkType: "durable",
+      relevanceStrength: params.relevanceStrength ?? null,
     });
   }
 
@@ -309,6 +424,7 @@ export async function approveQuote(params: ApproveQuoteParams): Promise<QuoteRec
       insightId,
       isPrimary: false,
       linkType: "durable",
+      relevanceStrength: params.relevanceStrength ?? null,
     });
   }
 
@@ -375,6 +491,7 @@ interface LinkQuoteParams {
   insightId: string;
   isPrimary?: boolean;
   linkType?: QuoteLinkType;
+  relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null;
 }
 
 async function assertInsightLinkableForQuote(params: {
@@ -402,9 +519,10 @@ async function assertInsightLinkableForQuote(params: {
   }
 }
 
-async function linkQuoteToInsightInternal(params: Required<Omit<LinkQuoteParams, "isPrimary" | "linkType">> & {
+async function linkQuoteToInsightInternal(params: Required<Omit<LinkQuoteParams, "isPrimary" | "linkType" | "relevanceStrength">> & {
   isPrimary: boolean;
   linkType: QuoteLinkType;
+  relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null;
 }) {
   await assertInsightLinkableForQuote({
     quoteId: params.quoteId,
@@ -425,12 +543,14 @@ async function linkQuoteToInsightInternal(params: Required<Omit<LinkQuoteParams,
       insightId: params.insightId,
       isPrimary: params.isPrimary,
       linkType: params.linkType,
+      relevanceStrength: params.relevanceStrength ?? null,
     })
     .onConflictDoUpdate({
       target: [quoteInsightLinks.quoteId, quoteInsightLinks.insightId],
       set: {
         isPrimary: params.isPrimary,
         linkType: params.linkType,
+        relevanceStrength: params.relevanceStrength ?? null,
       },
     });
 }
@@ -451,6 +571,7 @@ export async function linkQuoteToInsight(params: LinkQuoteParams): Promise<Quote
     insightId: params.insightId,
     isPrimary: params.isPrimary ?? false,
     linkType: params.linkType ?? "durable",
+    relevanceStrength: params.relevanceStrength ?? null,
   });
 
   await emitAuditEvent({
@@ -488,37 +609,94 @@ export async function unlinkQuoteFromInsight(params: UnlinkQuoteParams): Promise
 
   if (!quote) throw new Error("Quote not found.");
 
-  await db
-    .delete(quoteInsightLinks)
-    .where(
-      and(
-        eq(quoteInsightLinks.quoteId, params.quoteId),
-        eq(quoteInsightLinks.insightId, params.insightId)
-      )
-    );
-
-  // If the deleted link was primary, promote the oldest remaining link.
-  const remaining = await db
-    .select({
-      insightId: quoteInsightLinks.insightId,
-      isPrimary: quoteInsightLinks.isPrimary,
-      createdAt: quoteInsightLinks.createdAt,
-    })
-    .from(quoteInsightLinks)
-    .where(eq(quoteInsightLinks.quoteId, params.quoteId))
-    .orderBy(asc(quoteInsightLinks.createdAt));
-
-  if (remaining.length > 0 && !remaining.some((row) => row.isPrimary)) {
-    await db
-      .update(quoteInsightLinks)
-      .set({ isPrimary: true })
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(quoteInsightLinks)
       .where(
         and(
           eq(quoteInsightLinks.quoteId, params.quoteId),
-          eq(quoteInsightLinks.insightId, remaining[0].insightId)
+          eq(quoteInsightLinks.insightId, params.insightId)
         )
       );
-  }
+
+    // If the deleted link was primary, promote the oldest remaining link.
+    const remaining = await tx
+      .select({
+        insightId: quoteInsightLinks.insightId,
+        isPrimary: quoteInsightLinks.isPrimary,
+        createdAt: quoteInsightLinks.createdAt,
+      })
+      .from(quoteInsightLinks)
+      .where(eq(quoteInsightLinks.quoteId, params.quoteId))
+      .orderBy(asc(quoteInsightLinks.createdAt));
+
+    if (remaining.length > 0 && !remaining.some((row) => row.isPrimary)) {
+      await tx
+        .update(quoteInsightLinks)
+        .set({ isPrimary: true })
+        .where(
+          and(
+            eq(quoteInsightLinks.quoteId, params.quoteId),
+            eq(quoteInsightLinks.insightId, remaining[0].insightId)
+          )
+        );
+    }
+
+    const impactedCells = await tx
+      .select({
+        gridCellId: gridCellInsights.gridCellId,
+      })
+      .from(gridCellInsights)
+      .where(eq(gridCellInsights.insightId, params.insightId));
+
+    const impactedCellIds = [...new Set(impactedCells.map((row) => row.gridCellId))];
+    if (impactedCellIds.length > 0) {
+      const cellInsights = await tx
+        .select({
+          gridCellId: gridCellInsights.gridCellId,
+          insightId: gridCellInsights.insightId,
+        })
+        .from(gridCellInsights)
+        .where(inArray(gridCellInsights.gridCellId, impactedCellIds));
+
+      const cellLinks = await tx
+        .select({
+          gridCellId: gridCellInsights.gridCellId,
+          insightId: quoteInsightLinks.insightId,
+          relevanceStrength: quoteInsightLinks.relevanceStrength,
+        })
+        .from(gridCellInsights)
+        .innerJoin(
+          quoteInsightLinks,
+          eq(quoteInsightLinks.insightId, gridCellInsights.insightId)
+        )
+        .where(inArray(gridCellInsights.gridCellId, impactedCellIds));
+
+      for (const cellId of impactedCellIds) {
+        const insightIds = cellInsights
+          .filter((row) => row.gridCellId === cellId)
+          .map((row) => row.insightId);
+        const insightConfidences = insightIds.map((insightId) =>
+          computeInsightConfidence(
+            cellLinks
+              .filter(
+                (link) => link.gridCellId === cellId && link.insightId === insightId
+              )
+              .map((link) => ({ relevanceStrength: link.relevanceStrength }))
+          )
+        );
+        const cellConfidence = computeCellConfidence(insightConfidences);
+        await tx
+          .update(gridCells)
+          .set({
+            confidence: cellConfidence,
+            quoteCount: cellLinks.filter((link) => link.gridCellId === cellId).length,
+            updatedAt: sql`now()`,
+          })
+          .where(eq(gridCells.id, cellId));
+      }
+    }
+  });
 
   await emitAuditEvent({
     consultationId: null,
@@ -547,6 +725,9 @@ interface AISuggestion {
   personId?: string | null;
   riskFlag?: boolean;
   riskReason?: string | null;
+  justification?: string | null;
+  contextBefore?: string | null;
+  contextAfter?: string | null;
 }
 
 export async function ingestAIQuoteSuggestions(
@@ -583,6 +764,9 @@ export async function ingestAIQuoteSuggestions(
       source: "ai",
       riskFlag: suggestion.riskFlag ?? false,
       riskReason: suggestion.riskReason ?? null,
+      justification: suggestion.justification ?? null,
+      contextBefore: suggestion.contextBefore ?? null,
+      contextAfter: suggestion.contextAfter ?? null,
     });
     created.push(record);
   }

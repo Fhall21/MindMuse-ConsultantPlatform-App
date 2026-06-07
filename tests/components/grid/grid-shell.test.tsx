@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   GridShell,
   persistGridColumnOrder,
@@ -15,42 +16,83 @@ const columns: GridShellColumn[] = [
   { id: "column-c", question: "What should change?", position: 2 },
 ];
 
+function renderGridShell(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+  );
+}
+
+beforeEach(() => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({ suggestions: [] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
+  );
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe("GridShell", () => {
-  it("renders toolbar, empty state, evidence placeholder, and add-column dialog", () => {
-    render(<GridShell roundId="round-1" columns={[]} />);
+  it("renders toolbar, empty state, and evidence placeholder", () => {
+    renderGridShell(<GridShell roundId="round-1" columns={[]} />);
 
     expect(screen.getByLabelText("Analysis grid toolbar")).toBeInTheDocument();
     expect(screen.getByText("No analysis questions yet")).toBeInTheDocument();
     expect(screen.getByLabelText("Evidence panel")).toHaveTextContent("Select an insight");
+  });
+
+  it("opens add-column panel in aside and cancel restores evidence placeholder", () => {
+    const onAddColumn = vi.fn();
+    renderGridShell(
+      <GridShell roundId="round-1" columns={[]} onAddColumn={onAddColumn} />
+    );
+
+    expect(screen.getByLabelText("Evidence panel")).toHaveTextContent("Select an insight");
 
     fireEvent.click(screen.getAllByRole("button", { name: "Add column" })[0]);
-    expect(screen.getByRole("dialog")).toHaveTextContent("Add analysis question");
+
+    expect(screen.getByLabelText("Add column panel")).toBeInTheDocument();
+    expect(screen.getByText("Add analysis question")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByLabelText("Evidence panel")).toHaveTextContent("Select an insight");
+    expect(screen.queryByLabelText("Add column panel")).not.toBeInTheDocument();
   });
 
   it("renders a matrix-shaped loading state", () => {
-    render(<GridShell roundId="round-1" columns={[]} isLoading />);
+    renderGridShell(<GridShell roundId="round-1" columns={[]} isLoading />);
 
     expect(screen.getByLabelText("Loading analysis grid")).toBeInTheDocument();
     expect(screen.queryByText("No analysis questions yet")).not.toBeInTheDocument();
   });
 
   it("renders sortable column headers and supplied panel content", () => {
-    render(
+    renderGridShell(
       <GridShell
         roundId="round-1"
         columns={columns}
         matrix={<div>Matrix content</div>}
         evidencePanel={<div>Evidence content</div>}
+        onAddColumn={vi.fn()}
       />
     );
 
     expect(screen.getByText("1. What is working?")).toBeInTheDocument();
     expect(screen.getByText("Matrix content")).toBeInTheDocument();
     expect(screen.getByLabelText("Evidence panel")).toHaveTextContent("Evidence content");
+
+    fireEvent.click(screen.getByRole("button", { name: "Add column" }));
+
+    expect(screen.getByLabelText("Add column panel")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
 

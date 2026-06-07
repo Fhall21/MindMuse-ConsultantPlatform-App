@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { gridCells, gridCellInsights, insights, gridColumns, quoteInsightLinks, quotes } from "@/db/schema";
 import { requireOwnedRound } from "@/lib/data/ownership";
@@ -48,10 +48,12 @@ export async function GET(
         rejected: gridCellInsights.rejected,
         gridCellId: gridCellInsights.gridCellId,
         gridColumnId: gridCellInsights.gridColumnId,
+        createdAt: gridCellInsights.createdAt,
       })
       .from(gridCellInsights)
       .innerJoin(insights, eq(insights.id, gridCellInsights.insightId))
-      .where(eq(gridCellInsights.gridCellId, cellId));
+      .where(eq(gridCellInsights.gridCellId, cellId))
+      .orderBy(asc(gridCellInsights.createdAt));
 
     const insightIds = junctionRows.map((r) => r.id);
 
@@ -88,6 +90,8 @@ export async function GET(
           spanStart: quotes.spanStart,
           spanEnd: quotes.spanEnd,
           relevanceStrength: quoteInsightLinks.relevanceStrength,
+          contextBefore: quotes.contextBefore,
+          contextAfter: quotes.contextAfter,
         })
         .from(quoteInsightLinks)
         .innerJoin(quotes, eq(quotes.id, quoteInsightLinks.quoteId))
@@ -114,6 +118,8 @@ export async function GET(
           spanStart: q.spanStart,
           spanEnd: q.spanEnd,
           relevanceStrength: q.relevanceStrength,
+          contextBefore: q.contextBefore,
+          contextAfter: q.contextAfter,
         }));
 
       return {

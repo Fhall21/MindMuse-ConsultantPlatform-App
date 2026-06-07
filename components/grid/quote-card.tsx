@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { QuoteLink, RelevanceStrength } from "@/types/grid";
 
@@ -29,42 +28,54 @@ const RELEVANCE_CONFIG: Record<
   },
 };
 
+type QuoteWithContext = QuoteLink & {
+  contextBefore?: string | null;
+  contextAfter?: string | null;
+};
+
 export interface QuoteCardProps {
   quote: QuoteLink;
   meetingId: string;
 }
 
 export function QuoteCard({ quote }: QuoteCardProps) {
+  const quoteWithContext = quote as QuoteWithContext;
   const config = quote.relevanceStrength
     ? RELEVANCE_CONFIG[quote.relevanceStrength]
     : null;
+  const contextBefore = quoteWithContext.contextBefore ?? null;
+  const contextAfter = quoteWithContext.contextAfter ?? null;
+  const hasContext = Boolean(contextBefore || contextAfter);
 
   return (
-    <article
-      className={cn(
-        "space-y-2 rounded-lg border px-3 py-3 transition-colors",
-        quote.relevanceStrength === "strong_match" &&
-          "border-emerald-500/30 bg-emerald-500/5",
-        (!quote.relevanceStrength || quote.relevanceStrength === "weak") &&
-          "border-border/70"
-      )}
-    >
+    <article className="rounded-md border border-border bg-card p-3 transition-colors">
+      <div className="mb-1.5 text-[0.6125rem] font-semibold uppercase tracking-widest text-muted-foreground">
+        {quote.speakerLabel || "Unknown"}
+      </div>
+
       {config && (
-        <Badge
-          variant="outline"
-          className={cn("text-[10px]", config.className)}
+        <span
+          className={cn(
+            "mb-2 inline-block rounded-md border px-2 py-0.5 text-[0.65rem] font-medium",
+            config.className
+          )}
         >
           {config.label}
-        </Badge>
+        </span>
       )}
 
-      <blockquote className="border-l-4 border-primary/40 pl-3 text-sm italic leading-relaxed text-foreground">
-        {quote.exactText}
-      </blockquote>
-
-      {quote.speakerLabel && (
-        <p className="text-[11px] text-muted-foreground">— {quote.speakerLabel}</p>
-      )}
+      <p
+        className={cn(
+          "text-sm italic leading-relaxed",
+          hasContext ? "text-muted-foreground" : "text-foreground"
+        )}
+      >
+        {contextBefore}
+        <span className="rounded-sm bg-green-200/40 px-0.5 text-foreground not-italic">
+          {quote.exactText}
+        </span>
+        {contextAfter}
+      </p>
     </article>
   );
 }

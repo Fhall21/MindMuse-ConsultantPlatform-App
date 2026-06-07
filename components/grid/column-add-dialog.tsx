@@ -1,83 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { ColumnAddPanel } from "@/components/grid/column-add-panel";
 
 interface ColumnAddDialogProps {
+  roundId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAddColumn?: (question: string) => void | Promise<void>;
+  /** Prefetch AI suggestions when grid mounts, not only when dialog opens. */
+  prefetchSuggestions?: boolean;
 }
 
 export function ColumnAddDialog({
+  roundId,
   open,
   onOpenChange,
   onAddColumn,
+  prefetchSuggestions = false,
 }: ColumnAddDialogProps) {
-  const [question, setQuestion] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [panelKey, setPanelKey] = useState(0);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmedQuestion = question.trim();
-    if (!trimmedQuestion || !onAddColumn) return;
-
-    setIsSubmitting(true);
-    try {
-      await onAddColumn(trimmedQuestion);
-      setQuestion("");
-      onOpenChange(false);
-    } finally {
-      setIsSubmitting(false);
+  useEffect(() => {
+    if (!open) {
+      setPanelKey((key) => key + 1);
     }
-  }
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form className="grid gap-6" onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Add analysis question</DialogTitle>
-            <DialogDescription>
-              Add a question to compare across every meeting in this consultation.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-2">
-            <label htmlFor="grid-column-question" className="text-sm font-medium">
-              Question
-            </label>
-            <Textarea
-              id="grid-column-question"
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              placeholder="Where is support breaking down?"
-              rows={4}
-              autoFocus
-            />
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={!question.trim() || !onAddColumn || isSubmitting}
-            >
-              {isSubmitting ? "Adding…" : "Add column"}
-            </Button>
-          </DialogFooter>
-        </form>
+      <DialogContent className="max-h-[min(90vh,42rem)] overflow-hidden p-0 sm:max-w-lg">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Add analysis question</DialogTitle>
+          <DialogDescription>
+            Add a question to compare across every meeting in this consultation.
+          </DialogDescription>
+        </DialogHeader>
+        {open ? (
+          <ColumnAddPanel
+            key={panelKey}
+            roundId={roundId}
+            prefetchSuggestions={prefetchSuggestions || open}
+            submitDisabled={!onAddColumn}
+            onAddColumn={async (question) => {
+              if (!onAddColumn) return;
+              await onAddColumn(question);
+              onOpenChange(false);
+            }}
+            onCancel={() => onOpenChange(false)}
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   );

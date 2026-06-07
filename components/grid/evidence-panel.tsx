@@ -1,14 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  ExternalLink,
-  Pencil,
-  X,
-} from "lucide-react";
+import { Check, ExternalLink, Pencil, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -39,10 +32,10 @@ function EmptyState() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-1.5 p-6 text-center">
       <p className="text-sm font-medium text-muted-foreground">
-        Select a cell to see evidence
+        Select an insight in the grid
       </p>
       <p className="text-xs leading-5 text-muted-foreground/60">
-        Choose an insight in the grid to review its supporting quotes.
+        Click an insight row to review its supporting quotes here.
       </p>
     </div>
   );
@@ -62,7 +55,6 @@ function connectedStateIcon(
 export function EvidencePanel({
   selectedCell,
   selectedInsight,
-  onInsightSelect,
   onInsightReview,
   insights,
 }: EvidencePanelProps) {
@@ -82,8 +74,7 @@ export function EvidencePanel({
 
   const activeInsight = selectedInsight ?? insights[0];
   const activeIndex = insights.findIndex((i) => i.id === activeInsight.id);
-  const safeIndex = activeIndex === -1 ? 0 : activeIndex;
-  const current = insights[safeIndex];
+  const current = activeIndex === -1 ? insights[0] : insights[activeIndex];
   const displayLabel = current.editedLabel ?? current.label;
   const isOnCanvas = current.gridReviewState === "accepted" && current.accepted;
   const isAccepted = current.gridReviewState === "accepted";
@@ -116,77 +107,39 @@ export function EvidencePanel({
     setShowScopePrompt(false);
   }
 
-  function handleNavigate(direction: "prev" | "next") {
-    const nextIndex = direction === "prev" ? safeIndex - 1 : safeIndex + 1;
-    if (nextIndex < 0 || nextIndex >= insights.length) return;
-    onInsightSelect(insights[nextIndex].id);
-  }
-
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
       <div className="shrink-0 border-b px-4 py-3">
-        <div className="mb-1.5 flex items-center justify-between gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Insight {safeIndex + 1} of {insights.length}
-          </span>
+        <div className="flex items-start justify-between gap-2">
+          {isEditing ? (
+            <Textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="min-h-[4.5rem] flex-1 resize-none text-sm"
+              autoFocus
+            />
+          ) : (
+            <p
+              className={cn(
+                "line-clamp-3 flex-1 text-sm font-medium leading-5",
+                isRejected && "text-muted-foreground line-through"
+              )}
+              title={displayLabel}
+            >
+              {displayLabel}
+            </p>
+          )}
           {isOnCanvas && (
             <Badge
               variant="outline"
-              className="border-emerald-200 bg-emerald-100/80 text-[10px] text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200"
+              className="shrink-0 border-emerald-200 bg-emerald-100/80 text-[10px] text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200"
             >
               On canvas
             </Badge>
           )}
         </div>
-
-        {isEditing ? (
-          <Textarea
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            className="min-h-[4.5rem] resize-none text-sm"
-            autoFocus
-          />
-        ) : (
-          <p
-            className={cn(
-              "line-clamp-3 text-sm font-medium leading-5",
-              isRejected && "text-muted-foreground line-through"
-            )}
-            title={displayLabel}
-          >
-            {displayLabel}
-          </p>
-        )}
       </div>
-
-      {/* Insight nav */}
-      {insights.length > 1 && (
-        <div className="flex shrink-0 items-center justify-between border-b px-3 py-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 text-xs"
-            disabled={safeIndex === 0}
-            onClick={() => handleNavigate("prev")}
-          >
-            <ChevronLeft className="size-3.5" aria-hidden="true" />
-            Prev
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 text-xs"
-            disabled={safeIndex === insights.length - 1}
-            onClick={() => handleNavigate("next")}
-          >
-            Next
-            <ChevronRight className="size-3.5" aria-hidden="true" />
-          </Button>
-        </div>
-      )}
 
       {/* Scrollable evidence quotes */}
       <ScrollArea className="min-h-0 flex-1">

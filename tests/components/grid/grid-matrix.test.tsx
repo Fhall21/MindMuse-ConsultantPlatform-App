@@ -6,6 +6,7 @@ import {
   SortableContext,
 } from "@dnd-kit/sortable";
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { GridCell } from "@/components/grid/grid-cell";
 import { GridMatrix } from "@/components/grid/grid-matrix";
@@ -45,6 +46,17 @@ const completeCell: GridCellData = {
   generatedAt: "2026-01-01T00:00:00Z",
 };
 
+const completeCellB: GridCellData = {
+  id: "cell-b",
+  meetingId: "meeting-1",
+  columnId: "column-b",
+  status: "complete",
+  confidence: "medium",
+  insightCount: 1,
+  quoteCount: 2,
+  generatedAt: "2026-01-01T00:00:00Z",
+};
+
 const insight: InsightWithLinks = {
   id: "insight-1",
   label: "Shared base label",
@@ -60,14 +72,31 @@ const insight: InsightWithLinks = {
   quotes: [],
 };
 
+const insightB: InsightWithLinks = {
+  id: "insight-2",
+  label: "Other base label",
+  description: null,
+  junctionId: "junction-2",
+  editedLabel: "Other cell label",
+  gridReviewState: "pending",
+  accepted: false,
+  rejected: false,
+  gridCellId: "cell-b",
+  gridColumnId: "column-b",
+  connectedColumns: [],
+  quotes: [],
+};
+
 function renderMatrix(overrides: Partial<React.ComponentProps<typeof GridMatrix>> = {}) {
   const props: React.ComponentProps<typeof GridMatrix> = {
     columns,
     meetings: [{ id: "meeting-1", title: "Leadership interview" }],
     cells: [completeCell],
+    insightsByCellId: new Map([["cell-a", [insight]]]),
     selectedCellId: "cell-a",
-    selectedCellInsights: [insight],
+    selectedInsightId: null,
     onCellSelect: vi.fn(),
+    onInsightSelect: vi.fn(),
     onInsightReview: vi.fn(),
     onColumnDelete: vi.fn(),
     ...overrides,
@@ -91,7 +120,8 @@ function renderMatrix(overrides: Partial<React.ComponentProps<typeof GridMatrix>
 }
 
 describe("GridMatrix", () => {
-  it("orders question headers, freezes meeting column, and deletes a column", () => {
+  it("orders question headers, freezes meeting column, and deletes a column", async () => {
+    const user = userEvent.setup();
     const onColumnDelete = vi.fn();
     renderMatrix({ onColumnDelete });
 
@@ -101,11 +131,12 @@ describe("GridMatrix", () => {
     expect(headers[1]).toHaveTextContent("1. How safe do people feel to speak up?");
     expect(headers[2]).toHaveTextContent("2. Where is support breaking down?");
 
-    fireEvent.click(
+    await user.click(
       screen.getByRole("button", {
-        name: "Delete column: How safe do people feel to speak up?",
+        name: "Column actions: How safe do people feel to speak up?",
       })
     );
+    await user.click(await screen.findByRole("menuitem", { name: "Delete column" }));
     expect(onColumnDelete).toHaveBeenCalledWith("column-a");
   });
 
@@ -137,6 +168,29 @@ describe("GridMatrix", () => {
     );
   });
 
+  it("shows insight labels in non-selected cells", () => {
+    renderMatrix({
+      cells: [completeCell, completeCellB],
+      insightsByCellId: new Map([
+        ["cell-a", [insight]],
+        ["cell-b", [insightB]],
+      ]),
+      selectedCellId: "cell-a",
+    });
+
+    expect(screen.getByText("Cell-specific label")).toBeInTheDocument();
+    expect(screen.getByText("Other cell label")).toBeInTheDocument();
+  });
+
+  it("fires onInsightSelect when an insight row is clicked", () => {
+    const onInsightSelect = vi.fn();
+    renderMatrix({ onInsightSelect });
+
+    fireEvent.click(screen.getByText("Cell-specific label"));
+
+    expect(onInsightSelect).toHaveBeenCalledWith("cell-a", "insight-1");
+  });
+
   it("renders missing intersections without inventing selectable cells", () => {
     renderMatrix({ cells: [] });
 
@@ -158,7 +212,9 @@ describe("GridCell", () => {
           cell={{ ...completeCell, status }}
           insights={[]}
           isSelected={false}
+          selectedInsightId={null}
           onSelect={vi.fn()}
+          onInsightSelect={vi.fn()}
           onInsightReview={vi.fn()}
         />
       </TooltipProvider>
@@ -176,7 +232,9 @@ describe("GridCell", () => {
           cell={{ ...completeCell, status: "failed" }}
           insights={[]}
           isSelected={false}
+          selectedInsightId={null}
           onSelect={onSelect}
+          onInsightSelect={vi.fn()}
           onInsightReview={vi.fn()}
           onRetry={onRetry}
         />
@@ -195,6 +253,8 @@ describe("InsightCandidate", () => {
       <TooltipProvider>
         <InsightCandidate
           insight={{ ...insight, gridReviewState: "accepted", accepted: true }}
+          isSelected={false}
+          onSelect={vi.fn()}
           onAccept={vi.fn()}
           onReject={vi.fn()}
         />
@@ -210,6 +270,8 @@ describe("InsightCandidate", () => {
       <TooltipProvider>
         <InsightCandidate
           insight={{ ...insight, gridReviewState: "rejected", rejected: true }}
+          isSelected={false}
+          onSelect={vi.fn()}
           onAccept={vi.fn()}
           onReject={vi.fn()}
         />

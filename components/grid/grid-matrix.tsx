@@ -9,8 +9,14 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { GripVertical, X } from "lucide-react";
+import { GripVertical, MoreHorizontal, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -37,9 +43,11 @@ export interface GridMatrixProps {
   columns: GridColumn[];
   meetings: GridMeeting[];
   cells: GridCellData[];
+  insightsByCellId: Map<string, InsightWithLinks[]>;
   selectedCellId: string | null;
-  selectedCellInsights: InsightWithLinks[];
+  selectedInsightId: string | null;
   onCellSelect: (cellId: string) => void;
+  onInsightSelect: (cellId: string, insightId: string) => void;
   onInsightReview: (
     insightId: string,
     state: GridReviewState,
@@ -48,17 +56,20 @@ export interface GridMatrixProps {
     editScope?: "cell" | "all"
   ) => void;
   onColumnDelete: (columnId: string) => void;
-  onCellRetry?: (cellId: string) => void;
+  onColumnRegenerate?: (columnId: string) => void;
+  onCellRetry?: (meetingId: string) => void;
 }
 
 function SortableQuestionHeader({
   column,
   index,
   onDelete,
+  onRegenerate,
 }: {
   column: GridColumn;
   index: number;
   onDelete: () => void;
+  onRegenerate?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: column.id });
@@ -91,24 +102,43 @@ function SortableQuestionHeader({
         <TooltipContent side="bottom">{column.question}</TooltipContent>
       </Tooltip>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <Button
             type="button"
             variant="ghost"
             size="icon-xs"
             className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/header:opacity-100"
-            aria-label={`Delete column: ${column.question}`}
+            aria-label={`Column actions: ${column.question}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <MoreHorizontal aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {onRegenerate ? (
+            <DropdownMenuItem
+              onClick={(event) => {
+                event.stopPropagation();
+                onRegenerate();
+              }}
+            >
+              <RotateCcw aria-hidden="true" />
+              Regenerate
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            variant="destructive"
             onClick={(event) => {
               event.stopPropagation();
               onDelete();
             }}
           >
-            <X aria-hidden="true" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Delete column</TooltipContent>
-      </Tooltip>
+            <Trash2 aria-hidden="true" />
+            Delete column
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -117,11 +147,14 @@ export function GridMatrix({
   columns,
   meetings,
   cells,
+  insightsByCellId,
   selectedCellId,
-  selectedCellInsights,
+  selectedInsightId,
   onCellSelect,
+  onInsightSelect,
   onInsightReview,
   onColumnDelete,
+  onColumnRegenerate,
   onCellRetry,
 }: GridMatrixProps) {
   const orderedColumns = useMemo(
@@ -171,6 +204,11 @@ export function GridMatrix({
             column={gridColumn}
             index={index}
             onDelete={() => onColumnDelete(gridColumn.id)}
+            onRegenerate={
+              onColumnRegenerate
+                ? () => onColumnRegenerate(gridColumn.id)
+                : undefined
+            }
           />
         ),
         cell: ({ row }) => {
@@ -186,11 +224,13 @@ export function GridMatrix({
           return (
             <GridCell
               cell={cell}
-              insights={
-                selectedCellId === cell.id ? selectedCellInsights : []
-              }
+              insights={insightsByCellId.get(cell.id) ?? []}
               isSelected={selectedCellId === cell.id}
+              selectedInsightId={selectedInsightId}
               onSelect={() => onCellSelect(cell.id)}
+              onInsightSelect={(insightId) =>
+                onInsightSelect(cell.id, insightId)
+              }
               onInsightReview={(insightId, state, editedText, editScope) =>
                 onInsightReview(
                   insightId,
@@ -201,7 +241,7 @@ export function GridMatrix({
                 )
               }
               onRetry={
-                onCellRetry ? () => onCellRetry(cell.id) : undefined
+                onCellRetry ? () => onCellRetry(cell.meetingId) : undefined
               }
             />
           );
@@ -209,13 +249,16 @@ export function GridMatrix({
       })),
     ],
     [
+      insightsByCellId,
       onCellRetry,
       onCellSelect,
       onColumnDelete,
+      onColumnRegenerate,
       onInsightReview,
+      onInsightSelect,
       orderedColumns,
       selectedCellId,
-      selectedCellInsights,
+      selectedInsightId,
     ]
   );
 

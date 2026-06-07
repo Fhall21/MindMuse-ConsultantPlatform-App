@@ -55,6 +55,8 @@ export interface QuoteLink {
   spanStart: number;
   spanEnd: number;
   relevanceStrength: RelevanceStrength | null;
+  contextBefore: string | null;
+  contextAfter: string | null;
 }
 
 export interface InsightWithLinks {
@@ -68,6 +70,7 @@ export interface InsightWithLinks {
   rejected: boolean;
   gridCellId: string;
   gridColumnId: string;
+  createdAt?: string;
   connectedColumns: {
     columnId: string;
     question: string;

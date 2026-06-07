@@ -2,7 +2,6 @@
 
 import { memo, type MouseEvent } from "react";
 import { Check, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -14,6 +13,8 @@ import type { InsightWithLinks } from "@/types/grid";
 
 export interface InsightCandidateProps {
   insight: InsightWithLinks;
+  isSelected: boolean;
+  onSelect: () => void;
   onAccept: () => void;
   onReject: () => void;
   onEdit?: (text: string, scope: "cell" | "all") => void;
@@ -25,22 +26,40 @@ function stopCellSelection(event: MouseEvent<HTMLButtonElement>) {
 
 export const InsightCandidate = memo(function InsightCandidate({
   insight,
+  isSelected,
+  onSelect,
   onAccept,
   onReject,
 }: InsightCandidateProps) {
   const displayLabel = insight.editedLabel ?? insight.label;
   const isAccepted = insight.gridReviewState === "accepted";
   const isRejected = insight.gridReviewState === "rejected";
+  const isOnCanvas = isAccepted && insight.accepted;
+  const quoteCount = insight.quotes.length;
+  const quoteLabel = `${quoteCount} ${quoteCount === 1 ? "quote" : "quotes"}`;
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={cn(
-        "group/insight flex min-w-0 items-start gap-2 px-3 py-2.5 transition-colors",
-        isAccepted &&
-          "bg-emerald-50/70 dark:bg-emerald-950/20",
+        "group/insight flex min-w-0 cursor-pointer items-start gap-2 px-3 py-2.5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+        isSelected &&
+          "bg-primary/[0.035] ring-2 ring-inset ring-primary/70",
+        isAccepted && "bg-emerald-50/70 dark:bg-emerald-950/20",
         isRejected && "bg-muted/35 opacity-60"
       )}
       data-review-state={insight.gridReviewState}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect();
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onSelect();
+      }}
     >
       <span
         className={cn(
@@ -59,63 +78,70 @@ export const InsightCandidate = memo(function InsightCandidate({
         >
           {displayLabel}
         </p>
-        {isAccepted && (
-          <Badge
-            variant="outline"
-            className="mt-1.5 border-emerald-200 bg-emerald-100/80 text-[10px] text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200"
-          >
-            Accepted
-          </Badge>
-        )}
-        {isRejected && (
-          <Badge variant="outline" className="mt-1.5 text-[10px] text-muted-foreground">
-            Rejected
-          </Badge>
-        )}
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
+          <span>{quoteLabel}</span>
+          {isOnCanvas && (
+            <span className="rounded border border-emerald-200 bg-emerald-100/80 px-1 py-px text-[10px] text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
+              On canvas
+            </span>
+          )}
+          {isAccepted && (
+            <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
+              Accepted
+            </span>
+          )}
+          {isRejected && (
+            <span className="text-[10px] text-muted-foreground">Rejected</span>
+          )}
+        </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1">
-        {!isAccepted && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="border border-transparent text-muted-foreground hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:border-emerald-900/60 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300"
-                aria-label={`Accept insight: ${displayLabel}`}
-                onClick={(event) => {
-                  stopCellSelection(event);
-                  onAccept();
-                }}
-              >
-                <Check aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Accept insight</TooltipContent>
-          </Tooltip>
-        )}
+      <div className="flex w-14 shrink-0 items-center justify-end gap-0.5">
+        <div className="flex size-6 items-center justify-center">
+          {!isAccepted ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="border border-transparent text-muted-foreground opacity-0 transition-opacity hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 group-hover/insight:opacity-100 focus-visible:opacity-100 dark:hover:border-emerald-900/60 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300"
+                  aria-label={`Accept insight: ${displayLabel}`}
+                  onClick={(event) => {
+                    stopCellSelection(event);
+                    onAccept();
+                  }}
+                >
+                  <Check aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Accept insight</TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
 
-        {!isRejected && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="border border-transparent text-muted-foreground hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                aria-label={`Reject insight: ${displayLabel}`}
-                onClick={(event) => {
-                  stopCellSelection(event);
-                  onReject();
-                }}
-              >
-                <X aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Reject insight</TooltipContent>
-          </Tooltip>
-        )}
+        <div className="flex size-6 items-center justify-center">
+          {!isRejected ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="border border-transparent text-muted-foreground opacity-0 transition-opacity hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive group-hover/insight:opacity-100 focus-visible:opacity-100"
+                  aria-label={`Reject insight: ${displayLabel}`}
+                  onClick={(event) => {
+                    stopCellSelection(event);
+                    onReject();
+                  }}
+                >
+                  <X aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Reject insight</TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
       </div>
     </div>
   );

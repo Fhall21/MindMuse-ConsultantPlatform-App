@@ -21,7 +21,9 @@ export interface GridCellProps {
   cell: GridCellData;
   insights: InsightWithLinks[];
   isSelected: boolean;
+  selectedInsightId: string | null;
   onSelect: () => void;
+  onInsightSelect: (insightId: string) => void;
   onInsightReview: (
     insightId: string,
     state: GridReviewState,
@@ -54,7 +56,9 @@ export const GridCell = memo(function GridCell({
   cell,
   insights,
   isSelected,
+  selectedInsightId,
   onSelect,
+  onInsightSelect,
   onInsightReview,
   onRetry,
 }: GridCellProps) {
@@ -133,6 +137,8 @@ export const GridCell = memo(function GridCell({
                 <InsightCandidate
                   key={insight.junctionId}
                   insight={insight}
+                  isSelected={selectedInsightId === insight.id}
+                  onSelect={() => onInsightSelect(insight.id)}
                   onAccept={() =>
                     onInsightReview(insight.id, "accepted")
                   }
@@ -146,11 +152,7 @@ export const GridCell = memo(function GridCell({
               ))
             ) : (
               <div className="px-3 py-4 text-xs text-muted-foreground">
-                {cell.insightCount > 0
-                  ? `${cell.insightCount} ${
-                      cell.insightCount === 1 ? "insight" : "insights"
-                    }`
-                  : "No insight candidates"}
+                No insight candidates
               </div>
             )}
           </div>

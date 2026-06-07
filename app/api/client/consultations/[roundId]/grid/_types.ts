@@ -52,4 +52,6 @@ export type QuoteLinkRow = {
   spanStart: number;
   spanEnd: number;
   relevanceStrength: "strong_match" | "partial_support" | "context" | "weak" | null;
+  contextBefore: string | null;
+  contextAfter: string | null;
 };

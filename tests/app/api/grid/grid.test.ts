@@ -679,11 +679,25 @@ describe("Analysis Grid API routes", () => {
 
   it("loads connected columns and quotes in batch queries", async () => {
     const secondInsightId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa";
+    const earlierCreatedAt = "2026-01-01T10:00:00.000Z";
+    const laterCreatedAt = "2026-01-02T10:00:00.000Z";
     queueResults(
       [{ id: CELL_ID }],
       [
-        { id: INSIGHT_ID, gridCellId: CELL_ID },
-        { id: secondInsightId, gridCellId: CELL_ID },
+        {
+          id: INSIGHT_ID,
+          label: "First insight",
+          gridCellId: CELL_ID,
+          gridReviewState: "pending",
+          createdAt: earlierCreatedAt,
+        },
+        {
+          id: secondInsightId,
+          label: "Second insight",
+          gridCellId: CELL_ID,
+          gridReviewState: "accepted",
+          createdAt: laterCreatedAt,
+        },
       ],
       [
         {
@@ -701,16 +715,108 @@ describe("Analysis Grid API routes", () => {
           accepted: true,
         },
       ],
-      []
+      [
+        {
+          insightId: INSIGHT_ID,
+          id: QUOTE_ID,
+          exactText: "We struggled.",
+          speakerLabel: "Alex",
+          spanStart: 0,
+          spanEnd: 13,
+          relevanceStrength: "strong_match",
+          contextBefore: "Alex: ",
+          contextAfter: " with onboarding.",
+        },
+      ]
     );
 
     const response = await getCellInsights(request(), cellParams());
     const responseBody = await body(response);
+    const insights = responseBody.insights as Array<{
+      id: string;
+      createdAt: string;
+      quotes: Array<{
+        contextBefore: string | null;
+        contextAfter: string | null;
+      }>;
+    }>;
 
     expect(response.status).toBe(200);
-    expect(responseBody.insights).toHaveLength(2);
+    expect(insights).toHaveLength(2);
+    expect(insights.map((insight) => insight.id)).toEqual([
+      INSIGHT_ID,
+      secondInsightId,
+    ]);
+    expect(insights[0]?.createdAt).toBe(earlierCreatedAt);
+    expect(insights[1]?.createdAt).toBe(laterCreatedAt);
+    expect(insights[0]?.quotes[0]).toMatchObject({
+      contextBefore: "Alex: ",
+      contextAfter: " with onboarding.",
+    });
     expect(dbMock.state.operations.filter((operation) => operation.kind === "select"))
       .toHaveLength(4);
+  });
+
+  it("returns round insights in stable createdAt order with quote context", async () => {
+    const secondInsightId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa";
+    const earlierCreatedAt = "2026-01-01T08:00:00.000Z";
+    const laterCreatedAt = "2026-01-03T08:00:00.000Z";
+    queueResults(
+      [
+        {
+          id: INSIGHT_ID,
+          label: "Earlier",
+          gridCellId: CELL_ID,
+          gridColumnId: COLUMN_ID,
+          gridReviewState: "pending",
+          createdAt: earlierCreatedAt,
+        },
+        {
+          id: secondInsightId,
+          label: "Later",
+          gridCellId: CELL_ID,
+          gridColumnId: COLUMN_ID,
+          gridReviewState: "pending",
+          createdAt: laterCreatedAt,
+        },
+      ],
+      [],
+      [
+        {
+          insightId: secondInsightId,
+          id: QUOTE_ID,
+          exactText: "Key quote",
+          speakerLabel: "Sam",
+          spanStart: 10,
+          spanEnd: 19,
+          relevanceStrength: "partial_support",
+          contextBefore: "Before ",
+          contextAfter: " after",
+        },
+      ]
+    );
+
+    const response = await getRoundInsights(request(), roundParams());
+    const responseBody = await body(response);
+    const insights = responseBody.insights as Array<{
+      id: string;
+      createdAt: string;
+      quotes: Array<{
+        contextBefore: string | null;
+        contextAfter: string | null;
+      }>;
+    }>;
+
+    expect(response.status).toBe(200);
+    expect(insights.map((insight) => insight.id)).toEqual([
+      INSIGHT_ID,
+      secondInsightId,
+    ]);
+    expect(insights[0]?.createdAt).toBe(earlierCreatedAt);
+    expect(insights[1]?.quotes[0]).toMatchObject({
+      contextBefore: "Before ",
+      contextAfter: " after",
+    });
   });
 
   it("returns all round insights and validates column suggestions", async () => {

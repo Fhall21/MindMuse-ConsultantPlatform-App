@@ -8,6 +8,7 @@
     "dev:all": "concurrently -n next,ai -c blue,green \"bun run dev\" \"bun run dev:ai\"",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run db/migrate.ts",
+    "repair:grid-quote-lifecycle": "bun run db/scripts/repair-grid-quote-lifecycle.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "build": "next build",

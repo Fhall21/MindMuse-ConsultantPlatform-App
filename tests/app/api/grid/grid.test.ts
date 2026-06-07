@@ -13,6 +13,7 @@ type Operation = {
   kind: "select" | "insert" | "update" | "delete";
   table?: unknown;
   payload?: unknown;
+  orderBy?: unknown[];
 };
 
 const authContextMock = vi.hoisted(() => ({
@@ -31,12 +32,17 @@ const auditMock = vi.hoisted(() => ({
   insertAuditLogEntry: vi.fn(),
 }));
 
+const lifecycleMock = vi.hoisted(() => ({
+  syncInsightReviewLifecycle: vi.fn(),
+}));
+
 const dbMock = vi.hoisted(() => {
   type QueryKind = "select" | "insert" | "update" | "delete";
   type QueryOperation = {
     kind: QueryKind;
     table?: unknown;
     payload?: unknown;
+    orderBy?: unknown[];
   };
 
   const state = {
@@ -65,7 +71,8 @@ const dbMock = vi.hoisted(() => {
       return this;
     }
 
-    orderBy() {
+    orderBy(...expressions: unknown[]) {
+      this.operation.orderBy = expressions;
       return this;
     }
 
@@ -129,6 +136,7 @@ vi.mock("@/lib/api/route-helpers", async (importOriginal) => ({
   forwardJsonToAi: routeHelpersMock.forwardJsonToAi,
 }));
 vi.mock("@/lib/data/audit-log", () => auditMock);
+vi.mock("@/lib/data/insight-review-lifecycle", () => lifecycleMock);
 vi.mock("@/db/client", () => ({ db: dbMock.db }));
 vi.mock("@/lib/env", () => ({
   getAiServiceUrl: vi.fn(() => "http://ai.example.com"),
@@ -216,6 +224,10 @@ beforeEach(() => {
     userId: USER_ID,
   });
   auditMock.insertAuditLogEntry.mockResolvedValue(undefined);
+  lifecycleMock.syncInsightReviewLifecycle.mockResolvedValue({
+    hasAnyAccepted: false,
+    areAllRejected: false,
+  });
   vi.stubGlobal("fetch", vi.fn());
 });
 
@@ -552,12 +564,6 @@ describe("Analysis Grid API routes", () => {
       [{ id: CELL_ID, consultationId: ROUND_ID, columnId: COLUMN_ID }],
       [{ id: JUNCTION_ID, gridColumnId: COLUMN_ID }],
       [],
-      [{ accepted: true, rejected: false }],
-      [],
-      [{ quoteId: QUOTE_ID }],
-      [],
-      [],
-      [],
       [{ id: INSIGHT_ID, junctionId: JUNCTION_ID, description: null }],
       [],
       [],
@@ -572,19 +578,18 @@ describe("Analysis Grid API routes", () => {
     );
 
     expect(acceptedResponse.status).toBe(200);
-    expect(operations("update", insights).at(-1)?.payload).toMatchObject({
-      accepted: true,
-      rejected: false,
-    });
-    expect(operations("update", quotes)[0]?.payload).toMatchObject({
-      status: "approved",
-      approvedBy: USER_ID,
-    });
-    expect(operations("update", quoteInsightLinks)[0]?.payload).toMatchObject({
-      linkType: "durable",
-    });
+    expect(lifecycleMock.syncInsightReviewLifecycle).toHaveBeenCalledWith(
+      dbMock.db,
+      {
+        insightId: INSIGHT_ID,
+        userId: USER_ID,
+        state: "accepted",
+        scope: { kind: "junction", junctionId: JUNCTION_ID },
+      }
+    );
     expect(operations("insert", auditLog)).toHaveLength(1);
 
+    lifecycleMock.syncInsightReviewLifecycle.mockClear();
     dbMock.state.operations.length = 0;
     queueResults(
       [{
@@ -595,12 +600,6 @@ describe("Analysis Grid API routes", () => {
       }],
       [{ id: CELL_ID, consultationId: ROUND_ID, columnId: COLUMN_ID }],
       [{ id: JUNCTION_ID, gridColumnId: COLUMN_ID }],
-      [],
-      [
-        { accepted: false, rejected: false },
-        { accepted: false, rejected: true },
-      ],
-      [],
       [],
       [{ id: INSIGHT_ID, junctionId: JUNCTION_ID, description: null }],
       [],
@@ -616,9 +615,15 @@ describe("Analysis Grid API routes", () => {
     );
 
     expect(reversalResponse.status).toBe(200);
-    expect(operations("update", insights).at(-1)?.payload).toMatchObject({
-      rejected: false,
-    });
+    expect(lifecycleMock.syncInsightReviewLifecycle).toHaveBeenCalledWith(
+      dbMock.db,
+      {
+        insightId: INSIGHT_ID,
+        userId: USER_ID,
+        state: "pending",
+        scope: { kind: "junction", junctionId: JUNCTION_ID },
+      }
+    );
   });
 
   it("supports cell-local and global label edits", async () => {
@@ -633,10 +638,8 @@ describe("Analysis Grid API routes", () => {
       [{ id: JUNCTION_ID, gridColumnId: COLUMN_ID }],
       [],
       [],
+      [{ id: INSIGHT_ID, editedLabel: "Cell label", description: null }],
       [],
-      [{ accepted: false, rejected: false }],
-      [],
-      [{ id: INSIGHT_ID, editedLabel: "Cell label" }],
       [],
       []
     );
@@ -655,6 +658,7 @@ describe("Analysis Grid API routes", () => {
       gridReviewState: "edited",
     });
 
+    lifecycleMock.syncInsightReviewLifecycle.mockClear();
     dbMock.state.operations.length = 0;
     queueResults(
       [{
@@ -667,10 +671,8 @@ describe("Analysis Grid API routes", () => {
       [{ id: JUNCTION_ID, gridColumnId: COLUMN_ID }],
       [],
       [],
+      [{ id: INSIGHT_ID, junctionId: JUNCTION_ID, description: null }],
       [],
-      [{ accepted: false, rejected: false }],
-      [],
-      [{ id: INSIGHT_ID, label: "Global label" }],
       [],
       []
     );
@@ -779,6 +781,14 @@ describe("Analysis Grid API routes", () => {
     expect(insights[0]?.quoteConfidence).toBe("high");
     expect(dbMock.state.operations.filter((operation) => operation.kind === "select"))
       .toHaveLength(5);
+    expect(
+      dbMock.state.operations.find(
+        (operation) =>
+          operation.kind === "select" &&
+          operation.table === gridCellInsights &&
+          operation.orderBy
+      )?.orderBy
+    ).toHaveLength(2);
   });
 
   it("returns round insights in stable createdAt order with quote context", async () => {
@@ -844,6 +854,14 @@ describe("Analysis Grid API routes", () => {
       contextBefore: "Before ",
       contextAfter: " after",
     });
+    expect(
+      dbMock.state.operations.find(
+        (operation) =>
+          operation.kind === "select" &&
+          operation.table === gridCellInsights &&
+          operation.orderBy
+      )?.orderBy
+    ).toHaveLength(2);
   });
 
   it("returns all round insights and validates column suggestions", async () => {
@@ -932,6 +950,9 @@ describe("Analysis Grid API routes", () => {
       contextBefore: expect.any(String),
       contextAfter: expect.any(String),
       status: "suggested",
+    });
+    expect(operations("insert", quoteInsightLinks)[0]?.payload).toMatchObject({
+      linkType: "provisional",
     });
     expect(operations("update", gridCells).at(-1)?.payload).toMatchObject({
       confidence: "high",

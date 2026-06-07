@@ -69,6 +69,10 @@ export function buildGridInsightsResponse(
 
     return {
       ...row,
+      createdAt:
+        row.createdAt instanceof Date
+          ? row.createdAt.toISOString()
+          : row.createdAt,
       gridReviewState: row.gridReviewState ?? "pending",
       connectedColumns: rowConnectedCols,
       quotes: rowQuotes,

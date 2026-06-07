@@ -212,7 +212,13 @@ export async function composeCanvasState(
     .select({ insight: insights, meetingTitle: meetings.title })
     .from(insights)
     .innerJoin(meetings, eq(insights.meetingId, meetings.id))
-    .where(and(eq(meetings.consultationId, roundId), eq(meetings.userId, userId)))
+    .where(
+      and(
+        eq(meetings.consultationId, roundId),
+        eq(meetings.userId, userId),
+        eq(insights.accepted, true)
+      )
+    )
     .orderBy(asc(meetings.createdAt), asc(insights.createdAt));
 
   const insightNodes: CanvasNode[] = insightRows.map(({ insight, meetingTitle }) => ({

@@ -47,7 +47,7 @@ export async function GET(
       .innerJoin(insights, eq(insights.id, gridCellInsights.insightId))
       .innerJoin(gridColumns, eq(gridColumns.id, gridCellInsights.gridColumnId))
       .where(eq(gridColumns.consultationId, roundId))
-      .orderBy(asc(gridCellInsights.createdAt));
+      .orderBy(asc(gridCellInsights.createdAt), asc(gridCellInsights.id));
 
     const insightIds = [...new Set(junctionRows.map((r) => r.id))];
     const meetingIds = [

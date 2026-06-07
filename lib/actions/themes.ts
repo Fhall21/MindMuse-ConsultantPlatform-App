@@ -1,6 +1,5 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { insightDecisionLogs, insights } from "@/db/schema";
 import {
@@ -12,6 +11,7 @@ import {
   requireOwnedMeeting,
   requireOwnedTheme,
 } from "@/lib/data/ownership";
+import { syncInsightReviewLifecycle } from "@/lib/data/insight-review-lifecycle";
 import { AUDIT_ACTIONS } from "./audit-actions";
 import { emitAuditEvent } from "./audit";
 
@@ -127,20 +127,12 @@ export async function acceptTheme(
     );
 
     await db.transaction(async (tx) => {
-      const updated = await tx
-        .update(insights)
-        .set({ accepted: true })
-        .where(
-          and(
-            eq(insights.id, theme.id),
-            eq(insights.meetingId, normalizedMeetingId)
-          )
-        )
-        .returning({ id: insights.id });
-
-      if (updated.length === 0) {
-        throw new Error("Theme no longer exists in this meeting.");
-      }
+      await syncInsightReviewLifecycle(tx, {
+        insightId: theme.id,
+        userId,
+        state: "accepted",
+        scope: { kind: "all" },
+      });
 
       await tx.insert(insightDecisionLogs).values({
         userId,
@@ -199,9 +191,8 @@ export async function rejectTheme(
     throw new Error("A rejection rationale is required once the meeting is locked.");
   }
 
-  const [logRecord] = await db
-    .insert(insightDecisionLogs)
-    .values({
+  await db.transaction(async (tx) => {
+    await tx.insert(insightDecisionLogs).values({
       userId,
       meetingId: normalizedMeetingId,
       insightId: id,
@@ -209,19 +200,15 @@ export async function rejectTheme(
       consultationId: meeting.consultationId ?? null,
       decisionType: "reject",
       rationale: trimmedRationale,
-    })
-    .returning({ id: insightDecisionLogs.id });
+    });
 
-  // Soft-delete the theme so it persists for the Rejected tab and audit trail
-  try {
-    await db
-      .update(insights)
-      .set({ rejected: true, rejectedAt: new Date() })
-      .where(and(eq(insights.id, id), eq(insights.meetingId, normalizedMeetingId)));
-  } catch (error) {
-    await db.delete(insightDecisionLogs).where(eq(insightDecisionLogs.id, logRecord.id));
-    throw error;
-  }
+    await syncInsightReviewLifecycle(tx, {
+      insightId: id,
+      userId,
+      state: "rejected",
+      scope: { kind: "all" },
+    });
+  });
 
   // Emit audit event with decision metadata
   await emitAuditEvent({
@@ -308,19 +295,23 @@ export async function restoreTheme(
   const normalizedMeetingId = normalizeRequiredId(meetingId, "Meeting ID");
   const { meeting, theme } = await requireOwnedTheme(id, normalizedMeetingId, userId);
 
-  await db
-    .update(insights)
-    .set({ rejected: false, rejectedAt: null, accepted: false })
-    .where(and(eq(insights.id, id), eq(insights.meetingId, normalizedMeetingId)));
+  await db.transaction(async (tx) => {
+    await syncInsightReviewLifecycle(tx, {
+      insightId: id,
+      userId,
+      state: "pending",
+      scope: { kind: "all" },
+    });
 
-  await db.insert(insightDecisionLogs).values({
-    userId,
-    meetingId: normalizedMeetingId,
-    insightId: id,
-    insightLabel: theme.label,
-    consultationId: meeting.consultationId ?? null,
-    decisionType: "restore",
-    rationale: null,
+    await tx.insert(insightDecisionLogs).values({
+      userId,
+      meetingId: normalizedMeetingId,
+      insightId: id,
+      insightLabel: theme.label,
+      consultationId: meeting.consultationId ?? null,
+      decisionType: "restore",
+      rationale: null,
+    });
   });
 
   await emitAuditEvent({

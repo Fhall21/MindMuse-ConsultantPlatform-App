@@ -68,7 +68,7 @@ export async function GET(
       .from(gridCellInsights)
       .innerJoin(insights, eq(insights.id, gridCellInsights.insightId))
       .where(eq(gridCellInsights.gridCellId, cellId))
-      .orderBy(asc(gridCellInsights.createdAt));
+      .orderBy(asc(gridCellInsights.createdAt), asc(gridCellInsights.id));
 
     const insightIds = junctionRows.map((r) => r.id);
 

@@ -1,11 +1,12 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { insightDecisionLogs, insights, meetings } from "@/db/schema";
+import { insightDecisionLogs, insights } from "@/db/schema";
 import {
   scheduleLearningAnalysis,
   getThemeLearningSignalCountForUser,
 } from "@/lib/data/ai-learnings";
 import { requireOwnedMeeting, requireOwnedTheme } from "@/lib/data/ownership";
+import { syncInsightReviewLifecycle } from "@/lib/data/insight-review-lifecycle";
 import { AUDIT_ACTIONS } from "@/lib/actions/audit-actions";
 import { emitAuditEvent } from "@/lib/actions/audit";
 import { dispatchToolToFastApi } from "./tool-dispatch";
@@ -164,17 +165,12 @@ export async function acceptInsightForMeeting(params: {
   );
 
   await db.transaction(async (tx) => {
-    const updated = await tx
-      .update(insights)
-      .set({ accepted: true, rejected: false, rejectedAt: null })
-      .where(
-        and(eq(insights.id, theme.id), eq(insights.meetingId, params.meetingId))
-      )
-      .returning({ id: insights.id });
-
-    if (updated.length === 0) {
-      throw new Error("Theme no longer exists in this meeting.");
-    }
+    await syncInsightReviewLifecycle(tx, {
+      insightId: theme.id,
+      userId: params.userId,
+      state: "accepted",
+      scope: { kind: "all" },
+    });
 
     await tx.insert(insightDecisionLogs).values({
       userId: params.userId,
@@ -221,9 +217,8 @@ export async function rejectInsightForMeeting(params: {
     throw new Error("A rejection rationale is required once the meeting is locked.");
   }
 
-  const [logRecord] = await db
-    .insert(insightDecisionLogs)
-    .values({
+  await db.transaction(async (tx) => {
+    await tx.insert(insightDecisionLogs).values({
       userId: params.userId,
       meetingId: params.meetingId,
       insightId: params.insightId,
@@ -231,20 +226,15 @@ export async function rejectInsightForMeeting(params: {
       consultationId: meeting.consultationId ?? null,
       decisionType: "reject",
       rationale: trimmedRationale,
-    })
-    .returning({ id: insightDecisionLogs.id });
+    });
 
-  try {
-    await db
-      .update(insights)
-      .set({ rejected: true, rejectedAt: new Date(), accepted: false })
-      .where(
-        and(eq(insights.id, params.insightId), eq(insights.meetingId, params.meetingId))
-      );
-  } catch (error) {
-    await db.delete(insightDecisionLogs).where(eq(insightDecisionLogs.id, logRecord.id));
-    throw error;
-  }
+    await syncInsightReviewLifecycle(tx, {
+      insightId: params.insightId,
+      userId: params.userId,
+      state: "rejected",
+      scope: { kind: "all" },
+    });
+  });
 
   await emitAuditEvent({
     consultationId: params.meetingId,

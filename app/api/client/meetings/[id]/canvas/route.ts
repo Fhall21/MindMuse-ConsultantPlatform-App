@@ -129,7 +129,8 @@ export async function GET(
       .where(
         and(
           eq(meetings.consultationId, consultationId),
-          eq(meetings.userId, client.userId)
+          eq(meetings.userId, client.userId),
+          eq(insights.accepted, true)
         )
       )
       .orderBy(asc(meetings.createdAt), asc(insights.createdAt));

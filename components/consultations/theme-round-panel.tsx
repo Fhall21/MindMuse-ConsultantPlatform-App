@@ -133,6 +133,10 @@ export function ThemeRoundPanel({ roundId, roundLabel }: ThemeRoundPanelProps) {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["consultations", "round", roundId] }),
       queryClient.invalidateQueries({ queryKey: ["themes", "round-consultations", ...consultationIds] }),
+      queryClient.invalidateQueries({ queryKey: ["quotes"] }),
+      queryClient.invalidateQueries({ queryKey: ["canvas"] }),
+      queryClient.invalidateQueries({ queryKey: ["grid-insights", roundId] }),
+      queryClient.invalidateQueries({ queryKey: ["grid-cells", roundId] }),
     ]);
   }
 

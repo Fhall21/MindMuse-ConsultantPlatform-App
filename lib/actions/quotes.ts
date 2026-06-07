@@ -24,6 +24,11 @@ export type QuoteStatus = "suggested" | "approved" | "rejected";
 export type QuoteSource = "ai" | "manual";
 export type QuoteMaskRule = "role_workgroup" | "redact" | "none";
 export type QuoteLinkType = "durable" | "provisional";
+export type QuoteRelevanceStrength =
+  | "strong_match"
+  | "partial_support"
+  | "context"
+  | "weak";
 
 export interface QuoteRecord {
   id: string;
@@ -51,7 +56,7 @@ export interface QuoteRecord {
     insightLabel: string;
     isPrimary: boolean;
     linkType: QuoteLinkType;
-    relevanceStrength?: "strong_match" | "partial_support" | "context" | "weak" | null;
+    relevanceStrength?: QuoteRelevanceStrength | null;
   }>;
 }
 
@@ -126,7 +131,7 @@ async function loadQuoteWithLinks(quoteId: string): Promise<QuoteRecord | null> 
       insightLabel: link.insightLabel,
       isPrimary: link.isPrimary,
       linkType: link.linkType as QuoteLinkType,
-      relevanceStrength: link.relevanceStrength as any,
+      relevanceStrength: link.relevanceStrength as QuoteRelevanceStrength | null,
     })),
   };
 }
@@ -259,6 +264,7 @@ export async function createQuote(params: CreateQuoteParams): Promise<QuoteRecor
       contextAfter: params.contextAfter ?? contextAfter,
       approvedAt: initialStatus === "approved" ? new Date() : null,
       approvedBy: initialStatus === "approved" ? userId : null,
+      approvalOrigin: initialStatus === "approved" ? "manual" : null,
     })
     .returning({ id: quotes.id });
 
@@ -362,7 +368,7 @@ export async function updateQuoteSpan(params: UpdateQuoteSpanParams): Promise<Qu
 
   await emitAuditEvent({
     consultationId: null,
-    action: "quote.updated" as any,
+    action: AUDIT_ACTIONS.QUOTE_UPDATED,
     entityType: "quote",
     entityId: quote.id,
     metadata: {
@@ -400,6 +406,7 @@ export async function approveQuote(params: ApproveQuoteParams): Promise<QuoteRec
     .update(quotes)
     .set({
       status: "approved",
+      approvalOrigin: "manual",
       approvedAt: new Date(),
       approvedBy: userId,
       rejectionReason: null,

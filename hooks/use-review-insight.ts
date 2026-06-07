@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchJson } from "@/hooks/api";
 import type { GridReviewState, InsightWithLinks } from "@/types/grid";
 
-function applyReviewState(
+export function applyReviewState(
   insights: InsightWithLinks[],
   insightId: string,
   state: GridReviewState
@@ -85,6 +85,8 @@ export function useReviewInsight(roundId: string) {
       queryClient.invalidateQueries({ queryKey: ["cell-insights", cellId] });
       queryClient.invalidateQueries({ queryKey: ["grid-insights", roundId] });
       queryClient.invalidateQueries({ queryKey: ["grid-cells", roundId] });
+      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["canvas"] });
     },
   });
 }

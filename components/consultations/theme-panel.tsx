@@ -183,6 +183,10 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
       queryClient.invalidateQueries({ queryKey: ["meetings", resolvedMeetingId] }),
       queryClient.invalidateQueries({ queryKey: ["themes", "meeting", resolvedMeetingId] }),
       queryClient.invalidateQueries({ queryKey: ["audit_log", "meeting", resolvedMeetingId] }),
+      queryClient.invalidateQueries({ queryKey: ["quotes"] }),
+      queryClient.invalidateQueries({ queryKey: ["canvas"] }),
+      queryClient.invalidateQueries({ queryKey: ["grid-insights"] }),
+      queryClient.invalidateQueries({ queryKey: ["grid-cells"] }),
     ]);
   }
 

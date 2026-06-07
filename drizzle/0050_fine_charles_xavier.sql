@@ -1,0 +1,2 @@
+ALTER TABLE "quotes" ADD COLUMN "approval_origin" text;--> statement-breakpoint
+ALTER TABLE "quotes" ADD CONSTRAINT "quotes_approval_origin_check" CHECK ("quotes"."approval_origin" is null or "quotes"."approval_origin" in ('manual', 'insight'));

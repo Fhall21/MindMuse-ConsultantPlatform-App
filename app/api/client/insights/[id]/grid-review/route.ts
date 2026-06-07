@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   insights,
@@ -13,6 +13,7 @@ import {
   quoteInsightLinks,
 } from "@/db/schema";
 import { buildGridInsightsResponse } from "@/lib/quotes/grid-insight-response";
+import { syncInsightReviewLifecycle } from "@/lib/data/insight-review-lifecycle";
 import { jsonError, requireRouteClient } from "../../../_helpers";
 
 const patchReviewSchema = z.object({
@@ -160,66 +161,12 @@ export async function PATCH(
         newState = "edited";
       }
 
-      const acceptedVal = newState === "accepted";
-      const rejectedVal = newState === "rejected";
-
-      await tx
-        .update(gridCellInsights)
-        .set({
-          gridReviewState: newState,
-          accepted: acceptedVal,
-          rejected: rejectedVal,
-          updatedAt: new Date(),
-        })
-        .where(eq(gridCellInsights.id, junction.id));
-
-      // c. Sync global flags on insights table
-      const allJunctions = await tx
-        .select()
-        .from(gridCellInsights)
-        .where(eq(gridCellInsights.insightId, id));
-
-      const hasAnyAccepted = allJunctions.some((j) => j.accepted);
-      const areAllRejected = allJunctions.length > 0 && allJunctions.every((j) => j.rejected);
-
-      await tx
-        .update(insights)
-        .set({
-          accepted: hasAnyAccepted,
-          rejected: areAllRejected,
-          rejectedAt: areAllRejected ? new Date() : null,
-        })
-        .where(eq(insights.id, id));
-
-      if (newState === "accepted") {
-        const linkedQuotes = await tx
-          .select({ quoteId: quoteInsightLinks.quoteId })
-          .from(quoteInsightLinks)
-          .where(eq(quoteInsightLinks.insightId, id));
-
-        const quoteIds = linkedQuotes.map((link) => link.quoteId);
-        if (quoteIds.length > 0) {
-          await tx
-            .update(quotes)
-            .set({
-              status: "approved",
-              approvedAt: new Date(),
-              approvedBy: client.userId,
-              updatedAt: new Date(),
-            })
-            .where(inArray(quotes.id, quoteIds));
-
-          await tx
-            .update(quoteInsightLinks)
-            .set({ linkType: "durable" })
-            .where(
-              and(
-                eq(quoteInsightLinks.insightId, id),
-                inArray(quoteInsightLinks.quoteId, quoteIds)
-              )
-            );
-        }
-      }
+      await syncInsightReviewLifecycle(tx, {
+        insightId: id,
+        userId: client.userId,
+        state: newState,
+        scope: { kind: "junction", junctionId: junction.id },
+      });
 
       // d. Write audit log for state change (avoid double log)
       if (editedText === undefined) {

@@ -74,6 +74,7 @@ export const AUDIT_ACTIONS = {
   QUOTE_SUGGESTED: "quote.suggested",
   QUOTE_APPROVED: "quote.approved",
   QUOTE_REJECTED: "quote.rejected",
+  QUOTE_UPDATED: "quote.updated",
   QUOTE_MANUAL_CREATED: "quote.manual_created",
   QUOTE_INSIGHT_LINKED: "quote.insight_linked",
   QUOTE_INSIGHT_UNLINKED: "quote.insight_unlinked",

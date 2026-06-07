@@ -1551,6 +1551,7 @@ export const quotes = pgTable(
     contextAfter: text("context_after"),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
+    approvalOrigin: text("approval_origin").$type<"manual" | "insight">(),
     ...timestamps,
   },
   (table) => ({
@@ -1561,6 +1562,10 @@ export const quotes = pgTable(
     sourceCheck: check(
       "quotes_source_check",
       sql`${table.source} in ('ai', 'manual')`
+    ),
+    approvalOriginCheck: check(
+      "quotes_approval_origin_check",
+      sql`${table.approvalOrigin} is null or ${table.approvalOrigin} in ('manual', 'insight')`
     ),
     maskRuleCheck: check(
       "quotes_mask_rule_check",

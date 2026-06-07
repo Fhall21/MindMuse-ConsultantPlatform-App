@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { ChevronsUpDown, Unlink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { QuoteLink, RelevanceStrength } from "@/types/grid";
 
@@ -61,17 +66,24 @@ export function QuoteCard({
             </Button>
           ) : null}
           {onUnlink ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/quote:opacity-100 focus-visible:opacity-100"
-              aria-label="Unlink quote from insight"
-              disabled={unlinkDisabled}
-              onClick={() => onUnlink(quote.id)}
-            >
-              <Unlink className="size-3.5" aria-hidden="true" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/quote:opacity-100 focus-visible:opacity-100"
+                  aria-label="Unlink quote from insight"
+                  disabled={unlinkDisabled}
+                  onClick={() => onUnlink(quote.id)}
+                >
+                  <Unlink className="size-3.5" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Remove this quote from this insight. Quote stays in meeting review.
+              </TooltipContent>
+            </Tooltip>
           ) : null}
         </div>
       </div>

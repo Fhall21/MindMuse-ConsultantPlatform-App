@@ -9,6 +9,10 @@ vi.mock("@/hooks/use-quotes", () => ({
     mutate: vi.fn(),
     isPending: false,
   }),
+  useLinkQuoteInsight: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
 }));
 import {
   GridShell,

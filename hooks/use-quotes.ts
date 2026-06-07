@@ -94,12 +94,18 @@ export function useRejectQuote(meetingId: string) {
   });
 }
 
-export function useLinkQuoteInsight(meetingId: string) {
+export function useLinkQuoteInsight(meetingId: string, roundId?: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (params: Parameters<typeof linkQuoteToInsight>[0]) =>
       linkQuoteToInsight(params),
-    onSuccess: () => invalidateMeetingQuotes(qc, meetingId),
+    onSuccess: () => {
+      invalidateMeetingQuotes(qc, meetingId);
+      if (roundId) {
+        qc.invalidateQueries({ queryKey: ["grid-insights", roundId] });
+        qc.invalidateQueries({ queryKey: ["grid-cells", roundId] });
+      }
+    },
   });
 }
 

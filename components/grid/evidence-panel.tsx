@@ -8,7 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { QuoteCard } from "@/components/grid/quote-card";
-import { useUnlinkQuoteInsight } from "@/hooks/use-quotes";
+import { useLinkQuoteInsight, useUnlinkQuoteInsight } from "@/hooks/use-quotes";
+import { toast } from "sonner";
 import type {
   GridCell,
   GridReviewState,
@@ -61,7 +62,9 @@ export function EvidencePanel({
   onInsightReview,
   insights,
 }: EvidencePanelProps) {
-  const unlinkQuote = useUnlinkQuoteInsight(selectedCell?.meetingId ?? "", roundId);
+  const meetingId = selectedCell?.meetingId ?? "";
+  const unlinkQuote = useUnlinkQuoteInsight(meetingId, roundId);
+  const linkQuote = useLinkQuoteInsight(meetingId, roundId);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const [showScopePrompt, setShowScopePrompt] = useState(false);
@@ -111,6 +114,35 @@ export function EvidencePanel({
     setShowScopePrompt(false);
   }
 
+  function handleUnlinkQuote(
+    quoteId: string,
+    quoteIndex: number,
+    relevanceStrength: (typeof current.quotes)[number]["relevanceStrength"]
+  ) {
+    const insightId = current.id;
+    unlinkQuote.mutate(
+      { quoteId, insightId },
+      {
+        onSuccess: () => {
+          toast.success("Quote removed from this insight", {
+            duration: 30000,
+            action: {
+              label: "Undo",
+              onClick: () => {
+                linkQuote.mutate({
+                  quoteId,
+                  insightId,
+                  isPrimary: quoteIndex === 0,
+                  relevanceStrength,
+                });
+              },
+            },
+          });
+        },
+      }
+    );
+  }
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
@@ -152,17 +184,14 @@ export function EvidencePanel({
             <p className="text-xs text-muted-foreground">No supporting quotes.</p>
           ) : (
             <div className="space-y-2">
-              {current.quotes.map((quote) => (
+              {current.quotes.map((quote, quoteIndex) => (
                 <QuoteCard
                   key={quote.id}
                   quote={quote}
                   meetingId={selectedCell.meetingId}
-                  unlinkDisabled={unlinkQuote.isPending}
+                  unlinkDisabled={unlinkQuote.isPending || linkQuote.isPending}
                   onUnlink={(quoteId) =>
-                    unlinkQuote.mutate({
-                      quoteId,
-                      insightId: current.id,
-                    })
+                    handleUnlinkQuote(quoteId, quoteIndex, quote.relevanceStrength)
                   }
                 />
               ))}

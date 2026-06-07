@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeAll } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { GridCell } from "@/components/grid/grid-cell";
 import { InsightCandidate } from "@/components/grid/insight-candidate";
@@ -52,6 +52,14 @@ function renderWithUi(ui: React.ReactElement) {
   return render(<TooltipProvider>{ui}</TooltipProvider>);
 }
 
+beforeAll(() => {
+  global.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
+
 describe("Quote evidence UI", () => {
   it("toggles expanded quote context", () => {
     renderWithUi(<QuoteCard quote={quote} meetingId="meeting-1" />);
@@ -73,6 +81,19 @@ describe("Quote evidence UI", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Unlink quote from insight" }));
     expect(onUnlink).toHaveBeenCalledWith("quote-1");
+  });
+
+  it("shows unlink help text in tooltip", () => {
+    renderWithUi(
+      <QuoteCard quote={quote} meetingId="meeting-1" onUnlink={vi.fn()} />
+    );
+
+    fireEvent.focus(
+      screen.getByRole("button", { name: "Unlink quote from insight" })
+    );
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "Remove this quote from this insight. Quote stays in meeting review."
+    );
   });
 
   it("renders insight confidence as uppercase evidence label", () => {

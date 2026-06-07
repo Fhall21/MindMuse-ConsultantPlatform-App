@@ -10,6 +10,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { InsightCandidate } from "@/components/grid/insight-candidate";
+import {
+  evidenceConfidenceClassName,
+  formatEvidenceConfidence,
+} from "@/lib/quotes/insight-confidence";
 import { cn } from "@/lib/utils";
 import type {
   GridCell as GridCellData,
@@ -40,8 +44,17 @@ function CellFooter({ cell }: { cell: GridCellData }) {
 
   return (
     <div className="border-t px-3 py-2 text-[11px] leading-4 text-muted-foreground">
-      {quoteLabel}
-      {cell.confidence ? ` · confidence: ${cell.confidence}` : ""}
+      <span>{quoteLabel}</span>
+      {cell.confidence ? (
+        <span
+          className={cn(
+            "ml-1.5 text-[10px] font-semibold uppercase tracking-wide",
+            evidenceConfidenceClassName(cell.confidence)
+          )}
+        >
+          {formatEvidenceConfidence(cell.confidence)}
+        </span>
+      ) : null}
     </div>
   );
 }

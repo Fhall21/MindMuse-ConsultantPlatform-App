@@ -70,6 +70,7 @@ const insight: InsightWithLinks = {
   gridColumnId: "column-a",
   connectedColumns: [],
   quotes: [],
+  quoteConfidence: null,
 };
 
 const insightB: InsightWithLinks = {
@@ -85,6 +86,7 @@ const insightB: InsightWithLinks = {
   gridColumnId: "column-b",
   connectedColumns: [],
   quotes: [],
+  quoteConfidence: null,
 };
 
 function renderMatrix(overrides: Partial<React.ComponentProps<typeof GridMatrix>> = {}) {
@@ -146,7 +148,8 @@ describe("GridMatrix", () => {
     renderMatrix({ onCellSelect, onInsightReview });
 
     expect(screen.getByText("Cell-specific label")).toBeInTheDocument();
-    expect(screen.getByText("3 quotes · confidence: high")).toBeInTheDocument();
+    expect(screen.getByText("3 quotes")).toBeInTheDocument();
+    expect(screen.getByText("High evidence")).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText("Select analysis cell"));
     expect(onCellSelect).toHaveBeenCalledWith("cell-a");

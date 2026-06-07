@@ -114,6 +114,7 @@ def test_generate_grid_returns_answers_for_all_questions(client, monkeypatch):
                                 "spanStart": transcript.index(barrier_quote),
                                 "spanEnd": transcript.index(barrier_quote)
                                 + len(barrier_quote),
+                                "speakerLabel": "Alex",
                                 "relevanceStrength": "strong_match",
                             }
                         ],
@@ -135,6 +136,7 @@ def test_generate_grid_returns_answers_for_all_questions(client, monkeypatch):
                                 "spanStart": transcript.index(support_quote),
                                 "spanEnd": transcript.index(support_quote)
                                 + len(support_quote),
+                                "speakerLabel": "Alex",
                                 "relevanceStrength": "strong_match",
                             }
                         ],
@@ -166,6 +168,7 @@ def test_generate_grid_returns_answers_for_all_questions(client, monkeypatch):
         for answer in body["answers"]
         for insight in answer["insights"]
     )
+    assert body["answers"][0]["insights"][0]["quotes"][0]["speakerLabel"] == "Alex"
     call = fake_client.chat.completions.calls[0]
     assert call["temperature"] == 0.2
     assert len(call["messages"]) == 2
@@ -325,6 +328,201 @@ def test_generate_grid_discards_insights_without_verbatim_quotes(
         "confidence": None,
         "hasEvidence": False,
     }
+
+
+def test_generate_grid_resolves_speaker_label_from_transcript_turn(
+    client,
+    monkeypatch,
+):
+    transcript = (
+        "Interviewer: What made the change hard?\n"
+        "Alex: The rotating shifts make my sleep unpredictable.\n"
+    )
+    quote = "The rotating shifts make my sleep unpredictable."
+    monkeypatch.setattr(
+        grid,
+        "get_client",
+        lambda: FakeClient(
+            json.dumps(
+                {
+                    "answers": [
+                        {
+                            "columnId": "column-1",
+                            "cellId": "cell-1",
+                            "insights": [
+                                {
+                                    "text": "Shift work disrupted sleep.",
+                                    "existingInsightId": None,
+                                    "quotes": [
+                                        {
+                                            "exactText": quote,
+                                            "spanStart": transcript.index(quote),
+                                            "spanEnd": transcript.index(quote)
+                                            + len(quote),
+                                            "speakerLabel": None,
+                                            "relevanceStrength": "strong_match",
+                                        }
+                                    ],
+                                }
+                            ],
+                            "confidence": "high",
+                            "hasEvidence": True,
+                        }
+                        ,
+                        {
+                            "columnId": "column-2",
+                            "cellId": "cell-2",
+                            "insights": [],
+                            "confidence": None,
+                            "hasEvidence": False,
+                        },
+                    ]
+                }
+            )
+        ),
+    )
+
+    response = client.post(
+        "/grid/generate",
+        json=_request_payload(transcript),
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    quote_body = response.json()["answers"][0]["insights"][0]["quotes"][0]
+    assert quote_body["speakerLabel"] == "Alex"
+    assert quote_body["exactText"] == quote
+
+
+def test_generate_grid_expands_short_quotes_within_speaker_turn(
+    client,
+    monkeypatch,
+):
+    transcript = (
+        "Interviewer: What support did you want?\n"
+        "Alex: I need a fixed start time and weekly check-ins. It would help a lot.\n"
+        "Jordan: We can discuss scheduling."
+    )
+    quote = "weekly check-ins"
+    monkeypatch.setattr(
+        grid,
+        "get_client",
+        lambda: FakeClient(
+            json.dumps(
+                {
+                    "answers": [
+                        {
+                            "columnId": "column-1",
+                            "cellId": "cell-1",
+                            "insights": [
+                                {
+                                    "text": "Predictable scheduling and check-ins would help.",
+                                    "existingInsightId": None,
+                                    "quotes": [
+                                        {
+                                            "exactText": quote,
+                                            "spanStart": transcript.index(quote),
+                                            "spanEnd": transcript.index(quote)
+                                            + len(quote),
+                                            "speakerLabel": None,
+                                            "relevanceStrength": "strong_match",
+                                        }
+                                    ],
+                                }
+                            ],
+                            "confidence": "high",
+                            "hasEvidence": True,
+                        }
+                        ,
+                        {
+                            "columnId": "column-2",
+                            "cellId": "cell-2",
+                            "insights": [],
+                            "confidence": None,
+                            "hasEvidence": False,
+                        },
+                    ]
+                }
+            )
+        ),
+    )
+
+    response = client.post(
+        "/grid/generate",
+        json=_request_payload(transcript),
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    quote_body = response.json()["answers"][0]["insights"][0]["quotes"][0]
+    assert quote_body["speakerLabel"] == "Alex"
+    assert "Jordan:" not in quote_body["exactText"]
+    assert quote_body["exactText"].endswith("weekly check-ins.")
+
+
+def test_generate_grid_clamps_expansion_to_speaker_turn_boundary(
+    client,
+    monkeypatch,
+):
+    transcript = (
+        "Alex: I need a fixed start time.\n"
+        "Jordan: We can discuss scheduling and support.\n"
+    )
+    quote = "fixed start time"
+    monkeypatch.setattr(
+        grid,
+        "get_client",
+        lambda: FakeClient(
+            json.dumps(
+                {
+                    "answers": [
+                        {
+                            "columnId": "column-1",
+                            "cellId": "cell-1",
+                            "insights": [
+                                {
+                                    "text": "Predictability matters.",
+                                    "existingInsightId": None,
+                                    "quotes": [
+                                        {
+                                            "exactText": quote,
+                                            "spanStart": transcript.index(quote),
+                                            "spanEnd": transcript.index(quote)
+                                            + len(quote),
+                                            "speakerLabel": None,
+                                            "relevanceStrength": "strong_match",
+                                        }
+                                    ],
+                                }
+                            ],
+                            "confidence": "high",
+                            "hasEvidence": True,
+                        }
+                        ,
+                        {
+                            "columnId": "column-2",
+                            "cellId": "cell-2",
+                            "insights": [],
+                            "confidence": None,
+                            "hasEvidence": False,
+                        },
+                    ]
+                }
+            )
+        ),
+    )
+
+    response = client.post(
+        "/grid/generate",
+        json=_request_payload(transcript),
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    quote_body = response.json()["answers"][0]["insights"][0]["quotes"][0]
+    assert quote_body["speakerLabel"] == "Alex"
+    assert "Jordan:" not in quote_body["exactText"]
+    assert quote_body["spanEnd"] <= transcript.index("\nJordan:")
 
 
 def test_generate_grid_requires_authentication(client):

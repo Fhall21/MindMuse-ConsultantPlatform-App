@@ -14,6 +14,7 @@ export const gridGenerateResponseSchema = z.object({
               exactText: z.string().min(1),
               spanStart: z.number().int().nonnegative(),
               spanEnd: z.number().int().nonnegative(),
+              speakerLabel: z.string().nullable().optional(),
               relevanceStrength: z.enum([
                 "strong_match",
                 "partial_support",
@@ -54,4 +55,5 @@ export type QuoteLinkRow = {
   relevanceStrength: "strong_match" | "partial_support" | "context" | "weak" | null;
   contextBefore: string | null;
   contextAfter: string | null;
+  transcriptRaw?: string | null;
 };

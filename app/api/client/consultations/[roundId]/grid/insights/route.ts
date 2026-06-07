@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { gridCellInsights, insights, gridColumns, quoteInsightLinks, quotes } from "@/db/schema";
+import {
+  gridCellInsights,
+  gridCells,
+  insights,
+  gridColumns,
+  meetings,
+  quoteInsightLinks,
+  quotes,
+} from "@/db/schema";
 import { requireOwnedRound } from "@/lib/data/ownership";
+import { buildGridInsightsResponse } from "@/lib/quotes/grid-insight-response";
 import { jsonError, requireRouteClient } from "../../../../_helpers";
 import type { ConnectedColumnRow, QuoteLinkRow } from "../_types";
 import { gridRouteErrorStatus } from "../_errors";
@@ -41,6 +50,46 @@ export async function GET(
       .orderBy(asc(gridCellInsights.createdAt));
 
     const insightIds = [...new Set(junctionRows.map((r) => r.id))];
+    const meetingIds = [
+      ...new Set(
+        (
+          await db
+            .select({ meetingId: gridCells.meetingId })
+            .from(gridCells)
+            .innerJoin(
+              gridCellInsights,
+              eq(gridCellInsights.gridCellId, gridCells.id)
+            )
+            .innerJoin(gridColumns, eq(gridColumns.id, gridCellInsights.gridColumnId))
+            .where(eq(gridColumns.consultationId, roundId))
+        ).map((row) => row.meetingId)
+      ),
+    ];
+
+    const meetingTranscripts = meetingIds.length
+      ? await db
+          .select({
+            id: meetings.id,
+            transcriptRaw: meetings.transcriptRaw,
+          })
+          .from(meetings)
+          .where(inArray(meetings.id, meetingIds))
+      : [];
+    const transcriptByMeetingId = new Map(
+      meetingTranscripts.map((meeting) => [meeting.id, meeting.transcriptRaw])
+    );
+    const cellMeetingRows = meetingIds.length
+      ? await db
+          .select({
+            cellId: gridCells.id,
+            meetingId: gridCells.meetingId,
+          })
+          .from(gridCells)
+          .where(inArray(gridCells.meetingId, meetingIds))
+      : [];
+    const meetingIdByCellId = new Map(
+      cellMeetingRows.map((row) => [row.cellId, row.meetingId])
+    );
 
     // Batch query for connectedColumns (avoid N+1)
     let connectedCols: ConnectedColumnRow[] = [];
@@ -83,36 +132,18 @@ export async function GET(
         .where(inArray(quoteInsightLinks.insightId, insightIds));
     }
 
-    // Map connected columns and quotes back to each insight
     const insightsWithLinks = junctionRows.map((row) => {
-      const rowConnectedCols = connectedCols
-        .filter((col) => col.insightId === row.id)
-        .map((col) => ({
-          columnId: col.columnId,
-          question: col.question,
-          gridReviewState: col.gridReviewState ?? "pending",
-          accepted: col.accepted,
-        }));
+      const meetingId = meetingIdByCellId.get(row.gridCellId);
+      const transcriptRaw = meetingId
+        ? (transcriptByMeetingId.get(meetingId) ?? null)
+        : null;
 
-      const rowQuotes = quotesList
-        .filter((q) => q.insightId === row.id)
-        .map((q) => ({
-          id: q.id,
-          exactText: q.exactText,
-          speakerLabel: q.speakerLabel,
-          spanStart: q.spanStart,
-          spanEnd: q.spanEnd,
-          relevanceStrength: q.relevanceStrength,
-          contextBefore: q.contextBefore,
-          contextAfter: q.contextAfter,
-        }));
-
-      return {
-        ...row,
-        gridReviewState: row.gridReviewState ?? "pending",
-        connectedColumns: rowConnectedCols,
-        quotes: rowQuotes,
-      };
+      return buildGridInsightsResponse(
+        [row],
+        connectedCols,
+        quotesList,
+        transcriptRaw
+      )[0];
     });
 
     return NextResponse.json({ insights: insightsWithLinks });

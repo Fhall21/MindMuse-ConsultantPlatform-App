@@ -1,68 +1,86 @@
 "use client";
 
+import { useState } from "react";
+import { ChevronsUpDown, Unlink } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { QuoteLink, RelevanceStrength } from "@/types/grid";
 
-const RELEVANCE_CONFIG: Record<
-  RelevanceStrength,
-  { label: string; className: string }
-> = {
-  strong_match: {
-    label: "Strong match",
-    className:
-      "border-emerald-200 bg-emerald-100/80 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200",
-  },
-  partial_support: {
-    label: "Partial support",
-    className:
-      "border-blue-200 bg-blue-100/80 text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/50 dark:text-blue-200",
-  },
-  context: {
-    label: "Context",
-    className:
-      "border-amber-200 bg-amber-100/80 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/50 dark:text-amber-200",
-  },
-  weak: {
-    label: "Weak",
-    className: "border-border bg-muted/60 text-muted-foreground",
-  },
-};
-
-type QuoteWithContext = QuoteLink & {
-  contextBefore?: string | null;
-  contextAfter?: string | null;
+const RELEVANCE_LABELS: Record<RelevanceStrength, string> = {
+  strong_match: "Strong match",
+  partial_support: "Partial support",
+  context: "Context",
+  weak: "Weak",
 };
 
 export interface QuoteCardProps {
   quote: QuoteLink;
   meetingId: string;
+  onUnlink?: (quoteId: string) => void;
+  unlinkDisabled?: boolean;
 }
 
-export function QuoteCard({ quote }: QuoteCardProps) {
-  const quoteWithContext = quote as QuoteWithContext;
-  const config = quote.relevanceStrength
-    ? RELEVANCE_CONFIG[quote.relevanceStrength]
-    : null;
-  const contextBefore = quoteWithContext.contextBefore ?? null;
-  const contextAfter = quoteWithContext.contextAfter ?? null;
+export function QuoteCard({
+  quote,
+  onUnlink,
+  unlinkDisabled = false,
+}: QuoteCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  const hasExpandedContext = Boolean(
+    quote.expandedContextBefore || quote.expandedContextAfter
+  );
+  const contextBefore = expanded
+    ? (quote.expandedContextBefore ?? quote.contextBefore)
+    : quote.contextBefore;
+  const contextAfter = expanded
+    ? (quote.expandedContextAfter ?? quote.contextAfter)
+    : quote.contextAfter;
   const hasContext = Boolean(contextBefore || contextAfter);
+  const relevanceLabel = quote.relevanceStrength
+    ? RELEVANCE_LABELS[quote.relevanceStrength]
+    : null;
 
   return (
-    <article className="rounded-md border border-border bg-card p-3 transition-colors">
-      <div className="mb-1.5 text-[0.6125rem] font-semibold uppercase tracking-widest text-muted-foreground">
-        {quote.speakerLabel || "Unknown"}
+    <article className="group/quote rounded-md border border-border bg-card p-3 transition-colors">
+      <div className="mb-1.5 flex items-start justify-between gap-2">
+        <div className="text-[0.6125rem] font-semibold uppercase tracking-widest text-muted-foreground">
+          {quote.speakerLabel || "Unknown"}
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          {hasExpandedContext ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted-foreground"
+              aria-label={expanded ? "Collapse quote context" : "Expand quote context"}
+              aria-pressed={expanded}
+              onClick={() => setExpanded((value) => !value)}
+            >
+              <ChevronsUpDown className="size-3.5" aria-hidden="true" />
+            </Button>
+          ) : null}
+          {onUnlink ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/quote:opacity-100 focus-visible:opacity-100"
+              aria-label="Unlink quote from insight"
+              disabled={unlinkDisabled}
+              onClick={() => onUnlink(quote.id)}
+            >
+              <Unlink className="size-3.5" aria-hidden="true" />
+            </Button>
+          ) : null}
+        </div>
       </div>
 
-      {config && (
-        <span
-          className={cn(
-            "mb-2 inline-block rounded-md border px-2 py-0.5 text-[0.65rem] font-medium",
-            config.className
-          )}
-        >
-          {config.label}
-        </span>
-      )}
+      {relevanceLabel ? (
+        <p className="mb-2 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+          {relevanceLabel}
+        </p>
+      ) : null}
 
       <p
         className={cn(
@@ -71,7 +89,7 @@ export function QuoteCard({ quote }: QuoteCardProps) {
         )}
       >
         {contextBefore}
-        <span className="rounded-sm bg-green-200/40 px-0.5 text-foreground not-italic">
+        <span className="rounded-sm bg-green-200/40 px-0.5 text-foreground not-italic dark:bg-green-900/30">
           {quote.exactText}
         </span>
         {contextAfter}

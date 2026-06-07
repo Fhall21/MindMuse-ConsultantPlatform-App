@@ -57,6 +57,8 @@ export interface QuoteLink {
   relevanceStrength: RelevanceStrength | null;
   contextBefore: string | null;
   contextAfter: string | null;
+  expandedContextBefore?: string | null;
+  expandedContextAfter?: string | null;
 }
 
 export interface InsightWithLinks {
@@ -78,4 +80,5 @@ export interface InsightWithLinks {
     accepted: boolean;
   }[];
   quotes: QuoteLink[];
+  quoteConfidence: CellConfidence | null;
 }

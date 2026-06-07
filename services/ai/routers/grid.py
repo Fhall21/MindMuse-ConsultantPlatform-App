@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from fastapi import APIRouter, HTTPException
 from pydantic import ValidationError
@@ -21,6 +22,8 @@ from schemas.grid import (
 
 router = APIRouter(prefix="/grid", tags=["grid"])
 logger = logging.getLogger(__name__)
+
+_TURN_PREFIX_RE = re.compile(r"^(?P<speaker>[^:\n]{1,120}):[ \t]*")
 
 
 def _generation_error(message: str) -> HTTPException:
@@ -48,23 +51,139 @@ def _empty_answers(request: GridGenerateRequest) -> GridGenerateResponse:
     )
 
 
-def _ground_quote(transcript: str, quote: GridQuote) -> GridQuote | None:
-    if transcript[quote.span_start : quote.span_end] == quote.exact_text:
-        return quote
+def _find_turn_spans(transcript: str) -> list[tuple[int, int, str]]:
+    turns: list[tuple[int, int, str]] = []
+    line_start = 0
+    current_turn: tuple[int, int, str] | None = None
 
-    span_start = transcript.find(quote.exact_text)
-    if span_start < 0:
+    while line_start <= len(transcript):
+        line_end = transcript.find("\n", line_start)
+        if line_end < 0:
+            line_end = len(transcript)
+            line = transcript[line_start:line_end]
+            next_start = len(transcript) + 1
+        else:
+            line = transcript[line_start:line_end]
+            next_start = line_end + 1
+
+        match = _TURN_PREFIX_RE.match(line)
+        if match:
+            speaker = match.group("speaker").strip()
+            if current_turn is not None:
+                turns.append(current_turn)
+            current_turn = (line_start, len(transcript), speaker)
+
+        if line_end == len(transcript):
+            break
+
+        line_start = next_start
+
+    if current_turn is not None:
+        turns.append((current_turn[0], len(transcript), current_turn[2]))
+        for index, (start, _, speaker) in enumerate(turns[:-1]):
+            turns[index] = (start, turns[index + 1][0], speaker)
+
+    return turns
+
+
+def _find_turn_for_span(
+    turns: list[tuple[int, int, str]],
+    span_start: int,
+    span_end: int,
+) -> tuple[int, int, str] | None:
+    for turn_start, turn_end, speaker in turns:
+        if span_start >= turn_start and span_end <= turn_end:
+            return turn_start, turn_end, speaker
+    return None
+
+
+def _find_sentence_boundary_left(text: str, offset: int) -> int:
+    boundary = 0
+    search_start = max(0, offset - 120)
+    for marker in ("\n", ".", "?", "!"):
+        position = text.rfind(marker, search_start, offset)
+        if position >= 0:
+            boundary = max(boundary, position + 1)
+    while boundary < len(text) and text[boundary].isspace():
+        boundary += 1
+    return boundary
+
+
+def _find_sentence_boundary_right(text: str, offset: int) -> int:
+    boundary = len(text)
+    search_end = min(len(text), offset + 120)
+    candidates = [
+        position
+        for marker in ("\n", ".", "?", "!")
+        if (position := text.find(marker, offset, search_end)) >= 0
+    ]
+    if candidates:
+        boundary = min(candidates) + 1
+    return boundary
+
+
+def _expand_quote_span(
+    transcript: str,
+    quote: GridQuote,
+    turns: list[tuple[int, int, str]],
+) -> GridQuote | None:
+    if transcript[quote.span_start : quote.span_end] == quote.exact_text:
+        span_start = quote.span_start
+        span_end = quote.span_end
+    else:
+        span_start = transcript.find(quote.exact_text)
+        if span_start < 0:
+            return None
+        span_end = span_start + len(quote.exact_text)
+
+    turn = _find_turn_for_span(turns, span_start, span_end)
+    if turn is None:
+        return quote.model_copy(
+            update={
+                "span_start": span_start,
+                "span_end": span_end,
+            }
+        )
+
+    turn_start, turn_end, speaker = turn
+    resolved_speaker_label = quote.speaker_label or speaker
+
+    if len(quote.exact_text) < 40:
+        turn_text = transcript[turn_start:turn_end]
+        local_start = span_start - turn_start
+        local_end = span_end - turn_start
+        expanded_start = _find_sentence_boundary_left(turn_text, local_start)
+        expanded_end = _find_sentence_boundary_right(turn_text, local_end)
+        span_start = turn_start + expanded_start
+        span_end = turn_start + expanded_end
+
+    expanded_text = transcript[span_start:span_end].strip()
+    if not expanded_text:
         return None
 
     return quote.model_copy(
         update={
+            "exact_text": expanded_text,
             "span_start": span_start,
-            "span_end": span_start + len(quote.exact_text),
+            "span_end": span_end,
+            "speaker_label": resolved_speaker_label,
         }
     )
 
 
+def _ground_quote(
+    transcript: str,
+    quote: GridQuote,
+    turns: list[tuple[int, int, str]],
+) -> GridQuote | None:
+    expanded = _expand_quote_span(transcript, quote, turns)
+    if expanded is None:
+        return None
+    return expanded
+
+
 def _ground_answer(transcript: str, answer: GridAnswer) -> GridAnswer:
+    turns = _find_turn_spans(transcript)
     grounded_insights: list[GridInsight] = []
 
     for insight in answer.insights:
@@ -72,7 +191,7 @@ def _ground_answer(transcript: str, answer: GridAnswer) -> GridAnswer:
         seen_spans: set[tuple[int, int]] = set()
 
         for quote in insight.quotes:
-            grounded = _ground_quote(transcript, quote)
+            grounded = _ground_quote(transcript, quote, turns)
             if grounded is None:
                 continue
 

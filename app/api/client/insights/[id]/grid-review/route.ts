@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   insights,
@@ -12,6 +12,7 @@ import {
   quotes,
   quoteInsightLinks,
 } from "@/db/schema";
+import { buildGridInsightsResponse } from "@/lib/quotes/grid-insight-response";
 import { jsonError, requireRouteClient } from "../../../_helpers";
 
 const patchReviewSchema = z.object({
@@ -190,6 +191,36 @@ export async function PATCH(
         })
         .where(eq(insights.id, id));
 
+      if (newState === "accepted") {
+        const linkedQuotes = await tx
+          .select({ quoteId: quoteInsightLinks.quoteId })
+          .from(quoteInsightLinks)
+          .where(eq(quoteInsightLinks.insightId, id));
+
+        const quoteIds = linkedQuotes.map((link) => link.quoteId);
+        if (quoteIds.length > 0) {
+          await tx
+            .update(quotes)
+            .set({
+              status: "approved",
+              approvedAt: new Date(),
+              approvedBy: client.userId,
+              updatedAt: new Date(),
+            })
+            .where(inArray(quotes.id, quoteIds));
+
+          await tx
+            .update(quoteInsightLinks)
+            .set({ linkType: "durable" })
+            .where(
+              and(
+                eq(quoteInsightLinks.insightId, id),
+                inArray(quoteInsightLinks.quoteId, quoteIds)
+              )
+            );
+        }
+      }
+
       // d. Write audit log for state change (avoid double log)
       if (editedText === undefined) {
         await tx.insert(auditLog).values({
@@ -244,26 +275,46 @@ export async function PATCH(
 
     const quotesList = await db
       .select({
+        insightId: quoteInsightLinks.insightId,
         id: quotes.id,
         exactText: quotes.exactText,
         speakerLabel: quotes.speakerLabel,
         spanStart: quotes.spanStart,
         spanEnd: quotes.spanEnd,
         relevanceStrength: quoteInsightLinks.relevanceStrength,
+        contextBefore: quotes.contextBefore,
+        contextAfter: quotes.contextAfter,
       })
       .from(quoteInsightLinks)
       .innerJoin(quotes, eq(quotes.id, quoteInsightLinks.quoteId))
       .where(eq(quoteInsightLinks.insightId, id));
 
-    return NextResponse.json({
-      ...updatedJunction,
-      gridReviewState: updatedJunction.gridReviewState ?? "pending",
-      connectedColumns: connectedCols.map((column) => ({
-        ...column,
-        gridReviewState: column.gridReviewState ?? "pending",
+    const [meeting] = await db
+      .select({ transcriptRaw: meetings.transcriptRaw })
+      .from(meetings)
+      .where(eq(meetings.id, insightRow.meetingId))
+      .limit(1);
+
+    const enriched = buildGridInsightsResponse(
+      [
+        {
+          ...updatedJunction,
+          description: updatedJunction.description,
+          createdAt: undefined,
+        },
+      ],
+      connectedCols.map((column) => ({
+        insightId: id,
+        columnId: column.columnId,
+        question: column.question,
+        gridReviewState: column.gridReviewState,
+        accepted: column.accepted,
       })),
-      quotes: quotesList,
-    });
+      quotesList,
+      meeting?.transcriptRaw ?? null
+    )[0];
+
+    return NextResponse.json(enriched);
   } catch (error) {
     console.error("[grid-review/PATCH] Failed to update review", error);
     return jsonError(

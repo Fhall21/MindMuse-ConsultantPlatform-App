@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   closestCenter,
   DndContext,
@@ -222,6 +223,7 @@ function WiredGridWorkspace({
   const addColumn = useAddColumn(roundId);
   const deleteColumn = useDeleteColumn(roundId);
   const reviewInsight = useReviewInsight(roundId);
+  const queryClient = useQueryClient();
   const { generateColumn, retryMeeting } = useGridGenerationLoop(
     roundId,
     selectedCellId
@@ -337,16 +339,28 @@ function WiredGridWorkspace({
   );
 
   const handleInsightReview = useCallback(
-    (
+    async (
       insightId: string,
       state: GridReviewState,
       cellId: string,
       editedText?: string,
       editScope?: "cell" | "all"
     ) => {
-      reviewInsight.mutate({ insightId, state, cellId, editedText, editScope });
+      await reviewInsight.mutateAsync({
+        insightId,
+        state,
+        cellId,
+        editedText,
+        editScope,
+      });
+      const cell = cells.find((candidate) => candidate.id === cellId);
+      if (cell?.meetingId) {
+        await queryClient.invalidateQueries({
+          queryKey: ["quotes", "meeting", cell.meetingId],
+        });
+      }
     },
-    [reviewInsight]
+    [cells, queryClient, reviewInsight]
   );
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -423,6 +437,7 @@ function WiredGridWorkspace({
             />
           ) : (
             <EvidencePanel
+              roundId={roundId}
               selectedCell={selectedCell}
               selectedInsight={selectedInsight}
               insights={cellInsights}

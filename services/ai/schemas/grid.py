@@ -25,6 +25,7 @@ class GridQuote(GridSchema):
     exact_text: str = Field(alias="exactText", min_length=1)
     span_start: int = Field(alias="spanStart", ge=0)
     span_end: int = Field(alias="spanEnd", ge=0)
+    speaker_label: str | None = Field(default=None, alias="speakerLabel")
     relevance_strength: Literal[
         "strong_match",
         "partial_support",

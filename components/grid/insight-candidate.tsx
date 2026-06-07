@@ -8,6 +8,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  evidenceConfidenceClassName,
+  formatEvidenceConfidence,
+} from "@/lib/quotes/insight-confidence";
 import { cn } from "@/lib/utils";
 import type { InsightWithLinks } from "@/types/grid";
 
@@ -80,6 +84,16 @@ export const InsightCandidate = memo(function InsightCandidate({
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
           <span>{quoteLabel}</span>
+          {insight.quoteConfidence ? (
+            <span
+              className={cn(
+                "text-[10px] font-semibold uppercase tracking-wide",
+                evidenceConfidenceClassName(insight.quoteConfidence)
+              )}
+            >
+              {formatEvidenceConfidence(insight.quoteConfidence)}
+            </span>
+          ) : null}
           {isOnCanvas && (
             <span className="rounded border border-emerald-200 bg-emerald-100/80 px-1 py-px text-[10px] text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
               On canvas

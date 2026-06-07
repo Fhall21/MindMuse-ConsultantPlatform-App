@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { gridCells, gridCellInsights, insights, gridColumns, quoteInsightLinks, quotes } from "@/db/schema";
+import {
+  gridCells,
+  gridCellInsights,
+  insights,
+  gridColumns,
+  meetings,
+  quoteInsightLinks,
+  quotes,
+} from "@/db/schema";
 import { requireOwnedRound } from "@/lib/data/ownership";
+import { buildGridInsightsResponse } from "@/lib/quotes/grid-insight-response";
 import { jsonError, requireRouteClient } from "../../../../../../_helpers";
 import type { ConnectedColumnRow, QuoteLinkRow } from "../../../_types";
 import { gridRouteErrorStatus } from "../../../_errors";
@@ -34,6 +43,12 @@ export async function GET(
     if (!cell) {
       return jsonError("Cell not found", 404);
     }
+
+    const [meeting] = await db
+      .select({ transcriptRaw: meetings.transcriptRaw })
+      .from(meetings)
+      .where(eq(meetings.id, cell.meetingId))
+      .limit(1);
 
     // Fetch cell insights
     const junctionRows = await db
@@ -98,37 +113,12 @@ export async function GET(
         .where(inArray(quoteInsightLinks.insightId, insightIds));
     }
 
-    // Map connected columns and quotes back to each insight
-    const insightsWithLinks = junctionRows.map((row) => {
-      const rowConnectedCols = connectedCols
-        .filter((col) => col.insightId === row.id)
-        .map((col) => ({
-          columnId: col.columnId,
-          question: col.question,
-          gridReviewState: col.gridReviewState ?? "pending",
-          accepted: col.accepted,
-        }));
-
-      const rowQuotes = quotesList
-        .filter((q) => q.insightId === row.id)
-        .map((q) => ({
-          id: q.id,
-          exactText: q.exactText,
-          speakerLabel: q.speakerLabel,
-          spanStart: q.spanStart,
-          spanEnd: q.spanEnd,
-          relevanceStrength: q.relevanceStrength,
-          contextBefore: q.contextBefore,
-          contextAfter: q.contextAfter,
-        }));
-
-      return {
-        ...row,
-        gridReviewState: row.gridReviewState ?? "pending",
-        connectedColumns: rowConnectedCols,
-        quotes: rowQuotes,
-      };
-    });
+    const insightsWithLinks = buildGridInsightsResponse(
+      junctionRows,
+      connectedCols,
+      quotesList,
+      meeting?.transcriptRaw ?? null
+    );
 
     return NextResponse.json({ insights: insightsWithLinks });
   } catch (error) {

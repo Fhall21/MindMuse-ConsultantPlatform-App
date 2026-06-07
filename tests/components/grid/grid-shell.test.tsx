@@ -3,6 +3,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/hooks/use-quotes", () => ({
+  useUnlinkQuoteInsight: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+}));
 import {
   GridShell,
   persistGridColumnOrder,

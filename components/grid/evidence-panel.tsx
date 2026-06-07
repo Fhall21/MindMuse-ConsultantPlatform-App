@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { QuoteCard } from "@/components/grid/quote-card";
+import { useUnlinkQuoteInsight } from "@/hooks/use-quotes";
 import type {
   GridCell,
   GridReviewState,
@@ -15,6 +16,7 @@ import type {
 } from "@/types/grid";
 
 export interface EvidencePanelProps {
+  roundId: string;
   selectedCell: GridCell | null;
   selectedInsight: InsightWithLinks | null;
   onInsightSelect: (insightId: string) => void;
@@ -53,11 +55,13 @@ function connectedStateIcon(
 }
 
 export function EvidencePanel({
+  roundId,
   selectedCell,
   selectedInsight,
   onInsightReview,
   insights,
 }: EvidencePanelProps) {
+  const unlinkQuote = useUnlinkQuoteInsight(selectedCell?.meetingId ?? "", roundId);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const [showScopePrompt, setShowScopePrompt] = useState(false);
@@ -153,6 +157,13 @@ export function EvidencePanel({
                   key={quote.id}
                   quote={quote}
                   meetingId={selectedCell.meetingId}
+                  unlinkDisabled={unlinkQuote.isPending}
+                  onUnlink={(quoteId) =>
+                    unlinkQuote.mutate({
+                      quoteId,
+                      insightId: current.id,
+                    })
+                  }
                 />
               ))}
             </div>

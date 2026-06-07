@@ -143,6 +143,7 @@ import {
   gridColumns,
   insights,
   quoteInsightLinks,
+  quotes,
 } from "@/db/schema";
 import { GET as getGrid } from "@/app/api/client/consultations/[roundId]/grid/route";
 import { POST as createColumn } from "@/app/api/client/consultations/[roundId]/grid/columns/route";
@@ -553,10 +554,14 @@ describe("Analysis Grid API routes", () => {
       [],
       [{ accepted: true, rejected: false }],
       [],
+      [{ quoteId: QUOTE_ID }],
       [],
-      [{ id: INSIGHT_ID, junctionId: JUNCTION_ID }],
       [],
-      []
+      [],
+      [{ id: INSIGHT_ID, junctionId: JUNCTION_ID, description: null }],
+      [],
+      [],
+      [{ transcriptRaw: "Alex: We struggled." }]
     );
     const acceptedResponse = await patchGridReview(
       request("PATCH", {
@@ -570,6 +575,13 @@ describe("Analysis Grid API routes", () => {
     expect(operations("update", insights).at(-1)?.payload).toMatchObject({
       accepted: true,
       rejected: false,
+    });
+    expect(operations("update", quotes)[0]?.payload).toMatchObject({
+      status: "approved",
+      approvedBy: USER_ID,
+    });
+    expect(operations("update", quoteInsightLinks)[0]?.payload).toMatchObject({
+      linkType: "durable",
     });
     expect(operations("insert", auditLog)).toHaveLength(1);
 
@@ -590,9 +602,10 @@ describe("Analysis Grid API routes", () => {
       ],
       [],
       [],
-      [{ id: INSIGHT_ID, junctionId: JUNCTION_ID }],
+      [{ id: INSIGHT_ID, junctionId: JUNCTION_ID, description: null }],
       [],
-      []
+      [],
+      [{ transcriptRaw: "Alex: We struggled." }]
     );
     const reversalResponse = await patchGridReview(
       request("PATCH", {
@@ -681,8 +694,11 @@ describe("Analysis Grid API routes", () => {
     const secondInsightId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa";
     const earlierCreatedAt = "2026-01-01T10:00:00.000Z";
     const laterCreatedAt = "2026-01-02T10:00:00.000Z";
+    const transcriptRaw =
+      "Alex: The rotating shifts make my sleep unpredictable and recovery slow.";
     queueResults(
-      [{ id: CELL_ID }],
+      [{ id: CELL_ID, meetingId: MEETING_ID }],
+      [{ transcriptRaw }],
       [
         {
           id: INSIGHT_ID,
@@ -719,13 +735,15 @@ describe("Analysis Grid API routes", () => {
         {
           insightId: INSIGHT_ID,
           id: QUOTE_ID,
-          exactText: "We struggled.",
+          exactText: "rotating shifts make my sleep unpredictable",
           speakerLabel: "Alex",
-          spanStart: 0,
-          spanEnd: 13,
+          spanStart: transcriptRaw.indexOf("rotating shifts"),
+          spanEnd:
+            transcriptRaw.indexOf("rotating shifts") +
+            "rotating shifts make my sleep unpredictable".length,
           relevanceStrength: "strong_match",
-          contextBefore: "Alex: ",
-          contextAfter: " with onboarding.",
+          contextBefore: "Alex: The ",
+          contextAfter: " and recovery slow.",
         },
       ]
     );
@@ -735,9 +753,12 @@ describe("Analysis Grid API routes", () => {
     const insights = responseBody.insights as Array<{
       id: string;
       createdAt: string;
+      quoteConfidence: string | null;
       quotes: Array<{
         contextBefore: string | null;
         contextAfter: string | null;
+        expandedContextBefore: string | null;
+        expandedContextAfter: string | null;
       }>;
     }>;
 
@@ -750,11 +771,14 @@ describe("Analysis Grid API routes", () => {
     expect(insights[0]?.createdAt).toBe(earlierCreatedAt);
     expect(insights[1]?.createdAt).toBe(laterCreatedAt);
     expect(insights[0]?.quotes[0]).toMatchObject({
-      contextBefore: "Alex: ",
-      contextAfter: " with onboarding.",
+      contextBefore: "Alex: The ",
+      contextAfter: " and recovery slow.",
+      expandedContextBefore: expect.stringContaining("Alex:"),
+      expandedContextAfter: expect.stringContaining("recovery slow"),
     });
+    expect(insights[0]?.quoteConfidence).toBe("high");
     expect(dbMock.state.operations.filter((operation) => operation.kind === "select"))
-      .toHaveLength(4);
+      .toHaveLength(5);
   });
 
   it("returns round insights in stable createdAt order with quote context", async () => {
@@ -780,6 +804,9 @@ describe("Analysis Grid API routes", () => {
           createdAt: laterCreatedAt,
         },
       ],
+      [{ meetingId: MEETING_ID }],
+      [{ id: MEETING_ID, transcriptRaw: "Before Key quote after" }],
+      [{ cellId: CELL_ID, meetingId: MEETING_ID }],
       [],
       [
         {
@@ -839,6 +866,76 @@ describe("Analysis Grid API routes", () => {
     );
     const invalidResponse = await suggestColumns(request(), roundParams());
     expect(invalidResponse.status).toBe(502);
+  });
+
+  it("persists speaker, compact context, and computed confidence on generate", async () => {
+    const transcriptRaw =
+      "Alex: The rotating shifts make my sleep unpredictable and recovery slow.";
+    queueResults(
+      [{ id: MEETING_ID, transcriptRaw }],
+      [{ id: CELL_ID, columnId: COLUMN_ID, status: "pending" }],
+      [],
+      [{ id: COLUMN_ID, question: "What changed?", position: 0 }],
+      [{ id: INSIGHT_ID }],
+      [],
+      [{ id: QUOTE_ID }],
+      [],
+      [{ insightId: INSIGHT_ID }],
+      [
+        {
+          insightId: INSIGHT_ID,
+          quoteId: QUOTE_ID,
+          relevanceStrength: "strong_match",
+        },
+      ],
+      [],
+      [{ cellId: CELL_ID, status: "complete", insightCount: 1 }]
+    );
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          answers: [
+            {
+              columnId: COLUMN_ID,
+              cellId: CELL_ID,
+              insights: [
+                {
+                  text: "Sleep disruption from rotating shifts",
+                  existingInsightId: null,
+                  quotes: [
+                    {
+                      exactText: "rotating shifts make my sleep unpredictable",
+                      spanStart: transcriptRaw.indexOf("rotating shifts"),
+                      spanEnd:
+                        transcriptRaw.indexOf("rotating shifts") +
+                        "rotating shifts make my sleep unpredictable".length,
+                      speakerLabel: "Alex",
+                      relevanceStrength: "strong_match",
+                    },
+                  ],
+                },
+              ],
+              confidence: "medium",
+              hasEvidence: true,
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const response = await generateMeeting(request("POST"), meetingParams());
+
+    expect(response.status).toBe(200);
+    expect(operations("insert", quotes)[0]?.payload).toMatchObject({
+      speakerLabel: "Alex",
+      contextBefore: expect.any(String),
+      contextAfter: expect.any(String),
+      status: "suggested",
+    });
+    expect(operations("update", gridCells).at(-1)?.payload).toMatchObject({
+      confidence: "high",
+    });
   });
 
   it("keeps existing non-grid insight PATCH behavior working", async () => {

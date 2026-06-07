@@ -13,6 +13,11 @@ import {
 import { createChatServiceToken } from "@/lib/chat/service-token";
 import { API_PROXY_SESSION_ID } from "@/lib/chat/constants";
 import { getAiServiceUrl } from "@/lib/env";
+import {
+  computeCellConfidence,
+  computeInsightConfidence,
+} from "@/lib/quotes/insight-confidence";
+import { computeQuoteContext } from "@/lib/quotes/transcript-context";
 import { jsonError, requireRouteClient } from "../../../../../../_helpers";
 import {
   gridGenerateResponseSchema,
@@ -297,6 +302,13 @@ export async function POST(
 
             if (createdInsight) {
               for (const [index, generatedQuote] of generatedInsight.quotes.entries()) {
+                const quoteContext = computeQuoteContext(
+                  context.meeting.transcriptRaw ?? "",
+                  generatedQuote.spanStart,
+                  generatedQuote.spanEnd,
+                  "compact"
+                );
+
                 const [createdQuote] = await tx
                   .insert(quotes)
                   .values({
@@ -305,13 +317,15 @@ export async function POST(
                     spanStart: generatedQuote.spanStart,
                     spanEnd: generatedQuote.spanEnd,
                     exactText: generatedQuote.exactText,
-                    speakerLabel: null,
+                    speakerLabel: generatedQuote.speakerLabel ?? null,
                     workGroupLabel: null,
                     personId: null,
                     status: "suggested",
                     source: "ai",
                     anonymousMaskRule: "role_workgroup",
                     riskFlag: false,
+                    contextBefore: quoteContext.contextBefore,
+                    contextAfter: quoteContext.contextAfter,
                   })
                   .returning({ id: quotes.id });
 
@@ -336,16 +350,32 @@ export async function POST(
           insightIds.length === 0
             ? []
             : await tx
-                .select({ quoteId: quoteInsightLinks.quoteId })
+                .select({
+                  insightId: quoteInsightLinks.insightId,
+                  quoteId: quoteInsightLinks.quoteId,
+                  relevanceStrength: quoteInsightLinks.relevanceStrength,
+                })
                 .from(quoteInsightLinks)
                 .where(inArray(quoteInsightLinks.insightId, insightIds));
+
+        const insightConfidences = insightIds.map((insightId) =>
+          computeInsightConfidence(
+            cellQuoteLinks
+              .filter((link) => link.insightId === insightId)
+              .map((link) => ({ relevanceStrength: link.relevanceStrength }))
+          )
+        );
+        const cellConfidence = computeCellConfidence(
+          insightConfidences,
+          answer.confidence
+        );
 
         const insightCount = cellJunctions.length;
         await tx
           .update(gridCells)
           .set({
             status: insightCount > 0 ? "complete" : "no_evidence",
-            confidence: insightCount > 0 ? answer.confidence : null,
+            confidence: insightCount > 0 ? cellConfidence : null,
             insightCount,
             quoteCount: cellQuoteLinks.length,
             generatedAt: new Date(),

@@ -8,6 +8,8 @@ import {
   linkQuoteToInsight,
   rejectQuote,
   unlinkQuoteFromInsight,
+  updateQuoteSpeaker,
+  updateQuoteSpan,
 } from "@/lib/actions/quotes";
 import { fetchJson } from "@/hooks/api";
 
@@ -101,12 +103,18 @@ export function useLinkQuoteInsight(meetingId: string) {
   });
 }
 
-export function useUnlinkQuoteInsight(meetingId: string) {
+export function useUnlinkQuoteInsight(meetingId: string, roundId?: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (params: Parameters<typeof unlinkQuoteFromInsight>[0]) =>
       unlinkQuoteFromInsight(params),
-    onSuccess: () => invalidateMeetingQuotes(qc, meetingId),
+    onSuccess: () => {
+      invalidateMeetingQuotes(qc, meetingId);
+      if (roundId) {
+        qc.invalidateQueries({ queryKey: ["grid-insights", roundId] });
+        qc.invalidateQueries({ queryKey: ["grid-cells", roundId] });
+      }
+    },
   });
 }
 
@@ -115,6 +123,22 @@ export function useIngestAIQuoteSuggestions(meetingId: string) {
   return useMutation({
     mutationFn: (suggestions: Parameters<typeof ingestAIQuoteSuggestions>[1]) =>
       ingestAIQuoteSuggestions(meetingId, suggestions),
+    onSuccess: () => invalidateMeetingQuotes(qc, meetingId),
+  });
+}
+
+export function useUpdateQuoteSpeaker(meetingId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: updateQuoteSpeaker,
+    onSuccess: () => invalidateMeetingQuotes(qc, meetingId),
+  });
+}
+
+export function useUpdateQuoteSpan(meetingId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: updateQuoteSpan,
     onSuccess: () => invalidateMeetingQuotes(qc, meetingId),
   });
 }

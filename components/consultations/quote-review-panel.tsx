@@ -574,6 +574,7 @@ function DetailViewPane({
                             }
                           }}
                           disabled={busy}
+                          aria-label={`Link to ${option.label}`}
                           className="h-3.5 w-3.5 accent-primary"
                         />
                         <button

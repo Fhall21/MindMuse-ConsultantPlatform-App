@@ -1,9 +1,26 @@
 // @vitest-environment jsdom
 
+import { useState, useEffect } from "react";
 import userEvent from "@testing-library/user-event";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QuoteReviewPanel } from "@/components/consultations/quote-review-panel";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+function renderWithQueryClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      {ui}
+    </QueryClientProvider>
+  );
+}
 
 const approveQuoteMock = vi.fn();
 const createInsightMock = vi.fn();
@@ -56,6 +73,19 @@ const suggestedQuote = {
   links: [],
 };
 
+const mockQuotesState = vi.hoisted(() => ({
+  current: [] as any[],
+}));
+
+let testQuotesListener: ((quotes: any[]) => void) | null = null;
+
+function updateMockQuotes(updater: (quotes: any[]) => void) {
+  updater(mockQuotesState.current);
+  if (testQuotesListener) {
+    testQuotesListener([...mockQuotesState.current]);
+  }
+}
+
 vi.mock("@/hooks/use-meetings", () => ({
   useMeeting: () => ({
     data: {
@@ -67,15 +97,54 @@ vi.mock("@/hooks/use-meetings", () => ({
   }),
 }));
 
-vi.mock("@/hooks/use-quotes", () => ({
-  useMeetingQuotes: () => ({
-    data: [suggestedQuote],
+vi.mock("@/hooks/use-people", () => ({
+  useMeetingPeople: () => ({
+    data: [{ id: "person-1", name: "Analyst" }],
+    isLoading: false,
   }),
+}));
+
+vi.mock("@/hooks/use-quotes", () => ({
+  useMeetingQuotes: () => {
+    const [quotes, setQuotes] = useState(mockQuotesState.current);
+    useEffect(() => {
+      testQuotesListener = setQuotes;
+      return () => {
+        testQuotesListener = null;
+      };
+    }, []);
+    return { data: quotes };
+  },
   useCreateQuote: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useApproveQuote: () => ({ mutateAsync: approveQuoteMock, isPending: false }),
   useRejectQuote: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useLinkQuoteInsight: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useUnlinkQuoteInsight: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useLinkQuoteInsight: () => ({
+    mutateAsync: vi.fn().mockImplementation(async ({ quoteId, insightId, isPrimary, relevanceStrength }) => {
+      updateMockQuotes((quotes) => {
+        const q = quotes.find((x) => x.id === quoteId);
+        if (q) {
+          q.links = [
+            ...q.links.filter((l: any) => l.insightId !== insightId),
+            { insightId, isPrimary, relevanceStrength },
+          ];
+        }
+      });
+    }),
+    isPending: false,
+  }),
+  useUnlinkQuoteInsight: () => ({
+    mutateAsync: vi.fn().mockImplementation(async ({ quoteId, insightId }) => {
+      updateMockQuotes((quotes) => {
+        const q = quotes.find((x) => x.id === quoteId);
+        if (q) {
+          q.links = q.links.filter((l: any) => l.insightId !== insightId);
+        }
+      });
+    }),
+    isPending: false,
+  }),
+  useUpdateQuoteSpeaker: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateQuoteSpan: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/hooks/use-themes", () => ({
@@ -101,6 +170,7 @@ vi.mock("sonner", () => ({
 
 describe("QuoteReviewPanel insight linking", () => {
   beforeEach(() => {
+    mockQuotesState.current = [JSON.parse(JSON.stringify(suggestedQuote))];
     Object.defineProperty(window, "localStorage", {
       configurable: true,
       value: {
@@ -115,9 +185,9 @@ describe("QuoteReviewPanel insight linking", () => {
 
   it("shows only accepted insights in the quote link picker", async () => {
     const user = userEvent.setup();
-    render(<QuoteReviewPanel meetingId="meeting-1" />);
+    renderWithQueryClient(<QuoteReviewPanel meetingId="meeting-1" />);
 
-    await user.click(screen.getByRole("button", { name: "Link or create insight (optional)" }));
+    await user.click(screen.getByText("The handoff kept moving between different tools."));
 
     expect(screen.getByRole("checkbox", { name: "Link to Accepted theme" })).toBeInTheDocument();
     expect(screen.queryByRole("checkbox", { name: "Link to Pending draft theme" })).not.toBeInTheDocument();
@@ -126,9 +196,10 @@ describe("QuoteReviewPanel insight linking", () => {
 
   it("creates a new insight from quote mode and approves the quote with that primary link", async () => {
     const user = userEvent.setup();
-    render(<QuoteReviewPanel meetingId="meeting-1" />);
+    renderWithQueryClient(<QuoteReviewPanel meetingId="meeting-1" />);
 
-    await user.click(screen.getByRole("button", { name: "Link or create insight (optional)" }));
+    await user.click(screen.getByText("The handoff kept moving between different tools."));
+
     await user.type(screen.getByPlaceholderText("New insight"), "Tool handoff friction");
     await user.click(screen.getByRole("button", { name: "Add" }));
     await user.click(screen.getByRole("button", { name: "Approve" }));
@@ -139,41 +210,25 @@ describe("QuoteReviewPanel insight linking", () => {
         quoteId: "quote-1",
         primaryInsightId: "insight-new",
         additionalInsightIds: [],
+        relevanceStrength: null,
       });
     });
   });
 
-  it("lets users move the quote editor when floating placement is odd", async () => {
+  it("focuses quote on transcript click and closes the detail pane", async () => {
     const user = userEvent.setup();
-    const { container } = render(<QuoteReviewPanel meetingId="meeting-1" />);
+    const { container } = renderWithQueryClient(<QuoteReviewPanel meetingId="meeting-1" />);
 
     const highlightedQuote = container.querySelector<HTMLElement>(
-      'mark[data-quote-id="quote-1"]'
+      'span[data-quote-id="quote-1"]'
     );
     expect(highlightedQuote).not.toBeNull();
     await user.click(highlightedQuote!);
 
-    const dialog = screen.getByRole("dialog", { name: "Edit quote" });
-    vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue({
-      x: 100,
-      y: 80,
-      top: 80,
-      left: 100,
-      right: 420,
-      bottom: 280,
-      width: 320,
-      height: 200,
-      toJSON: () => ({}),
-    });
+    expect(screen.getByRole("combobox")).toHaveValue("Analyst");
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Move quote editor" }), {
-      button: 0,
-      clientX: 120,
-      clientY: 100,
-    });
-    fireEvent.pointerMove(window, { clientX: 170, clientY: 140 });
-    fireEvent.pointerUp(window);
+    await user.click(screen.getByRole("button", { name: "Close" }));
 
-    expect(dialog).toHaveStyle({ left: "150px", top: "120px" });
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 });

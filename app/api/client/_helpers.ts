@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCurrentUserId } from "@/lib/data/auth-context";
 
-export async function requireRouteClient() {
+type RouteClient =
+  | { response: NextResponse }
+  | { userId: string };
+
+export async function requireRouteClient(): Promise<RouteClient> {
   try {
     const userId = await getCurrentUserId();
 

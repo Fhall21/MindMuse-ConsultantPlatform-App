@@ -15,6 +15,8 @@ from schemas.grid import (
     GridGenerateResponse,
     GridInsight,
     GridQuote,
+    GridColumnSuggestionsRequest,
+    GridColumnSuggestionsResponse,
 )
 
 router = APIRouter(prefix="/grid", tags=["grid"])
@@ -187,3 +189,73 @@ async def generate_grid(request: GridGenerateRequest) -> GridGenerateResponse:
             for answer in response.answers
         ]
     )
+
+
+SUGGESTIONS_SYSTEM_PROMPT = """You are an expert qualitative research analyst.
+
+Given the following transcript snippets/transcripts from a consultation, suggest up to 5 key analysis questions to structure our analysis grid.
+Each question must be a concise, direct question (e.g. 'What barriers did participants face?').
+
+Return ONLY a JSON object with a 'suggestions' field containing a list of strings:
+{"suggestions": ["question 1", "question 2", ...]}
+"""
+
+
+@router.post("/column-suggestions", response_model=GridColumnSuggestionsResponse)
+async def suggest_columns(
+    request: GridColumnSuggestionsRequest,
+) -> GridColumnSuggestionsResponse:
+    """Suggest up to 5 analysis questions based on transcripts in the round."""
+    transcripts = [
+        transcript.strip()
+        for transcript in request.transcripts
+        if transcript.strip()
+    ]
+    if not transcripts:
+        return GridColumnSuggestionsResponse(suggestions=[])
+    combined_transcripts = "\n\n=== Transcript ===\n".join(transcripts)
+
+    if not settings.openai_api_key:
+        raise _generation_error("AI model is not configured")
+
+    try:
+        completion = get_client().chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": SUGGESTIONS_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": combined_transcripts[:30000],  # safe cap for context
+                },
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.7,
+        )
+    except Exception as exc:
+        logger.exception("Column suggestions model call failed")
+        raise _generation_error("AI model request failed") from exc
+
+    try:
+        content = completion.choices[0].message.content
+    except (AttributeError, IndexError, TypeError) as exc:
+        raise _generation_error("AI model returned malformed output") from exc
+
+    if not content:
+        raise _generation_error("AI model returned an empty response")
+
+    try:
+        parsed = json.loads(content)
+        if not isinstance(parsed, dict):
+            raise ValueError("response must be an object")
+        raw_suggestions = parsed.get("suggestions")
+        if not isinstance(raw_suggestions, list):
+            raise ValueError("suggestions must be a list")
+        suggestions = [
+            suggestion.strip()
+            for suggestion in raw_suggestions
+            if isinstance(suggestion, str) and suggestion.strip()
+        ][:5]
+        return GridColumnSuggestionsResponse(suggestions=suggestions)
+    except (json.JSONDecodeError, ValidationError, ValueError) as exc:
+        logger.warning("Column suggestions returned malformed output: %s", exc)
+        raise _generation_error("AI model returned malformed output") from exc

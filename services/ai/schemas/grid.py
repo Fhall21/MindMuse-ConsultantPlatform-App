@@ -52,3 +52,11 @@ class GridAnswer(GridSchema):
 
 class GridGenerateResponse(GridSchema):
     answers: list[GridAnswer]
+
+
+class GridColumnSuggestionsRequest(GridSchema):
+    transcripts: list[str] = Field(max_length=100)
+
+
+class GridColumnSuggestionsResponse(GridSchema):
+    suggestions: list[str] = Field(max_length=5)

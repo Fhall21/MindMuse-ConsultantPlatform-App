@@ -10,6 +10,8 @@ export const CHAT_PROTECTED_FASTAPI_PATHS = new Set([
   "/canvas/layout",
   "/research/generate",
   "/draft/email",
+  "/grid/generate",
+  "/grid/column-suggestions",
   "/rounds/generate-report",
   "/analysis/start",
 ]);

@@ -335,3 +335,131 @@ def test_generate_grid_requires_authentication(client):
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Unauthorized"}
+
+
+def test_column_suggestions_returns_trimmed_maximum_of_five(
+    client,
+    monkeypatch,
+):
+    fake_client = FakeClient(
+        json.dumps(
+            {
+                "suggestions": [
+                    "  What changed?  ",
+                    "",
+                    "What barriers emerged?",
+                    "What support was requested?",
+                    "What worked well?",
+                    "What remains unresolved?",
+                    "This sixth valid question is dropped",
+                ]
+            }
+        )
+    )
+    monkeypatch.setattr(grid, "get_client", lambda: fake_client)
+
+    response = client.post(
+        "/grid/column-suggestions",
+        json={"transcripts": ["Participant described several changes."]},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "suggestions": [
+            "What changed?",
+            "What barriers emerged?",
+            "What support was requested?",
+            "What worked well?",
+            "What remains unresolved?",
+        ]
+    }
+
+
+def test_column_suggestions_empty_transcripts_skip_model(client, monkeypatch):
+    def fail_if_called():
+        raise AssertionError("LLM must not be called without transcript text")
+
+    monkeypatch.setattr(grid, "get_client", fail_if_called)
+
+    response = client.post(
+        "/grid/column-suggestions",
+        json={"transcripts": ["", "   "]},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"suggestions": []}
+
+
+def test_column_suggestions_malformed_output_returns_structured_500(
+    client,
+    monkeypatch,
+):
+    monkeypatch.setattr(grid, "get_client", lambda: FakeClient("not-json"))
+
+    response = client.post(
+        "/grid/column-suggestions",
+        json={"transcripts": ["Transcript"]},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"]["message"] == (
+        "AI model returned malformed output"
+    )
+
+
+def test_column_suggestions_rejects_non_list_payload(client, monkeypatch):
+    monkeypatch.setattr(
+        grid,
+        "get_client",
+        lambda: FakeClient(json.dumps({"suggestions": "not-a-list"})),
+    )
+
+    response = client.post(
+        "/grid/column-suggestions",
+        json={"transcripts": ["Transcript"]},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"]["message"] == (
+        "AI model returned malformed output"
+    )
+
+
+def test_column_suggestions_model_failure_returns_structured_500(
+    client,
+    monkeypatch,
+):
+    class FailingCompletions:
+        def create(self, **kwargs):  # noqa: ARG002
+            raise RuntimeError("model unavailable")
+
+    monkeypatch.setattr(
+        grid,
+        "get_client",
+        lambda: SimpleNamespace(
+            chat=SimpleNamespace(completions=FailingCompletions())
+        ),
+    )
+
+    response = client.post(
+        "/grid/column-suggestions",
+        json={"transcripts": ["Transcript"]},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"]["message"] == "AI model request failed"
+
+
+def test_column_suggestions_requires_authentication(client):
+    response = client.post(
+        "/grid/column-suggestions",
+        json={"transcripts": ["Transcript"]},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Unauthorized"}

@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import posthog from "posthog-js";
 import { CanvasShell, type CanvasShellHandle } from "@/components/canvas/canvas-shell";
+import { GridShell } from "@/components/grid/grid-shell";
 import { RoundAuditTrail } from "@/components/audit/audit-trail";
 import { AnalyticsPanel } from "@/components/consultations/rounds/analytics-panel";
 import { LinkedConsultationsSection } from "@/components/consultations/rounds/linked-consultations-section";
@@ -22,12 +23,13 @@ import {
 } from "@/lib/actions/consultation-workflow";
 import type { RoundConsultationSummary, SourceTheme } from "@/types/round-detail";
 
-const VALID_TABS = ["canvas", "meetings", "reports", "analysis", "audit"] as const;
+const VALID_TABS = ["canvas", "meetings", "grid", "analysis", "reports", "audit"] as const;
 type Tab = (typeof VALID_TABS)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
   canvas: "Canvas",
   meetings: "Meetings",
+  grid: "Grid",
   reports: "Reports",
   analysis: "Analysis",
   audit: "Audit",
@@ -52,6 +54,7 @@ export function CanvasWorkspaceShell({ roundId, roundLabel }: CanvasWorkspaceShe
   const [everActivated, setEverActivated] = useState<Record<Tab, boolean>>({
     canvas: true,
     meetings: false,
+    grid: false,
     reports: false,
     analysis: false,
     audit: false,
@@ -223,6 +226,12 @@ export function CanvasWorkspaceShell({ roundId, roundLabel }: CanvasWorkspaceShe
             <div className="mx-auto max-w-5xl space-y-4 px-4 py-8">
               <LinkedConsultationsSection meetings={adaptedMeetings} />
             </div>
+          </div>
+        )}
+
+        {everActivated.grid && (
+          <div hidden={activeTab !== "grid"} className="h-full">
+            <GridShell roundId={roundId} columns={[]} />
           </div>
         )}
 

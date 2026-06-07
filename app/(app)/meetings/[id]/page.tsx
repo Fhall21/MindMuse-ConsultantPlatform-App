@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { AuditTrail } from "@/components/audit/audit-trail";
 import { ThemePanel } from "@/components/consultations/theme-panel";
+import { GridInsightSection } from "@/components/meetings/grid-insight-section";
 import { QuoteReviewPanel } from "@/components/consultations/quote-review-panel";
 import { EmailDraftPanel } from "@/components/evidence/email-draft-panel";
 import { TranscriptIntakePanel } from "@/components/consultations/transcript-intake-panel";
@@ -548,6 +549,7 @@ export default function MeetingDetailPage({
           >
             <SectionHeading>Themes</SectionHeading>
             <ThemePanel meetingId={id} />
+            <GridInsightSection meetingId={id} />
           </section>
 
           <Separator className="mx-auto w-full max-w-2xl" />

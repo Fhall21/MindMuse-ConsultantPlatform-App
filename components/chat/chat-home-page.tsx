@@ -20,8 +20,6 @@ import { useChatSessions } from "@/hooks/use-chat-sessions";
 import { useConsultations } from "@/hooks/use-consultations";
 import { captureFileForChatIntake } from "@/lib/capture/chat-file-intake";
 import { mergeBootstrapWithStreamingAssistant } from "@/lib/chat/merge-bootstrap-messages";
-import type { CrossAnalysisResults } from "@/lib/chat/analysis-db";
-import type { ChatAnalysisNotification } from "@/components/chat/chat-analysis-notifications";
 import type { ResumeSuggestion } from "@/lib/chat/resume-suggestion";
 import {
   areSuggestedResponsesStale,
@@ -74,10 +72,6 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
   const [isCapturingFile, setIsCapturingFile] = useState(false);
   const [isSwitchingSession, setIsSwitchingSession] = useState(false);
   const [createProjectCardPinned, setCreateProjectCardPinned] = useState(false);
-  const [analysisNotifications, setAnalysisNotifications] = useState<ChatAnalysisNotification[]>(
-    []
-  );
-  const seenAnalysisTaskIdsRef = useRef<Set<string>>(new Set());
   const sessionIdRef = useRef<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [suggestedResponses, setSuggestedResponses] =
@@ -562,72 +556,6 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
     });
   }, [loadBootstrap]);
 
-  useEffect(() => {
-    if (!consultationId) {
-      return;
-    }
-
-    let interval: ReturnType<typeof setInterval> | null = null;
-
-    const poll = async () => {
-      if (document.visibilityState === "hidden") {
-        return;
-      }
-
-      try {
-        const data = await fetchJson<{
-          status: string;
-          task_id: string;
-          results?: CrossAnalysisResults;
-        }>(`/api/analysis/status/${consultationId}`);
-
-        if (
-          data.status === "complete" &&
-          data.results &&
-          data.task_id &&
-          !seenAnalysisTaskIdsRef.current.has(data.task_id)
-        ) {
-          seenAnalysisTaskIdsRef.current.add(data.task_id);
-          setAnalysisNotifications((current) => [
-            ...current,
-            {
-              id: data.task_id,
-              consultationId,
-              results: data.results!,
-            },
-          ]);
-          if (interval) {
-            clearInterval(interval);
-            interval = null;
-          }
-        }
-      } catch (pollError) {
-        console.warn("[chat-home] analysis poll failed", pollError);
-      }
-    };
-
-    void poll();
-    interval = setInterval(() => {
-      void poll();
-    }, 30_000);
-
-    const onVisibilityChange = () => {
-      void poll();
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [consultationId]);
-
-  const handleDismissAnalysisNotification = useCallback((id: string) => {
-    setAnalysisNotifications((current) => current.filter((item) => item.id !== id));
-  }, []);
-
   const handleConsultationSelected = useCallback(
     (nextConsultationId: string) => {
       setConsultationId(nextConsultationId);
@@ -735,8 +663,6 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
             onProjectCreated={handleProjectCreated}
             onCardUpdated={handleCardUpdated}
             onSubmitText={sendUserText}
-            analysisNotifications={analysisNotifications}
-            onDismissAnalysisNotification={handleDismissAnalysisNotification}
             textareaRef={textareaRef}
             suggestedResponses={visibleSuggestedResponses}
             onSelectSuggestion={handleSelectSuggestion}

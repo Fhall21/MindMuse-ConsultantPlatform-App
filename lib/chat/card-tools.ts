@@ -32,6 +32,9 @@ export const CHAT_CARD_TOOL_NAMES = new Set<string>([
   "ask_user_choice",
   // Sprint 22 — quote review in chat
   "show_quotes",
+  // Sprint 25 task-09b — cross-meeting analysis
+  "start_cross_analysis",
+  "list_previous_analyses",
 ]);
 
 /** Internal agent tools — never render ToolResultFallbackCard in the thread. */

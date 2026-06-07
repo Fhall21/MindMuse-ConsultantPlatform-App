@@ -104,6 +104,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   auditLog,
+  crossAnalysisJobs,
   insights,
   consultationOutputArtifacts,
   meetingPeople,
@@ -115,6 +116,8 @@ import {
   buildMeetingPickerOutput,
 } from "./tools/meetings-picker";
 import { resolveMeetingForConsultationAction } from "./meeting-resolve";
+import { startCrossAnalysisJob, readCrossAnalysisResults } from "./analysis-db";
+import { startCrossAnalysisSchema, listPreviousAnalysesSchema } from "./tools/analysis";
 
 export type { ChatToolRuntimeContext } from "./tool-context";
 
@@ -1521,6 +1524,86 @@ export function createChatTools(input: ChatToolRuntimeContext) {
         }));
 
         return { ...proposal, tool_result_id: toolResult.id };
+      },
+    }),
+
+    start_cross_analysis: tool({
+      description:
+        "Run a cross-meeting pattern analysis for this consultation using hdbscan clustering. Use when the user says 'analyze', 'run analysis', or '/analyze'. Requires at least two meetings.",
+      inputSchema: startCrossAnalysisSchema,
+      execute: async (input) => {
+        const parsed = startCrossAnalysisSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+
+        const started = await startCrossAnalysisJob({
+          userId: context.userId,
+          consultationId: parsed.consultation_id,
+          sessionId: context.sessionId,
+        });
+
+        const output: Record<string, unknown> = { consultation_id: parsed.consultation_id };
+        if (started) {
+          output.status = started.status;
+          output.task_id = started.task_id;
+        } else {
+          output.error = "Need at least two meetings to run analysis.";
+        }
+
+        await persistToolExecution({
+          context,
+          toolName: "start_cross_analysis",
+          input: payload,
+          output,
+          status: started ? "success" : "error",
+        });
+
+        return output;
+      },
+    }),
+
+    list_previous_analyses: tool({
+      description:
+        "List previous cross-meeting analyses for a consultation. Use when the user asks to see past analyses or says '/previous-analyses'.",
+      inputSchema: listPreviousAnalysesSchema,
+      execute: async (input) => {
+        const parsed = listPreviousAnalysesSchema.parse(input);
+        const payload = parsed as unknown as Record<string, unknown>;
+
+        const jobs = await db
+          .select()
+          .from(crossAnalysisJobs)
+          .where(
+            and(
+              eq(crossAnalysisJobs.userId, context.userId),
+              eq(crossAnalysisJobs.consultationId, parsed.consultation_id),
+              eq(crossAnalysisJobs.status, "complete")
+            )
+          )
+          .orderBy(desc(crossAnalysisJobs.updatedAt))
+          .limit(20);
+
+        const analyses = jobs.map((job) => {
+          const results = readCrossAnalysisResults(job.results);
+          return {
+            id: job.id,
+            task_id: job.taskId,
+            pattern_count: results?.pattern_count ?? 0,
+            transcript_count: results?.transcript_count ?? 0,
+            created_at: job.createdAt.toISOString(),
+          };
+        });
+
+        const output = { consultation_id: parsed.consultation_id, analyses };
+
+        await persistToolExecution({
+          context,
+          toolName: "list_previous_analyses",
+          input: payload,
+          output,
+          status: "success",
+        });
+
+        return output;
       },
     }),
   };

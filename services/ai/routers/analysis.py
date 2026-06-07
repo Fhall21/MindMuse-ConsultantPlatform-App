@@ -40,6 +40,41 @@ def _get_db_engine() -> Any:
     return _db_engine
 
 
+def _create_analysis_notification(task_id: str, consultation_id: str, pattern_count: int, transcript_count: int) -> None:
+    engine = _get_db_engine()
+    with engine.begin() as conn:
+        row = conn.execute(
+            text("SELECT user_id FROM cross_analysis_jobs WHERE task_id = :task_id LIMIT 1"),
+            {"task_id": task_id},
+        ).fetchone()
+        if not row:
+            return
+        user_id = str(row[0])
+        summary = f"{pattern_count} pattern{'s' if pattern_count != 1 else ''} across {transcript_count} transcript{'s' if transcript_count != 1 else ''}"
+        action_url = f"/canvas/round/{consultation_id}?tab=analysis"
+        conn.execute(
+            text(
+                """
+                INSERT INTO notifications (id, user_id, type, consultation_id, data, action_url, created_at)
+                VALUES (:id, :user_id, 'analysis_complete', :consultation_id,
+                        CAST(:data AS jsonb), :action_url, NOW())
+                """
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "consultation_id": consultation_id,
+                "data": json.dumps({
+                    "job_type": "analysis_complete",
+                    "job_id": task_id,
+                    "summary": summary,
+                    "action_url": action_url,
+                }),
+                "action_url": action_url,
+            },
+        )
+
+
 def _update_job(task_id: str, status: str, results: dict | None = None, error: str | None = None) -> None:
     engine = _get_db_engine()
     with engine.begin() as conn:
@@ -121,6 +156,17 @@ async def _run_cross_analysis(consultation_id: str, task_id: str) -> None:
             "findings": findings,
         }
         await loop.run_in_executor(None, _update_job, task_id, "complete", results, None)
+        try:
+            await loop.run_in_executor(
+                None,
+                _create_analysis_notification,
+                task_id,
+                consultation_id,
+                len(findings),
+                len(transcripts),
+            )
+        except Exception as notify_exc:
+            logger.warning("[analysis] notification insert failed task_id=%s: %s", task_id, notify_exc)
     except Exception as exc:
         logger.exception("[analysis] background task failed task_id=%s", task_id)
         await loop.run_in_executor(None, _update_job, task_id, "error", None, str(exc))

@@ -4,7 +4,6 @@ import type { RefObject } from "react";
 import type { UIMessage } from "ai";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ChatThread } from "@/components/chat/ChatThread";
-import type { ChatAnalysisNotification } from "@/components/chat/chat-analysis-notifications";
 import type { SuggestedResponseOption } from "@/lib/chat/suggested-responses";
 
 interface ChatShellProps {
@@ -27,8 +26,6 @@ interface ChatShellProps {
   onProjectCreated?: (consultationId: string) => void;
   onCardUpdated?: () => void;
   onSubmitText?: (text: string) => boolean | Promise<boolean>;
-  analysisNotifications?: ChatAnalysisNotification[];
-  onDismissAnalysisNotification?: (id: string) => void;
   textareaRef?: RefObject<HTMLTextAreaElement | null>;
   suggestedResponses?: SuggestedResponseOption[] | null;
   onSelectSuggestion?: (prefill: string) => void;
@@ -54,8 +51,6 @@ export function ChatShell({
   onProjectCreated,
   onCardUpdated,
   onSubmitText,
-  analysisNotifications = [],
-  onDismissAnalysisNotification,
   textareaRef,
   suggestedResponses = null,
   onSelectSuggestion,
@@ -82,8 +77,6 @@ export function ChatShell({
             sessionId={sessionId}
             needsConsultationSelection={needsConsultationSelection}
             showCreateProject={showCreateProject}
-            analysisNotifications={analysisNotifications}
-            onDismissAnalysisNotification={onDismissAnalysisNotification}
             onRetry={showRetry ? onRetry : undefined}
             onConsultationSelected={onConsultationSelected}
             onProjectCreated={onProjectCreated}

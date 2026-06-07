@@ -29,6 +29,9 @@ import { BulkDismissPendingCard } from "./BulkDismissPendingCard";
 import { MeetingNoteCard } from "./MeetingNoteCard";
 import { AskChoiceCard } from "./AskChoiceCard";
 import { QuoteReviewCard } from "./QuoteReviewCard";
+// Sprint 25 task-09b — cross-meeting analysis
+import { AnalyzeStartCard } from "./AnalyzeStartCard";
+import { PreviousAnalysesCard } from "./PreviousAnalysesCard";
 import type { ChatCardProps } from "./types";
 
 export type ChatCardComponent = ComponentType<ChatCardProps>;
@@ -67,6 +70,9 @@ export const CHAT_CARD_MAP: Record<string, ChatCardComponent> = {
   ask_user_choice: AskChoiceCard,
   // Sprint 22 — quote review in chat
   show_quotes: QuoteReviewCard,
+  // Sprint 25 task-09b — cross-meeting analysis
+  start_cross_analysis: AnalyzeStartCard,
+  list_previous_analyses: PreviousAnalysesCard,
 };
 
 export function resolveChatCard(toolName: string): ChatCardComponent {

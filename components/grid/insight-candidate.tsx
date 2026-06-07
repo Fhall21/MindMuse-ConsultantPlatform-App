@@ -38,7 +38,6 @@ export const InsightCandidate = memo(function InsightCandidate({
   const displayLabel = insight.editedLabel ?? insight.label;
   const isAccepted = insight.gridReviewState === "accepted";
   const isRejected = insight.gridReviewState === "rejected";
-  const isOnCanvas = isAccepted && insight.accepted;
   const quoteCount = insight.quotes.length;
   const quoteLabel = `${quoteCount} ${quoteCount === 1 ? "quote" : "quotes"}`;
 
@@ -94,11 +93,6 @@ export const InsightCandidate = memo(function InsightCandidate({
               {formatEvidenceConfidence(insight.quoteConfidence)}
             </span>
           ) : null}
-          {isOnCanvas && (
-            <span className="rounded border border-emerald-200 bg-emerald-100/80 px-1 py-px text-[10px] text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
-              On canvas
-            </span>
-          )}
           {isAccepted && (
             <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
               Accepted

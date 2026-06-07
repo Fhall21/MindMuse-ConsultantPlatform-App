@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { CardConfirmProvider } from "@/components/chat/card-confirm-context";
 import { stripLeakedToolSyntax } from "@/lib/chat/assistant-output";
 import { ChatPageHeader } from "@/components/chat/chat-page-header";
-import { NotificationBell } from "@/components/chat/notification-bell";
 import { ChatShell } from "@/components/chat/ChatShell";
 import { ChatHomeView } from "@/components/chat/ChatHomeView";
 import {
@@ -683,7 +682,6 @@ export function ChatHomePage({ displayName }: ChatHomePageProps) {
             onBackToHome={() => {
               void handleBackToHome();
             }}
-            rightSlot={<NotificationBell />}
           />
         </div>
         {view === "home" ? (

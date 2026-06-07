@@ -1683,3 +1683,37 @@ export const gridCellInsights = pgTable("grid_cell_insights", {
 }, (t) => ({
   insightCellUnique: uniqueIndex("grid_cell_insights_insight_cell_idx").on(t.insightId, t.gridCellId),
 }));
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type")
+      .notNull()
+      .$type<"analysis_complete" | "research_ready" | "job_complete">(),
+    consultationId: uuid("consultation_id").references(() => consultations.id, {
+      onDelete: "set null",
+    }),
+    data: jsonb("data").$type<{
+      job_type: string;
+      job_id: string;
+      summary: string;
+      action_url?: string;
+    }>(),
+    actionUrl: text("action_url"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    seenAt: timestamp("seen_at", { withTimezone: true }),
+  },
+  (table) => ({
+    userIdx: index("idx_notifications_user_id").on(table.userId),
+    userCreatedIdx: index("idx_notifications_user_created").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { UserNav } from "@/components/layout/user-nav";
+import { NotificationBell } from "@/components/chat/notification-bell";
 import { Separator } from "@/components/ui/separator";
 import { getAuthSession, getSessionDisplayName } from "@/lib/auth";
 
@@ -24,6 +25,7 @@ export default async function AppLayout({
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-5" />
           <div className="flex-1" />
+          <NotificationBell />
           <UserNav
             email={session.user.email}
             displayName={getSessionDisplayName(session)}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
-import { chatSessions, chatToolResults, researchSessions } from "@/db/schema";
+import { chatSessions, chatToolResults, notifications, researchSessions } from "@/db/schema";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
 
 // READ-ONLY — no side effects. Do NOT add writes here.
@@ -10,7 +10,7 @@ export async function GET() {
   const auth = await requireAuthenticatedApiUser();
   if (auth instanceof NextResponse) return auth;
 
-  const [toolRows, researchRows] = await Promise.all([
+  const [toolRows, researchRows, notificationRows] = await Promise.all([
     db
       .select({
         id: chatToolResults.id,
@@ -48,6 +48,22 @@ export async function GET() {
       )
       .orderBy(desc(researchSessions.completedAt))
       .limit(20),
+    db
+      .select({
+        id: notifications.id,
+        type: notifications.type,
+        data: notifications.data,
+        createdAt: notifications.createdAt,
+      })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, auth.id),
+          isNull(notifications.seenAt)
+        )
+      )
+      .orderBy(desc(notifications.createdAt))
+      .limit(20),
   ]);
 
   const researchNotifications = researchRows.map((row) => ({
@@ -62,11 +78,22 @@ export async function GET() {
     createdAt: row.completedAt ?? row.updatedAt,
   }));
 
-  const notifications = [...toolRows, ...researchNotifications]
+  const notificationsTableRows = notificationRows.map((row) => ({
+    id: row.id,
+    toolName: row.type,
+    output: row.data ?? null,
+    createdAt: row.createdAt,
+  }));
+
+  const allNotifications = [
+    ...toolRows,
+    ...researchNotifications,
+    ...notificationsTableRows,
+  ]
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
     .slice(0, 20);
 
-  return NextResponse.json({ notifications });
+  return NextResponse.json({ notifications: allNotifications });
 }
 
 export async function POST() {

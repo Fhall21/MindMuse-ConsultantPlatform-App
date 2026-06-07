@@ -43,66 +43,85 @@ export function ChatQuoteReviewRow({
   return (
     <article
       className={cn(
-        "space-y-3 rounded-lg border px-4 py-4 transition-colors",
-        isAccepted && "border-emerald-500/30 bg-emerald-500/5",
-        isDismissed && "border-border/60 bg-muted/20 opacity-80",
-        !isAccepted && !isDismissed && "border-border/70",
+        "rounded-md border border-border bg-card p-3 transition-colors",
         className
       )}
     >
-      <blockquote className="text-[0.9375rem] italic leading-relaxed text-foreground">
-        {contextBefore && <span className="text-muted-foreground">{contextBefore}</span>}
-        <span className="bg-amber-200/50 dark:bg-amber-500/20 px-1 rounded-sm mx-1 text-foreground">
-          &ldquo;{text}&rdquo;
+      <div className="mb-1.5 text-[0.6125rem] font-semibold uppercase tracking-widest text-muted-foreground">
+        {speaker || "Unknown"}
+      </div>
+
+      <blockquote className="mb-2 line-clamp-4 text-[0.8125rem] leading-relaxed text-muted-foreground">
+        {contextBefore}
+        <span
+          className={cn(
+            "rounded-sm bg-opacity-60 px-0.5 text-foreground",
+            isAccepted
+              ? "bg-green-200 dark:bg-green-500/20"
+              : isDismissed
+                ? "bg-muted"
+                : "bg-amber-200 dark:bg-amber-500/20"
+          )}
+        >
+          {text}
         </span>
-        {contextAfter && <span className="text-muted-foreground">{contextAfter}</span>}
+        {contextAfter}
       </blockquote>
 
       {justification && (
-        <div className="border-l-2 border-border/60 pl-3 text-xs italic text-muted-foreground">
+        <div className="mb-2 border-t border-border pt-1.5 text-xs italic text-muted-foreground">
           {justification}
         </div>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        {[speaker, positionLabel, "AI suggested"].filter(Boolean).join(" · ")}
-      </p>
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Badge variant="outline" className="max-w-[12rem] truncate">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+        <p>{[positionLabel, "AI suggested"].filter(Boolean).join(" · ")}</p>
+        <Badge variant="outline" className="max-w-[12rem] truncate rounded-sm">
           {themeLabel}
         </Badge>
-        {isAccepted ? (
-          <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
-            Saved
-          </Badge>
-        ) : isDismissed ? (
-          <Badge variant="outline" className="text-muted-foreground">
-            Dismissed
-          </Badge>
-        ) : null}
       </div>
 
       {error ? (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="mt-2 text-sm text-destructive">
           {error}
         </p>
       ) : null}
 
       {showActions ? (
-        <div className="flex flex-wrap gap-2 border-t border-border/60 pt-3">
+        <div className="mt-2 flex flex-wrap gap-1.5">
           {onAccept ? (
-            <Button type="button" size="sm" disabled={isBusy} onClick={onAccept}>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 px-2.5 text-xs"
+              disabled={isBusy}
+              onClick={onAccept}
+            >
               {isBusy ? <Loader2 className="size-4 animate-spin" /> : null}
               Accept
             </Button>
           ) : null}
           {onDismiss ? (
-            <Button type="button" size="sm" variant="outline" disabled={isBusy} onClick={onDismiss}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2.5 text-xs"
+              disabled={isBusy}
+              onClick={onDismiss}
+            >
               Dismiss
             </Button>
           ) : null}
         </div>
+      ) : isAccepted ? (
+        <Badge className="mt-2 rounded-sm border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-200">
+          Saved
+        </Badge>
+      ) : isDismissed ? (
+        <Badge variant="outline" className="mt-2 rounded-sm text-muted-foreground">
+          Dismissed
+        </Badge>
       ) : null}
     </article>
   );

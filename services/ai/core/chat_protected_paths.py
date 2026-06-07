@@ -16,6 +16,7 @@ CHAT_PROTECTED_PATHS: frozenset[str] = frozenset(
         "/canvas/layout",
         "/research/generate",
         "/draft/email",
+        "/grid/generate",
         "/rounds/generate-report",
         "/analysis/start",
     }

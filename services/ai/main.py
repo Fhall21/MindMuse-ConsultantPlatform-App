@@ -35,6 +35,7 @@ from routers import (
     canvas,
     clarification,
     draft,
+    grid,
     infer,
     interview,
     ocr,
@@ -148,6 +149,7 @@ app.add_middleware(ChatServiceTokenMiddleware)
 app.include_router(themes.router)
 app.include_router(quotes.router)
 app.include_router(draft.router)
+app.include_router(grid.router)
 app.include_router(clarification.router)
 app.include_router(rounds.router)
 
@@ -178,6 +180,7 @@ async def health():
             "/themes/extract",
             "/quotes/identify",
             "/draft/email",
+            "/grid/generate",
             "/rounds/refine-group-draft",
             "/rounds/generate-summary",
             "/rounds/generate-report",

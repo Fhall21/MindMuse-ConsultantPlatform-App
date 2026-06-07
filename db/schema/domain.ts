@@ -1587,6 +1587,7 @@ export const quoteInsightLinks = pgTable(
       .references(() => insights.id, { onDelete: "cascade" }),
     isPrimary: boolean("is_primary").default(false).notNull(),
     linkType: text("link_type").default("durable").notNull(),
+    relevanceStrength: text("relevance_strength").$type<"strong_match" | "partial_support" | "context" | "weak" | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
@@ -1632,3 +1633,45 @@ export const canvasSpatialLayoutJobs = pgTable(
     ),
   })
 );
+
+export const gridColumns = pgTable("grid_columns", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  consultationId: uuid("consultation_id").notNull().references(() => consultations.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  question: text("question").notNull(),
+  position: integer("position").default(0).notNull(),
+  ...timestamps,
+});
+
+export const gridCells = pgTable("grid_cells", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  consultationId: uuid("consultation_id").notNull().references(() => consultations.id, { onDelete: "cascade" }),
+  meetingId: uuid("meeting_id").notNull().references(() => meetings.id, { onDelete: "cascade" }),
+  columnId: uuid("column_id").notNull().references(() => gridColumns.id, { onDelete: "cascade" }),
+  status: text("status").default("pending").$type<"pending" | "generating" | "complete" | "no_evidence" | "failed">(),
+  confidence: text("confidence").$type<"high" | "medium" | "low" | null>(),
+  quoteCount: integer("quote_count").default(0),
+  insightCount: integer("insight_count").default(0),
+  generatedAt: timestamp("generated_at", { withTimezone: true }),
+  ...timestamps,
+}, (t) => ({
+  meetingColumnUnique: uniqueIndex("grid_cells_meeting_column_idx").on(t.meetingId, t.columnId),
+}));
+
+// Junction: one insight can appear in multiple grid cells (different columns or rounds).
+// Per-cell review state lives here — NOT on the insights table.
+export const gridCellInsights = pgTable("grid_cell_insights", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  insightId: uuid("insight_id").notNull().references(() => insights.id, { onDelete: "cascade" }),
+  gridCellId: uuid("grid_cell_id").notNull().references(() => gridCells.id, { onDelete: "cascade" }),
+  // Denormalized: avoids join through gridCells on every insight fetch.
+  // App invariant: gridColumnId MUST equal gridCellId→gridCells.columnId — enforced in route handler.
+  gridColumnId: uuid("grid_column_id").notNull().references(() => gridColumns.id, { onDelete: "cascade" }),
+  gridReviewState: text("grid_review_state").default("pending").$type<"pending" | "accepted" | "rejected" | "edited">(),
+  accepted: boolean("accepted").default(false).notNull(),
+  rejected: boolean("rejected").default(false).notNull(),
+  editedLabel: text("edited_label"),
+  ...timestamps,
+}, (t) => ({
+  insightCellUnique: uniqueIndex("grid_cell_insights_insight_cell_idx").on(t.insightId, t.gridCellId),
+}));

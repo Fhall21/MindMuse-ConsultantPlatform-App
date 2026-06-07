@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   closestCenter,
@@ -35,6 +35,7 @@ import { useGridCells } from "@/hooks/use-grid-cells";
 import { useGridInsights } from "@/hooks/use-grid-insights";
 import { useGridGenerationLoop } from "@/hooks/use-meeting-generate";
 import { useReviewInsight } from "@/hooks/use-review-insight";
+import { generateGridCsv } from "@/lib/export-grid-csv";
 import type { GridReviewState, InsightWithLinks } from "@/types/grid";
 
 type RightPanelMode = "evidence" | "add-column";
@@ -216,6 +217,9 @@ function WiredGridWorkspace({
   const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null);
+  const [exportPending, setExportPending] = useState(false);
+  const exportDownloadedRef = useRef(false);
+  const exportTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: gridData, isLoading: gridLoading } = useGrid(roundId);
   const { data: cellsData, isLoading: cellsLoading } = useGridCells(roundId);
@@ -234,7 +238,10 @@ function WiredGridWorkspace({
     () => cellsData?.cells ?? gridData?.cells ?? [],
     [cellsData?.cells, gridData?.cells]
   );
-  const { data: gridInsightsData } = useGridInsights(roundId, columns.length > 0);
+  const { data: gridInsightsData, isFetching: insightsFetching } = useGridInsights(
+    roundId,
+    columns.length > 0 || exportPending
+  );
   const completedCellIds = useMemo(
     () =>
       new Set(
@@ -350,6 +357,56 @@ function WiredGridWorkspace({
     [retryMeeting]
   );
 
+  const doDownload = useCallback(() => {
+    if (!meetings.length || !orderedColumns.length) {
+      toast.info("Nothing to export yet.")
+      return
+    }
+    const csv = generateGridCsv(orderedColumns, meetings, cells, insightsByCellId)
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `grid-export-${roundId}-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [meetings, orderedColumns, cells, insightsByCellId, roundId]);
+
+  const handleExportClick = useCallback(() => {
+    if (exportPending) return
+    if (!meetings.length || !orderedColumns.length) {
+      toast.info("Nothing to export yet.")
+      return
+    }
+    if (gridInsightsData && !insightsFetching) {
+      doDownload()
+      return
+    }
+    exportDownloadedRef.current = false
+    setExportPending(true)
+    exportTimeoutRef.current = setTimeout(() => {
+      setExportPending(false)
+      toast.error("Export timed out. Check connection and try again.")
+    }, 8000)
+  }, [exportPending, meetings, orderedColumns, gridInsightsData, insightsFetching, doDownload]);
+
+  useEffect(() => {
+    if (!exportPending || insightsFetching) return
+    if (exportDownloadedRef.current) return
+    if (!gridInsightsData) {
+      setExportPending(false)
+      toast.error("Could not load insights for export. Try again.")
+      return
+    }
+    if (exportTimeoutRef.current) {
+      clearTimeout(exportTimeoutRef.current)
+      exportTimeoutRef.current = null
+    }
+    exportDownloadedRef.current = true
+    setExportPending(false)
+    doDownload()
+  }, [exportPending, insightsFetching, gridInsightsData, doDownload]);
+
   const handleInsightReview = useCallback(
     async (
       insightId: string,
@@ -399,7 +456,8 @@ function WiredGridWorkspace({
     <>
       <GridToolbar
         onAddColumn={openAddColumnPanel}
-        onExport={onExport}
+        onExport={handleExportClick}
+        exportLoading={exportPending && insightsFetching}
         bulkActions={{ roundId, completedCellIds }}
       />
 

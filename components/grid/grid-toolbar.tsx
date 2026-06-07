@@ -7,6 +7,7 @@ import {
   Download,
   Filter,
   Grid2X2,
+  Loader2,
   Plus,
   UsersRound,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import { BulkAcceptDialog } from "@/components/grid/bulk-accept-dialog";
 interface GridToolbarProps {
   onAddColumn: () => void;
   onExport?: () => void;
+  exportLoading?: boolean;
   bulkActions?: {
     roundId: string;
     completedCellIds: ReadonlySet<string>;
@@ -26,6 +28,7 @@ interface GridToolbarProps {
 export function GridToolbar({
   onAddColumn,
   onExport,
+  exportLoading = false,
   bulkActions,
 }: GridToolbarProps) {
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
@@ -101,8 +104,18 @@ export function GridToolbar({
         Compare groups
       </Button>
 
-      <Button type="button" variant="outline" size="sm" onClick={onExport}>
-        <Download aria-hidden="true" />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onExport}
+        disabled={exportLoading}
+      >
+        {exportLoading ? (
+          <Loader2 className="animate-spin" aria-hidden="true" />
+        ) : (
+          <Download aria-hidden="true" />
+        )}
         Export
       </Button>
 

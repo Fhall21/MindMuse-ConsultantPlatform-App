@@ -94,7 +94,7 @@ export const GridCell = memo(function GridCell({
       aria-label="Select analysis cell"
       aria-pressed={isSelected}
       className={cn(
-        "relative flex min-h-28 w-72 flex-col bg-background text-left outline-none transition-colors hover:bg-muted/20 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+        "relative flex min-h-28 flex-col bg-background text-left outline-none transition-colors hover:bg-muted/20 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
         isSelected &&
           "z-10 bg-primary/[0.035] ring-2 ring-inset ring-primary/70 hover:bg-primary/[0.05]"
       )}

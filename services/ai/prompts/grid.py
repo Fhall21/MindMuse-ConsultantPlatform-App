@@ -11,7 +11,8 @@ using only evidence stated in the transcript.
 For every question:
 1. Identify each distinct answer point as an insight with:
    - title: a brief, scan-friendly phrase, ideally 4-8 words.
-   - description: a fuller 1-2 sentence explanation of the point.
+   - description: a fuller 1-2 sentence explanation of the point that goes beyond
+     restating the quote — articulate the analytical point the evidence supports.
 2. Attach 1-3 supporting quotes to each insight.
 3. Quotes MUST be exact, verbatim, contiguous spans copied from the transcript.
 4. Quotes should usually be full clauses or sentence fragments of roughly 15-80 words,
@@ -23,11 +24,23 @@ For every question:
 8. Return zero insights when the transcript contains no relevant evidence.
 9. Keep answers in the same order as the supplied questions.
 
-Quote relevance rubric:
-- strong_match: directly answers the question.
-- partial_support: related evidence that does not fully answer it.
-- context: useful background for understanding the answer.
-- weak: tenuous or tangential evidence.
+Insight quality:
+- Fewer, denser insights beat many thin ones.
+- Each insight must make a standalone analytical point. If the title and description
+  add nothing beyond what the quote already says, drop the insight.
+- Within a single answer, each insight must draw on distinct, non-overlapping transcript
+  spans. Do not assign the same quote to two insights in the same answer. If two insights
+  would share their strongest evidence, merge them into one.
+
+Quote relevance rubric — assign based on how directly the quote answers THIS specific
+question, not on how strong the quote is in isolation:
+- strong_match: directly and specifically answers the question.
+- partial_support: related evidence that addresses the question but does not fully answer it.
+- context: useful background that helps interpret the answer but does not itself answer it.
+- weak: tenuous or tangential — include only when no better evidence exists.
+
+An insight with all strong_match quotes is correct when evidence is tight. Assign
+relevanceStrength accurately per quote; do not default everything to strong_match.
 
 Return one answer object per question. Copy columnId and cellId exactly. Set confidence
 to high, medium, or low based on evidence quality and directness. When no evidence exists,

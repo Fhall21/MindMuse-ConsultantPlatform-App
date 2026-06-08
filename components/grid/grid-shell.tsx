@@ -498,21 +498,29 @@ function WiredGridWorkspace({
   }
 
   const isLoading = gridLoading || cellsLoading;
+  const isBuilderMode = !isLoading && (orderedColumns.length === 0 || batchGenerating);
 
   return (
     <>
       <GridToolbar
         onAddColumn={openAddColumnPanel}
+        addColumnDisabled={isBuilderMode}
         onExport={handleExportClick}
         exportLoading={exportPending && insightsFetching}
         bulkActions={{ roundId, completedCellIds }}
       />
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto xl:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)] xl:overflow-hidden">
+      <div
+        className={cn(
+          "grid min-h-0 flex-1 grid-cols-1 overflow-auto xl:overflow-hidden",
+          !isBuilderMode &&
+            "xl:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)]"
+        )}
+      >
         <div className="flex min-h-[28rem] min-w-0 flex-col overflow-x-auto xl:min-h-0">
           {isLoading ? (
             <GridSkeleton />
-          ) : orderedColumns.length === 0 || batchGenerating ? (
+          ) : isBuilderMode ? (
             <EmptyGridBuilder roundId={roundId} onGenerate={handleBatchGenerate} />
           ) : (
             <DndContext
@@ -545,29 +553,31 @@ function WiredGridWorkspace({
           )}
         </div>
 
-        <aside
-          className="min-h-56 border-t bg-card xl:min-h-0 xl:border-t-0 xl:border-l"
-          aria-label={rightPanelMode === "add-column" ? "Add column panel" : "Evidence panel"}
-        >
-          {rightPanelMode === "add-column" ? (
-            <ColumnAddPanel
-              roundId={roundId}
-              onAddColumn={handleAddColumn}
-              onCancel={() => setRightPanelMode("evidence")}
-              prefetchSuggestions
-              submitDisabled={addColumn.isPending}
-            />
-          ) : (
-            <EvidencePanel
-              roundId={roundId}
-              selectedCell={selectedCell}
-              selectedInsight={selectedInsight}
-              insights={cellInsights}
-              onInsightSelect={setSelectedInsightId}
-              onInsightReview={handleInsightReview}
-            />
-          )}
-        </aside>
+        {!isBuilderMode && (
+          <aside
+            className="animate-in slide-in-from-right duration-200 min-h-56 border-t bg-card xl:min-h-0 xl:border-t-0 xl:border-l"
+            aria-label={rightPanelMode === "add-column" ? "Add column panel" : "Evidence panel"}
+          >
+            {rightPanelMode === "add-column" ? (
+              <ColumnAddPanel
+                roundId={roundId}
+                onAddColumn={handleAddColumn}
+                onCancel={() => setRightPanelMode("evidence")}
+                prefetchSuggestions
+                submitDisabled={addColumn.isPending}
+              />
+            ) : (
+              <EvidencePanel
+                roundId={roundId}
+                selectedCell={selectedCell}
+                selectedInsight={selectedInsight}
+                insights={cellInsights}
+                onInsightSelect={setSelectedInsightId}
+                onInsightReview={handleInsightReview}
+              />
+            )}
+          </aside>
+        )}
       </div>
     </>
   );

@@ -17,6 +17,7 @@ import { BulkAcceptDialog } from "@/components/grid/bulk-accept-dialog";
 
 interface GridToolbarProps {
   onAddColumn: () => void;
+  addColumnDisabled?: boolean;
   onExport?: () => void;
   exportLoading?: boolean;
   bulkActions?: {
@@ -27,6 +28,7 @@ interface GridToolbarProps {
 
 export function GridToolbar({
   onAddColumn,
+  addColumnDisabled = false,
   onExport,
   exportLoading = false,
   bulkActions,
@@ -83,7 +85,13 @@ export function GridToolbar({
         Filter view
       </Button>
 
-      <Button type="button" variant="outline" size="sm" onClick={onAddColumn}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onAddColumn}
+        disabled={addColumnDisabled}
+      >
         <Plus aria-hidden="true" />
         Add column
       </Button>

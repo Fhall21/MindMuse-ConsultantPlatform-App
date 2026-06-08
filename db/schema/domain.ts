@@ -1702,6 +1702,7 @@ export const notifications = pgTable(
       job_id: string;
       summary: string;
       action_url?: string;
+      auto_triggered?: boolean;
     }>(),
     actionUrl: text("action_url"),
     createdAt: timestamp("created_at", { withTimezone: true })

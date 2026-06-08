@@ -1,4 +1,4 @@
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, gt } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { db } from "@/db/client";
 import { crossAnalysisJobs, meetings } from "@/db/schema";
@@ -103,6 +103,38 @@ export async function startCrossAnalysisJob(params: {
   });
 
   return { task_id: taskId, status: "queued" };
+}
+
+export async function countMeetingsSinceLastAnalysis(
+  userId: string,
+  consultationId: string
+): Promise<number> {
+  const [lastJob] = await db
+    .select({ completedAt: crossAnalysisJobs.updatedAt })
+    .from(crossAnalysisJobs)
+    .where(
+      and(
+        eq(crossAnalysisJobs.userId, userId),
+        eq(crossAnalysisJobs.consultationId, consultationId),
+        eq(crossAnalysisJobs.status, "complete")
+      )
+    )
+    .orderBy(desc(crossAnalysisJobs.updatedAt))
+    .limit(1);
+
+  const [row] = await db
+    .select({ count: count() })
+    .from(meetings)
+    .where(
+      and(
+        eq(meetings.userId, userId),
+        eq(meetings.consultationId, consultationId),
+        eq(meetings.isArchived, false),
+        lastJob ? gt(meetings.createdAt, lastJob.completedAt) : undefined
+      )
+    );
+
+  return row?.count ?? 0;
 }
 
 export function readCrossAnalysisResults(

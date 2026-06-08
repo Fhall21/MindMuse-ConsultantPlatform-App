@@ -34,6 +34,7 @@ interface JobNotificationOutput {
   job_id: string;
   summary: string;
   action_url?: string;
+  auto_triggered?: boolean;
 }
 
 interface JobNotification {
@@ -214,6 +215,9 @@ export function NotificationBell() {
                         {output?.summary && (
                           <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
                             {output.summary}
+                            {output.auto_triggered && (
+                              <span className="text-xs text-muted-foreground"> · Automatic</span>
+                            )}
                           </p>
                         )}
                         {hasAction && (

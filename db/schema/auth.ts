@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -36,6 +37,7 @@ export const profiles = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     displayName: text("display_name"),
     fullName: text("full_name"),
+    autoTriggerInterval: integer("auto_trigger_interval"),
     ...timestamps,
   },
   (table) => ({

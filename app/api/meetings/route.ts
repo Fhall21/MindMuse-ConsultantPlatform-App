@@ -9,8 +9,8 @@ import {
   updateToolResult,
 } from "@/lib/chat/persist";
 import { bindChatSessionConsultation } from "@/lib/chat/theme-extract-flow";
-import { startCrossAnalysisJob } from "@/lib/chat/analysis-db";
 import { confirmMeetingSchema } from "@/lib/chat/tools/intake";
+import { getAppSiteUrl } from "@/lib/env";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedApiUser();
@@ -98,11 +98,15 @@ export async function POST(request: NextRequest) {
         content: MEETING_SAVED_FOLLOW_UP,
       });
 
-      void startCrossAnalysisJob({
-        userId: auth.id,
-        consultationId: parsed.data.project_id,
-        sessionId,
-      });
+      const cookieHeader = request.headers.get("cookie") ?? "";
+      void fetch(`${getAppSiteUrl()}/api/analysis/auto-trigger`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: cookieHeader,
+        },
+        body: JSON.stringify({ consultation_id: parsed.data.project_id }),
+      }).catch((err) => console.warn("[meetings] auto-trigger fire failed", err));
     }
 
     return NextResponse.json(record, { status: 201 });

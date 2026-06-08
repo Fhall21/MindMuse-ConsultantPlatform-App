@@ -48,6 +48,7 @@ export const auth = betterAuth({
             .values({
               userId: user.id,
               displayName: user.name ?? null,
+              autoTriggerInterval: 5,
             })
             .onConflictDoNothing();
         },

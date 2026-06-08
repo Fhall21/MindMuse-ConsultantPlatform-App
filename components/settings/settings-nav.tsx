@@ -33,6 +33,11 @@ const settingsSections = [
     href: "/settings/report-sharing",
   },
   {
+    title: "Preferences",
+    description: "Configure platform behaviour like auto-analysis frequency.",
+    href: "/settings/preferences",
+  },
+  {
     title: "Integrations",
     href: "/settings/integrations",
   },

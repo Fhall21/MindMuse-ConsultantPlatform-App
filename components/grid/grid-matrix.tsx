@@ -217,7 +217,10 @@ export function GridMatrix({
           const cell = row.original.cellsByColumnId.get(gridColumn.id);
           if (!cell) {
             return (
-              <div className="flex min-h-28 w-72 items-center px-3 py-4 text-xs text-muted-foreground">
+              <div
+                className="flex min-h-28 items-center px-3 py-4 text-xs text-muted-foreground"
+                style={{ width: "480px" }}
+              >
                 Not generated
               </div>
             );

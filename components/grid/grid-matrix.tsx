@@ -200,7 +200,7 @@ export function GridMatrix({
       },
       ...orderedColumns.map<ColumnDef<MatrixRow>>((gridColumn, index) => ({
         id: gridColumn.id,
-        size: 288,
+        size: 480,
         header: () => (
           <SortableQuestionHeader
             column={gridColumn}

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { profiles } from "@/db/schema";
+import { userPreferences } from "@/db/schema";
 import { requireAuthenticatedApiUser } from "@/lib/api/route-helpers";
-
-const VALID_INTERVALS = [5, 10, 15, 20] as const;
+import { eq } from "drizzle-orm";
 
 const patchSchema = z.object({
   interval: z.union([z.enum(["5", "10", "15", "20"]), z.literal("disabled")]),
@@ -17,13 +15,13 @@ export async function GET(request: NextRequest) {
     return auth;
   }
 
-  const [profile] = await db
-    .select({ autoTriggerInterval: profiles.autoTriggerInterval })
-    .from(profiles)
-    .where(eq(profiles.userId, auth.id))
+  const [prefs] = await db
+    .select({ autoTriggerInterval: userPreferences.autoTriggerInterval })
+    .from(userPreferences)
+    .where(eq(userPreferences.userId, auth.id))
     .limit(1);
 
-  return NextResponse.json({ interval: profile?.autoTriggerInterval ?? null });
+  return NextResponse.json({ interval: prefs?.autoTriggerInterval ?? null });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -51,9 +49,12 @@ export async function PATCH(request: NextRequest) {
     parsed.data.interval === "disabled" ? null : Number(parsed.data.interval);
 
   await db
-    .update(profiles)
-    .set({ autoTriggerInterval: newInterval })
-    .where(eq(profiles.userId, auth.id));
+    .insert(userPreferences)
+    .values({ userId: auth.id, autoTriggerInterval: newInterval })
+    .onConflictDoUpdate({
+      target: userPreferences.userId,
+      set: { autoTriggerInterval: newInterval, updatedAt: new Date() },
+    });
 
   return NextResponse.json({ interval: newInterval });
 }

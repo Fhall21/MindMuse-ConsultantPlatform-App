@@ -137,6 +137,71 @@ function limitExpandedContext(before: string, after: string): QuoteContext {
   };
 }
 
+function findTurnIndex(turns: TranscriptTurn[], turn: TranscriptTurn): number {
+  return turns.findIndex(
+    (candidate) =>
+      candidate.start === turn.start &&
+      candidate.end === turn.end &&
+      candidate.speaker === turn.speaker
+  );
+}
+
+function findParagraphStart(
+  transcript: string,
+  turnStart: number,
+  spanStart: number
+): number {
+  const boundary = transcript.lastIndexOf("\n\n", spanStart);
+  return boundary >= turnStart ? boundary + 2 : turnStart;
+}
+
+function findParagraphEnd(
+  transcript: string,
+  spanEnd: number,
+  turnEnd: number
+): number {
+  const boundary = transcript.indexOf("\n\n", spanEnd);
+  return boundary >= 0 && boundary < turnEnd ? boundary : turnEnd;
+}
+
+function looksLikePrompt(text: string): boolean {
+  const normalized = text.trim();
+  if (!normalized) return false;
+  return (
+    normalized.includes("?") ||
+    /^(interviewer|facilitator|moderator|researcher)\b/i.test(normalized)
+  );
+}
+
+function buildExpandedContext(
+  transcript: string,
+  turns: TranscriptTurn[],
+  startTurn: TranscriptTurn,
+  endTurn: TranscriptTurn,
+  spanStart: number,
+  spanEnd: number
+): QuoteContext {
+  const paragraphStart = findParagraphStart(transcript, startTurn.start, spanStart);
+  const paragraphEnd = findParagraphEnd(transcript, spanEnd, endTurn.end);
+  const beforeParts: string[] = [];
+  const startTurnIndex = findTurnIndex(turns, startTurn);
+  const previousTurn = startTurnIndex > 0 ? turns[startTurnIndex - 1] : null;
+
+  if (previousTurn) {
+    const previousText = transcript.slice(previousTurn.start, previousTurn.end);
+    if (looksLikePrompt(previousText)) {
+      beforeParts.push(previousText);
+    }
+  }
+
+  beforeParts.push(transcript.slice(paragraphStart, spanStart));
+
+  return limitExpandedContext(
+    beforeParts.join("\n\n"),
+    transcript.slice(spanEnd, paragraphEnd)
+  );
+}
+
 export function extractTranscriptTurns(transcript: string): TranscriptTurn[] {
   return parseTranscriptTurns(transcript);
 }
@@ -155,14 +220,21 @@ export function computeQuoteContext(
 
   const turns = parseTranscriptTurns(transcript);
   if (turns.length === 0) {
+    const wordLimit = mode === "expanded" ? 120 : 40;
+    const charWindow = mode === "expanded" ? 720 : 240;
+
     return {
       contextBefore: trimContext(
-        takeWords(transcript.slice(Math.max(0, spanStart - 240), spanStart), 40, "start")
+        takeWords(
+          transcript.slice(Math.max(0, spanStart - charWindow), spanStart),
+          wordLimit,
+          "start"
+        )
       ),
       contextAfter: trimContext(
         takeWords(
-          transcript.slice(spanEnd, Math.min(transcript.length, spanEnd + 240)),
-          40,
+          transcript.slice(spanEnd, Math.min(transcript.length, spanEnd + charWindow)),
+          wordLimit,
           "start"
         )
       ),
@@ -174,15 +246,22 @@ export function computeQuoteContext(
     return { contextBefore: null, contextAfter: null };
   }
 
-  const beforeSource = transcript.slice(startTurn.start, spanStart);
-  const afterSource = transcript.slice(spanEnd, endTurn.end);
-
   if (mode === "compact") {
+    const beforeSource = transcript.slice(startTurn.start, spanStart);
+    const afterSource = transcript.slice(spanEnd, endTurn.end);
+
     return {
       contextBefore: trimContext(takeWords(beforeSource, 40, "start")),
       contextAfter: trimContext(takeWords(afterSource, 40, "start")),
     };
   }
 
-  return limitExpandedContext(beforeSource, afterSource);
+  return buildExpandedContext(
+    transcript,
+    turns,
+    startTurn,
+    endTurn,
+    spanStart,
+    spanEnd
+  );
 }

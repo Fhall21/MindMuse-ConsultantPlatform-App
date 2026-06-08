@@ -7,7 +7,8 @@ export const gridGenerateResponseSchema = z.object({
       cellId: z.string().min(1),
       insights: z.array(
         z.object({
-          text: z.string().min(1),
+          title: z.string().min(1),
+          description: z.string().min(1),
           existingInsightId: z.string().min(1).nullable().optional(),
           quotes: z.array(
             z.object({

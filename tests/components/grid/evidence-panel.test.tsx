@@ -40,7 +40,7 @@ const quote = {
 const insight: InsightWithLinks = {
   id: "insight-1",
   label: "Sleep disruption from rotating shifts",
-  description: null,
+  description: "Rotating shifts made sleep unpredictable and slowed recovery.",
   junctionId: "junction-1",
   editedLabel: null,
   gridReviewState: "pending",
@@ -92,6 +92,10 @@ describe("EvidencePanel unlink", () => {
   it("shows undo toast after unlink with preserved link metadata", () => {
     renderPanel();
 
+    expect(
+      screen.getByText("Rotating shifts made sleep unpredictable and slowed recovery.")
+    ).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "Unlink quote from insight" }));
 
     expect(unlinkMutate).toHaveBeenCalledWith(
@@ -115,6 +119,7 @@ describe("EvidencePanel unlink", () => {
       quoteId: "quote-1",
       insightId: "insight-1",
       isPrimary: true,
+      linkType: "provisional",
       relevanceStrength: "strong_match",
     });
   });

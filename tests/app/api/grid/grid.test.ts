@@ -456,7 +456,8 @@ describe("Analysis Grid API routes", () => {
               cellId: CELL_ID,
               insights: [
                 {
-                  text: "Work was difficult",
+                  title: "Work was difficult",
+                  description: "Alex described work as difficult in the transcript.",
                   existingInsightId: otherInsightId,
                   quotes: [
                     {
@@ -918,7 +919,8 @@ describe("Analysis Grid API routes", () => {
               cellId: CELL_ID,
               insights: [
                 {
-                  text: "Sleep disruption from rotating shifts",
+                  title: "Sleep disruption from rotating shifts",
+                  description: "Rotating shifts made Alex's sleep unpredictable.",
                   existingInsightId: null,
                   quotes: [
                     {

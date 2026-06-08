@@ -35,7 +35,8 @@ class GridQuote(GridSchema):
 
 
 class GridInsight(GridSchema):
-    text: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    description: str = Field(min_length=1)
     existing_insight_id: str | None = Field(
         default=None,
         alias="existingInsightId",

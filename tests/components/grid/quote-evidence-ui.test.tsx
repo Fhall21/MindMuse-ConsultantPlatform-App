@@ -24,7 +24,7 @@ const quote = {
 const insight: InsightWithLinks = {
   id: "insight-1",
   label: "Sleep disruption from rotating shifts",
-  description: null,
+  description: "Rotating shifts made sleep unpredictable and slowed recovery.",
   junctionId: "junction-1",
   editedLabel: null,
   gridReviewState: "pending",
@@ -64,13 +64,26 @@ describe("Quote evidence UI", () => {
   it("toggles expanded quote context", () => {
     renderWithUi(<QuoteCard quote={quote} meetingId="meeting-1" />);
 
-    expect(screen.getByText(/Alex: The /)).toBeInTheDocument();
+    expect(screen.queryByText(/Alex: The /)).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Expand quote context" })
     );
+    expect(screen.getByText(/Alex: The /)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Collapse quote context" })
     ).toBeInTheDocument();
+  });
+
+  it("shows expand help text in tooltip", () => {
+    renderWithUi(<QuoteCard quote={quote} meetingId="meeting-1" />);
+
+    fireEvent.focus(
+      screen.getByRole("button", { name: "Expand quote context" })
+    );
+
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "Show surrounding transcript context."
+    );
   });
 
   it("calls unlink callback from quote card", () => {
@@ -108,6 +121,9 @@ describe("Quote evidence UI", () => {
     );
 
     expect(screen.getByText("High evidence")).toBeInTheDocument();
+    expect(
+      screen.getByText("Rotating shifts made sleep unpredictable and slowed recovery.")
+    ).toBeInTheDocument();
   });
 
   it("renders cell footer confidence label", () => {

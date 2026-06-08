@@ -272,8 +272,8 @@ export async function POST(
                 .insert(insights)
                 .values({
                   meetingId,
-                  label: generatedInsight.text,
-                  description: null,
+                  label: generatedInsight.title,
+                  description: generatedInsight.description,
                   accepted: false,
                   rejected: false,
                   isUserAdded: false,

@@ -36,10 +36,10 @@ export function QuoteCard({
   );
   const contextBefore = expanded
     ? (quote.expandedContextBefore ?? quote.contextBefore)
-    : quote.contextBefore;
+    : null;
   const contextAfter = expanded
     ? (quote.expandedContextAfter ?? quote.contextAfter)
-    : quote.contextAfter;
+    : null;
   const hasContext = Boolean(contextBefore || contextAfter);
   const relevanceLabel = quote.relevanceStrength
     ? RELEVANCE_LABELS[quote.relevanceStrength]
@@ -53,17 +53,28 @@ export function QuoteCard({
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           {hasExpandedContext ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted-foreground"
-              aria-label={expanded ? "Collapse quote context" : "Expand quote context"}
-              aria-pressed={expanded}
-              onClick={() => setExpanded((value) => !value)}
-            >
-              <ChevronsUpDown className="size-3.5" aria-hidden="true" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted-foreground"
+                  aria-label={
+                    expanded ? "Collapse quote context" : "Expand quote context"
+                  }
+                  aria-pressed={expanded}
+                  onClick={() => setExpanded((value) => !value)}
+                >
+                  <ChevronsUpDown className="size-3.5" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {expanded
+                  ? "Hide surrounding transcript context."
+                  : "Show surrounding transcript context."}
+              </TooltipContent>
+            </Tooltip>
           ) : null}
           {onUnlink ? (
             <Tooltip>

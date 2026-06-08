@@ -40,6 +40,7 @@ export const InsightCandidate = memo(function InsightCandidate({
   const isRejected = insight.gridReviewState === "rejected";
   const quoteCount = insight.quotes.length;
   const quoteLabel = `${quoteCount} ${quoteCount === 1 ? "quote" : "quotes"}`;
+  const description = insight.description?.trim();
 
   return (
     <div
@@ -81,6 +82,16 @@ export const InsightCandidate = memo(function InsightCandidate({
         >
           {displayLabel}
         </p>
+        {description ? (
+          <p
+            className={cn(
+              "mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground",
+              isRejected && "line-through"
+            )}
+          >
+            {description}
+          </p>
+        ) : null}
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
           <span>{quoteLabel}</span>
           {insight.quoteConfidence ? (

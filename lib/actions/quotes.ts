@@ -504,6 +504,7 @@ interface LinkQuoteParams {
 async function assertInsightLinkableForQuote(params: {
   quoteId: string;
   insightId: string;
+  linkType: QuoteLinkType;
 }) {
   const [row] = await db
     .select({
@@ -521,8 +522,71 @@ async function assertInsightLinkableForQuote(params: {
     throw new Error("Insight not found for this quote.");
   }
 
-  if (!row.accepted || row.rejected) {
+  if (row.rejected) {
+    throw new Error("Rejected insights cannot be linked to quotes.");
+  }
+
+  if (params.linkType !== "provisional" && !row.accepted) {
     throw new Error("Only accepted insights can be linked to quotes.");
+  }
+}
+
+async function updateGridCellsForInsight(insightId: string) {
+  const impactedCells = await db
+    .select({
+      gridCellId: gridCellInsights.gridCellId,
+    })
+    .from(gridCellInsights)
+    .where(eq(gridCellInsights.insightId, insightId));
+
+  const impactedCellIds = [...new Set(impactedCells.map((row) => row.gridCellId))];
+  if (impactedCellIds.length === 0) return;
+
+  const cellInsights = await db
+    .select({
+      gridCellId: gridCellInsights.gridCellId,
+      insightId: gridCellInsights.insightId,
+    })
+    .from(gridCellInsights)
+    .where(inArray(gridCellInsights.gridCellId, impactedCellIds));
+
+  const cellLinks = await db
+    .select({
+      gridCellId: gridCellInsights.gridCellId,
+      insightId: quoteInsightLinks.insightId,
+      relevanceStrength: quoteInsightLinks.relevanceStrength,
+    })
+    .from(gridCellInsights)
+    .innerJoin(
+      quoteInsightLinks,
+      eq(quoteInsightLinks.insightId, gridCellInsights.insightId)
+    )
+    .where(inArray(gridCellInsights.gridCellId, impactedCellIds));
+
+  for (const cellId of impactedCellIds) {
+    const insightIds = cellInsights
+      .filter((row) => row.gridCellId === cellId)
+      .map((row) => row.insightId);
+    const insightConfidences = insightIds.map((linkedInsightId) =>
+      computeInsightConfidence(
+        cellLinks
+          .filter(
+            (link) =>
+              link.gridCellId === cellId && link.insightId === linkedInsightId
+          )
+          .map((link) => ({ relevanceStrength: link.relevanceStrength }))
+      )
+    );
+    const cellConfidence = computeCellConfidence(insightConfidences);
+
+    await db
+      .update(gridCells)
+      .set({
+        confidence: cellConfidence,
+        quoteCount: cellLinks.filter((link) => link.gridCellId === cellId).length,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(gridCells.id, cellId));
   }
 }
 
@@ -534,6 +598,7 @@ async function linkQuoteToInsightInternal(params: Required<Omit<LinkQuoteParams,
   await assertInsightLinkableForQuote({
     quoteId: params.quoteId,
     insightId: params.insightId,
+    linkType: params.linkType,
   });
 
   if (params.isPrimary) {
@@ -560,6 +625,8 @@ async function linkQuoteToInsightInternal(params: Required<Omit<LinkQuoteParams,
         relevanceStrength: params.relevanceStrength ?? null,
       },
     });
+
+  await updateGridCellsForInsight(params.insightId);
 }
 
 export async function linkQuoteToInsight(params: LinkQuoteParams): Promise<QuoteRecord> {

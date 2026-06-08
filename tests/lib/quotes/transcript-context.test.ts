@@ -80,6 +80,71 @@ describe("transcript-context", () => {
     expect(context.contextBefore).toContain("Alice:");
     expect(context.contextAfter).not.toContain("Bob:");
   });
+
+  it("includes the previous interviewer prompt in expanded context", () => {
+    const transcript = [
+      "Interviewer: What has made returning difficult?",
+      "Alex: The rotating shifts make my sleep unpredictable. Recovery has been slow.",
+    ].join("\n");
+    const quote = "make my sleep unpredictable";
+    const context = computeQuoteContext(
+      transcript,
+      transcript.indexOf(quote),
+      transcript.indexOf(quote) + quote.length,
+      "expanded"
+    );
+
+    expect(context.contextBefore).toContain(
+      "Interviewer: What has made returning difficult?"
+    );
+    expect(context.contextBefore).toContain("Alex: The rotating shifts");
+    expect(context.contextAfter).toContain("Recovery has been slow.");
+  });
+
+  it("expands long speaker responses within the current paragraph", () => {
+    const transcript = [
+      "Alex: First paragraph is not part of the focused context.",
+      "",
+      "Alex: The new roster started badly. It kept changing every week. I could not plan recovery time. The team noticed I was exhausted.",
+    ].join("\n");
+    const quote = "I could not plan recovery time";
+    const context = computeQuoteContext(
+      transcript,
+      transcript.indexOf(quote),
+      transcript.indexOf(quote) + quote.length,
+      "expanded"
+    );
+
+    expect(context.contextBefore).toContain("Alex: The new roster started badly.");
+    expect(context.contextBefore).not.toContain("First paragraph");
+    expect(context.contextAfter).toContain("The team noticed I was exhausted.");
+  });
+
+  it("falls back to a transcript window when speaker prefixes are absent", () => {
+    const transcript =
+      "Returning was difficult because the roster changed weekly. Sleep became unpredictable and recovery was slower than expected.";
+    const quote = "Sleep became unpredictable";
+    const context = computeQuoteContext(
+      transcript,
+      transcript.indexOf(quote),
+      transcript.indexOf(quote) + quote.length,
+      "expanded"
+    );
+
+    expect(context.contextBefore).toContain("roster changed weekly");
+    expect(context.contextAfter).toContain("recovery was slower");
+  });
+
+  it("returns empty context for invalid spans", () => {
+    expect(computeQuoteContext("Alex: text", -1, 4, "expanded")).toEqual({
+      contextBefore: null,
+      contextAfter: null,
+    });
+    expect(computeQuoteContext("Alex: text", 5, 5, "expanded")).toEqual({
+      contextBefore: null,
+      contextAfter: null,
+    });
+  });
 });
 
 describe("findTurnSpans", () => {

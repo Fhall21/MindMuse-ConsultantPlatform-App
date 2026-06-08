@@ -106,7 +106,8 @@ def test_generate_grid_returns_answers_for_all_questions(client, monkeypatch):
                 "cellId": "cell-1",
                 "insights": [
                     {
-                        "text": "Rotating shifts disrupt sleep and obstruct a stable return.",
+                        "title": "Rotating shifts disrupt sleep",
+                        "description": "Rotating shifts make Alex's sleep unpredictable and obstruct a stable return.",
                         "existingInsightId": None,
                         "quotes": [
                             {
@@ -128,7 +129,8 @@ def test_generate_grid_returns_answers_for_all_questions(client, monkeypatch):
                 "cellId": "cell-2",
                 "insights": [
                     {
-                        "text": "Alex requested predictable hours and regular support.",
+                        "title": "Predictable support requested",
+                        "description": "Alex requested predictable hours and regular check-ins as practical return-to-work support.",
                         "existingInsightId": None,
                         "quotes": [
                             {
@@ -171,6 +173,8 @@ def test_generate_grid_returns_answers_for_all_questions(client, monkeypatch):
     assert body["answers"][0]["insights"][0]["quotes"][0]["speakerLabel"] == "Alex"
     call = fake_client.chat.completions.calls[0]
     assert call["temperature"] == 0.2
+    assert call["response_format"]["type"] == "json_schema"
+    assert call["response_format"]["json_schema"]["strict"] is True
     assert len(call["messages"]) == 2
 
 
@@ -224,6 +228,46 @@ def test_generate_grid_malformed_output_returns_structured_500(
             "message": "AI model returned malformed output",
         }
     }
+
+
+def test_generate_grid_missing_description_returns_structured_500(
+    client,
+    monkeypatch,
+):
+    payload = {
+        "answers": [
+            {
+                "columnId": "column-1",
+                "cellId": "cell-1",
+                "insights": [
+                    {
+                        "title": "Missing description",
+                        "existingInsightId": None,
+                        "quotes": [],
+                    }
+                ],
+                "confidence": "low",
+                "hasEvidence": True,
+            },
+            {
+                "columnId": "column-2",
+                "cellId": "cell-2",
+                "insights": [],
+                "confidence": None,
+                "hasEvidence": False,
+            },
+        ]
+    }
+    monkeypatch.setattr(grid, "get_client", lambda: FakeClient(json.dumps(payload)))
+
+    response = client.post(
+        "/grid/generate",
+        json=_request_payload("Alex described a workplace barrier."),
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"]["message"] == "AI model returned malformed output"
 
 
 def test_generate_grid_model_timeout_returns_structured_500(
@@ -283,7 +327,8 @@ def test_generate_grid_discards_insights_without_verbatim_quotes(
                 "cellId": "cell-1",
                 "insights": [
                     {
-                        "text": "Unsupported claim.",
+                        "title": "Unsupported claim",
+                        "description": "The model supplied a claim that is not grounded in the transcript.",
                         "existingInsightId": "insight-from-model",
                         "quotes": [
                             {
@@ -351,7 +396,8 @@ def test_generate_grid_resolves_speaker_label_from_transcript_turn(
                             "cellId": "cell-1",
                             "insights": [
                                 {
-                                    "text": "Shift work disrupted sleep.",
+                                    "title": "Shift work disrupted sleep",
+                                    "description": "Alex described rotating shifts as disrupting sleep.",
                                     "existingInsightId": None,
                                     "quotes": [
                                         {
@@ -416,7 +462,8 @@ def test_generate_grid_expands_short_quotes_within_speaker_turn(
                             "cellId": "cell-1",
                             "insights": [
                                 {
-                                    "text": "Predictable scheduling and check-ins would help.",
+                                    "title": "Predictable scheduling would help",
+                                    "description": "Alex said a fixed start time and weekly check-ins would help.",
                                     "existingInsightId": None,
                                     "quotes": [
                                         {
@@ -481,7 +528,8 @@ def test_generate_grid_clamps_expansion_to_speaker_turn_boundary(
                             "cellId": "cell-1",
                             "insights": [
                                 {
-                                    "text": "Predictability matters.",
+                                    "title": "Predictability matters",
+                                    "description": "Alex identified a fixed start time as important.",
                                     "existingInsightId": None,
                                     "quotes": [
                                         {

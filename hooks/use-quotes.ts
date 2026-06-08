@@ -102,6 +102,7 @@ export function useLinkQuoteInsight(meetingId: string, roundId?: string) {
     onSuccess: () => {
       invalidateMeetingQuotes(qc, meetingId);
       if (roundId) {
+        qc.invalidateQueries({ queryKey: ["cell-insights"] });
         qc.invalidateQueries({ queryKey: ["grid-insights", roundId] });
         qc.invalidateQueries({ queryKey: ["grid-cells", roundId] });
       }
@@ -117,6 +118,7 @@ export function useUnlinkQuoteInsight(meetingId: string, roundId?: string) {
     onSuccess: () => {
       invalidateMeetingQuotes(qc, meetingId);
       if (roundId) {
+        qc.invalidateQueries({ queryKey: ["cell-insights"] });
         qc.invalidateQueries({ queryKey: ["grid-insights", roundId] });
         qc.invalidateQueries({ queryKey: ["grid-cells", roundId] });
       }

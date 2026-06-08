@@ -9,7 +9,9 @@ Read the full transcript once. Then answer EACH supplied analysis question indep
 using only evidence stated in the transcript.
 
 For every question:
-1. Identify each distinct answer point as a concise insight of 1-2 sentences.
+1. Identify each distinct answer point as an insight with:
+   - title: a brief, scan-friendly phrase, ideally 4-8 words.
+   - description: a fuller 1-2 sentence explanation of the point.
 2. Attach 1-3 supporting quotes to each insight.
 3. Quotes MUST be exact, verbatim, contiguous spans copied from the transcript.
 4. Quotes should usually be full clauses or sentence fragments of roughly 15-80 words,
@@ -35,8 +37,8 @@ existingInsightId must always be null. The caller does not provide existing insi
 records, so reuse cannot be established safely in this request.
 
 Return ONLY valid JSON with this shape:
-{"answers":[{"columnId":"string","cellId":"string","insights":[{"text":"string",
-"existingInsightId":null,"quotes":[{"exactText":"verbatim transcript text",
+{"answers":[{"columnId":"string","cellId":"string","insights":[{"title":"brief title",
+"description":"fuller insight description","existingInsightId":null,"quotes":[{"exactText":"verbatim transcript text",
 "spanStart":0,"spanEnd":10,"speakerLabel":"Speaker Name",
 "relevanceStrength":"strong_match"}]}],
 "confidence":"high","hasEvidence":true}]}

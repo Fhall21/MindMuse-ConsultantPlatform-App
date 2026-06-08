@@ -83,6 +83,7 @@ export function EvidencePanel({
   const activeIndex = insights.findIndex((i) => i.id === activeInsight.id);
   const current = activeIndex === -1 ? insights[0] : insights[activeIndex];
   const displayLabel = current.editedLabel ?? current.label;
+  const description = current.description?.trim();
   const isOnCanvas = current.gridReviewState === "accepted" && current.accepted;
   const isAccepted = current.gridReviewState === "accepted";
   const isRejected = current.gridReviewState === "rejected";
@@ -133,6 +134,7 @@ export function EvidencePanel({
                   quoteId,
                   insightId,
                   isPrimary: quoteIndex === 0,
+                  linkType: "provisional",
                   relevanceStrength,
                 });
               },
@@ -175,6 +177,11 @@ export function EvidencePanel({
             </Badge>
           )}
         </div>
+        {description ? (
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
       </div>
 
       {/* Scrollable evidence quotes */}

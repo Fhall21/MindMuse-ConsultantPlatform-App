@@ -25,6 +25,112 @@ logger = logging.getLogger(__name__)
 
 _TURN_PREFIX_RE = re.compile(r"^(?P<speaker>[^:\n]{1,120}):[ \t]*")
 
+GRID_GENERATE_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "grid_generate_response",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["answers"],
+            "properties": {
+                "answers": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": [
+                            "columnId",
+                            "cellId",
+                            "insights",
+                            "confidence",
+                            "hasEvidence",
+                        ],
+                        "properties": {
+                            "columnId": {"type": "string"},
+                            "cellId": {"type": "string"},
+                            "insights": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": [
+                                        "title",
+                                        "description",
+                                        "existingInsightId",
+                                        "quotes",
+                                    ],
+                                    "properties": {
+                                        "title": {"type": "string"},
+                                        "description": {"type": "string"},
+                                        "existingInsightId": {
+                                            "anyOf": [
+                                                {"type": "string"},
+                                                {"type": "null"},
+                                            ],
+                                        },
+                                        "quotes": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "additionalProperties": False,
+                                                "required": [
+                                                    "exactText",
+                                                    "spanStart",
+                                                    "spanEnd",
+                                                    "speakerLabel",
+                                                    "relevanceStrength",
+                                                ],
+                                                "properties": {
+                                                    "exactText": {
+                                                        "type": "string",
+                                                    },
+                                                    "spanStart": {
+                                                        "type": "integer",
+                                                    },
+                                                    "spanEnd": {
+                                                        "type": "integer",
+                                                    },
+                                                    "speakerLabel": {
+                                                        "anyOf": [
+                                                            {"type": "string"},
+                                                            {"type": "null"},
+                                                        ],
+                                                    },
+                                                    "relevanceStrength": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "strong_match",
+                                                            "partial_support",
+                                                            "context",
+                                                            "weak",
+                                                        ],
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                            "confidence": {
+                                "anyOf": [
+                                    {
+                                        "type": "string",
+                                        "enum": ["high", "medium", "low"],
+                                    },
+                                    {"type": "null"},
+                                ],
+                            },
+                            "hasEvidence": {"type": "boolean"},
+                        },
+                    },
+                },
+            },
+        },
+    },
+}
+
 
 def _generation_error(message: str) -> HTTPException:
     return HTTPException(
@@ -278,7 +384,7 @@ async def generate_grid(request: GridGenerateRequest) -> GridGenerateResponse:
                     ),
                 },
             ],
-            response_format={"type": "json_object"},
+            response_format=GRID_GENERATE_RESPONSE_FORMAT,
             temperature=0.2,
         )
     except Exception as exc:

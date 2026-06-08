@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { fetchJson } from "@/hooks/api";
+import { useMeetingGridInsights } from "@/hooks/use-meeting-grid-insights";
 import { useMeeting } from "@/hooks/use-meetings";
 import { useMeetingThemes } from "@/hooks/use-themes";
 import { acceptTheme, addUserTheme, rejectTheme, restoreTheme, saveThemes } from "@/lib/actions/themes";
@@ -40,16 +41,6 @@ interface ExtractedTheme {
 
 interface ThemeDetails {
   description?: string | null;
-  confidence?: number;
-}
-
-interface ThemeDisplayItem {
-  id: string;
-  label: string;
-  description: string | null;
-  accepted: boolean;
-  rejected: boolean;
-  source: "ai" | "user";
   confidence?: number;
 }
 
@@ -116,6 +107,7 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
   const queryClient = useQueryClient();
   const meetingQuery = useMeeting(resolvedMeetingId ?? "");
   const themesQuery = useMeetingThemes(resolvedMeetingId ?? "");
+  const gridInsightsQuery = useMeetingGridInsights(resolvedMeetingId ?? "");
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -150,7 +142,14 @@ export function ThemePanel({ meetingId, consultationId }: ThemePanelProps) {
 
   const transcript = meetingQuery.data?.meeting.transcript_raw?.trim() ?? "";
   const consultationIsLocked = meetingQuery.data?.meeting.status === "complete";
-  const savedThemes = useMemo(() => themesQuery.data ?? [], [themesQuery.data]);
+  const gridInsightIds = useMemo(
+    () => new Set((gridInsightsQuery.data?.insights ?? []).map((insight) => insight.id)),
+    [gridInsightsQuery.data]
+  );
+  const savedThemes = useMemo(
+    () => (themesQuery.data ?? []).filter((theme) => !gridInsightIds.has(theme.id)),
+    [themesQuery.data, gridInsightIds]
+  );
 
   // Derive lists from DB-backed data (rejected is a column now)
   const pendingThemes = useMemo(

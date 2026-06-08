@@ -1,20 +1,28 @@
 "use client";
 
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { MeetingGridInsight } from "@/app/api/client/meetings/[id]/grid-insights/route";
 
 interface GridInsightRowProps {
   insight: MeetingGridInsight;
+  isSelected?: boolean;
+  onView: (insight: MeetingGridInsight) => void;
 }
 
-export function GridInsightRow({ insight }: GridInsightRowProps) {
+export function GridInsightRow({ insight, isSelected = false, onView }: GridInsightRowProps) {
   const displayLabel = insight.editedLabel ?? insight.label;
+  const description = insight.description?.trim();
 
   return (
     <div className="flex items-start justify-between gap-3 py-2.5">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-sm leading-snug">{displayLabel}</span>
+        {description ? (
+          <span className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+            {description}
+          </span>
+        ) : null}
         {insight.question && (
           <span className="text-xs text-muted-foreground line-clamp-1">
             {insight.question}
@@ -28,14 +36,15 @@ export function GridInsightRow({ insight }: GridInsightRowProps) {
             On canvas
           </Badge>
         )}
-        {insight.consultationId ? (
-          <Link
-            href={`/canvas/round/${insight.consultationId}?tab=grid`}
-            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          >
-            View →
-          </Link>
-        ) : null}
+        <Button
+          type="button"
+          variant={isSelected ? "secondary" : "ghost"}
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={() => onView(insight)}
+        >
+          View
+        </Button>
       </div>
     </div>
   );

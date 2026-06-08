@@ -1,20 +1,22 @@
 import { NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { gridCellInsights, gridCells, gridColumns, insights } from "@/db/schema";
+import {
+  gridCellInsights,
+  gridCells,
+  gridColumns,
+  insights,
+  meetings,
+  quoteInsightLinks,
+  quotes,
+} from "@/db/schema";
 import { requireOwnedMeeting } from "@/lib/data/ownership";
+import { buildGridInsightsResponse } from "@/lib/quotes/grid-insight-response";
 import { jsonError, requireRouteClient } from "../../../_helpers";
-import type { GridReviewState } from "@/types/grid";
+import type { ConnectedColumnRow, QuoteLinkRow } from "../../../consultations/[roundId]/grid/_types";
+import type { GridReviewState, InsightWithLinks } from "@/types/grid";
 
-export interface MeetingGridInsight {
-  id: string;
-  label: string;
-  editedLabel: string | null;
-  gridReviewState: GridReviewState;
-  accepted: boolean;
-  rejected: boolean;
-  gridCellId: string;
-  gridColumnId: string;
+export interface MeetingGridInsight extends InsightWithLinks {
   consultationId: string;
   question: string;
 }
@@ -47,13 +49,16 @@ export async function GET(
     const rows = await db
       .select({
         insightId: insights.id,
+        junctionId: gridCellInsights.id,
         label: insights.label,
+        description: insights.description,
         editedLabel: gridCellInsights.editedLabel,
         gridReviewState: gridCellInsights.gridReviewState,
         accepted: gridCellInsights.accepted,
         rejected: gridCellInsights.rejected,
         gridCellId: gridCellInsights.gridCellId,
         gridColumnId: gridCellInsights.gridColumnId,
+        createdAt: gridCellInsights.createdAt,
         consultationId: gridCells.consultationId,
         question: gridColumns.question,
       })
@@ -77,17 +82,81 @@ export async function GET(
       }
     }
 
-    const meetingInsights: MeetingGridInsight[] = Array.from(best.values()).map((row) => ({
-      id: row.insightId,
-      label: row.label,
-      editedLabel: row.editedLabel,
-      gridReviewState: (row.gridReviewState ?? "pending") as GridReviewState,
-      accepted: row.accepted,
-      rejected: row.rejected,
-      gridCellId: row.gridCellId,
-      gridColumnId: row.gridColumnId,
-      consultationId: row.consultationId,
-      question: row.question,
+    const selectedRows = Array.from(best.values());
+    const insightIds = selectedRows.map((row) => row.insightId);
+
+    let connectedCols: ConnectedColumnRow[] = [];
+    if (insightIds.length > 0) {
+      connectedCols = await db
+        .select({
+          insightId: gridCellInsights.insightId,
+          columnId: gridCellInsights.gridColumnId,
+          question: gridColumns.question,
+          gridReviewState: gridCellInsights.gridReviewState,
+          accepted: gridCellInsights.accepted,
+        })
+        .from(gridCellInsights)
+        .innerJoin(gridColumns, eq(gridColumns.id, gridCellInsights.gridColumnId))
+        .where(
+          and(
+            inArray(gridCellInsights.insightId, insightIds),
+            inArray(
+              gridColumns.consultationId,
+              [...new Set(selectedRows.map((row) => row.consultationId))]
+            )
+          )
+        );
+    }
+
+    let quotesList: QuoteLinkRow[] = [];
+    if (insightIds.length > 0) {
+      quotesList = await db
+        .select({
+          insightId: quoteInsightLinks.insightId,
+          id: quotes.id,
+          exactText: quotes.exactText,
+          speakerLabel: quotes.speakerLabel,
+          spanStart: quotes.spanStart,
+          spanEnd: quotes.spanEnd,
+          relevanceStrength: quoteInsightLinks.relevanceStrength,
+          contextBefore: quotes.contextBefore,
+          contextAfter: quotes.contextAfter,
+          transcriptRaw: meetings.transcriptRaw,
+        })
+        .from(quoteInsightLinks)
+        .innerJoin(quotes, eq(quotes.id, quoteInsightLinks.quoteId))
+        .innerJoin(meetings, eq(meetings.id, quotes.meetingId))
+        .where(inArray(quoteInsightLinks.insightId, insightIds));
+    }
+
+    const metadataByInsightId = new Map(
+      selectedRows.map((row) => [
+        row.insightId,
+        { consultationId: row.consultationId, question: row.question },
+      ])
+    );
+
+    const meetingInsights: MeetingGridInsight[] = buildGridInsightsResponse(
+      selectedRows.map((row) => ({
+        id: row.insightId,
+        label: row.label,
+        description: row.description,
+        junctionId: row.junctionId,
+        editedLabel: row.editedLabel,
+        gridReviewState: (row.gridReviewState ?? "pending") as GridReviewState,
+        accepted: row.accepted,
+        rejected: row.rejected,
+        gridCellId: row.gridCellId,
+        gridColumnId: row.gridColumnId,
+        createdAt: row.createdAt,
+      })),
+      connectedCols,
+      quotesList,
+      null
+    ).map((insight) => ({
+      ...insight,
+      consultationId: metadataByInsightId.get(insight.id)?.consultationId ?? "",
+      question: metadataByInsightId.get(insight.id)?.question ?? "",
     }));
 
     return NextResponse.json({ insights: meetingInsights });

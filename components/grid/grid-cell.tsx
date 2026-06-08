@@ -24,6 +24,7 @@ import type {
 export interface GridCellProps {
   cell: GridCellData;
   insights: InsightWithLinks[];
+  insightsLoading?: boolean;
   isSelected: boolean;
   selectedInsightId: string | null;
   onSelect: () => void;
@@ -68,6 +69,7 @@ function activateCell(event: KeyboardEvent<HTMLDivElement>, onSelect: () => void
 export const GridCell = memo(function GridCell({
   cell,
   insights,
+  insightsLoading = false,
   isSelected,
   selectedInsightId,
   onSelect,
@@ -75,6 +77,12 @@ export const GridCell = memo(function GridCell({
   onInsightReview,
   onRetry,
 }: GridCellProps) {
+  const isPreparingCandidates =
+    cell.status === "complete" &&
+    insights.length === 0 &&
+    cell.quoteCount > 0 &&
+    (insightsLoading || cell.insightCount === 0);
+
   function stopCellSelection(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
   }
@@ -163,6 +171,16 @@ export const GridCell = memo(function GridCell({
                   }
                 />
               ))
+            ) : isPreparingCandidates ? (
+              <div className="flex flex-col gap-3 px-3 py-4 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 font-medium">
+                  <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                  Preparing insight candidates…
+                </div>
+                <p>
+                  Evidence is grounded. Linking quotes to candidate insights.
+                </p>
+              </div>
             ) : (
               <div className="px-3 py-4 text-xs text-muted-foreground">
                 No insight candidates

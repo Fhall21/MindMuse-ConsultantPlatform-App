@@ -391,10 +391,22 @@ export function AnalyticsPanel({
 
       {/* Idle state */}
       {panelState === "idle" ? (
-        <p className="text-sm text-muted-foreground">
-          No analytics have been run for this consultation group yet. Run analytics to generate
-          cluster suggestions from extraction data.
-        </p>
+        <div className="space-y-5 py-1">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Pattern analysis across meetings</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Analytics reads the extracted terms from each meeting in this group and groups
+              similar ones into clusters — surfacing shared themes and patterns across
+              conversations. Each cluster shows which meetings contributed, so every insight
+              is traceable back to source evidence.
+            </p>
+          </div>
+          <Separator />
+          <p className="text-xs text-muted-foreground">
+            Clusters are suggestions only. Every accept, edit, or reject is recorded in the
+            audit trail before anything is finalised.
+          </p>
+        </div>
       ) : null}
 
       {/* Stats row — visible once there is data */}

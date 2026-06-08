@@ -44,6 +44,7 @@ export interface GridMatrixProps {
   meetings: GridMeeting[];
   cells: GridCellData[];
   insightsByCellId: Map<string, InsightWithLinks[]>;
+  insightsLoading?: boolean;
   selectedCellId: string | null;
   selectedInsightId: string | null;
   onCellSelect: (cellId: string) => void;
@@ -148,6 +149,7 @@ export function GridMatrix({
   meetings,
   cells,
   insightsByCellId,
+  insightsLoading = false,
   selectedCellId,
   selectedInsightId,
   onCellSelect,
@@ -225,6 +227,7 @@ export function GridMatrix({
             <GridCell
               cell={cell}
               insights={insightsByCellId.get(cell.id) ?? []}
+              insightsLoading={insightsLoading}
               isSelected={selectedCellId === cell.id}
               selectedInsightId={selectedInsightId}
               onSelect={() => onCellSelect(cell.id)}
@@ -250,6 +253,7 @@ export function GridMatrix({
     ],
     [
       insightsByCellId,
+      insightsLoading,
       onCellRetry,
       onCellSelect,
       onColumnDelete,

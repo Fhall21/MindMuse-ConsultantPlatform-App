@@ -238,9 +238,22 @@ function WiredGridWorkspace({
     () => cellsData?.cells ?? gridData?.cells ?? [],
     [cellsData?.cells, gridData?.cells]
   );
+  const evidenceBackedCellIds = useMemo(
+    () =>
+      cells
+        .filter(
+          (cell) =>
+            cell.status === "complete" &&
+            cell.quoteCount > 0 &&
+            cell.insightCount === 0
+        )
+        .map((cell) => cell.id),
+    [cells]
+  );
   const { data: gridInsightsData, isFetching: insightsFetching } = useGridInsights(
     roundId,
-    columns.length > 0 || exportPending
+    columns.length > 0 || exportPending,
+    { pollMissingCellIds: evidenceBackedCellIds }
   );
   const completedCellIds = useMemo(
     () =>
@@ -483,6 +496,7 @@ function WiredGridWorkspace({
                   meetings={meetings}
                   cells={cells}
                   insightsByCellId={insightsByCellId}
+                  insightsLoading={insightsFetching}
                   selectedCellId={selectedCellId}
                   selectedInsightId={selectedInsightId}
                   onCellSelect={handleCellSelect}

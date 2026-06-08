@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { ColumnAddPanel } from "@/components/grid/column-add-panel";
+import { EmptyGridBuilder } from "@/components/grid/empty-grid-builder";
 import { EvidencePanel } from "@/components/grid/evidence-panel";
 import { GridMatrix, type GridMeeting } from "@/components/grid/grid-matrix";
 import { GridToolbar } from "@/components/grid/grid-toolbar";
@@ -218,6 +219,7 @@ function WiredGridWorkspace({
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null);
   const [exportPending, setExportPending] = useState(false);
+  const [batchGenerating, setBatchGenerating] = useState(false);
   const exportDownloadedRef = useRef(false);
   const exportTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -344,6 +346,38 @@ function WiredGridWorkspace({
           "Could not start extraction. Cells stay pending — use Regenerate on the column header."
         );
       });
+    },
+    [addColumn, generateColumn]
+  );
+
+  const handleBatchGenerate = useCallback(
+    async (questions: string[]) => {
+      setBatchGenerating(true);
+      const columnIds: string[] = [];
+      try {
+        for (const question of questions) {
+          const column = await addColumn.mutateAsync({ question });
+          columnIds.push(column.id);
+        }
+      } catch {
+        if (columnIds.length > 0) {
+          toast.error(
+            `${columnIds.length} of ${questions.length} columns created. Add remaining questions from the toolbar.`
+          );
+        } else {
+          toast.error("Could not create columns. Try again.");
+        }
+        setBatchGenerating(false);
+        return;
+      }
+
+      setBatchGenerating(false);
+
+      for (const columnId of columnIds) {
+        void generateColumn(columnId).catch(() => {
+          toast.error("Could not start generation. Try generating from the toolbar.");
+        });
+      }
     },
     [addColumn, generateColumn]
   );
@@ -478,8 +512,8 @@ function WiredGridWorkspace({
         <div className="flex min-h-[28rem] min-w-0 flex-col overflow-x-auto xl:min-h-0">
           {isLoading ? (
             <GridSkeleton />
-          ) : orderedColumns.length === 0 ? (
-            <EmptyGrid onAddColumn={openAddColumnPanel} />
+          ) : orderedColumns.length === 0 || batchGenerating ? (
+            <EmptyGridBuilder roundId={roundId} onGenerate={handleBatchGenerate} />
           ) : (
             <DndContext
               id={`analysis-grid-${roundId}`}

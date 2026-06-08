@@ -23,18 +23,13 @@ const settingsSections = [
     href: "/settings/ai-personalisation",
   },
   {
-    title: "Meeting Types",
-    description: "Manage the types used to classify and code your meetings.",
-    href: "/settings/meeting-types",
-  },
-  {
     title: "Report Sharing",
     description: "Manage the passcode used to unlock stakeholder share links.",
     href: "/settings/report-sharing",
   },
   {
     title: "Preferences",
-    description: "Configure platform behaviour like auto-analysis frequency.",
+    description: "Configure platform behaviour and manage meeting types.",
     href: "/settings/preferences",
   },
   {

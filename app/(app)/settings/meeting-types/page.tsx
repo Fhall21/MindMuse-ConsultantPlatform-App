@@ -1,5 +1,5 @@
-import { MeetingTypesPanel } from "@/components/settings/meeting-types/meeting-types-panel";
+import { redirect } from "next/navigation";
 
 export default function MeetingTypesPage() {
-  return <MeetingTypesPanel />;
+  redirect("/settings/preferences");
 }

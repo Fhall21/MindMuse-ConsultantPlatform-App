@@ -70,7 +70,10 @@ export function GridInsightSection({ meetingId }: GridInsightSectionProps) {
             variant="ghost"
             size="sm"
             className="h-6 px-2 text-xs text-muted-foreground"
-            onClick={() => setShow((v) => !v)}
+            onClick={() => {
+              if (show) setSelectedInsightId(null);
+              setShow((v) => !v);
+            }}
           >
             {show ? "Hide" : "Show"}
           </Button>
@@ -104,6 +107,13 @@ export function GridInsightSection({ meetingId }: GridInsightSectionProps) {
                 key={group.question}
                 className="group rounded-lg border border-border/60 bg-card/40"
                 open={index === 0}
+                onToggle={(e) => {
+                  if (!(e.currentTarget as HTMLDetailsElement).open) {
+                    if (group.insights.some((i) => i.id === selectedInsightId)) {
+                      setSelectedInsightId(null);
+                    }
+                  }
+                }}
               >
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-medium">
                   <span className="line-clamp-2">{group.question}</span>
@@ -121,7 +131,11 @@ export function GridInsightSection({ meetingId }: GridInsightSectionProps) {
                       key={`${insight.gridCellId}-${insight.id}`}
                       insight={insight}
                       isSelected={selectedInsightId === insight.id}
-                      onView={(next) => setSelectedInsightId(next.id)}
+                      onView={(next) =>
+                        setSelectedInsightId(
+                          next.id === selectedInsightId ? null : next.id
+                        )
+                      }
                     />
                   ))}
                 </div>
@@ -133,6 +147,7 @@ export function GridInsightSection({ meetingId }: GridInsightSectionProps) {
               insight={selectedInsight}
               meetingId={meetingId}
               onReview={handleReview}
+              onClose={() => setSelectedInsightId(null)}
               isReviewing={reviewInsight.isPending}
             />
           </div>

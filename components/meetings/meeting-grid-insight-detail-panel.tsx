@@ -12,6 +12,7 @@ interface MeetingGridInsightDetailPanelProps {
   insight: MeetingGridInsight | null;
   meetingId: string;
   onReview: (insightId: string, state: GridReviewState, cellId: string) => void;
+  onClose?: () => void;
   isReviewing?: boolean;
 }
 
@@ -19,6 +20,7 @@ export function MeetingGridInsightDetailPanel({
   insight,
   meetingId,
   onReview,
+  onClose,
   isReviewing = false,
 }: MeetingGridInsightDetailPanelProps) {
   if (!insight) {
@@ -45,7 +47,21 @@ export function MeetingGridInsightDetailPanel({
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Insight detail
           </p>
-          <StateBadge state={insight.gridReviewState} />
+          <div className="flex items-center gap-1.5">
+            <StateBadge state={insight.gridReviewState} />
+            {onClose && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
+                onClick={onClose}
+                aria-label="Close panel"
+              >
+                <X className="size-3.5" aria-hidden="true" />
+              </Button>
+            )}
+          </div>
         </div>
         <div className="space-y-1.5">
           <h3 className="text-sm font-semibold leading-5">{displayLabel}</h3>

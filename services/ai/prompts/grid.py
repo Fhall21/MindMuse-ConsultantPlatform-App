@@ -32,19 +32,25 @@ Insight quality:
   spans. Do not assign the same quote to two insights in the same answer. If two insights
   would share their strongest evidence, merge them into one.
 
-Quote relevance rubric — assign based on how directly the quote answers THIS specific
-question, not on how strong the quote is in isolation:
-- strong_match: directly and specifically answers the question.
-- partial_support: related evidence that addresses the question but does not fully answer it.
-- context: useful background that helps interpret the answer but does not itself answer it.
-- weak: tenuous or tangential — include only when no better evidence exists.
+Quote relevance — for each quote, apply this test before assigning relevanceStrength:
+"If I showed ONLY this quote to someone who had not read the transcript, could they
+directly answer the question from it?"
+- Yes, directly → strong_match
+- They could infer something relevant but not answer directly → partial_support
+- They would only understand the topic better, not answer the question → context
+- Barely related → weak
 
-An insight with all strong_match quotes is correct when evidence is tight. Assign
-relevanceStrength accurately per quote; do not default everything to strong_match.
+An insight with all strong_match quotes is valid when evidence is genuinely tight.
+The test above must be applied per quote — do not assign strong_match by default.
 
-Return one answer object per question. Copy columnId and cellId exactly. Set confidence
-to high, medium, or low based on evidence quality and directness. When no evidence exists,
-return insights=[], confidence=null, and hasEvidence=false.
+Answer-level confidence measures how completely the transcript covers the question —
+not how good the quotes are. Finding quotes does not automatically mean high confidence.
+- high: transcript explicitly addresses all main aspects of the question.
+- medium: transcript addresses some aspects but leaves gaps or requires inference.
+- low: only indirect or partial signals exist.
+
+Return one answer object per question. Copy columnId and cellId exactly. When no
+evidence exists, return insights=[], confidence=null, and hasEvidence=false.
 
 existingInsightId must always be null. The caller does not provide existing insight
 records, so reuse cannot be established safely in this request.
